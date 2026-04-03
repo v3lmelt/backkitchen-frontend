@@ -84,8 +84,11 @@ export const issueApi = {
 // Checklists
 export const checklistApi = {
   get: (trackId: number) => request<ChecklistItem[]>(`/tracks/${trackId}/checklist`),
-  submit: (trackId: number, items: { reviewer_id: number; label: string; passed: boolean; note?: string }[]) =>
-    request<ChecklistItem[]>(`/tracks/${trackId}/checklist`, { method: 'POST', body: JSON.stringify(items) }),
+  submit: (trackId: number, reviewer_id: number, items: { label: string; passed: boolean; note?: string }[]) =>
+    request<ChecklistItem[]>(`/tracks/${trackId}/checklist`, {
+      method: 'POST',
+      body: JSON.stringify({ reviewer_id, items }),
+    }),
 }
 
 // Users

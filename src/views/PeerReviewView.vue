@@ -79,8 +79,8 @@ async function submitChecklist() {
   if (!appStore.currentUser) return
   await checklistApi.submit(
     trackId.value,
+    appStore.currentUser.id,
     checklist.value.map(item => ({
-      reviewer_id: appStore.currentUser!.id,
       label: item.label,
       passed: item.passed,
       note: item.note || undefined,
