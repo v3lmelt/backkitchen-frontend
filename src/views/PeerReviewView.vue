@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { trackApi, issueApi, checklistApi } from '@/api'
 import { useAppStore } from '@/stores/app'
@@ -16,18 +16,22 @@ const issues = ref<Issue[]>([])
 const loading = ref(true)
 const waveformRef = ref<InstanceType<typeof WaveformPlayer>>()
 
+function createEmptyIssue() {
+  return {
+    title: '',
+    description: '',
+    severity: 'major' as const,
+    issue_type: 'point' as 'point' | 'range',
+    time_start: 0,
+    time_end: null as number | null,
+    author_id: 0,
+    status: 'open' as const,
+  }
+}
+
 // New issue form
 const showNewIssue = ref(false)
-const newIssue = ref({
-  title: '',
-  description: '',
-  severity: 'major' as const,
-  issue_type: 'point' as 'point' | 'range',
-  time_start: 0,
-  time_end: null as number | null,
-  author_id: 0,
-  status: 'open' as const,
-})
+const newIssue = ref(createEmptyIssue())
 
 // Checklist
 const checklistLabels = ['Mix Balance', 'Low-End', 'Stereo Image', 'Loudness', 'Format Compliance']
@@ -59,20 +63,38 @@ onMounted(async () => {
 const audioUrl = computed(() => track.value?.file_path ? `/api/tracks/${trackId.value}/audio` : '')
 
 function onWaveformClick(time: number) {
+  newIssue.value.issue_type = 'point'
   newIssue.value.time_start = Math.round(time * 10) / 10
+  newIssue.value.time_end = null
+  showNewIssue.value = true
+}
+
+function onWaveformRangeSelect(start: number, end: number) {
+  newIssue.value.issue_type = 'range'
+  newIssue.value.time_start = start
+  newIssue.value.time_end = end
   showNewIssue.value = true
 }
 
 async function submitIssue() {
   if (!appStore.currentUser) return
+
+  if (newIssue.value.issue_type === 'range') {
+    if (newIssue.value.time_end === null) {
+      alert('Range issues require an end time.')
+      return
+    }
+    if (newIssue.value.time_end <= newIssue.value.time_start) {
+      alert('Range issue end time must be greater than start time.')
+      return
+    }
+  }
+
   newIssue.value.author_id = appStore.currentUser.id
   const created = await issueApi.create(trackId.value, newIssue.value)
-  issues.value.push(created)
+  issues.value = [...issues.value, created].sort((a, b) => a.time_start - b.time_start)
   showNewIssue.value = false
-  newIssue.value = {
-    title: '', description: '', severity: 'major', issue_type: 'point',
-    time_start: 0, time_end: null, author_id: 0, status: 'open',
-  }
+  newIssue.value = createEmptyIssue()
 }
 
 async function submitChecklist() {
@@ -98,6 +120,30 @@ function formatTime(seconds: number): string {
   const s = Math.floor(seconds % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
 }
+
+const issueFormTitle = computed(() => {
+  if (newIssue.value.issue_type === 'range' && newIssue.value.time_end !== null) {
+    return `New Issue from ${formatTime(newIssue.value.time_start)} to ${formatTime(newIssue.value.time_end)}`
+  }
+  return `New Issue at ${formatTime(newIssue.value.time_start)}`
+})
+
+const selectedRange = computed(() => {
+  if (!showNewIssue.value || newIssue.value.issue_type !== 'range' || newIssue.value.time_end === null) {
+    return null
+  }
+
+  return {
+    start: newIssue.value.time_start,
+    end: newIssue.value.time_end,
+  }
+})
+
+watch(() => newIssue.value.issue_type, issueType => {
+  if (issueType === 'point') {
+    newIssue.value.time_end = null
+  }
+})
 </script>
 
 <template>
@@ -116,13 +162,16 @@ function formatTime(seconds: number): string {
 
     <!-- Waveform -->
     <div v-if="audioUrl">
-      <p class="text-xs text-muted-foreground mb-2">Click on the waveform to mark an issue at that timestamp</p>
+      <p class="text-xs text-muted-foreground mb-2">Click to mark a point issue, or drag across the waveform to create and adjust a range issue.</p>
       <WaveformPlayer
         ref="waveformRef"
         :audio-url="audioUrl"
         :issues="issues"
+        :selected-range="selectedRange"
+        selectable
         @click="onWaveformClick"
         @regionClick="onIssueSelect"
+        @rangeSelect="onWaveformRangeSelect"
       />
     </div>
 
@@ -138,7 +187,7 @@ function formatTime(seconds: number): string {
 
         <!-- New Issue Form -->
         <div v-if="showNewIssue" class="card space-y-3 border-primary/50">
-          <h4 class="text-sm font-mono font-semibold text-foreground">New Issue at {{ formatTime(newIssue.time_start) }}</h4>
+          <h4 class="text-sm font-mono font-semibold text-foreground">{{ issueFormTitle }}</h4>
           <input v-model="newIssue.title" class="input-field w-full" placeholder="Issue title" />
           <textarea v-model="newIssue.description" class="input-field w-full h-20 resize-none" placeholder="Description..." />
           <div class="grid grid-cols-2 gap-3">
