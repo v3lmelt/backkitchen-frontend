@@ -49,15 +49,6 @@ onMounted(async () => {
     plugins: [regions],
   })
 
-  // Fetch as Blob first so IDM extensions don't intercept the request
-  try {
-    const res = await fetch(props.audioUrl)
-    const blob = await res.blob()
-    await ws.loadBlob(blob)
-  } catch {
-    ws.load(props.audioUrl) // fallback
-  }
-
   ws.on('ready', () => {
     duration.value = ws.getDuration()
     emit('ready', duration.value)
@@ -75,6 +66,15 @@ onMounted(async () => {
   ws.on('click', () => {
     emit('click', ws.getCurrentTime())
   })
+
+  // Fetch as Blob first so IDM extensions don't intercept the request
+  try {
+    const res = await fetch(props.audioUrl)
+    const blob = await res.blob()
+    await ws.loadBlob(blob)
+  } catch {
+    ws.load(props.audioUrl) // fallback
+  }
 
   wavesurfer.value = ws
 })

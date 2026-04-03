@@ -1,4 +1,4 @@
-import type { Album, Track, Issue, Comment, ChecklistItem, User, TrackStatus, CommentImage } from '@/types'
+import type { Album, Track, Issue, Comment, ChecklistItem, User, TrackStatus } from '@/types'
 
 const BASE = '/api'
 
