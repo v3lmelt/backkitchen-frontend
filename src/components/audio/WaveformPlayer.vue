@@ -4,6 +4,8 @@ import WaveSurfer from 'wavesurfer.js'
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
 import type { Issue } from '@/types'
 
+const TOKEN_KEY = 'backkitchen_token'
+
 const props = defineProps<{
   audioUrl: string
   issues?: Issue[]
@@ -194,13 +196,19 @@ onMounted(async () => {
     })
   }
 
-  // Fetch as Blob first so IDM extensions don't intercept the request
+  // Audio endpoints are auth-protected, so load them through fetch with Bearer auth.
   try {
-    const res = await fetch(props.audioUrl)
+    const token = localStorage.getItem(TOKEN_KEY)
+    const res = await fetch(props.audioUrl, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+    if (!res.ok) {
+      throw new Error(`Failed to load audio: ${res.status}`)
+    }
     const blob = await res.blob()
     await ws.loadBlob(blob)
   } catch {
-    ws.load(props.audioUrl) // fallback
+    // Keep the player mounted but avoid a second unauthenticated request loop.
   }
 
   wavesurfer.value = ws

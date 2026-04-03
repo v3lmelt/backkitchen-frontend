@@ -13,6 +13,7 @@ const trackId = computed(() => Number(route.params.id))
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
 const existingChecklist = ref<ChecklistItem[]>([])
+const error = ref('')
 const loading = ref(true)
 const waveformRef = ref<InstanceType<typeof WaveformPlayer>>()
 
@@ -73,20 +74,30 @@ async function submitIssue() {
 }
 
 async function submitChecklist() {
-  existingChecklist.value = await checklistApi.submit(
-    trackId.value,
-    checklist.value.map(item => ({
-      label: item.label,
-      passed: item.passed,
-      note: item.note || undefined,
-    })),
-  )
-  alert('Checklist submitted.')
+  error.value = ''
+  try {
+    existingChecklist.value = await checklistApi.submit(
+      trackId.value,
+      checklist.value.map(item => ({
+        label: item.label,
+        passed: item.passed,
+        note: item.note || undefined,
+      })),
+    )
+    alert('Checklist submitted.')
+  } catch (err: any) {
+    error.value = err.message || 'Request failed.'
+  }
 }
 
 async function finish(decision: 'needs_revision' | 'pass') {
-  await trackApi.finishPeerReview(trackId.value, decision)
-  router.push(`/tracks/${trackId.value}`)
+  error.value = ''
+  try {
+    await trackApi.finishPeerReview(trackId.value, decision)
+    router.push(`/tracks/${trackId.value}`)
+  } catch (err: any) {
+    error.value = err.message || 'Request failed.'
+  }
 }
 
 function onIssueSelect(issue: Issue) {
@@ -111,6 +122,10 @@ function formatTime(seconds: number): string {
       <button @click="router.push(`/tracks/${trackId}`)" class="btn-secondary text-sm">
         Back to Track
       </button>
+    </div>
+
+    <div v-if="error" class="rounded-lg border border-red-700/50 bg-red-900/20 px-4 py-3 text-sm text-red-300">
+      {{ error }}
     </div>
 
     <div v-if="audioUrl">
