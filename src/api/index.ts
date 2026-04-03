@@ -1,4 +1,4 @@
-import type { Album, Track, Issue, Comment, ChecklistItem, User, TrackStatus } from '@/types'
+import type { Album, Track, Issue, Comment, ChecklistItem, User, TrackStatus, CommentImage } from '@/types'
 
 const BASE = '/api'
 
@@ -63,8 +63,22 @@ export const issueApi = {
     request<Issue>(`/tracks/${trackId}/issues`, { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: Partial<Pick<Issue, 'status' | 'title' | 'description'>>) =>
     request<Issue>(`/issues/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  addComment: (id: number, data: { author_id: number; content: string }) =>
-    request<Comment>(`/issues/${id}/comments`, { method: 'POST', body: JSON.stringify(data) }),
+  addComment: (id: number, data: { author_id: number; content: string; images?: File[] }) => {
+    const form = new FormData()
+    form.append('author_id', String(data.author_id))
+    form.append('content', data.content)
+    if (data.images) {
+      for (const img of data.images) form.append('images', img)
+    }
+    return fetch(`${BASE}/issues/${id}/comments`, { method: 'POST', body: form })
+      .then(async res => {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(parseErrorDetail(body.detail) || `Request failed: ${res.status}`)
+        }
+        return res.json() as Promise<Comment>
+      })
+  },
 }
 
 // Checklists

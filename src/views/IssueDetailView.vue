@@ -14,6 +14,9 @@ const issueId = computed(() => Number(route.params.id))
 const issue = ref<Issue | null>(null)
 const loading = ref(true)
 const newComment = ref('')
+const selectedImages = ref<File[]>([])
+const imagePreviewUrls = ref<string[]>([])
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
 onMounted(async () => {
   try {
@@ -35,15 +38,35 @@ function formatDate(dateStr: string): string {
   })
 }
 
+function onFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files) return
+  for (const file of Array.from(input.files)) {
+    selectedImages.value.push(file)
+    imagePreviewUrls.value.push(URL.createObjectURL(file))
+  }
+  input.value = ''
+}
+
+function removeSelectedImage(index: number) {
+  URL.revokeObjectURL(imagePreviewUrls.value[index])
+  selectedImages.value.splice(index, 1)
+  imagePreviewUrls.value.splice(index, 1)
+}
+
 async function addComment() {
   if (!newComment.value.trim() || !appStore.currentUser || !issue.value) return
   const comment = await issueApi.addComment(issueId.value, {
     author_id: appStore.currentUser.id,
     content: newComment.value,
+    images: selectedImages.value.length ? selectedImages.value : undefined,
   })
   if (!issue.value.comments) issue.value.comments = []
   issue.value.comments.push(comment)
   newComment.value = ''
+  imagePreviewUrls.value.forEach(url => URL.revokeObjectURL(url))
+  selectedImages.value = []
+  imagePreviewUrls.value = []
 }
 
 async function updateStatus(status: 'will_fix' | 'disagreed' | 'resolved') {
@@ -131,21 +154,73 @@ async function updateStatus(status: 'will_fix' | 'disagreed' | 'resolved') {
           <span class="text-xs text-muted-foreground">{{ formatDate(comment.created_at) }}</span>
         </div>
         <p class="text-sm text-foreground whitespace-pre-wrap">{{ comment.content }}</p>
+        <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-3">
+          <a
+            v-for="img in comment.images"
+            :key="img.id"
+            :href="img.image_url"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <img
+              :src="img.image_url"
+              class="h-20 w-20 object-cover rounded border border-border cursor-pointer hover:opacity-80 transition-opacity"
+              alt="attachment"
+            />
+          </a>
+        </div>
       </div>
 
       <!-- New Comment -->
-      <div class="flex gap-2">
+      <div class="space-y-2">
         <textarea
           v-model="newComment"
-          class="input-field flex-1 h-20 resize-none"
+          class="input-field w-full h-20 resize-none"
           placeholder="Add a comment..."
           @keydown.meta.enter="addComment"
           @keydown.ctrl.enter="addComment"
         />
+
+        <!-- Image previews -->
+        <div v-if="imagePreviewUrls.length" class="flex flex-wrap gap-2">
+          <div
+            v-for="(url, i) in imagePreviewUrls"
+            :key="i"
+            class="relative"
+          >
+            <img :src="url" class="h-16 w-16 object-cover rounded border border-border" alt="preview" />
+            <button
+              @click="removeSelectedImage(i)"
+              class="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground rounded-full text-xs flex items-center justify-center leading-none"
+              title="Remove"
+            >×</button>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <input
+            ref="fileInputRef"
+            type="file"
+            accept="image/*"
+            multiple
+            class="hidden"
+            @change="onFileSelect"
+          />
+          <button
+            @click="fileInputRef?.click()"
+            class="btn-secondary text-sm inline-flex items-center gap-1"
+            title="Attach images"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Image
+          </button>
+          <button @click="addComment" :disabled="!newComment.trim()" class="btn-primary text-sm">
+            Add Comment
+          </button>
+        </div>
       </div>
-      <button @click="addComment" :disabled="!newComment.trim()" class="btn-primary text-sm">
-        Add Comment
-      </button>
     </div>
   </div>
 </template>

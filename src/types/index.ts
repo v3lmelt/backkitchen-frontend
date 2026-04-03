@@ -58,6 +58,13 @@ export interface Issue {
   comments?: Comment[]
 }
 
+export interface CommentImage {
+  id: number
+  comment_id: number
+  image_url: string
+  created_at: string
+}
+
 export interface Comment {
   id: number
   issue_id: number
@@ -65,6 +72,7 @@ export interface Comment {
   author?: User
   content: string
   created_at: string
+  images?: CommentImage[]
 }
 
 export interface ChecklistItem {
