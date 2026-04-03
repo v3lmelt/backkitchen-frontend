@@ -38,6 +38,14 @@ function roundToTenth(value: number): number {
   return Math.round(value * 10) / 10
 }
 
+function getCursorElement(): HTMLElement | null {
+  const waveformHost = Array.from(container.value?.children || []).find(
+    child => child instanceof HTMLElement && !!child.shadowRoot,
+  ) as HTMLElement | undefined
+
+  return waveformHost?.shadowRoot?.querySelector('[part="cursor"]') as HTMLElement | null
+}
+
 function syncSelectedRange(region: { id: string; start: number; end: number; remove?: () => void }) {
   const start = roundToTenth(Math.min(region.start, region.end))
   const end = roundToTenth(Math.max(region.start, region.end))
@@ -64,6 +72,8 @@ function renderSelectionRegion() {
   const selectedRange = props.selectedRange
   if (!selectedRange) {
     selectionRegionId.value = null
+    const cursor = getCursorElement()
+    if (cursor) cursor.style.opacity = '1'
     return
   }
 
@@ -72,6 +82,8 @@ function renderSelectionRegion() {
 
   if (end <= start) {
     selectionRegionId.value = null
+    const cursor = getCursorElement()
+    if (cursor) cursor.style.opacity = '1'
     return
   }
 
@@ -106,6 +118,9 @@ function renderSelectionRegion() {
     content.style.borderRadius = '9999px'
     content.style.padding = '2px 8px'
   }
+
+  const cursor = getCursorElement()
+  if (cursor) cursor.style.opacity = '0'
 
   selectionRegionId.value = region.id
 }
