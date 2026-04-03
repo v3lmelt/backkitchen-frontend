@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import WaveSurfer from 'wavesurfer.js'
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
+import { CircleAlert, CircleCheckBig } from 'lucide-vue-next'
 import type { Issue } from '@/types'
+import { formatTimestamp, roundToMilliseconds } from '@/utils/time'
 
 const TOKEN_KEY = 'backkitchen_token'
 
@@ -22,6 +25,8 @@ const emit = defineEmits<{
   rangeSelect: [start: number, end: number]
 }>()
 
+const { t } = useI18n()
+
 const container = ref<HTMLDivElement>()
 const wavesurfer = ref<WaveSurfer | null>(null)
 const regionsPlugin = ref<RegionsPlugin | null>(null)
@@ -31,13 +36,193 @@ const duration = ref(0)
 const isRenderingRegions = ref(false)
 const selectionRegionId = ref<string | null>(null)
 const lastSelectionAt = ref(0)
-const selectionVisual = {
-  color: 'rgba(34, 211, 238, 0.28)',
-  content: 'Editing range',
+const activePointGroupKey = ref<string | null>(null)
+const selectionVisualColor = 'rgba(34, 211, 238, 0.28)'
+const rangeLaneHeight = 18
+const rangeLaneGap = 6
+const markerIconOffset = 18
+
+type MarkerStatus = 'unresolved' | 'resolved'
+
+interface PointMarkerGroup {
+  key: string
+  time: number
+  percent: number
+  left: string
+  issues: Issue[]
+  status: MarkerStatus
+  markerAlign: 'left' | 'center' | 'right'
+  popoverAlign: 'left' | 'center' | 'right'
 }
 
-function roundToTenth(value: number): number {
-  return Math.round(value * 10) / 10
+interface RangeMarker {
+  issue: Issue
+  lane: number
+  left: string
+  width: string
+  top: string
+  status: MarkerStatus
+}
+
+function clampPercent(value: number): number {
+  return Math.min(100, Math.max(0, value))
+}
+
+function getMarkerStatus(issues: Issue[]): MarkerStatus {
+  return issues.every(issue => issue.status === 'resolved') ? 'resolved' : 'unresolved'
+}
+
+function getMarkerPosition(time: number): string {
+  if (duration.value <= 0) return '0%'
+  return `${clampPercent((time / duration.value) * 100)}%`
+}
+
+function getMarkerPercent(time: number): number {
+  if (duration.value <= 0) return 0
+  return clampPercent((time / duration.value) * 100)
+}
+
+function getPointMarkerAlign(percent: number): 'left' | 'center' | 'right' {
+  if (percent <= 3) return 'left'
+  if (percent >= 97) return 'right'
+  return 'center'
+}
+
+function getPointPopoverAlign(percent: number): 'left' | 'center' | 'right' {
+  if (percent <= 12) return 'left'
+  if (percent >= 88) return 'right'
+  return 'center'
+}
+
+function markerAnchorClass(align: 'left' | 'center' | 'right'): string {
+  if (align === 'left') return 'translate-x-0'
+  if (align === 'right') return '-translate-x-full'
+  return '-translate-x-1/2'
+}
+
+function popoverAnchorClass(align: 'left' | 'center' | 'right'): string {
+  if (align === 'left') return 'left-0 translate-x-0'
+  if (align === 'right') return 'right-0 translate-x-0'
+  return 'left-1/2 -translate-x-1/2'
+}
+
+function getRangeWidth(start: number, end: number): string {
+  if (duration.value <= 0) return '0%'
+  const width = ((Math.max(end, start) - start) / duration.value) * 100
+  return `${Math.max(clampPercent(width), 0.35)}%`
+}
+
+const pointGroups = computed<PointMarkerGroup[]>(() => {
+  if (!props.issues?.length || duration.value <= 0) return []
+
+  const grouped = new Map<string, Issue[]>()
+  for (const issue of props.issues) {
+    if (issue.issue_type !== 'point') continue
+    const key = issue.time_start.toFixed(3)
+    const entries = grouped.get(key)
+    if (entries) {
+      entries.push(issue)
+    } else {
+      grouped.set(key, [issue])
+    }
+  }
+
+  return Array.from(grouped.entries())
+    .map(([key, issues]) => {
+      const time = Number(key)
+      const percent = getMarkerPercent(time)
+      return {
+        key,
+        time,
+        percent,
+        left: `${percent}%`,
+        issues: [...issues].sort((a, b) => a.created_at.localeCompare(b.created_at)),
+        status: getMarkerStatus(issues),
+        markerAlign: getPointMarkerAlign(percent),
+        popoverAlign: getPointPopoverAlign(percent),
+      }
+    })
+    .sort((a, b) => a.time - b.time)
+})
+
+const rangeMarkers = computed<RangeMarker[]>(() => {
+  if (!props.issues?.length || duration.value <= 0) return []
+
+  const ranges = props.issues
+    .filter((issue): issue is Issue & { time_end: number } => issue.issue_type === 'range' && issue.time_end !== null)
+    .slice()
+    .sort((a, b) => {
+      if (a.time_start !== b.time_start) return a.time_start - b.time_start
+      if ((a.time_end ?? a.time_start) !== (b.time_end ?? b.time_start)) {
+        return (a.time_end ?? a.time_start) - (b.time_end ?? b.time_start)
+      }
+      return a.created_at.localeCompare(b.created_at)
+    })
+
+  const laneEndTimes: number[] = []
+  const markers: RangeMarker[] = []
+
+  for (const issue of ranges) {
+    const end = issue.time_end ?? issue.time_start
+    let lane = laneEndTimes.findIndex(laneEnd => laneEnd <= issue.time_start)
+    if (lane === -1) {
+      lane = laneEndTimes.length
+      laneEndTimes.push(end)
+    } else {
+      laneEndTimes[lane] = end
+    }
+
+    markers.push({
+      issue,
+      lane,
+      left: getMarkerPosition(issue.time_start),
+      width: getRangeWidth(issue.time_start, end),
+      top: `${markerIconOffset + lane * (rangeLaneHeight + rangeLaneGap)}px`,
+      status: getMarkerStatus([issue]),
+    })
+  }
+
+  return markers
+})
+
+const overlayHeight = computed(() => {
+  const laneCount = rangeMarkers.value.reduce((max, marker) => Math.max(max, marker.lane + 1), 0)
+  const rangeHeight = laneCount > 0 ? markerIconOffset + laneCount * rangeLaneHeight + Math.max(0, laneCount - 1) * rangeLaneGap : 0
+  return Math.max(props.height || 128, rangeHeight + 12)
+})
+
+const overlayBottomOffset = computed(() => `${Math.max(overlayHeight.value - (props.height || 128), 0)}px`)
+const pointLineHeight = computed(() => `${Math.max(overlayHeight.value - 28, 108)}px`)
+
+const hasIssues = computed(() => (props.issues?.length ?? 0) > 0)
+
+function togglePointGroup(groupKey: string) {
+  activePointGroupKey.value = activePointGroupKey.value === groupKey ? null : groupKey
+}
+
+function selectIssue(issue: Issue) {
+  activePointGroupKey.value = null
+  emit('regionClick', issue)
+}
+
+function iconForStatus(status: MarkerStatus) {
+  return status === 'resolved' ? CircleCheckBig : CircleAlert
+}
+
+function iconClassForStatus(status: MarkerStatus) {
+  return status === 'resolved'
+    ? 'text-success bg-success/15 border-success/30'
+    : 'text-error bg-error/15 border-error/30'
+}
+
+function lineClassForStatus(status: MarkerStatus) {
+  return status === 'resolved' ? 'bg-success/90' : 'bg-error/90'
+}
+
+function rangeClassForStatus(status: MarkerStatus) {
+  return status === 'resolved'
+    ? 'border-success/60 bg-success/20 hover:bg-success/28'
+    : 'border-warning/70 bg-warning/25 hover:bg-warning/35'
 }
 
 function getCursorElement(): HTMLElement | null {
@@ -49,8 +234,8 @@ function getCursorElement(): HTMLElement | null {
 }
 
 function syncSelectedRange(region: { id: string; start: number; end: number; remove?: () => void }) {
-  const start = roundToTenth(Math.min(region.start, region.end))
-  const end = roundToTenth(Math.max(region.start, region.end))
+  const start = roundToMilliseconds(Math.min(region.start, region.end))
+  const end = roundToMilliseconds(Math.max(region.start, region.end))
 
   if (end <= start) {
     region.remove?.()
@@ -79,8 +264,8 @@ function renderSelectionRegion() {
     return
   }
 
-  const start = roundToTenth(Math.min(selectedRange.start, selectedRange.end))
-  const end = roundToTenth(Math.max(selectedRange.start, selectedRange.end))
+  const start = roundToMilliseconds(Math.min(selectedRange.start, selectedRange.end))
+  const end = roundToMilliseconds(Math.max(selectedRange.start, selectedRange.end))
 
   if (end <= start) {
     selectionRegionId.value = null
@@ -94,8 +279,8 @@ function renderSelectionRegion() {
     end,
     drag: true,
     resize: true,
-    color: selectionVisual.color,
-    content: selectionVisual.content,
+    color: selectionVisualColor,
+    content: t('waveform.editingRange'),
     id: '__draft_range__',
   })
 
@@ -128,9 +313,7 @@ function renderSelectionRegion() {
 }
 
 function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
+  return formatTimestamp(seconds)
 }
 
 onMounted(async () => {
@@ -189,10 +372,10 @@ onMounted(async () => {
 
   if (props.selectable) {
     ;(regions as any).enableDragSelection?.({
-      color: selectionVisual.color,
+      color: selectionVisualColor,
       drag: true,
       resize: true,
-      content: selectionVisual.content,
+      content: t('waveform.editingRange'),
     })
   }
 
@@ -215,40 +398,10 @@ onMounted(async () => {
 })
 
 function renderIssueRegions() {
-  if (!regionsPlugin.value || !props.issues) return
+  if (!regionsPlugin.value) return
   isRenderingRegions.value = true
   regionsPlugin.value.clearRegions()
   selectionRegionId.value = null
-
-  const severityColors: Record<string, string> = {
-    critical: 'rgba(255, 92, 51, 0.25)',
-    major: 'rgba(255, 132, 0, 0.25)',
-    minor: 'rgba(178, 178, 255, 0.25)',
-    suggestion: 'rgba(182, 255, 206, 0.25)',
-  }
-
-  for (const issue of props.issues) {
-    const color = severityColors[issue.severity] || 'rgba(168, 85, 247, 0.25)'
-    if (issue.issue_type === 'range' && issue.time_end) {
-      regionsPlugin.value.addRegion({
-        start: issue.time_start,
-        end: issue.time_end,
-        color,
-        drag: false,
-        resize: false,
-        id: String(issue.id),
-      })
-    } else {
-      regionsPlugin.value.addRegion({
-        start: issue.time_start,
-        end: issue.time_start + 0.5,
-        color,
-        drag: false,
-        resize: false,
-        id: String(issue.id),
-      })
-    }
-  }
 
   renderSelectionRegion()
 
@@ -257,6 +410,9 @@ function renderIssueRegions() {
 
 watch(() => props.issues, renderIssueRegions, { deep: true })
 watch(() => props.selectedRange, renderIssueRegions, { deep: true })
+watch(duration, () => {
+  activePointGroupKey.value = null
+})
 
 function togglePlay() {
   wavesurfer.value?.playPause()
@@ -277,7 +433,86 @@ defineExpose({ seekTo, togglePlay })
 
 <template>
   <div class="card space-y-3">
-    <div ref="container" class="bg-[#0D0D0D] rounded-none overflow-hidden" />
+    <div class="relative" :style="{ paddingBottom: overlayBottomOffset }">
+      <div
+        v-if="hasIssues"
+        class="pointer-events-none absolute inset-x-0 top-0 z-10"
+        :style="{ height: `${overlayHeight}px` }"
+      >
+        <button
+          v-for="marker in rangeMarkers"
+          :key="marker.issue.id"
+          type="button"
+          class="pointer-events-auto absolute rounded-md border transition-colors"
+          :class="rangeClassForStatus(marker.status)"
+          :style="{ left: marker.left, width: marker.width, top: marker.top, height: `${rangeLaneHeight}px` }"
+          @click="selectIssue(marker.issue)"
+        >
+          <component
+            :is="iconForStatus(marker.status)"
+            class="absolute -top-4 left-1 h-3.5 w-3.5 rounded-full border p-0.5"
+            :class="iconClassForStatus(marker.status)"
+          />
+        </button>
+
+        <div
+          v-for="group in pointGroups"
+          :key="group.key"
+          class="absolute top-0 flex flex-col items-center"
+          :class="markerAnchorClass(group.markerAlign)"
+          :style="{ left: group.left }"
+        >
+          <button
+            type="button"
+            class="pointer-events-auto flex flex-col items-center"
+            @click="togglePointGroup(group.key)"
+          >
+            <component
+              :is="iconForStatus(group.status)"
+              class="h-4 w-4 rounded-full border p-0.5"
+              :class="iconClassForStatus(group.status)"
+            />
+            <span
+              v-if="group.issues.length > 1"
+              class="mt-1 inline-flex min-w-5 items-center justify-center rounded-full border border-border bg-card px-1 text-[10px] font-semibold leading-4 text-foreground shadow"
+            >
+              {{ group.issues.length }}
+            </span>
+            <span class="mt-1 min-h-[108px] w-px" :class="lineClassForStatus(group.status)" :style="{ height: pointLineHeight }" />
+          </button>
+
+          <div
+            v-if="activePointGroupKey === group.key"
+            class="pointer-events-auto absolute top-6 z-20 w-56 rounded-lg border border-border bg-card/95 p-2 shadow-xl backdrop-blur"
+            :class="popoverAnchorClass(group.popoverAlign)"
+          >
+            <button
+              v-for="issue in group.issues"
+              :key="issue.id"
+              type="button"
+              class="flex w-full items-start gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/70"
+              @click="selectIssue(issue)"
+            >
+              <component
+                :is="iconForStatus(issue.status === 'resolved' ? 'resolved' : 'unresolved')"
+                class="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border p-0.5"
+                :class="iconClassForStatus(issue.status === 'resolved' ? 'resolved' : 'unresolved')"
+              />
+              <span class="min-w-0">
+                <span class="block truncate text-xs font-medium text-foreground">{{ issue.title }}</span>
+                <span class="block text-[11px] text-muted-foreground">{{ formatTime(issue.time_start) }}</span>
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div
+        ref="container"
+        class="relative z-0 overflow-hidden rounded-none bg-[#0D0D0D]"
+        :style="{ height: `${props.height || 128}px` }"
+      />
+    </div>
     <div class="flex items-center gap-4">
       <button @click="togglePlay" class="text-cyan hover:text-cyan-dark transition-colors">
         <svg v-if="!isPlaying" class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">

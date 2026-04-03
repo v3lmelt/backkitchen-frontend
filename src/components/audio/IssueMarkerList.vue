@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import type { Issue } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
+import { formatTimestamp } from '@/utils/time'
 
 defineProps<{
   issues: Issue[]
@@ -10,10 +12,10 @@ const emit = defineEmits<{
   select: [issue: Issue]
 }>()
 
+const { t } = useI18n()
+
 function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
+  return formatTimestamp(seconds)
 }
 </script>
 
@@ -46,7 +48,7 @@ function formatTime(seconds: number): string {
       </div>
     </div>
     <div v-if="issues.length === 0" class="text-center text-muted-foreground text-sm py-4">
-      No issues found
+      {{ t('issueMarker.noIssues') }}
     </div>
   </div>
 </template>

@@ -1,21 +1,24 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { checklistApi, issueApi, trackApi } from '@/api'
 import type { ChecklistItem, Issue, Track } from '@/types'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
+import { formatTimestamp, roundToMilliseconds } from '@/utils/time'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
 const existingChecklist = ref<ChecklistItem[]>([])
-const error = ref('')
 const loading = ref(true)
 const waveformRef = ref<InstanceType<typeof WaveformPlayer>>()
+const error = ref('')
 
 const showNewIssue = ref(false)
 const newIssue = ref({
@@ -28,7 +31,21 @@ const newIssue = ref({
   phase: 'peer' as const,
 })
 
+// English labels are used as API keys; translated for display via translateChecklistLabel()
 const checklistLabels = ['Arrangement', 'Balance', 'Low-End', 'Stereo Image', 'Technical Cleanliness']
+const checklistLabelKeyMap: Record<string, string> = {
+  'Arrangement': 'arrangement',
+  'Balance': 'balance',
+  'Low-End': 'lowEnd',
+  'Stereo Image': 'stereoImage',
+  'Technical Cleanliness': 'technicalCleanliness',
+}
+
+function translateChecklistLabel(label: string): string {
+  const key = checklistLabelKeyMap[label]
+  return key ? t(`checklistLabels.${key}`) : label
+}
+
 const checklist = ref(checklistLabels.map(label => ({ label, passed: false, note: '' })))
 
 onMounted(loadPage)
@@ -54,7 +71,7 @@ async function loadPage() {
 const audioUrl = computed(() => track.value?.file_path ? `/api/tracks/${trackId.value}/audio` : '')
 
 function onWaveformClick(time: number) {
-  newIssue.value.time_start = Math.round(time * 10) / 10
+  newIssue.value.time_start = roundToMilliseconds(time)
   showNewIssue.value = true
 }
 
@@ -84,9 +101,9 @@ async function submitChecklist() {
         note: item.note || undefined,
       })),
     )
-    alert('Checklist submitted.')
+    alert(t('peerReview.checklistSubmitted'))
   } catch (err: any) {
-    error.value = err.message || 'Request failed.'
+    error.value = err.message || t('common.requestFailed')
   }
 }
 
@@ -96,7 +113,7 @@ async function finish(decision: 'needs_revision' | 'pass') {
     await trackApi.finishPeerReview(trackId.value, decision)
     router.push(`/tracks/${trackId.value}`)
   } catch (err: any) {
-    error.value = err.message || 'Request failed.'
+    error.value = err.message || t('common.requestFailed')
   }
 }
 
@@ -105,22 +122,20 @@ function onIssueSelect(issue: Issue) {
 }
 
 function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
+  return formatTimestamp(seconds)
 }
 </script>
 
 <template>
-  <div v-if="loading" class="text-center text-muted-foreground py-12">Loading...</div>
+  <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
   <div v-else-if="track" class="space-y-6">
     <div class="flex items-start justify-between">
       <div>
-        <h1 class="text-2xl font-mono font-bold text-foreground">Peer Review: {{ track.title }}</h1>
-        <p class="text-muted-foreground">Assigned reviewer workflow for source v{{ track.version }}</p>
+        <h1 class="text-2xl font-sans font-bold text-foreground">{{ t('peerReview.heading', { title: track.title }) }}</h1>
+        <p class="text-muted-foreground">{{ t('peerReview.subheading', { version: track.version }) }}</p>
       </div>
       <button @click="router.push(`/tracks/${trackId}`)" class="btn-secondary text-sm">
-        Back to Track
+        {{ t('common.backToTrack') }}
       </button>
     </div>
 
@@ -129,7 +144,7 @@ function formatTime(seconds: number): string {
     </div>
 
     <div v-if="audioUrl">
-      <p class="text-xs text-muted-foreground mb-2">Click the waveform to mark a peer review issue.</p>
+      <p class="text-xs text-muted-foreground mb-2">{{ t('peerReview.waveformHint') }}</p>
       <WaveformPlayer
         ref="waveformRef"
         :audio-url="audioUrl"
@@ -142,41 +157,41 @@ function formatTime(seconds: number): string {
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div class="space-y-4">
         <div class="flex items-center justify-between">
-          <h3 class="text-sm font-mono font-semibold text-foreground">Peer Issues ({{ issues.length }})</h3>
+          <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('peerReview.issuesHeading', { count: issues.length }) }}</h3>
           <button @click="showNewIssue = !showNewIssue" class="btn-primary text-xs">
-            + Add Issue
+            {{ t('common.addIssue') }}
           </button>
         </div>
 
         <div v-if="showNewIssue" class="card space-y-3 border-primary/50">
-          <h4 class="text-sm font-mono font-semibold text-foreground">New Issue at {{ formatTime(newIssue.time_start) }}</h4>
-          <input v-model="newIssue.title" class="input-field w-full" placeholder="Issue title" />
-          <textarea v-model="newIssue.description" class="input-field w-full h-20 resize-none" placeholder="Description..." />
+          <h4 class="text-sm font-sans font-semibold text-foreground">{{ t('common.newIssueAt', { time: formatTime(newIssue.time_start) }) }}</h4>
+          <input v-model="newIssue.title" class="input-field w-full" :placeholder="t('common.issueTitlePlaceholder')" />
+          <textarea v-model="newIssue.description" class="input-field w-full h-20 resize-none" :placeholder="t('common.descriptionPlaceholder')" />
           <div class="grid grid-cols-2 gap-3">
             <select v-model="newIssue.severity" class="input-field">
-              <option value="critical">Critical</option>
-              <option value="major">Major</option>
-              <option value="minor">Minor</option>
-              <option value="suggestion">Suggestion</option>
+              <option value="critical">{{ t('severity.critical') }}</option>
+              <option value="major">{{ t('severity.major') }}</option>
+              <option value="minor">{{ t('severity.minor') }}</option>
+              <option value="suggestion">{{ t('severity.suggestion') }}</option>
             </select>
             <select v-model="newIssue.issue_type" class="input-field">
-              <option value="point">Point</option>
-              <option value="range">Range</option>
+              <option value="point">{{ t('issueType.point') }}</option>
+              <option value="range">{{ t('issueType.range') }}</option>
             </select>
           </div>
           <div v-if="newIssue.issue_type === 'range'" class="grid grid-cols-2 gap-3">
             <div>
-              <label class="text-xs text-muted-foreground">Start (s)</label>
-              <input v-model.number="newIssue.time_start" type="number" step="0.1" class="input-field w-full" />
+              <label class="text-xs text-muted-foreground">{{ t('peerReview.startLabel') }}</label>
+              <input v-model.number="newIssue.time_start" type="number" step="0.001" class="input-field w-full" />
             </div>
             <div>
-              <label class="text-xs text-muted-foreground">End (s)</label>
-              <input v-model.number="newIssue.time_end" type="number" step="0.1" class="input-field w-full" />
+              <label class="text-xs text-muted-foreground">{{ t('peerReview.endLabel') }}</label>
+              <input v-model.number="newIssue.time_end" type="number" step="0.001" class="input-field w-full" />
             </div>
           </div>
           <div class="flex gap-2">
-            <button @click="submitIssue" class="btn-primary text-sm">Submit Issue</button>
-            <button @click="showNewIssue = false" class="btn-secondary text-sm">Cancel</button>
+            <button @click="submitIssue" class="btn-primary text-sm">{{ t('common.submitIssue') }}</button>
+            <button @click="showNewIssue = false" class="btn-secondary text-sm">{{ t('common.cancel') }}</button>
           </div>
         </div>
 
@@ -184,7 +199,7 @@ function formatTime(seconds: number): string {
       </div>
 
       <div class="card space-y-4">
-        <h3 class="text-sm font-mono font-semibold text-foreground">Peer Review Checklist</h3>
+        <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('peerReview.checklistHeading') }}</h3>
         <div v-for="item in checklist" :key="item.label" class="flex items-start gap-3">
           <input
             type="checkbox"
@@ -192,23 +207,23 @@ function formatTime(seconds: number): string {
             class="mt-1 rounded border-border bg-card text-primary focus:ring-primary"
           />
           <div class="flex-1">
-            <div class="text-sm text-foreground">{{ item.label }}</div>
+            <div class="text-sm text-foreground">{{ translateChecklistLabel(item.label) }}</div>
             <input
               v-model="item.note"
               class="input-field w-full text-xs mt-1"
-              placeholder="Notes (optional)"
+              :placeholder="t('common.notesOptionalPlaceholder')"
             />
           </div>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <button @click="submitChecklist" class="btn-secondary text-sm">
-            Save Checklist
+            {{ t('peerReview.saveChecklist') }}
           </button>
           <button @click="finish('needs_revision')" class="btn-primary text-sm">
-            Request Revision
+            {{ t('peerReview.requestRevision') }}
           </button>
           <button @click="finish('pass')" class="btn-primary text-sm">
-            Pass to Producer
+            {{ t('peerReview.passToProducer') }}
           </button>
         </div>
       </div>

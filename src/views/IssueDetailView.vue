@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { issueApi } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Issue } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
+import { formatTimestamp } from '@/utils/time'
 
 const route = useRoute()
 const router = useRouter()
+const { t, locale } = useI18n()
 const appStore = useAppStore()
 const issueId = computed(() => Number(route.params.id))
 
@@ -27,13 +30,12 @@ onMounted(async () => {
 })
 
 function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
+  return formatTimestamp(seconds)
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
+  const localeStr = locale.value === 'zh-CN' ? 'zh-CN' : 'en-US'
+  return new Date(dateStr).toLocaleDateString(localeStr, {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 }
@@ -75,7 +77,7 @@ async function updateStatus(status: 'will_fix' | 'disagreed' | 'resolved') {
 </script>
 
 <template>
-  <div v-if="loading" class="text-center text-muted-foreground py-12">Loading...</div>
+  <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
   <div v-else-if="issue" class="max-w-3xl mx-auto space-y-6">
     <!-- Header -->
     <div>
@@ -83,9 +85,9 @@ async function updateStatus(status: 'will_fix' | 'disagreed' | 'resolved') {
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <polyline points="15 18 9 12 15 6" />
         </svg>
-        Back
+        {{ t('issueDetail.back') }}
       </button>
-      <h1 class="text-2xl font-mono font-bold text-foreground">{{ issue.title }}</h1>
+      <h1 class="text-2xl font-sans font-bold text-foreground">{{ issue.title }}</h1>
       <div class="flex items-center gap-3 mt-2">
         <StatusBadge :status="issue.phase" type="phase" />
         <StatusBadge :status="issue.severity" type="severity" />
@@ -95,7 +97,7 @@ async function updateStatus(status: 'will_fix' | 'disagreed' | 'resolved') {
           <span v-if="issue.time_end"> - {{ formatTime(issue.time_end) }}</span>
         </span>
         <span class="text-sm text-muted-foreground">
-          {{ issue.issue_type === 'range' ? 'Range' : 'Point' }}
+          {{ issue.issue_type === 'range' ? t('issueType.range') : t('issueType.point') }}
         </span>
       </div>
     </div>
@@ -104,7 +106,7 @@ async function updateStatus(status: 'will_fix' | 'disagreed' | 'resolved') {
     <div class="card">
       <p class="text-sm text-foreground whitespace-pre-wrap">{{ issue.description }}</p>
       <div class="text-xs text-muted-foreground mt-3">
-        Created {{ formatDate(issue.created_at) }}
+        {{ t('issueDetail.created', { date: formatDate(issue.created_at) }) }}
       </div>
     </div>
 
@@ -115,28 +117,28 @@ async function updateStatus(status: 'will_fix' | 'disagreed' | 'resolved') {
         @click="updateStatus('will_fix')"
         class="btn-primary text-sm"
       >
-        Will Fix
+        {{ t('issueDetail.willFix') }}
       </button>
       <button
         v-if="issue.status === 'open'"
         @click="updateStatus('disagreed')"
         class="btn-secondary text-sm"
       >
-        Disagree
+        {{ t('issueDetail.disagree') }}
       </button>
       <button
         v-if="issue.status === 'will_fix'"
         @click="updateStatus('resolved')"
         class="bg-success-bg text-success font-medium px-4 py-2 rounded-full text-sm hover:opacity-80 transition-opacity"
       >
-        Mark Resolved
+        {{ t('issueDetail.markResolved') }}
       </button>
     </div>
 
     <!-- Comments -->
     <div class="space-y-4">
-      <h3 class="text-sm font-mono font-semibold text-foreground">
-        Comments ({{ issue.comments?.length || 0 }})
+      <h3 class="text-sm font-sans font-semibold text-foreground">
+        {{ t('issueDetail.commentsHeading', { count: issue.comments?.length || 0 }) }}
       </h3>
 
       <div v-for="comment in issue.comments" :key="comment.id" class="card">
@@ -149,7 +151,7 @@ async function updateStatus(status: 'will_fix' | 'disagreed' | 'resolved') {
             {{ comment.author.display_name.charAt(0) }}
           </div>
           <span class="text-sm font-medium text-foreground">
-            {{ comment.author?.display_name || 'Unknown' }}
+            {{ comment.author?.display_name || t('issueDetail.unknown') }}
           </span>
           <span class="text-xs text-muted-foreground">{{ formatDate(comment.created_at) }}</span>
         </div>
@@ -176,7 +178,7 @@ async function updateStatus(status: 'will_fix' | 'disagreed' | 'resolved') {
         <textarea
           v-model="newComment"
           class="input-field w-full h-20 resize-none"
-          placeholder="Add a comment..."
+          :placeholder="t('issueDetail.addCommentPlaceholder')"
           @keydown.meta.enter="addComment"
           @keydown.ctrl.enter="addComment"
         />
@@ -209,15 +211,14 @@ async function updateStatus(status: 'will_fix' | 'disagreed' | 'resolved') {
           <button
             @click="fileInputRef?.click()"
             class="btn-secondary text-sm inline-flex items-center gap-1"
-            title="Attach images"
           >
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            Image
+            {{ t('issueDetail.image') }}
           </button>
           <button @click="addComment" :disabled="!newComment.trim()" class="btn-primary text-sm">
-            Add Comment
+            {{ t('issueDetail.addComment') }}
           </button>
         </div>
       </div>

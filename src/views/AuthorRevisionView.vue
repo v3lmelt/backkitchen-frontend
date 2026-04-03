@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { issueApi, trackApi } from '@/api'
 import type { Issue, IssueStatus, Track } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
+import { formatTimestamp } from '@/utils/time'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
@@ -31,8 +34,16 @@ async function loadPage() {
 
 const pendingIssues = computed(() => issues.value.filter(issue => issue.status === 'open'))
 const respondedIssues = computed(() => issues.value.filter(issue => issue.status !== 'open'))
-const revisionLabel = computed(() => track.value?.status === 'mastering_revision' ? 'Mastering Revision' : 'Peer Revision')
-const uploadButtonLabel = computed(() => track.value?.status === 'mastering_revision' ? 'Submit Back to Mastering' : 'Submit Back to Peer Review')
+const revisionLabel = computed(() =>
+  track.value?.status === 'mastering_revision'
+    ? t('revision.masteringRevision')
+    : t('revision.peerRevision')
+)
+const uploadButtonLabel = computed(() =>
+  track.value?.status === 'mastering_revision'
+    ? t('revision.submitBackToMastering')
+    : t('revision.submitBackToPeer')
+)
 
 function onFileSelect(event: Event) {
   const input = event.target as HTMLInputElement
@@ -57,42 +68,40 @@ async function submitRevision() {
 }
 
 function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
+  return formatTimestamp(seconds)
 }
 </script>
 
 <template>
-  <div v-if="loading" class="text-center text-muted-foreground py-12">Loading...</div>
+  <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
   <div v-else-if="track" class="max-w-4xl mx-auto space-y-6">
     <div class="flex items-start justify-between">
       <div>
-        <h1 class="text-2xl font-mono font-bold text-foreground">{{ revisionLabel }}: {{ track.title }}</h1>
-        <p class="text-muted-foreground">Respond to open issues and upload a new source audio version.</p>
+        <h1 class="text-2xl font-sans font-bold text-foreground">{{ revisionLabel }}: {{ track.title }}</h1>
+        <p class="text-muted-foreground">{{ t('revision.subheading') }}</p>
       </div>
       <button @click="router.push(`/tracks/${trackId}`)" class="btn-secondary text-sm">
-        Back to Track
+        {{ t('common.backToTrack') }}
       </button>
     </div>
 
     <div class="grid grid-cols-3 gap-4">
       <div class="card text-center">
         <div class="text-2xl font-bold text-error">{{ pendingIssues.length }}</div>
-        <div class="text-xs text-muted-foreground">Open</div>
+        <div class="text-xs text-muted-foreground">{{ t('revision.openCount') }}</div>
       </div>
       <div class="card text-center">
         <div class="text-2xl font-bold text-warning">{{ issues.filter(issue => issue.status === 'will_fix').length }}</div>
-        <div class="text-xs text-muted-foreground">Will Fix</div>
+        <div class="text-xs text-muted-foreground">{{ t('revision.willFixCount') }}</div>
       </div>
       <div class="card text-center">
         <div class="text-2xl font-bold text-success">{{ respondedIssues.length }}</div>
-        <div class="text-xs text-muted-foreground">Responded</div>
+        <div class="text-xs text-muted-foreground">{{ t('revision.respondedCount') }}</div>
       </div>
     </div>
 
     <div v-if="pendingIssues.length > 0">
-      <h3 class="text-sm font-mono font-semibold text-foreground mb-3">Open Issues</h3>
+      <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('revision.openIssuesHeading') }}</h3>
       <div class="space-y-3">
         <div v-for="issue in pendingIssues" :key="issue.id" class="card">
           <div class="flex items-start justify-between gap-4">
@@ -105,8 +114,8 @@ function formatTime(seconds: number): string {
               <p class="text-xs text-muted-foreground mt-1">{{ issue.description }}</p>
             </div>
             <div class="flex gap-2 flex-shrink-0">
-              <button @click="respondToIssue(issue, 'will_fix')" class="btn-primary text-xs">Will Fix</button>
-              <button @click="respondToIssue(issue, 'disagreed')" class="btn-secondary text-xs">Disagree</button>
+              <button @click="respondToIssue(issue, 'will_fix')" class="btn-primary text-xs">{{ t('revision.willFix') }}</button>
+              <button @click="respondToIssue(issue, 'disagreed')" class="btn-secondary text-xs">{{ t('revision.disagree') }}</button>
             </div>
           </div>
         </div>
@@ -114,7 +123,7 @@ function formatTime(seconds: number): string {
     </div>
 
     <div v-if="respondedIssues.length > 0">
-      <h3 class="text-sm font-mono font-semibold text-foreground mb-3">Responded Issues</h3>
+      <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('revision.respondedIssuesHeading') }}</h3>
       <div class="space-y-2">
         <div v-for="issue in respondedIssues" :key="issue.id" class="card opacity-80">
           <div class="flex items-center justify-between">
@@ -129,10 +138,8 @@ function formatTime(seconds: number): string {
     </div>
 
     <div class="card border-primary/50 space-y-3">
-      <h3 class="text-sm font-mono font-semibold text-foreground">Upload Revised Source Audio</h3>
-      <p class="text-xs text-muted-foreground">
-        Upload the next source version after responding to the issues above.
-      </p>
+      <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('revision.uploadHeading') }}</h3>
+      <p class="text-xs text-muted-foreground">{{ t('revision.uploadHint') }}</p>
       <input type="file" accept="audio/*" @change="onFileSelect" class="input-field w-full" />
       <button
         @click="submitRevision"
@@ -142,7 +149,7 @@ function formatTime(seconds: number): string {
           !selectedFile || uploading ? 'bg-border text-muted-foreground cursor-not-allowed' : 'btn-primary'
         ]"
       >
-        {{ uploading ? 'Uploading...' : uploadButtonLabel }}
+        {{ uploading ? t('revision.uploading') : uploadButtonLabel }}
       </button>
     </div>
   </div>
