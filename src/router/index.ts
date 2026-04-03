@@ -1,8 +1,20 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+const PUBLIC_ROUTES = ['/login', '/register']
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
+    {
+      path: '/login',
+      name: 'login',
+      component: () => import('@/views/LoginView.vue'),
+    },
+    {
+      path: '/register',
+      name: 'register',
+      component: () => import('@/views/RegisterView.vue'),
+    },
     {
       path: '/',
       name: 'dashboard',
@@ -44,6 +56,13 @@ const router = createRouter({
       component: () => import('@/views/SettingsView.vue'),
     },
   ],
+})
+
+router.beforeEach((to) => {
+  if (PUBLIC_ROUTES.includes(to.path)) return true
+  const stored = localStorage.getItem('backkitchen_user')
+  if (!stored) return '/login'
+  return true
 })
 
 export default router

@@ -92,6 +92,24 @@ export const checklistApi = {
 export const userApi = {
   list: () => request<User[]>('/users'),
   get: (id: number) => request<User>(`/users/${id}`),
-  create: (data: { username: string; display_name: string; role: string; avatar_color?: string }) =>
+  create: (data: { username: string; display_name: string; role: string; avatar_color?: string; email?: string; password?: string }) =>
     request<User>('/users', { method: 'POST', body: JSON.stringify(data) }),
+}
+
+// Auth
+export const authApi = {
+  login: (email: string, password: string) =>
+    request<User>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  register: (data: { firstName: string; lastName: string; email: string; password: string }) =>
+    request<User>('/users', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: data.email,
+        display_name: `${data.firstName} ${data.lastName}`.trim(),
+        role: 'reviewer',
+        avatar_color: '#FF8400',
+        email: data.email,
+        password: data.password,
+      }),
+    }),
 }

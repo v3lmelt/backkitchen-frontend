@@ -10,6 +10,7 @@ export interface User {
   display_name: string
   role: UserRole
   avatar_color: string
+  email?: string
   created_at: string
 }
 
