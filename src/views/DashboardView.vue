@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi } from '@/api'
 import type { Track, Album, TrackStatus } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 
 const router = useRouter()
+const { t } = useI18n()
 const tracks = ref<Track[]>([])
 const albums = ref<Album[]>([])
 const loading = ref(true)
@@ -48,32 +50,32 @@ function formatDuration(seconds: number | null): string {
     <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
       <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = ''">
         <div class="text-2xl font-bold text-foreground">{{ stats.total }}</div>
-        <div class="text-xs text-muted-foreground mt-1">Total</div>
+        <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.total') }}</div>
       </div>
       <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'submitted'">
         <div class="text-2xl font-bold text-info">{{ stats.submitted }}</div>
-        <div class="text-xs text-muted-foreground mt-1">Submitted</div>
+        <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.submitted') }}</div>
       </div>
       <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'peer_review'">
         <div class="text-2xl font-bold text-warning">{{ stats.peer_review }}</div>
-        <div class="text-xs text-muted-foreground mt-1">Peer Flow</div>
+        <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.peerFlow') }}</div>
       </div>
       <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'mastering'">
         <div class="text-2xl font-bold text-warning">{{ stats.mastering }}</div>
-        <div class="text-xs text-muted-foreground mt-1">Mastering Flow</div>
+        <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.masteringFlow') }}</div>
       </div>
       <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'completed'">
         <div class="text-2xl font-bold text-success">{{ stats.completed }}</div>
-        <div class="text-xs text-muted-foreground mt-1">Completed</div>
+        <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.completed') }}</div>
       </div>
       <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'rejected'">
         <div class="text-2xl font-bold text-error">{{ stats.rejected }}</div>
-        <div class="text-xs text-muted-foreground mt-1">Rejected</div>
+        <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.rejected') }}</div>
       </div>
     </div>
 
     <div v-if="albums.length > 0">
-      <h2 class="text-lg font-mono font-semibold text-foreground mb-3">Albums</h2>
+      <h2 class="text-lg font-sans font-semibold text-foreground mb-3">{{ t('dashboard.albums') }}</h2>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div v-for="album in albums" :key="album.id" class="card">
           <div class="flex items-center gap-3">
@@ -85,7 +87,7 @@ function formatDuration(seconds: number | null): string {
             </div>
             <div>
               <h3 class="text-sm font-medium text-foreground">{{ album.title }}</h3>
-              <p class="text-xs text-muted-foreground">{{ album.track_count }} tracks</p>
+              <p class="text-xs text-muted-foreground">{{ t('dashboard.tracksCount', { n: album.track_count }) }}</p>
             </div>
           </div>
         </div>
@@ -94,32 +96,32 @@ function formatDuration(seconds: number | null): string {
 
     <div>
       <div class="flex items-center justify-between mb-3">
-        <h2 class="text-lg font-mono font-semibold text-foreground">
-          Tracks
+        <h2 class="text-lg font-sans font-semibold text-foreground">
+          {{ t('dashboard.tracksHeading') }}
           <span v-if="filterStatus" class="text-sm font-normal text-muted-foreground ml-2">
-            (filtered: {{ filterStatus }})
-            <button @click="filterStatus = ''" class="text-primary hover:underline ml-1">clear</button>
+            ({{ t('dashboard.filtered', { status: filterStatus }) }})
+            <button @click="filterStatus = ''" class="text-primary hover:underline ml-1">{{ t('dashboard.clearFilter') }}</button>
           </span>
         </h2>
         <button @click="router.push('/upload')" class="btn-primary text-sm">
-          + Submit Track
+          {{ t('dashboard.submitTrack') }}
         </button>
       </div>
 
-      <div v-if="loading" class="text-center text-muted-foreground py-12">Loading...</div>
+      <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
       <div v-else-if="filteredTracks.length === 0" class="text-center text-muted-foreground py-12">
-        No tracks found.
+        {{ t('dashboard.noTracks') }}
       </div>
       <div v-else class="bg-card border border-border rounded-none overflow-hidden">
         <table class="w-full">
           <thead>
-            <tr class="border-b border-border text-left text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider">
-              <th class="px-4 py-3">Title</th>
-              <th class="px-4 py-3">Artist</th>
-              <th class="px-4 py-3">Duration</th>
-              <th class="px-4 py-3">Status</th>
-              <th class="px-4 py-3">Open Issues</th>
-              <th class="px-4 py-3">Version</th>
+            <tr class="border-b border-border text-left text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wider">
+              <th class="px-4 py-3">{{ t('dashboard.colTitle') }}</th>
+              <th class="px-4 py-3">{{ t('dashboard.colArtist') }}</th>
+              <th class="px-4 py-3">{{ t('dashboard.colDuration') }}</th>
+              <th class="px-4 py-3">{{ t('dashboard.colStatus') }}</th>
+              <th class="px-4 py-3">{{ t('dashboard.colOpenIssues') }}</th>
+              <th class="px-4 py-3">{{ t('dashboard.colVersion') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -134,7 +136,7 @@ function formatDuration(seconds: number | null): string {
               <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ formatDuration(track.duration) }}</td>
               <td class="px-4 py-3"><StatusBadge :status="track.status" type="track" /></td>
               <td class="px-4 py-3 text-sm text-muted-foreground">
-                <span v-if="track.open_issue_count" class="text-error">{{ track.open_issue_count }} open</span>
+                <span v-if="track.open_issue_count" class="text-error">{{ t('dashboard.openCount', { count: track.open_issue_count }) }}</span>
                 <span v-else>--</span>
               </td>
               <td class="px-4 py-3 text-sm text-muted-foreground">v{{ track.version }}</td>

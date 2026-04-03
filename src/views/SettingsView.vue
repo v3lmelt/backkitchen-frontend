@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { reactive, ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { albumApi, userApi } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Album, User } from '@/types'
 
+const { t } = useI18n()
 const appStore = useAppStore()
 const users = ref<User[]>([])
 const albums = ref<Album[]>([])
@@ -67,48 +69,48 @@ async function saveTeam(album: Album) {
 
 <template>
   <div class="max-w-5xl mx-auto space-y-8">
-    <h1 class="text-2xl font-mono font-bold text-foreground">Album Settings</h1>
+    <h1 class="text-2xl font-sans font-bold text-foreground">{{ t('settings.heading') }}</h1>
 
     <section class="card space-y-4">
-      <h2 class="text-lg font-mono font-semibold text-foreground">Create Album</h2>
+      <h2 class="text-lg font-sans font-semibold text-foreground">{{ t('settings.createAlbum') }}</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label class="block text-xs text-muted-foreground mb-1">Album Title</label>
-          <input v-model="newAlbum.title" class="input-field w-full" placeholder="Album title" />
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.albumTitle') }}</label>
+          <input v-model="newAlbum.title" class="input-field w-full" :placeholder="t('settings.albumTitlePlaceholder')" />
         </div>
         <div>
-          <label class="block text-xs text-muted-foreground mb-1">Cover Color</label>
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.coverColor') }}</label>
           <input v-model="newAlbum.cover_color" type="color" class="input-field w-full h-10" />
         </div>
       </div>
       <div>
-        <label class="block text-xs text-muted-foreground mb-1">Description</label>
-        <textarea v-model="newAlbum.description" class="input-field w-full h-20 resize-none" placeholder="Album description" />
+        <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.description') }}</label>
+        <textarea v-model="newAlbum.description" class="input-field w-full h-20 resize-none" :placeholder="t('settings.descriptionPlaceholder')" />
       </div>
-      <button @click="createAlbum" class="btn-primary text-sm w-full">Create Album</button>
+      <button @click="createAlbum" class="btn-primary text-sm w-full">{{ t('settings.createButton') }}</button>
     </section>
 
     <section>
-      <h2 class="text-lg font-mono font-semibold text-foreground mb-4">Album Teams</h2>
+      <h2 class="text-lg font-sans font-semibold text-foreground mb-4">{{ t('settings.albumTeams') }}</h2>
 
-      <div v-if="loading" class="text-center text-muted-foreground py-12">Loading...</div>
+      <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
       <div v-else class="space-y-4">
         <div v-for="album in albums" :key="album.id" class="card space-y-4">
           <div class="flex items-start justify-between gap-4">
             <div>
               <h3 class="text-sm font-medium text-foreground">{{ album.title }}</h3>
-              <p class="text-xs text-muted-foreground mt-1">{{ album.description || 'No description.' }}</p>
+              <p class="text-xs text-muted-foreground mt-1">{{ album.description || t('settings.noDescription') }}</p>
             </div>
             <div class="text-xs text-muted-foreground">
-              Producer: {{ album.producer?.display_name || 'Unassigned' }}
+              {{ t('settings.producerLabel', { name: album.producer?.display_name || t('settings.unassigned') }) }}
             </div>
           </div>
 
           <template v-if="appStore.currentUser?.id === album.producer_id">
             <div>
-              <label class="block text-xs text-muted-foreground mb-1">Fixed Mastering Engineer</label>
+              <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.masteringEngineerSelect') }}</label>
               <select v-model="teamState[album.id].mastering_engineer_id" class="input-field w-full">
-                <option :value="null">None</option>
+                <option :value="null">{{ t('settings.noneOption') }}</option>
                 <option v-for="user in users" :key="user.id" :value="user.id">
                   {{ user.display_name }}
                 </option>
@@ -116,7 +118,7 @@ async function saveTeam(album: Album) {
             </div>
 
             <div>
-              <div class="text-xs text-muted-foreground mb-2">Album Participants</div>
+              <div class="text-xs text-muted-foreground mb-2">{{ t('settings.participants') }}</div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <label v-for="user in users" :key="user.id" class="flex items-center gap-2 text-sm text-foreground">
                   <input
@@ -134,19 +136,19 @@ async function saveTeam(album: Album) {
               :disabled="savingAlbumId === album.id"
               class="btn-primary text-sm"
             >
-              {{ savingAlbumId === album.id ? 'Saving...' : 'Save Team' }}
+              {{ savingAlbumId === album.id ? t('settings.saving') : t('settings.saveTeam') }}
             </button>
           </template>
 
           <template v-else>
             <div class="text-sm text-muted-foreground">
-              Team configuration can only be edited by the album producer.
+              {{ t('settings.readOnlyNotice') }}
             </div>
             <div class="text-sm text-foreground">
-              Mastering Engineer: {{ album.mastering_engineer?.display_name || 'Unassigned' }}
+              {{ t('settings.masteringEngineerInfo', { name: album.mastering_engineer?.display_name || t('settings.unassigned') }) }}
             </div>
             <div class="text-xs text-muted-foreground">
-              Participants: {{ album.members.map(member => member.user.display_name).join(', ') || 'None' }}
+              {{ t('settings.participantsInfo', { list: album.members.map(member => member.user.display_name).join(', ') || t('settings.noneParticipants') }) }}
             </div>
           </template>
         </div>

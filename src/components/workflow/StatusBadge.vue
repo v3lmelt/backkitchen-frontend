@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { TrackStatus, IssueStatus, IssueSeverity, IssuePhase } from '@/types'
 
 const props = defineProps<{
@@ -7,38 +8,43 @@ const props = defineProps<{
   type?: 'track' | 'issue' | 'severity' | 'phase'
 }>()
 
-const config = computed(() => {
-  const map: Record<string, { label: string; class: string }> = {
-    submitted: { label: 'Submitted', class: 'bg-info-bg text-info' },
-    peer_review: { label: 'Peer Review', class: 'bg-warning-bg text-warning' },
-    peer_revision: { label: 'Peer Revision', class: 'bg-error-bg text-error' },
-    producer_mastering_gate: { label: 'Producer Gate', class: 'bg-info-bg text-info' },
-    mastering: { label: 'Mastering', class: 'bg-warning-bg text-warning' },
-    mastering_revision: { label: 'Master Revision', class: 'bg-error-bg text-error' },
-    final_review: { label: 'Final Review', class: 'bg-info-bg text-info' },
-    completed: { label: 'Completed', class: 'bg-success-bg text-success' },
-    rejected: { label: 'Rejected', class: 'bg-error-bg text-error' },
-    open: { label: 'Open', class: 'bg-error-bg text-error' },
-    will_fix: { label: 'Will Fix', class: 'bg-warning-bg text-warning' },
-    disagreed: { label: 'Disagreed', class: 'bg-info-bg text-info' },
-    resolved: { label: 'Resolved', class: 'bg-success-bg text-success' },
-    critical: { label: 'Critical', class: 'bg-error-bg text-error' },
-    major: { label: 'Major', class: 'bg-warning-bg text-warning' },
-    minor: { label: 'Minor', class: 'bg-info-bg text-info' },
-    suggestion: { label: 'Suggestion', class: 'bg-success-bg text-success' },
-    peer: { label: 'Peer', class: 'bg-info-bg text-info' },
-    mastering_phase: { label: 'Mastering', class: 'bg-warning-bg text-warning' },
-    final_review_phase: { label: 'Final Review', class: 'bg-primary/15 text-primary' },
-  }
+const { t } = useI18n()
 
-  const status = props.type === 'phase'
+const config = computed(() => {
+  const statusKey = props.type === 'phase'
     ? props.status === 'mastering'
       ? 'mastering_phase'
       : props.status === 'final_review'
         ? 'final_review_phase'
         : 'peer'
     : props.status
-  return map[status] || { label: String(props.status), class: 'bg-card text-muted-foreground' }
+
+  const classMap: Record<string, string> = {
+    submitted: 'bg-info-bg text-info',
+    peer_review: 'bg-warning-bg text-warning',
+    peer_revision: 'bg-error-bg text-error',
+    producer_mastering_gate: 'bg-info-bg text-info',
+    mastering: 'bg-warning-bg text-warning',
+    mastering_revision: 'bg-error-bg text-error',
+    final_review: 'bg-info-bg text-info',
+    completed: 'bg-success-bg text-success',
+    rejected: 'bg-error-bg text-error',
+    open: 'bg-error-bg text-error',
+    will_fix: 'bg-warning-bg text-warning',
+    disagreed: 'bg-info-bg text-info',
+    resolved: 'bg-success-bg text-success',
+    critical: 'bg-error-bg text-error',
+    major: 'bg-warning-bg text-warning',
+    minor: 'bg-info-bg text-info',
+    suggestion: 'bg-success-bg text-success',
+    peer: 'bg-info-bg text-info',
+    mastering_phase: 'bg-warning-bg text-warning',
+    final_review_phase: 'bg-primary/15 text-primary',
+  }
+
+  const cls = classMap[statusKey] ?? 'bg-card text-muted-foreground'
+  const label = t(`status.${statusKey}`, String(props.status))
+  return { label, class: cls }
 })
 </script>
 

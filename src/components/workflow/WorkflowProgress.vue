@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { TrackStatus } from '@/types'
 
 const props = defineProps<{ status: TrackStatus }>()
+
+const { t } = useI18n()
 
 const groupedStatus = computed(() => {
   const map: Record<TrackStatus, string> = {
@@ -20,21 +23,22 @@ const groupedStatus = computed(() => {
 })
 
 const steps = ['submitted', 'peer', 'gate', 'mastering', 'final', 'completed'] as const
-const labels: Record<(typeof steps)[number], string> = {
-  submitted: 'Submitted',
-  peer: 'Peer Review',
-  gate: 'Producer Gate',
-  mastering: 'Mastering',
-  final: 'Final Review',
-  completed: 'Completed',
-}
+
+const stepLabels = computed(() => ({
+  submitted: t('workflow.steps.submitted'),
+  peer: t('workflow.steps.peer'),
+  gate: t('workflow.steps.gate'),
+  mastering: t('workflow.steps.mastering'),
+  final: t('workflow.steps.final'),
+  completed: t('workflow.steps.completed'),
+}))
 
 const currentIndex = computed(() => steps.indexOf(groupedStatus.value as (typeof steps)[number]))
 </script>
 
 <template>
   <div v-if="status === 'rejected'" class="text-sm text-error font-medium">
-    Rejected
+    {{ t('workflow.rejected') }}
   </div>
   <div v-else class="flex items-center gap-1">
     <template v-for="(step, i) in steps" :key="step">
@@ -56,7 +60,7 @@ const currentIndex = computed(() => steps.indexOf(groupedStatus.value as (typeof
             i === currentIndex ? 'text-foreground font-medium' : 'text-muted-foreground'
           ]"
         >
-          {{ labels[step] }}
+          {{ stepLabels[step] }}
         </span>
       </div>
       <div

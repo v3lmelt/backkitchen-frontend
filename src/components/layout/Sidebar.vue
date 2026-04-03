@@ -1,22 +1,24 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 
 const route = useRoute()
 const appStore = useAppStore()
+const { t } = useI18n()
 
-const navItems = [
-  { label: 'Dashboard', icon: 'grid', path: '/' },
-  { label: 'Submit', icon: 'upload', path: '/upload' },
-  { label: 'Settings', icon: 'settings', path: '/settings' },
-]
+const navItems = computed(() => [
+  { label: t('nav.dashboard'), icon: 'grid', path: '/' },
+  { label: t('nav.submit'), icon: 'upload', path: '/upload' },
+  { label: t('nav.settings'), icon: 'settings', path: '/settings' },
+])
 
 const roleLabel = computed(() => {
   const role = appStore.currentUser?.role
-  if (role === 'mastering_engineer') return 'Mastering Engineer'
-  if (role === 'producer') return 'Producer'
-  return 'Member'
+  if (role === 'mastering_engineer') return t('roles.masteringEngineer')
+  if (role === 'producer') return t('roles.producer')
+  return t('roles.member')
 })
 
 const isActive = (path: string) => {

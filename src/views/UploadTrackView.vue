@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi } from '@/api'
 import type { Album } from '@/types'
 
 const router = useRouter()
+const { t } = useI18n()
 const albums = ref<Album[]>([])
 const uploading = ref(false)
 const dragOver = ref(false)
@@ -58,7 +60,7 @@ async function upload() {
     const track = await trackApi.upload(formData)
     router.push(`/tracks/${track.id}`)
   } catch (err: any) {
-    alert(err.message || 'Upload failed')
+    alert(err.message || t('upload.uploadFailed'))
   } finally {
     uploading.value = false
   }
@@ -73,7 +75,7 @@ function formatFileSize(bytes: number): string {
 
 <template>
   <div class="max-w-2xl mx-auto space-y-6">
-    <h1 class="text-2xl font-mono font-bold text-foreground">Submit Track</h1>
+    <h1 class="text-2xl font-sans font-bold text-foreground">{{ t('upload.heading') }}</h1>
 
     <!-- Drop Zone -->
     <div
@@ -93,7 +95,7 @@ function formatFileSize(bytes: number): string {
         <line x1="12" y1="3" x2="12" y2="15" />
       </svg>
       <p v-if="!selectedFile" class="text-muted-foreground">
-        Drop audio file here or <span class="text-primary">browse</span>
+        {{ t('upload.dropHint') }} <span class="text-primary">{{ t('upload.browse') }}</span>
       </p>
       <div v-else class="text-foreground">
         <p class="font-medium">{{ selectedFile.name }}</p>
@@ -104,26 +106,26 @@ function formatFileSize(bytes: number): string {
     <!-- Form -->
     <div class="card space-y-4">
       <div>
-        <label class="block text-sm text-muted-foreground mb-1">Track Title *</label>
-        <input v-model="form.title" class="input-field w-full" placeholder="Enter track title" />
+        <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.trackTitle') }}</label>
+        <input v-model="form.title" class="input-field w-full" :placeholder="t('upload.titlePlaceholder')" />
       </div>
       <div>
-        <label class="block text-sm text-muted-foreground mb-1">Artist *</label>
-        <input v-model="form.artist" class="input-field w-full" placeholder="Artist name" />
+        <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.artist') }}</label>
+        <input v-model="form.artist" class="input-field w-full" :placeholder="t('upload.artistPlaceholder')" />
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm text-muted-foreground mb-1">Album</label>
+          <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.album') }}</label>
           <select v-model="form.album_id" class="input-field w-full">
-            <option value="">No album</option>
+            <option value="">{{ t('upload.noAlbum') }}</option>
             <option v-for="album in albums" :key="album.id" :value="album.id">
               {{ album.title }}
             </option>
           </select>
         </div>
         <div>
-          <label class="block text-sm text-muted-foreground mb-1">BPM</label>
-          <input v-model="form.bpm" type="number" class="input-field w-full" placeholder="e.g. 128" />
+          <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.bpm') }}</label>
+          <input v-model="form.bpm" type="number" class="input-field w-full" :placeholder="t('upload.bpmPlaceholder')" />
         </div>
       </div>
 
@@ -137,7 +139,7 @@ function formatFileSize(bytes: number): string {
             : 'btn-primary'
         ]"
       >
-        {{ uploading ? 'Uploading...' : 'Submit Track' }}
+        {{ uploading ? t('upload.uploading') : t('upload.submit') }}
       </button>
     </div>
   </div>
