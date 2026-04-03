@@ -21,8 +21,8 @@ async function handleSubmit() {
   }
   loading.value = true
   try {
-    const user = await authApi.login(email.value, password.value)
-    appStore.setCurrentUser(user)
+    const auth = await authApi.login(email.value, password.value)
+    appStore.setAuth(auth.user, auth.access_token)
     router.push('/')
   } catch (e: any) {
     error.value = e.message || 'Invalid email or password.'

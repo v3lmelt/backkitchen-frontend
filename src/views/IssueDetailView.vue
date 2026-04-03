@@ -57,7 +57,6 @@ function removeSelectedImage(index: number) {
 async function addComment() {
   if (!newComment.value.trim() || !appStore.currentUser || !issue.value) return
   const comment = await issueApi.addComment(issueId.value, {
-    author_id: appStore.currentUser.id,
     content: newComment.value,
     images: selectedImages.value.length ? selectedImages.value : undefined,
   })
@@ -88,6 +87,7 @@ async function updateStatus(status: 'will_fix' | 'disagreed' | 'resolved') {
       </button>
       <h1 class="text-2xl font-mono font-bold text-foreground">{{ issue.title }}</h1>
       <div class="flex items-center gap-3 mt-2">
+        <StatusBadge :status="issue.phase" type="phase" />
         <StatusBadge :status="issue.severity" type="severity" />
         <StatusBadge :status="issue.status" type="issue" />
         <span class="text-sm text-muted-foreground">

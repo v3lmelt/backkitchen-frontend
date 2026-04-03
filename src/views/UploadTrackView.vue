@@ -73,7 +73,7 @@ function formatFileSize(bytes: number): string {
 
 <template>
   <div class="max-w-2xl mx-auto space-y-6">
-    <h1 class="text-2xl font-mono font-bold text-foreground">Upload Track</h1>
+    <h1 class="text-2xl font-mono font-bold text-foreground">Submit Track</h1>
 
     <!-- Drop Zone -->
     <div
@@ -137,7 +137,7 @@ function formatFileSize(bytes: number): string {
             : 'btn-primary'
         ]"
       >
-        {{ uploading ? 'Uploading...' : 'Upload Track' }}
+        {{ uploading ? 'Uploading...' : 'Submit Track' }}
       </button>
     </div>
   </div>

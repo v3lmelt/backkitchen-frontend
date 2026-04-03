@@ -8,9 +8,16 @@ const appStore = useAppStore()
 
 const navItems = [
   { label: 'Dashboard', icon: 'grid', path: '/' },
-  { label: 'Upload', icon: 'upload', path: '/upload' },
+  { label: 'Submit', icon: 'upload', path: '/upload' },
   { label: 'Settings', icon: 'settings', path: '/settings' },
 ]
+
+const roleLabel = computed(() => {
+  const role = appStore.currentUser?.role
+  if (role === 'mastering_engineer') return 'Mastering Engineer'
+  if (role === 'producer') return 'Producer'
+  return 'Member'
+})
 
 const isActive = (path: string) => {
   if (path === '/') return route.path === '/'
@@ -76,7 +83,7 @@ const collapsed = computed(() => appStore.sidebarCollapsed)
         </div>
         <div v-if="!collapsed" class="min-w-0">
           <div class="text-sm font-medium text-foreground truncate">{{ appStore.currentUser.display_name }}</div>
-          <div class="text-xs text-muted-foreground capitalize">{{ appStore.currentUser.role }}</div>
+          <div class="text-xs text-muted-foreground truncate">{{ roleLabel }}</div>
         </div>
       </div>
     </div>

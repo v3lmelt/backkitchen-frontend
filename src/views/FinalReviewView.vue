@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { checklistApi, issueApi, trackApi } from '@/api'
-import type { ChecklistItem, Issue, Track } from '@/types'
+import { issueApi, trackApi } from '@/api'
+import { useAppStore } from '@/stores/app'
+import type { Issue, Track } from '@/types'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 
 const route = useRoute()
 const router = useRouter()
+const appStore = useAppStore()
 const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
-const existingChecklist = ref<ChecklistItem[]>([])
 const loading = ref(true)
 const waveformRef = ref<InstanceType<typeof WaveformPlayer>>()
 
@@ -24,11 +25,8 @@ const newIssue = ref({
   issue_type: 'point' as 'point' | 'range',
   time_start: 0,
   time_end: null as number | null,
-  phase: 'peer' as const,
+  phase: 'final_review' as const,
 })
-
-const checklistLabels = ['Arrangement', 'Balance', 'Low-End', 'Stereo Image', 'Technical Cleanliness']
-const checklist = ref(checklistLabels.map(label => ({ label, passed: false, note: '' })))
 
 onMounted(loadPage)
 
@@ -37,20 +35,21 @@ async function loadPage() {
   try {
     const detail = await trackApi.get(trackId.value)
     track.value = detail.track
-    issues.value = detail.issues.filter(issue => issue.phase === 'peer' && issue.workflow_cycle === detail.track.workflow_cycle)
-    existingChecklist.value = detail.checklist_items
-    if (existingChecklist.value.length) {
-      checklist.value = checklistLabels.map(label => {
-        const item = existingChecklist.value.find(entry => entry.label === label)
-        return { label, passed: item?.passed ?? false, note: item?.note ?? '' }
-      })
-    }
+    const deliveryId = detail.track.current_master_delivery?.id ?? null
+    issues.value = detail.issues.filter(issue => issue.phase === 'final_review' && issue.master_delivery_id === deliveryId)
   } finally {
     loading.value = false
   }
 }
 
-const audioUrl = computed(() => track.value?.file_path ? `/api/tracks/${trackId.value}/audio` : '')
+const masterAudioUrl = computed(() => track.value?.current_master_delivery ? `/api/tracks/${trackId.value}/master-audio` : '')
+const currentUserId = computed(() => appStore.currentUser?.id)
+const canApprove = computed(() => {
+  if (!track.value?.current_master_delivery || !currentUserId.value) return false
+  if (currentUserId.value === track.value.producer_id) return !track.value.current_master_delivery.producer_approved_at
+  if (currentUserId.value === track.value.submitter_id) return !track.value.current_master_delivery.submitter_approved_at
+  return false
+})
 
 function onWaveformClick(time: number) {
   newIssue.value.time_start = Math.round(time * 10) / 10
@@ -68,24 +67,17 @@ async function submitIssue() {
     issue_type: 'point',
     time_start: 0,
     time_end: null,
-    phase: 'peer',
+    phase: 'final_review',
   }
 }
 
-async function submitChecklist() {
-  existingChecklist.value = await checklistApi.submit(
-    trackId.value,
-    checklist.value.map(item => ({
-      label: item.label,
-      passed: item.passed,
-      note: item.note || undefined,
-    })),
-  )
-  alert('Checklist submitted.')
+async function approve() {
+  await trackApi.approveFinalReview(trackId.value)
+  await loadPage()
 }
 
-async function finish(decision: 'needs_revision' | 'pass') {
-  await trackApi.finishPeerReview(trackId.value, decision)
+async function returnToMastering() {
+  await trackApi.returnToMastering(trackId.value)
   router.push(`/tracks/${trackId.value}`)
 }
 
@@ -105,19 +97,19 @@ function formatTime(seconds: number): string {
   <div v-else-if="track" class="space-y-6">
     <div class="flex items-start justify-between">
       <div>
-        <h1 class="text-2xl font-mono font-bold text-foreground">Peer Review: {{ track.title }}</h1>
-        <p class="text-muted-foreground">Assigned reviewer workflow for source v{{ track.version }}</p>
+        <h1 class="text-2xl font-mono font-bold text-foreground">Final Review: {{ track.title }}</h1>
+        <p class="text-muted-foreground">Producer and submitter both need to approve the current master delivery.</p>
       </div>
       <button @click="router.push(`/tracks/${trackId}`)" class="btn-secondary text-sm">
         Back to Track
       </button>
     </div>
 
-    <div v-if="audioUrl">
-      <p class="text-xs text-muted-foreground mb-2">Click the waveform to mark a peer review issue.</p>
+    <div v-if="masterAudioUrl">
+      <p class="text-xs text-muted-foreground mb-2">Click the waveform to mark final review issues on the current master.</p>
       <WaveformPlayer
         ref="waveformRef"
-        :audio-url="audioUrl"
+        :audio-url="masterAudioUrl"
         :issues="issues"
         @click="onWaveformClick"
         @regionClick="onIssueSelect"
@@ -127,10 +119,8 @@ function formatTime(seconds: number): string {
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div class="space-y-4">
         <div class="flex items-center justify-between">
-          <h3 class="text-sm font-mono font-semibold text-foreground">Peer Issues ({{ issues.length }})</h3>
-          <button @click="showNewIssue = !showNewIssue" class="btn-primary text-xs">
-            + Add Issue
-          </button>
+          <h3 class="text-sm font-mono font-semibold text-foreground">Final Review Issues ({{ issues.length }})</h3>
+          <button @click="showNewIssue = !showNewIssue" class="btn-primary text-xs">+ Add Issue</button>
         </div>
 
         <div v-if="showNewIssue" class="card space-y-3 border-primary/50">
@@ -149,16 +139,6 @@ function formatTime(seconds: number): string {
               <option value="range">Range</option>
             </select>
           </div>
-          <div v-if="newIssue.issue_type === 'range'" class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="text-xs text-muted-foreground">Start (s)</label>
-              <input v-model.number="newIssue.time_start" type="number" step="0.1" class="input-field w-full" />
-            </div>
-            <div>
-              <label class="text-xs text-muted-foreground">End (s)</label>
-              <input v-model.number="newIssue.time_end" type="number" step="0.1" class="input-field w-full" />
-            </div>
-          </div>
           <div class="flex gap-2">
             <button @click="submitIssue" class="btn-primary text-sm">Submit Issue</button>
             <button @click="showNewIssue = false" class="btn-secondary text-sm">Cancel</button>
@@ -169,33 +149,25 @@ function formatTime(seconds: number): string {
       </div>
 
       <div class="card space-y-4">
-        <h3 class="text-sm font-mono font-semibold text-foreground">Peer Review Checklist</h3>
-        <div v-for="item in checklist" :key="item.label" class="flex items-start gap-3">
-          <input
-            type="checkbox"
-            v-model="item.passed"
-            class="mt-1 rounded border-border bg-card text-primary focus:ring-primary"
-          />
-          <div class="flex-1">
-            <div class="text-sm text-foreground">{{ item.label }}</div>
-            <input
-              v-model="item.note"
-              class="input-field w-full text-xs mt-1"
-              placeholder="Notes (optional)"
-            />
-          </div>
+        <h3 class="text-sm font-mono font-semibold text-foreground">Approval Status</h3>
+        <div class="flex items-center justify-between text-sm">
+          <span>Producer</span>
+          <span :class="track.current_master_delivery?.producer_approved_at ? 'text-success' : 'text-muted-foreground'">
+            {{ track.current_master_delivery?.producer_approved_at ? 'Approved' : 'Pending' }}
+          </span>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <button @click="submitChecklist" class="btn-secondary text-sm">
-            Save Checklist
-          </button>
-          <button @click="finish('needs_revision')" class="btn-primary text-sm">
-            Request Revision
-          </button>
-          <button @click="finish('pass')" class="btn-primary text-sm">
-            Pass to Producer
-          </button>
+        <div class="flex items-center justify-between text-sm">
+          <span>Submitter</span>
+          <span :class="track.current_master_delivery?.submitter_approved_at ? 'text-success' : 'text-muted-foreground'">
+            {{ track.current_master_delivery?.submitter_approved_at ? 'Approved' : 'Pending' }}
+          </span>
         </div>
+        <button @click="approve" :disabled="!canApprove" class="btn-primary text-sm w-full">
+          Approve Current Master
+        </button>
+        <button @click="returnToMastering" :disabled="issues.length === 0" class="btn-secondary text-sm w-full">
+          Return to Mastering
+        </button>
       </div>
     </div>
   </div>

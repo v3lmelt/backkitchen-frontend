@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 const PUBLIC_ROUTES = ['/login', '/register']
+const TOKEN_KEY = 'backkitchen_token'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -41,9 +42,19 @@ const router = createRouter({
       component: () => import('@/views/AuthorRevisionView.vue'),
     },
     {
-      path: '/tracks/:id/decision',
+      path: '/tracks/:id/producer',
       name: 'producer-decision',
       component: () => import('@/views/ProducerDecisionView.vue'),
+    },
+    {
+      path: '/tracks/:id/mastering',
+      name: 'mastering-review',
+      component: () => import('@/views/MasteringReviewView.vue'),
+    },
+    {
+      path: '/tracks/:id/final-review',
+      name: 'final-review',
+      component: () => import('@/views/FinalReviewView.vue'),
     },
     {
       path: '/upload',
@@ -59,9 +70,12 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  if (PUBLIC_ROUTES.includes(to.path)) return true
-  const stored = localStorage.getItem('backkitchen_user')
-  if (!stored) return '/login'
+  const token = localStorage.getItem(TOKEN_KEY)
+  if (PUBLIC_ROUTES.includes(to.path)) {
+    if (token) return '/'
+    return true
+  }
+  if (!token) return '/login'
   return true
 })
 

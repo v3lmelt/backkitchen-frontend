@@ -13,9 +13,9 @@ const filterStatus = ref<TrackStatus | ''>('')
 
 onMounted(async () => {
   try {
-    const [t, a] = await Promise.all([trackApi.list(), albumApi.list()])
-    tracks.value = t
-    albums.value = a
+    const [loadedTracks, loadedAlbums] = await Promise.all([trackApi.list(), albumApi.list()])
+    tracks.value = loadedTracks
+    albums.value = loadedAlbums
   } finally {
     loading.value = false
   }
@@ -23,15 +23,16 @@ onMounted(async () => {
 
 const filteredTracks = computed(() => {
   if (!filterStatus.value) return tracks.value
-  return tracks.value.filter(t => t.status === filterStatus.value)
+  return tracks.value.filter(track => track.status === filterStatus.value)
 })
 
 const stats = computed(() => ({
   total: tracks.value.length,
-  submitted: tracks.value.filter(t => t.status === 'submitted').length,
-  in_review: tracks.value.filter(t => t.status === 'in_review').length,
-  revision: tracks.value.filter(t => t.status === 'revision').length,
-  approved: tracks.value.filter(t => t.status === 'approved').length,
+  submitted: tracks.value.filter(track => track.status === 'submitted').length,
+  peer_review: tracks.value.filter(track => ['peer_review', 'peer_revision'].includes(track.status)).length,
+  mastering: tracks.value.filter(track => ['mastering', 'mastering_revision', 'final_review'].includes(track.status)).length,
+  completed: tracks.value.filter(track => track.status === 'completed').length,
+  rejected: tracks.value.filter(track => track.status === 'rejected').length,
 }))
 
 function formatDuration(seconds: number | null): string {
@@ -44,31 +45,33 @@ function formatDuration(seconds: number | null): string {
 
 <template>
   <div class="space-y-6">
-    <!-- Stats Cards -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
       <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = ''">
         <div class="text-2xl font-bold text-foreground">{{ stats.total }}</div>
-        <div class="text-xs text-muted-foreground mt-1">Total Tracks</div>
+        <div class="text-xs text-muted-foreground mt-1">Total</div>
       </div>
       <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'submitted'">
         <div class="text-2xl font-bold text-info">{{ stats.submitted }}</div>
         <div class="text-xs text-muted-foreground mt-1">Submitted</div>
       </div>
-      <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'in_review'">
-        <div class="text-2xl font-bold text-warning">{{ stats.in_review }}</div>
-        <div class="text-xs text-muted-foreground mt-1">In Review</div>
+      <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'peer_review'">
+        <div class="text-2xl font-bold text-warning">{{ stats.peer_review }}</div>
+        <div class="text-xs text-muted-foreground mt-1">Peer Flow</div>
       </div>
-      <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'revision'">
-        <div class="text-2xl font-bold text-error">{{ stats.revision }}</div>
-        <div class="text-xs text-muted-foreground mt-1">Revision</div>
+      <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'mastering'">
+        <div class="text-2xl font-bold text-warning">{{ stats.mastering }}</div>
+        <div class="text-xs text-muted-foreground mt-1">Mastering Flow</div>
       </div>
-      <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'approved'">
-        <div class="text-2xl font-bold text-success">{{ stats.approved }}</div>
-        <div class="text-xs text-muted-foreground mt-1">Approved</div>
+      <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'completed'">
+        <div class="text-2xl font-bold text-success">{{ stats.completed }}</div>
+        <div class="text-xs text-muted-foreground mt-1">Completed</div>
+      </div>
+      <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'rejected'">
+        <div class="text-2xl font-bold text-error">{{ stats.rejected }}</div>
+        <div class="text-xs text-muted-foreground mt-1">Rejected</div>
       </div>
     </div>
 
-    <!-- Albums -->
     <div v-if="albums.length > 0">
       <h2 class="text-lg font-mono font-semibold text-foreground mb-3">Albums</h2>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -89,7 +92,6 @@ function formatDuration(seconds: number | null): string {
       </div>
     </div>
 
-    <!-- Track List -->
     <div>
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-mono font-semibold text-foreground">
@@ -100,13 +102,13 @@ function formatDuration(seconds: number | null): string {
           </span>
         </h2>
         <button @click="router.push('/upload')" class="btn-primary text-sm">
-          + Upload Track
+          + Submit Track
         </button>
       </div>
 
       <div v-if="loading" class="text-center text-muted-foreground py-12">Loading...</div>
       <div v-else-if="filteredTracks.length === 0" class="text-center text-muted-foreground py-12">
-        No tracks found. Upload your first track to get started.
+        No tracks found.
       </div>
       <div v-else class="bg-card border border-border rounded-none overflow-hidden">
         <table class="w-full">
@@ -116,7 +118,7 @@ function formatDuration(seconds: number | null): string {
               <th class="px-4 py-3">Artist</th>
               <th class="px-4 py-3">Duration</th>
               <th class="px-4 py-3">Status</th>
-              <th class="px-4 py-3">Issues</th>
+              <th class="px-4 py-3">Open Issues</th>
               <th class="px-4 py-3">Version</th>
             </tr>
           </thead>
@@ -127,14 +129,10 @@ function formatDuration(seconds: number | null): string {
               @click="router.push(`/tracks/${track.id}`)"
               class="border-b border-border last:border-0 hover:bg-white/5 cursor-pointer transition-colors"
             >
-              <td class="px-4 py-3">
-                <span class="text-sm font-medium text-foreground">{{ track.title }}</span>
-              </td>
+              <td class="px-4 py-3 text-sm font-medium text-foreground">{{ track.title }}</td>
               <td class="px-4 py-3 text-sm text-muted-foreground">{{ track.artist }}</td>
               <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ formatDuration(track.duration) }}</td>
-              <td class="px-4 py-3">
-                <StatusBadge :status="track.status" type="track" />
-              </td>
+              <td class="px-4 py-3"><StatusBadge :status="track.status" type="track" /></td>
               <td class="px-4 py-3 text-sm text-muted-foreground">
                 <span v-if="track.open_issue_count" class="text-error">{{ track.open_issue_count }} open</span>
                 <span v-else>--</span>

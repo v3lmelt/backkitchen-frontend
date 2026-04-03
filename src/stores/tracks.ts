@@ -20,18 +20,11 @@ export const useTrackStore = defineStore('tracks', () => {
   async function loadTrack(id: number) {
     loading.value = true
     try {
-      currentTrack.value = await trackApi.get(id)
+      currentTrack.value = (await trackApi.get(id)).track
     } finally {
       loading.value = false
     }
   }
 
-  async function updateStatus(id: number, status: TrackStatus) {
-    const updated = await trackApi.updateStatus(id, status)
-    currentTrack.value = updated
-    const idx = tracks.value.findIndex(t => t.id === id)
-    if (idx !== -1) tracks.value[idx] = updated
-  }
-
-  return { tracks, currentTrack, loading, loadTracks, loadTrack, updateStatus }
+  return { tracks, currentTrack, loading, loadTracks, loadTrack }
 })

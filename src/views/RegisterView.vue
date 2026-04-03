@@ -2,8 +2,10 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authApi } from '@/api'
+import { useAppStore } from '@/stores/app'
 
 const router = useRouter()
+const appStore = useAppStore()
 
 const firstName = ref('')
 const lastName = ref('')
@@ -32,13 +34,15 @@ async function handleSubmit() {
 
   loading.value = true
   try {
-    await authApi.register({
-      firstName: firstName.value,
-      lastName: lastName.value,
+    const display_name = `${firstName.value} ${lastName.value}`.trim()
+    const auth = await authApi.register({
+      username: email.value,
+      display_name,
       email: email.value,
       password: password.value,
     })
-    router.push('/login')
+    appStore.setAuth(auth.user, auth.access_token)
+    router.push('/')
   } catch (e: any) {
     if (e.message?.includes('409') || e.message?.toLowerCase().includes('unique') || e.message?.toLowerCase().includes('already')) {
       error.value = 'An account with this email already exists.'

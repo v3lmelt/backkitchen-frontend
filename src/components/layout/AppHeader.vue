@@ -9,14 +9,16 @@ const appStore = useAppStore()
 const pageTitle = computed(() => {
   const name = route.name as string
   const map: Record<string, string> = {
-    'dashboard': 'Dashboard',
+    dashboard: 'Dashboard',
     'track-detail': 'Track Detail',
     'peer-review': 'Peer Review',
     'issue-detail': 'Issue Detail',
-    'author-revision': 'Author Revision',
-    'producer-decision': 'Producer Decision',
-    'upload': 'Upload Track',
-    'settings': 'Settings',
+    'author-revision': 'Source Revision',
+    'producer-decision': 'Producer Workspace',
+    'mastering-review': 'Mastering Review',
+    'final-review': 'Final Review',
+    upload: 'Submit Track',
+    settings: 'Album Settings',
   }
   return map[name] || 'BACK KITCHEN'
 })
@@ -27,6 +29,13 @@ const breadcrumbs = computed(() => {
     crumbs.push({ label: pageTitle.value, path: route.path })
   }
   return crumbs
+})
+
+const roleLabel = computed(() => {
+  const role = appStore.currentUser?.role
+  if (role === 'mastering_engineer') return 'Mastering Engineer'
+  if (role === 'producer') return 'Producer'
+  return 'Member'
 })
 </script>
 
@@ -54,18 +63,14 @@ const breadcrumbs = computed(() => {
       </nav>
     </div>
 
-    <!-- User switcher -->
-    <div class="flex items-center gap-2">
-      <select
-        v-if="appStore.users.length > 0"
-        :value="appStore.currentUser?.id"
-        @change="appStore.setCurrentUser(appStore.users.find(u => u.id === Number(($event.target as HTMLSelectElement).value))!)"
-        class="input-field text-sm py-1"
-      >
-        <option v-for="user in appStore.users" :key="user.id" :value="user.id">
-          {{ user.display_name }} ({{ user.role }})
-        </option>
-      </select>
+    <div v-if="appStore.currentUser" class="flex items-center gap-3">
+      <div class="text-right hidden sm:block">
+        <div class="text-sm text-foreground font-medium">{{ appStore.currentUser.display_name }}</div>
+        <div class="text-xs text-muted-foreground">{{ roleLabel }}</div>
+      </div>
+      <button @click="appStore.logout()" class="btn-secondary text-xs px-3 py-1.5">
+        Logout
+      </button>
     </div>
   </header>
 </template>

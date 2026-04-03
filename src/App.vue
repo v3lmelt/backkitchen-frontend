@@ -10,9 +10,7 @@ const appStore = useAppStore()
 const isAuthPage = computed(() => ['/login', '/register'].includes(route.path))
 
 onMounted(() => {
-  if (!isAuthPage.value) {
-    appStore.loadUsers()
-  }
+  appStore.bootstrap()
 })
 </script>
 
