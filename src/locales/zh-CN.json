@@ -16,7 +16,8 @@
     "rangeStart": "起点（秒）",
     "rangeEnd": "终点（秒）",
     "requestFailed": "请求失败",
-    "downloadAudio": "下载音频"
+    "downloadAudio": "下载音频",
+    "downloadFailed": "下载失败"
   },
   "severity": {
     "critical": "严重",
@@ -262,7 +263,8 @@
     "addCommentPlaceholder": "添加评论…",
     "image": "图片",
     "addComment": "添加评论",
-    "audioContext": "音频定位"
+    "audioContext": "音频定位",
+    "noDescription": "暂无描述"
   },
   "upload": {
     "heading": "提交曲目",

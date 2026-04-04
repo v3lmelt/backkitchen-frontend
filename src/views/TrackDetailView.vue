@@ -8,6 +8,7 @@ import { formatLocaleDate } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
+import IssueDetailPanel from '@/components/IssueDetailPanel.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 
@@ -110,9 +111,16 @@ const actionLabel = (action: string) => {
   return t(key, action.replaceAll('_', ' '))
 }
 
+const selectedIssue = ref<Issue | null>(null)
+
 function onIssueSelect(issue: Issue) {
   waveformRef.value?.seekTo(issue.time_start)
-  router.push(`/issues/${issue.id}`)
+  selectedIssue.value = issue
+}
+
+function onIssueUpdated(updated: Issue) {
+  const idx = issues.value.findIndex(i => i.id === updated.id)
+  if (idx !== -1) issues.value[idx] = updated
 }
 
 function openPrimaryAction(action: string) {
@@ -263,4 +271,5 @@ const olderVersions = computed(() =>
       </div>
     </div>
   </div>
+  <IssueDetailPanel :issue="selectedIssue" @close="selectedIssue = null" @updated="onIssueUpdated" />
 </template>

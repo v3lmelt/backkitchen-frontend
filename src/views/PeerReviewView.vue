@@ -7,7 +7,9 @@ import type { ChecklistItem, Issue, Track } from '@/types'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
+import IssueDetailPanel from '@/components/IssueDetailPanel.vue'
 import { useToast } from '@/composables/useToast'
+import { useAudioDownload } from '@/composables/useAudioDownload'
 
 const route = useRoute()
 const router = useRouter()
@@ -91,9 +93,25 @@ async function finish(decision: 'needs_revision' | 'pass') {
   }
 }
 
+const selectedIssue = ref<Issue | null>(null)
+
 function onIssueSelect(issue: Issue) {
   waveformRef.value?.seekTo(issue.time_start)
   waveformRef.value?.highlightIssue(issue)
+  selectedIssue.value = issue
+}
+
+function onIssueUpdated(updated: Issue) {
+  const idx = issues.value.findIndex(i => i.id === updated.id)
+  if (idx !== -1) issues.value[idx] = updated
+}
+
+const { downloading, downloadAudio } = useAudioDownload()
+
+function handleDownload() {
+  if (!audioUrl.value || !track.value) return
+  const ext = track.value.file_path?.split('.').pop() || 'wav'
+  downloadAudio(audioUrl.value, `${track.value.title}.${ext}`)
 }
 </script>
 
@@ -115,7 +133,12 @@ function onIssueSelect(issue: Issue) {
     </div>
 
     <div v-if="audioUrl">
-      <p class="text-xs text-muted-foreground mb-2">{{ t('peerReview.waveformHint') }}</p>
+      <div class="flex items-center justify-between mb-2">
+        <p class="text-xs text-muted-foreground">{{ t('peerReview.waveformHint') }}</p>
+        <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+          {{ downloading ? '…' : t('common.downloadAudio') }}
+        </button>
+      </div>
       <WaveformPlayer
         ref="waveformRef"
         :audio-url="audioUrl"
@@ -185,4 +208,5 @@ function onIssueSelect(issue: Issue) {
       </div>
     </div>
   </div>
+  <IssueDetailPanel :issue="selectedIssue" @close="selectedIssue = null" @updated="onIssueUpdated" />
 </template>
