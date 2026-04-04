@@ -8,7 +8,6 @@ import { formatLocaleDate } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
-import IssueDetailPanel from '@/components/IssueDetailPanel.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 
@@ -84,7 +83,6 @@ const issues = ref<Issue[]>([])
 const events = ref<WorkflowEvent[]>([])
 const sourceVersions = ref<TrackSourceVersion[]>([])
 const loading = ref(true)
-const waveformRef = ref<InstanceType<typeof WaveformPlayer>>()
 const showVersionCompare = ref(false)
 const selectedCompareVersionId = ref<number | null>(null)
 
@@ -111,16 +109,8 @@ const actionLabel = (action: string) => {
   return t(key, action.replaceAll('_', ' '))
 }
 
-const selectedIssue = ref<Issue | null>(null)
-
 function onIssueSelect(issue: Issue) {
-  waveformRef.value?.seekTo(issue.time_start)
-  selectedIssue.value = issue
-}
-
-function onIssueUpdated(updated: Issue) {
-  const idx = issues.value.findIndex(i => i.id === updated.id)
-  if (idx !== -1) issues.value[idx] = updated
+  router.push(`/issues/${issue.id}`)
 }
 
 function openPrimaryAction(action: string) {
@@ -187,19 +177,18 @@ const olderVersions = computed(() =>
           </div>
           <!-- 版本选择器 -->
           <div v-if="showVersionCompare && olderVersions.length > 0" class="flex items-center gap-2 mb-3">
-            <span class="text-xs text-gray-400">{{ t('compare.selectVersion') }}</span>
+            <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
             <select v-model="selectedCompareVersionId" class="select-field-sm">
               <option :value="null">-- {{ t('compare.selectVersion') }} --</option>
               <option v-for="v in olderVersions" :key="v.id" :value="v.id">
                 V{{ v.version_number }} · {{ fmtDate(v.created_at) }}
               </option>
             </select>
-            <button v-if="selectedCompareVersionId" @click="selectedCompareVersionId = null" class="text-xs text-gray-500 hover:text-gray-300">
+            <button v-if="selectedCompareVersionId" @click="selectedCompareVersionId = null" class="text-xs text-muted-foreground hover:text-foreground">
               {{ t('compare.clear') }}
             </button>
           </div>
           <WaveformPlayer
-            ref="waveformRef"
             :audio-url="audioUrl"
             :issues="currentCycleIssues"
             :track-id="trackId"
@@ -228,7 +217,7 @@ const olderVersions = computed(() =>
           </div>
           <div class="flex justify-between">
             <span class="text-muted-foreground">{{ t('trackDetail.peerReviewer') }}</span>
-            <span class="text-foreground">{{ track.peer_reviewer?.display_name || '--' }}</span>
+            <span class="text-foreground font-mono">{{ track.peer_reviewer ? `#${hashId(track.peer_reviewer.id)}` : '--' }}</span>
           </div>
           <div class="flex justify-between">
             <span class="text-muted-foreground">{{ t('trackDetail.openIssues') }}</span>
@@ -271,5 +260,4 @@ const olderVersions = computed(() =>
       </div>
     </div>
   </div>
-  <IssueDetailPanel :issue="selectedIssue" @close="selectedIssue = null" @updated="onIssueUpdated" />
 </template>

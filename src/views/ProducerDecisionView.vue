@@ -9,7 +9,6 @@ import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
-import IssueDetailPanel from '@/components/IssueDetailPanel.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 
 const route = useRoute()
@@ -21,7 +20,6 @@ const track = ref<Track | null>(null)
 const allCycleIssues = ref<Issue[]>([])
 const checklist = ref<ChecklistItem[]>([])
 const loading = ref(true)
-const waveformRef = ref<InstanceType<typeof WaveformPlayer>>()
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 
 onMounted(loadPage)
@@ -45,13 +43,8 @@ const isMasteringGateState = computed(() => track.value?.status === 'producer_ma
 
 const audioUrl = computed(() => track.value?.file_path ? `/api/tracks/${trackId.value}/audio` : '')
 
-const { downloading, downloadAudio } = useAudioDownload()
-
-function handleDownload() {
-  if (!audioUrl.value || !track.value) return
-  const ext = track.value.file_path?.split('.').pop() || 'wav'
-  downloadAudio(audioUrl.value, `${track.value.title}.${ext}`)
-}
+const { downloading, downloadTrackAudio } = useAudioDownload()
+const handleDownload = () => downloadTrackAudio(audioUrl, track)
 
 const producerIssues = computed(() =>
   allCycleIssues.value.filter(i => i.phase === 'producer'),
@@ -63,17 +56,8 @@ const openCount = computed(() => allCycleIssues.value.filter(i => i.status === '
 const resolvedCount = computed(() => allCycleIssues.value.filter(i => i.status === 'resolved').length)
 const checklistPassedCount = computed(() => checklist.value.filter(item => item.passed).length)
 
-const selectedIssue = ref<Issue | null>(null)
-
 function onIssueSelect(issue: Issue) {
-  waveformRef.value?.seekTo(issue.time_start)
-  waveformRef.value?.highlightIssue(issue)
-  selectedIssue.value = issue
-}
-
-function onIssueUpdated(updated: Issue) {
-  const idx = allCycleIssues.value.findIndex(i => i.id === updated.id)
-  if (idx !== -1) allCycleIssues.value[idx] = updated
+  router.push(`/issues/${issue.id}`)
 }
 
 async function handleIntake(decision: 'accept' | 'reject_final' | 'reject_resubmittable') {
@@ -141,7 +125,6 @@ async function handleGate(decision: 'send_to_mastering' | 'request_peer_revision
           </button>
         </div>
         <WaveformPlayer
-          ref="waveformRef"
           :audio-url="audioUrl"
           :issues="producerIssues"
           :selectable="true"
@@ -209,5 +192,4 @@ async function handleGate(decision: 'send_to_mastering' | 'request_peer_revision
       </div>
     </template>
   </div>
-  <IssueDetailPanel :issue="selectedIssue" @close="selectedIssue = null" @updated="onIssueUpdated" />
 </template>

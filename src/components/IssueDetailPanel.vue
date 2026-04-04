@@ -5,7 +5,7 @@ import { issueApi } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Issue, IssueStatus } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
-import { formatTimestamp, formatLocaleDate } from '@/utils/time'
+import { formatTimestamp } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 
 const props = defineProps<{ issue: Issue | null }>()

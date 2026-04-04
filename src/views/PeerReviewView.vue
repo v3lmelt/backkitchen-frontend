@@ -7,7 +7,6 @@ import type { ChecklistItem, Issue, Track } from '@/types'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
-import IssueDetailPanel from '@/components/IssueDetailPanel.vue'
 import { useToast } from '@/composables/useToast'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 
@@ -21,7 +20,6 @@ const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
 const existingChecklist = ref<ChecklistItem[]>([])
 const loading = ref(true)
-const waveformRef = ref<InstanceType<typeof WaveformPlayer>>()
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 const error = ref('')
 
@@ -93,26 +91,12 @@ async function finish(decision: 'needs_revision' | 'pass') {
   }
 }
 
-const selectedIssue = ref<Issue | null>(null)
-
 function onIssueSelect(issue: Issue) {
-  waveformRef.value?.seekTo(issue.time_start)
-  waveformRef.value?.highlightIssue(issue)
-  selectedIssue.value = issue
+  router.push(`/issues/${issue.id}`)
 }
 
-function onIssueUpdated(updated: Issue) {
-  const idx = issues.value.findIndex(i => i.id === updated.id)
-  if (idx !== -1) issues.value[idx] = updated
-}
-
-const { downloading, downloadAudio } = useAudioDownload()
-
-function handleDownload() {
-  if (!audioUrl.value || !track.value) return
-  const ext = track.value.file_path?.split('.').pop() || 'wav'
-  downloadAudio(audioUrl.value, `${track.value.title}.${ext}`)
-}
+const { downloading, downloadTrackAudio } = useAudioDownload()
+const handleDownload = () => downloadTrackAudio(audioUrl, track)
 </script>
 
 <template>
@@ -140,7 +124,6 @@ function handleDownload() {
         </button>
       </div>
       <WaveformPlayer
-        ref="waveformRef"
         :audio-url="audioUrl"
         :issues="issues"
         :selectable="true"
@@ -208,5 +191,4 @@ function handleDownload() {
       </div>
     </div>
   </div>
-  <IssueDetailPanel :issue="selectedIssue" @close="selectedIssue = null" @updated="onIssueUpdated" />
 </template>

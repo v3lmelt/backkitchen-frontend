@@ -7,7 +7,6 @@ import type { Issue, Track } from '@/types'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
-import IssueDetailPanel from '@/components/IssueDetailPanel.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 
 const route = useRoute()
@@ -18,7 +17,6 @@ const trackId = computed(() => Number(route.params.id))
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
 const loading = ref(true)
-const waveformRef = ref<InstanceType<typeof WaveformPlayer>>()
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 const masterFile = ref<File | null>(null)
 const uploading = ref(false)
@@ -38,25 +36,11 @@ async function loadPage() {
 
 const audioUrl = computed(() => track.value?.file_path ? `/api/tracks/${trackId.value}/audio` : '')
 
-const { downloading, downloadAudio } = useAudioDownload()
-
-function handleDownload() {
-  if (!audioUrl.value || !track.value) return
-  const ext = track.value.file_path?.split('.').pop() || 'wav'
-  downloadAudio(audioUrl.value, `${track.value.title}.${ext}`)
-}
-
-const selectedIssue = ref<Issue | null>(null)
+const { downloading, downloadTrackAudio } = useAudioDownload()
+const handleDownload = () => downloadTrackAudio(audioUrl, track)
 
 function onIssueSelect(issue: Issue) {
-  waveformRef.value?.seekTo(issue.time_start)
-  waveformRef.value?.highlightIssue(issue)
-  selectedIssue.value = issue
-}
-
-function onIssueUpdated(updated: Issue) {
-  const idx = issues.value.findIndex(i => i.id === updated.id)
-  if (idx !== -1) issues.value[idx] = updated
+  router.push(`/issues/${issue.id}`)
 }
 
 async function requestRevision() {
@@ -102,7 +86,6 @@ async function uploadMasterDelivery() {
         </button>
       </div>
       <WaveformPlayer
-        ref="waveformRef"
         :audio-url="audioUrl"
         :issues="issues"
         :selectable="true"
@@ -151,5 +134,4 @@ async function uploadMasterDelivery() {
       </div>
     </div>
   </div>
-  <IssueDetailPanel :issue="selectedIssue" @close="selectedIssue = null" @updated="onIssueUpdated" />
 </template>

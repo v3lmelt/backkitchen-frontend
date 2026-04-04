@@ -45,6 +45,10 @@ const lastSelectionAt = ref(0)
 const activePointGroupKey = ref<string | null>(null)
 const abMode = ref<'A' | 'B'>('A')
 const isCompareMode = computed(() => !!props.compareVersionId)
+const compareDuration = ref(0)
+const compareCurrentTime = ref(0)
+const activeDuration = computed(() => abMode.value === 'B' && compareDuration.value > 0 ? compareDuration.value : duration.value)
+const activeCurrentTime = computed(() => abMode.value === 'B' && compareDuration.value > 0 ? compareCurrentTime.value : currentTime.value)
 const selectionVisualColor = 'rgba(34, 211, 238, 0.28)'
 const SEVERITY_COLORS: Record<string, string> = {
   critical: '#ef4444',
@@ -162,7 +166,7 @@ const rangeIssues = computed(() =>
 )
 
 const overlayHeight = computed(() => props.height || 128)
-const pointLineHeight = computed(() => `${Math.max((props.height || 128) - 28, 80)}px`)
+const pointLineHeight = computed(() => `${Math.max((props.height || 128) - 28, 0)}px`)
 
 const hasPointIssues = computed(() => (props.issues ?? []).some(i => i.issue_type === 'point'))
 
@@ -215,6 +219,8 @@ function _addHighlightRegion(issue: Issue & { time_end: number }) {
     resize: false,
     id: `__hl_${issue.id}__`,
   })
+  const el = (region as any).element as HTMLElement | undefined
+  if (el) el.style.pointerEvents = 'none'
   highlightRegionId.value = region.id
 }
 
@@ -373,13 +379,15 @@ onMounted(async () => {
       emit('timeupdate', time)
       lastTimeUpdateMs = now
     }
-    if (compareWaveSurfer.value && isCompareMode.value && now - lastInteractionMs > 300) {
-      const compareDuration = compareWaveSurfer.value.getDuration()
-      if (compareDuration > 0) {
+    // Drift correction: only in A mode, and only outside the post-interaction window.
+    // In B mode the two tracks intentionally play from different absolute positions
+    // (the user sought B to a visual fraction), so correcting against A's time is wrong.
+    if (compareWaveSurfer.value && isCompareMode.value && abMode.value === 'A' && now - lastInteractionMs > 300) {
+      const compDur = compareWaveSurfer.value.getDuration()
+      if (compDur > 0) {
         const compareTime = compareWaveSurfer.value.getCurrentTime()
-        // Correct drift if positions diverge by more than 0.15s
-        if (Math.abs(compareTime - time) > 0.15) {
-          compareWaveSurfer.value.seekTo(time / compareDuration)
+        if (Math.abs(compareTime - time) > 0.5) {
+          compareWaveSurfer.value.seekTo(time / compDur)
         }
       }
     }
@@ -396,9 +404,14 @@ onMounted(async () => {
   ws.on('interaction', (newTime: number) => {
     if (compareWaveSurfer.value && isCompareMode.value) {
       lastInteractionMs = Date.now()
-      const primaryDuration = ws.getDuration()
-      if (primaryDuration > 0) {
-        compareWaveSurfer.value.seekTo(newTime / primaryDuration)
+      const primaryDur = ws.getDuration()
+      const compDur = compareWaveSurfer.value.getDuration()
+      if (primaryDur > 0 && compDur > 0) {
+        if (abMode.value === 'A') {
+          compareWaveSurfer.value.seekTo(newTime / compDur)
+        } else {
+          compareWaveSurfer.value.seekTo(newTime / primaryDur)
+        }
       }
     }
   })
@@ -488,6 +501,8 @@ watch(() => props.compareVersionId, async (newId) => {
   if (compareWaveSurfer.value) {
     compareWaveSurfer.value.destroy()
     compareWaveSurfer.value = null
+    compareDuration.value = 0
+    compareCurrentTime.value = 0
   }
   if (!newId || !props.trackId) {
     abMode.value = 'A'
@@ -509,6 +524,18 @@ watch(() => props.compareVersionId, async (newId) => {
     barRadius: 2,
     interact: false,
     cursorWidth: 0,
+  })
+
+  ws.on('ready', () => {
+    compareDuration.value = ws.getDuration()
+  })
+  let lastCompareUpdateMs = 0
+  ws.on('timeupdate', (t: number) => {
+    const now = Date.now()
+    if (now - lastCompareUpdateMs >= 50) {
+      compareCurrentTime.value = t
+      lastCompareUpdateMs = now
+    }
   })
 
   const compareUrl = `/api/tracks/${props.trackId}/source-versions/${newId}/audio`
@@ -572,9 +599,9 @@ function seekTo(time: number) {
     wavesurfer.value.seekTo(time / duration.value)
   }
   if (compareWaveSurfer.value && isCompareMode.value) {
-    const compareDuration = compareWaveSurfer.value.getDuration()
-    if (compareDuration > 0) {
-      compareWaveSurfer.value.seekTo(time / compareDuration)
+    const compDur = compareWaveSurfer.value.getDuration()
+    if (compDur > 0) {
+      compareWaveSurfer.value.seekTo(time / compDur)
     }
   }
 }
@@ -618,7 +645,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue })
             >
               {{ group.issues.length }}
             </span>
-            <span class="mt-1 min-h-[108px] w-px" :class="lineClassForStatus(group.status)" :style="{ height: pointLineHeight }" />
+            <span class="mt-1 w-px" :class="lineClassForStatus(group.status)" :style="{ height: pointLineHeight }" />
           </button>
 
           <div
@@ -663,15 +690,15 @@ defineExpose({ seekTo, togglePlay, highlightIssue })
         <div v-if="isCompareMode" class="absolute top-2 right-2 flex items-center gap-1 bg-black/60 rounded-lg p-1 z-10">
           <button
             @click="abMode = 'A'"
-            :class="['px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'A' ? 'bg-blue-500 text-white' : 'text-gray-400 hover:text-white']">
+            :class="['px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'A' ? 'bg-primary text-background' : 'text-muted-foreground hover:text-white']">
             A
           </button>
           <button
             @click="abMode = 'B'"
-            :class="['px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'B' ? 'bg-orange-500 text-white' : 'text-gray-400 hover:text-white']">
+            :class="['px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'B' ? 'bg-primary text-background' : 'text-muted-foreground hover:text-white']">
             B
           </button>
-          <span class="text-xs text-gray-400 px-1">{{ abMode === 'A' ? $t('compare.currentVersion') : $t('compare.previousVersion') }}</span>
+          <span class="text-xs text-muted-foreground px-1">{{ abMode === 'A' ? $t('compare.currentVersion') : $t('compare.previousVersion') }}</span>
         </div>
       </div>
     </div>
@@ -710,7 +737,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue })
         </svg>
       </button>
       <span class="text-sm text-muted-foreground font-mono">
-        {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
+        {{ formatTime(activeCurrentTime) }} / {{ formatTime(activeDuration) }}
       </span>
     </div>
   </div>

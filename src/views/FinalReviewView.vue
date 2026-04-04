@@ -8,7 +8,6 @@ import type { Issue, Track } from '@/types'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
-import IssueDetailPanel from '@/components/IssueDetailPanel.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 
 const route = useRoute()
@@ -20,7 +19,6 @@ const trackId = computed(() => Number(route.params.id))
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
 const loading = ref(true)
-const waveformRef = ref<InstanceType<typeof WaveformPlayer>>()
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 
 onMounted(loadPage)
@@ -40,13 +38,8 @@ async function loadPage() {
 const masterAudioUrl = computed(() => track.value?.current_master_delivery ? `/api/tracks/${trackId.value}/master-audio` : '')
 const masterDeliveryId = computed(() => track.value?.current_master_delivery?.id ?? null)
 
-const { downloading, downloadAudio } = useAudioDownload()
-
-function handleDownload() {
-  if (!masterAudioUrl.value || !track.value) return
-  const ext = track.value.current_master_delivery?.file_path?.split('.').pop() || 'wav'
-  downloadAudio(masterAudioUrl.value, `${track.value.title}_master.${ext}`)
-}
+const { downloading, downloadTrackAudio } = useAudioDownload()
+const handleDownload = () => downloadTrackAudio(masterAudioUrl, track, '_master')
 
 const currentUserId = computed(() => appStore.currentUser?.id)
 const canApprove = computed(() => {
@@ -56,17 +49,8 @@ const canApprove = computed(() => {
   return false
 })
 
-const selectedIssue = ref<Issue | null>(null)
-
 function onIssueSelect(issue: Issue) {
-  waveformRef.value?.seekTo(issue.time_start)
-  waveformRef.value?.highlightIssue(issue)
-  selectedIssue.value = issue
-}
-
-function onIssueUpdated(updated: Issue) {
-  const idx = issues.value.findIndex(i => i.id === updated.id)
-  if (idx !== -1) issues.value[idx] = updated
+  router.push(`/issues/${issue.id}`)
 }
 
 async function approve() {
@@ -101,7 +85,6 @@ async function returnToMastering() {
         </button>
       </div>
       <WaveformPlayer
-        ref="waveformRef"
         :audio-url="masterAudioUrl"
         :issues="issues"
         :selectable="true"
@@ -152,5 +135,4 @@ async function returnToMastering() {
       </div>
     </div>
   </div>
-  <IssueDetailPanel :issue="selectedIssue" @close="selectedIssue = null" @updated="onIssueUpdated" />
 </template>
