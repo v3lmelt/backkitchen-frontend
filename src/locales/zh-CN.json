@@ -259,6 +259,24 @@
     "readOnlyNotice": "团队配置只能由专辑制作人编辑。",
     "masteringEngineerInfo": "母带工程师：{name}",
     "participantsInfo": "参与者：{list}",
-    "noneParticipants": "无"
+    "noneParticipants": "无",
+    "inviteMember": "邀请成员",
+    "inviteByUserId": "通过用户 ID 邀请",
+    "userIdPlaceholder": "输入用户 ID",
+    "invite": "邀请",
+    "inviting": "邀请中…",
+    "pendingInvitations": "待处理邀请",
+    "noPendingInvitations": "暂无待处理邀请。",
+    "cancelInvitation": "取消",
+    "invitationSent": "邀请已发送。",
+    "invitationCancelled": "邀请已取消。",
+    "inviteErrorAlreadyMember": "用户已是成员。",
+    "inviteErrorAlreadyInvited": "用户已有待处理的邀请。"
+  },
+  "invitations": {
+    "title": "专辑邀请",
+    "from": "邀请者：{name}",
+    "accept": "接受",
+    "decline": "拒绝"
   }
 }

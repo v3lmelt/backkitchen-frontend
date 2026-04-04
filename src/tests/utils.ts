@@ -1,13 +1,14 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import enMessages from '@/locales/en.json'
 
 export function createTestI18n() {
   return createI18n({
     legacy: false,
     locale: 'en',
     fallbackLocale: 'en',
-    messages: { en: {} },
+    messages: { en: enMessages },
     missingWarn: false,
     fallbackWarn: false,
   })

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { User } from '@/types'
-import { authApi, userApi } from '@/api'
+import type { Invitation, User } from '@/types'
+import { authApi, invitationApi, userApi } from '@/api'
 import router from '@/router'
 
 const USER_KEY = 'backkitchen_user'
@@ -14,6 +14,7 @@ export const useAppStore = defineStore('app', () => {
   const users = ref<User[]>([])
   const sidebarCollapsed = ref(false)
   const bootstrapped = ref(false)
+  const pendingInvitations = ref<Invitation[]>([])
 
   const isAuthenticated = computed(() => Boolean(token.value && currentUser.value))
 
@@ -55,8 +56,31 @@ export const useAppStore = defineStore('app', () => {
     users.value = await userApi.list()
   }
 
+  async function loadPendingInvitations() {
+    if (!isAuthenticated.value) {
+      pendingInvitations.value = []
+      return
+    }
+    try {
+      pendingInvitations.value = await invitationApi.listMine()
+    } catch {
+      pendingInvitations.value = []
+    }
+  }
+
+  async function acceptInvitation(id: number) {
+    await invitationApi.accept(id)
+    pendingInvitations.value = pendingInvitations.value.filter((inv) => inv.id !== id)
+  }
+
+  async function declineInvitation(id: number) {
+    await invitationApi.decline(id)
+    pendingInvitations.value = pendingInvitations.value.filter((inv) => inv.id !== id)
+  }
+
   function logout() {
     clearAuth()
+    pendingInvitations.value = []
     router.push('/login')
   }
 
@@ -71,10 +95,14 @@ export const useAppStore = defineStore('app', () => {
     sidebarCollapsed,
     bootstrapped,
     isAuthenticated,
+    pendingInvitations,
     setAuth,
     clearAuth,
     bootstrap,
     loadUsers,
+    loadPendingInvitations,
+    acceptInvitation,
+    declineInvitation,
     logout,
     toggleSidebar,
   }

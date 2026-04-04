@@ -67,7 +67,7 @@ describe('PeerReviewView', () => {
     const titleInput = wrapper.find('input')
     await titleInput.setValue('Clicks')
     await wrapper.find('textarea').setValue('Need cleanup')
-    await wrapper.findAll('button').find(button => button.text() === 'common.submitIssue')?.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Submit Issue')?.trigger('click')
 
     expect(mocks.issueCreateMock).toHaveBeenCalledWith(7, expect.objectContaining({ title: 'Clicks' }))
   })
@@ -78,8 +78,8 @@ describe('PeerReviewView', () => {
     await Promise.resolve()
 
     const buttons = wrapper.findAll('button')
-    await buttons.find(button => button.text() === 'peerReview.saveChecklist')!.trigger('click')
-    await buttons.find(button => button.text() === 'peerReview.passToProducer')!.trigger('click')
+    await buttons.find(button => button.text() === 'Save Checklist')!.trigger('click')
+    await buttons.find(button => button.text() === 'Pass to Producer')!.trigger('click')
 
     expect(mocks.checklistSubmitMock).toHaveBeenCalledWith(7, expect.any(Array))
     expect(mocks.finishPeerReviewMock).toHaveBeenCalledWith(7, 'pass')

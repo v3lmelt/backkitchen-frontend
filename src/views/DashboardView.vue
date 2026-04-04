@@ -3,11 +3,13 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi } from '@/api'
+import { useAppStore } from '@/stores/app'
 import type { Track, Album, TrackStatus } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 
 const router = useRouter()
 const { t } = useI18n()
+const appStore = useAppStore()
 const tracks = ref<Track[]>([])
 const albums = ref<Album[]>([])
 const loading = ref(true)
@@ -18,6 +20,7 @@ onMounted(async () => {
     const [loadedTracks, loadedAlbums] = await Promise.all([trackApi.list(), albumApi.list()])
     tracks.value = loadedTracks
     albums.value = loadedAlbums
+    await appStore.loadPendingInvitations()
   } finally {
     loading.value = false
   }
@@ -43,10 +46,51 @@ function formatDuration(seconds: number | null): string {
   const s = Math.floor(seconds % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
 }
+
+async function handleAccept(invitationId: number) {
+  await appStore.acceptInvitation(invitationId)
+  const [loadedTracks, loadedAlbums] = await Promise.all([trackApi.list(), albumApi.list()])
+  tracks.value = loadedTracks
+  albums.value = loadedAlbums
+}
+
+async function handleDecline(invitationId: number) {
+  await appStore.declineInvitation(invitationId)
+}
 </script>
 
 <template>
   <div class="space-y-6">
+    <div v-if="appStore.pendingInvitations.length > 0" class="card border-primary/30 bg-primary/5">
+      <h2 class="text-lg font-sans font-semibold text-foreground mb-3">{{ t('invitations.title') }}</h2>
+      <div class="space-y-3">
+        <div v-for="inv in appStore.pendingInvitations" :key="inv.id" class="flex items-center justify-between gap-4 p-3 bg-card rounded-lg border border-border">
+          <div class="flex items-center gap-3">
+            <div
+              class="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm"
+              :style="{ backgroundColor: inv.album?.cover_color || '#8b5cf6' }"
+            >
+              {{ inv.album?.title?.charAt(0) || '?' }}
+            </div>
+            <div>
+              <div class="text-sm font-medium text-foreground">{{ inv.album?.title }}</div>
+              <div class="text-xs text-muted-foreground">
+                {{ t('invitations.from', { name: inv.invited_by_user?.display_name || 'Unknown' }) }}
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button @click="handleAccept(inv.id)" class="btn-primary text-xs px-3 py-1.5">
+              {{ t('invitations.accept') }}
+            </button>
+            <button @click="handleDecline(inv.id)" class="btn-secondary text-xs px-3 py-1.5">
+              {{ t('invitations.decline') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
       <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = ''">
         <div class="text-2xl font-bold text-foreground">{{ stats.total }}</div>

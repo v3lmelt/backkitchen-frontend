@@ -39,6 +39,18 @@ export interface AlbumMember {
   user: User
 }
 
+export interface Invitation {
+  id: number
+  album_id: number
+  user_id: number
+  invited_by_user_id: number
+  status: 'pending' | 'accepted' | 'declined'
+  created_at: string
+  album?: { id: number; title: string; cover_color: string } | null
+  user?: User | null
+  invited_by_user?: User | null
+}
+
 export interface Album {
   id: number
   title: string

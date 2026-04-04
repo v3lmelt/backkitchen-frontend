@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { reactive, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { albumApi, userApi } from '@/api'
+import { albumApi, invitationApi, userApi } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Album, User } from '@/types'
+import type { Album, Invitation, User } from '@/types'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -11,6 +11,11 @@ const users = ref<User[]>([])
 const albums = ref<Album[]>([])
 const loading = ref(true)
 const savingAlbumId = ref<number | null>(null)
+const albumInvitations = ref<Record<number, Invitation[]>>({})
+const invitingAlbumId = ref<number | null>(null)
+const inviteUserId = ref<Record<number, string>>({})
+const inviteError = ref<Record<number, string>>({})
+const inviteSuccess = ref<Record<number, string>>({})
 
 const newAlbum = ref({ title: '', description: '', cover_color: '#A855F7' })
 const teamState = reactive<Record<number, { mastering_engineer_id: number | null; member_ids: number[] }>>({})
@@ -22,6 +27,15 @@ onMounted(async () => {
     users.value = loadedUsers
     albums.value = loadedAlbums
     syncTeamState()
+    await Promise.all(
+      loadedAlbums
+        .filter(album => appStore.currentUser?.id === album.producer_id)
+        .map(album =>
+          invitationApi.listForAlbum(album.id).then(invs => {
+            albumInvitations.value[album.id] = invs
+          })
+        )
+    )
   } finally {
     loading.value = false
   }
@@ -64,6 +78,46 @@ async function saveTeam(album: Album) {
   } finally {
     savingAlbumId.value = null
   }
+}
+
+async function inviteMember(albumId: number) {
+  const userId = parseInt(inviteUserId.value[albumId] || '0')
+  if (!userId) return
+  invitingAlbumId.value = albumId
+  inviteError.value[albumId] = ''
+  inviteSuccess.value[albumId] = ''
+  try {
+    const invitation = await invitationApi.create(albumId, userId)
+    if (!albumInvitations.value[albumId]) {
+      albumInvitations.value[albumId] = []
+    }
+    albumInvitations.value[albumId].push(invitation)
+    inviteSuccess.value[albumId] = t('settings.invitationSent')
+    inviteUserId.value[albumId] = ''
+  } catch (err: any) {
+    const msg = err.message || ''
+    if (msg.includes('already a member')) {
+      inviteError.value[albumId] = t('settings.inviteErrorAlreadyMember')
+    } else if (msg.includes('already a pending')) {
+      inviteError.value[albumId] = t('settings.inviteErrorAlreadyInvited')
+    } else {
+      inviteError.value[albumId] = msg
+    }
+  } finally {
+    invitingAlbumId.value = null
+  }
+}
+
+async function cancelInvitation(albumId: number, invitationId: number) {
+  await invitationApi.cancel(invitationId)
+  if (albumInvitations.value[albumId]) {
+    albumInvitations.value[albumId] = albumInvitations.value[albumId].filter(inv => inv.id !== invitationId)
+  }
+}
+
+function getUserDisplayName(userId: number): string {
+  const user = users.value.find(u => u.id === userId)
+  return user?.display_name || `User #${userId}`
 }
 </script>
 
@@ -149,6 +203,47 @@ async function saveTeam(album: Album) {
             </div>
             <div class="text-xs text-muted-foreground">
               {{ t('settings.participantsInfo', { list: album.members.map(member => member.user.display_name).join(', ') || t('settings.noneParticipants') }) }}
+            </div>
+          </template>
+
+          <template v-if="appStore.currentUser?.id === album.producer_id">
+            <div class="border-t border-border pt-4 mt-4">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-xs text-muted-foreground">{{ t('settings.inviteByUserId') }}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="inviteUserId[album.id]"
+                  type="number"
+                  class="input-field w-32 text-sm"
+                  :placeholder="t('settings.userIdPlaceholder')"
+                  @keyup.enter="inviteMember(album.id)"
+                />
+                <button
+                  @click="inviteMember(album.id)"
+                  :disabled="invitingAlbumId === album.id || !inviteUserId[album.id]"
+                  class="btn-secondary text-xs px-3 py-1.5"
+                >
+                  {{ invitingAlbumId === album.id ? t('settings.inviting') : t('settings.invite') }}
+                </button>
+              </div>
+              <div v-if="inviteError[album.id]" class="text-xs text-error mt-1">{{ inviteError[album.id] }}</div>
+              <div v-if="inviteSuccess[album.id]" class="text-xs text-success mt-1">{{ inviteSuccess[album.id] }}</div>
+            </div>
+
+            <div v-if="albumInvitations[album.id]?.length > 0" class="border-t border-border pt-4 mt-4">
+              <div class="text-xs text-muted-foreground mb-2">{{ t('settings.pendingInvitations') }}</div>
+              <div class="space-y-2">
+                <div v-for="inv in albumInvitations[album.id]" :key="inv.id" class="flex items-center justify-between p-2 bg-card rounded border border-border">
+                  <div class="text-sm text-foreground">
+                    {{ getUserDisplayName(inv.user_id) }}
+                    <span class="text-xs text-muted-foreground ml-1">(#{{ inv.user_id }})</span>
+                  </div>
+                  <button @click="cancelInvitation(album.id, inv.id)" class="text-xs text-error hover:underline">
+                    {{ t('settings.cancelInvitation') }}
+                  </button>
+                </div>
+              </div>
             </div>
           </template>
         </div>

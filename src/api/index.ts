@@ -3,6 +3,7 @@ import type {
   AuthResponse,
   ChecklistItem,
   Comment,
+  Invitation,
   Issue,
   Track,
   TrackDetailResponse,
@@ -127,4 +128,14 @@ export const authApi = {
   register: (data: { username: string; display_name: string; email: string; password: string }) =>
     request<AuthResponse>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   me: () => request<User>('/auth/me'),
+}
+
+export const invitationApi = {
+  listForAlbum: (albumId: number) => request<Invitation[]>(`/albums/${albumId}/invitations`),
+  listMine: () => request<Invitation[]>('/invitations'),
+  create: (albumId: number, userId: number) =>
+    request<Invitation>(`/albums/${albumId}/invitations`, { method: 'POST', body: JSON.stringify({ user_id: userId }) }),
+  accept: (id: number) => request<Invitation>(`/invitations/${id}/accept`, { method: 'POST' }),
+  decline: (id: number) => request<void>(`/invitations/${id}/decline`, { method: 'POST' }),
+  cancel: (id: number) => request<void>(`/invitations/${id}`, { method: 'DELETE' }),
 }

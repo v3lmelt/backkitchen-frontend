@@ -76,7 +76,7 @@ describe('FinalReviewView', () => {
     await Promise.resolve()
 
     expect(wrapper.find('.issue-list').text()).toBe('1')
-    await wrapper.findAll('button').find(button => button.text() === 'finalReview.approveMaster')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Approve Current Master')!.trigger('click')
 
     expect(mocks.approveFinalReviewMock).toHaveBeenCalledWith(10)
     expect(mocks.trackGetMock).toHaveBeenCalledTimes(2)
@@ -87,7 +87,7 @@ describe('FinalReviewView', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    await wrapper.findAll('button').find(button => button.text() === 'finalReview.returnToMastering')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Return to Mastering')!.trigger('click')
 
     expect(mocks.returnToMasteringMock).toHaveBeenCalledWith(10)
     expect(mocks.pushMock).toHaveBeenCalledWith('/tracks/10')

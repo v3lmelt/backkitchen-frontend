@@ -259,6 +259,24 @@
     "readOnlyNotice": "Team configuration can only be edited by the album producer.",
     "masteringEngineerInfo": "Mastering Engineer: {name}",
     "participantsInfo": "Participants: {list}",
-    "noneParticipants": "None"
+    "noneParticipants": "None",
+    "inviteMember": "Invite Member",
+    "inviteByUserId": "Invite by User ID",
+    "userIdPlaceholder": "Enter user ID",
+    "invite": "Invite",
+    "inviting": "Inviting...",
+    "pendingInvitations": "Pending Invitations",
+    "noPendingInvitations": "No pending invitations.",
+    "cancelInvitation": "Cancel",
+    "invitationSent": "Invitation sent.",
+    "invitationCancelled": "Invitation cancelled.",
+    "inviteErrorAlreadyMember": "User is already a member.",
+    "inviteErrorAlreadyInvited": "User already has a pending invitation."
+  },
+  "invitations": {
+    "title": "Album Invitations",
+    "from": "Invited by {name}",
+    "accept": "Accept",
+    "decline": "Decline"
   }
 }
