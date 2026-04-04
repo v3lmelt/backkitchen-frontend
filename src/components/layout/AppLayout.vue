@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Sidebar from './Sidebar.vue'
 import AppHeader from './AppHeader.vue'
+import ToastContainer from '@/components/ToastContainer.vue'
 </script>
 
 <template>
@@ -13,4 +14,5 @@ import AppHeader from './AppHeader.vue'
       </main>
     </div>
   </div>
+  <ToastContainer />
 </template>
