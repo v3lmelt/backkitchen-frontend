@@ -50,7 +50,7 @@ describe('useToast', () => {
   it('removeToast removes a specific toast', () => {
     const { success, info, removeToast, toasts } = useToast()
     const id1 = success('first', 0)
-    const id2 = info('second', 0)
+    info('second', 0)
     expect(toasts.value).toHaveLength(2)
 
     removeToast(id1)
