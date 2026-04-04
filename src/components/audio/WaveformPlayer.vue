@@ -501,9 +501,12 @@ watch(() => props.compareVersionId, async (newId) => {
 
   const ws = WaveSurfer.create({
     container: compareContainer,
-    waveColor: 'rgba(249,115,22,0.15)',
-    progressColor: 'rgba(249,115,22,0.2)',
+    waveColor: 'rgba(249,115,22,0.5)',
+    progressColor: 'rgba(249,115,22,0.7)',
     height: props.height || 128,
+    barWidth: 2,
+    barGap: 1,
+    barRadius: 2,
     interact: false,
     cursorWidth: 0,
   })
