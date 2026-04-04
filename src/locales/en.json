@@ -242,7 +242,9 @@
     "bpmPlaceholder": "e.g. 128",
     "uploading": "Uploading...",
     "submit": "Submit Track",
-    "uploadFailed": "Upload failed"
+    "uploadFailed": "Upload failed",
+    "uploadSuccess": "Track submitted successfully",
+    "albumRequired": "Please select an album before submitting"
   },
   "settings": {
     "heading": "Album Settings",

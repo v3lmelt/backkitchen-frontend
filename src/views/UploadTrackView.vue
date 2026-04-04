@@ -4,9 +4,11 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi } from '@/api'
 import type { Album } from '@/types'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
 const { t } = useI18n()
+const { error: toastError, success: toastSuccess } = useToast()
 const albums = ref<Album[]>([])
 const uploading = ref(false)
 const dragOver = ref(false)
@@ -48,19 +50,24 @@ function onDrop(e: DragEvent) {
 
 async function upload() {
   if (!selectedFile.value || !form.value.title || !form.value.artist) return
+  if (!form.value.album_id) {
+    toastError(t('upload.albumRequired'))
+    return
+  }
   uploading.value = true
   try {
     const formData = new FormData()
     formData.append('file', selectedFile.value)
     formData.append('title', form.value.title)
     formData.append('artist', form.value.artist)
-    if (form.value.album_id) formData.append('album_id', String(form.value.album_id))
+    formData.append('album_id', String(form.value.album_id))
     if (form.value.bpm) formData.append('bpm', String(form.value.bpm))
 
     const track = await trackApi.upload(formData)
+    toastSuccess(t('upload.uploadSuccess'))
     router.push(`/tracks/${track.id}`)
   } catch (err: any) {
-    alert(err.message || t('upload.uploadFailed'))
+    toastError(err.message || t('upload.uploadFailed'))
   } finally {
     uploading.value = false
   }

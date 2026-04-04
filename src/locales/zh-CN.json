@@ -242,7 +242,9 @@
     "bpmPlaceholder": "例如 128",
     "uploading": "上传中…",
     "submit": "提交曲目",
-    "uploadFailed": "上传失败"
+    "uploadFailed": "上传失败",
+    "uploadSuccess": "曲目提交成功",
+    "albumRequired": "请先选择专辑再提交"
   },
   "settings": {
     "heading": "专辑设置",

@@ -7,10 +7,12 @@ import type { ChecklistItem, Issue, Track } from '@/types'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import { formatTimestamp, roundToMilliseconds } from '@/utils/time'
+import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const { success: toastSuccess } = useToast()
 const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
@@ -101,7 +103,7 @@ async function submitChecklist() {
         note: item.note || undefined,
       })),
     )
-    alert(t('peerReview.checklistSubmitted'))
+    toastSuccess(t('peerReview.checklistSubmitted'))
   } catch (err: any) {
     error.value = err.message || t('common.requestFailed')
   }
