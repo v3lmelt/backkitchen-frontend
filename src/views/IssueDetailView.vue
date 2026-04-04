@@ -59,7 +59,7 @@ function removeSelectedImage(index: number) {
 }
 
 async function addComment() {
-  if (!newComment.value.trim() || !appStore.currentUser || !issue.value) return
+  if ((!newComment.value.trim() && !selectedImages.value.length) || !appStore.currentUser || !issue.value) return
   const comment = await issueApi.addComment(issueId.value, {
     content: newComment.value,
     images: selectedImages.value.length ? selectedImages.value : undefined,
@@ -257,7 +257,7 @@ function cancelStatusChange() {
             </svg>
             {{ t('issueDetail.image') }}
           </button>
-          <button @click="addComment" :disabled="!newComment.trim()" class="btn-primary text-sm">
+          <button @click="addComment" :disabled="!newComment.trim() && !selectedImages.length" class="btn-primary text-sm">
             {{ t('issueDetail.addComment') }}
           </button>
         </div>
