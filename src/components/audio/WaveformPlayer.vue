@@ -39,14 +39,26 @@ const currentTime = ref(0)
 const duration = ref(0)
 const isRenderingRegions = ref(false)
 const selectionRegionId = ref<string | null>(null)
+const highlightRegionId = ref<string | null>(null)
+const activeRangeIssueId = ref<number | null>(null)
 const lastSelectionAt = ref(0)
 const activePointGroupKey = ref<string | null>(null)
 const abMode = ref<'A' | 'B'>('A')
 const isCompareMode = computed(() => !!props.compareVersionId)
 const selectionVisualColor = 'rgba(34, 211, 238, 0.28)'
-const rangeLaneHeight = 18
-const rangeLaneGap = 6
-const markerIconOffset = 18
+const SEVERITY_COLORS: Record<string, string> = {
+  critical: '#ef4444',
+  major: '#f97316',
+  minor: '#eab308',
+  suggestion: '#3b82f6',
+}
+
+const SEVERITY_REGION_COLORS: Record<string, string> = {
+  critical: 'rgba(239,68,68,0.22)',
+  major: 'rgba(249,115,22,0.22)',
+  minor: 'rgba(234,179,8,0.22)',
+  suggestion: 'rgba(59,130,246,0.22)',
+}
 
 type MarkerStatus = 'unresolved' | 'resolved'
 
@@ -61,14 +73,6 @@ interface PointMarkerGroup {
   popoverAlign: 'left' | 'center' | 'right'
 }
 
-interface RangeMarker {
-  issue: Issue
-  lane: number
-  left: string
-  width: string
-  top: string
-  status: MarkerStatus
-}
 
 function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, value))
@@ -151,55 +155,17 @@ const pointGroups = computed<PointMarkerGroup[]>(() => {
     .sort((a, b) => a.time - b.time)
 })
 
-const rangeMarkers = computed<RangeMarker[]>(() => {
-  if (!props.issues?.length || duration.value <= 0) return []
+const rangeIssues = computed(() =>
+  (props.issues ?? []).filter(
+    (i): i is Issue & { time_end: number } => i.issue_type === 'range' && i.time_end !== null,
+  ),
+)
 
-  const ranges = props.issues
-    .filter((issue): issue is Issue & { time_end: number } => issue.issue_type === 'range' && issue.time_end !== null)
-    .slice()
-    .sort((a, b) => {
-      if (a.time_start !== b.time_start) return a.time_start - b.time_start
-      if ((a.time_end ?? a.time_start) !== (b.time_end ?? b.time_start)) {
-        return (a.time_end ?? a.time_start) - (b.time_end ?? b.time_start)
-      }
-      return a.created_at.localeCompare(b.created_at)
-    })
+const overlayHeight = computed(() => props.height || 128)
+const overlayBottomOffset = computed(() => '0px')
+const pointLineHeight = computed(() => `${Math.max((props.height || 128) - 28, 80)}px`)
 
-  const laneEndTimes: number[] = []
-  const markers: RangeMarker[] = []
-
-  for (const issue of ranges) {
-    const end = issue.time_end ?? issue.time_start
-    let lane = laneEndTimes.findIndex(laneEnd => laneEnd <= issue.time_start)
-    if (lane === -1) {
-      lane = laneEndTimes.length
-      laneEndTimes.push(end)
-    } else {
-      laneEndTimes[lane] = end
-    }
-
-    markers.push({
-      issue,
-      lane,
-      left: getMarkerPosition(issue.time_start),
-      width: getRangeWidth(issue.time_start, end),
-      top: `${markerIconOffset + lane * (rangeLaneHeight + rangeLaneGap)}px`,
-      status: getMarkerStatus([issue]),
-    })
-  }
-
-  return markers
-})
-
-const overlayHeight = computed(() => {
-  const laneCount = rangeMarkers.value.reduce((max, marker) => Math.max(max, marker.lane + 1), 0)
-  const rangeHeight = laneCount > 0 ? markerIconOffset + laneCount * rangeLaneHeight + Math.max(0, laneCount - 1) * rangeLaneGap : 0
-  return Math.max(props.height || 128, rangeHeight + 12)
-})
-
-const overlayBottomOffset = computed(() => `${Math.max(overlayHeight.value - (props.height || 128), 0)}px`)
-const pointLineHeight = computed(() => `${Math.max(overlayHeight.value - 28, 108)}px`)
-
+const hasPointIssues = computed(() => (props.issues ?? []).some(i => i.issue_type === 'point'))
 const hasIssues = computed(() => (props.issues?.length ?? 0) > 0)
 
 function togglePointGroup(groupKey: string) {
@@ -225,10 +191,44 @@ function lineClassForStatus(status: MarkerStatus) {
   return status === 'resolved' ? 'bg-success/90' : 'bg-error/90'
 }
 
-function rangeClassForStatus(status: MarkerStatus) {
-  return status === 'resolved'
-    ? 'border-success/60 bg-success/20 hover:bg-success/28'
-    : 'border-warning/70 bg-warning/25 hover:bg-warning/35'
+function severityColor(severity: string): string {
+  return SEVERITY_COLORS[severity] ?? '#6366f1'
+}
+
+function severityRegionColor(severity: string): string {
+  return SEVERITY_REGION_COLORS[severity] ?? 'rgba(99,102,241,0.22)'
+}
+
+function _removeRegionById(id: string) {
+  const region = (regionsPlugin.value as any)?.getRegions?.()?.find(
+    (r: { id: string; remove?: () => void }) => r.id === id,
+  )
+  region?.remove?.()
+}
+
+function _addHighlightRegion(issue: Issue & { time_end: number }) {
+  if (!regionsPlugin.value) return
+  const region = regionsPlugin.value.addRegion({
+    start: issue.time_start,
+    end: issue.time_end,
+    color: severityRegionColor(issue.severity),
+    drag: false,
+    resize: false,
+    id: `__hl_${issue.id}__`,
+  })
+  highlightRegionId.value = region.id
+}
+
+function highlightIssue(issue: Issue | null) {
+  const newId = (issue?.issue_type === 'range' && issue.time_end !== null) ? issue.id : null
+  // Toggle off if same issue clicked again; otherwise activate the new one
+  activeRangeIssueId.value = activeRangeIssueId.value === newId ? null : newId
+  renderIssueRegions()
+}
+
+function handleTimelineClick(issue: Issue & { time_end: number }) {
+  seekTo(issue.time_start)
+  emit('regionClick', issue)  // parent's onIssueSelect will call highlightIssue
 }
 
 function getCursorElement(): HTMLElement | null {
@@ -263,21 +263,37 @@ function syncSelectedRange(region: { id: string; start: number; end: number; rem
 function renderSelectionRegion() {
   if (!regionsPlugin.value) return
   const selectedRange = props.selectedRange
+
   if (!selectedRange) {
-    selectionRegionId.value = null
+    if (selectionRegionId.value) {
+      _removeRegionById(selectionRegionId.value)
+      selectionRegionId.value = null
+    }
     const cursor = getCursorElement()
     if (cursor) cursor.style.opacity = '1'
     return
   }
 
+  // Skip re-render while user is actively dragging a region
+  if (selectionRegionId.value && selectionRegionId.value !== '__draft_range__') return
+
   const start = roundToMilliseconds(Math.min(selectedRange.start, selectedRange.end))
   const end = roundToMilliseconds(Math.max(selectedRange.start, selectedRange.end))
 
   if (end <= start) {
-    selectionRegionId.value = null
+    if (selectionRegionId.value) {
+      _removeRegionById(selectionRegionId.value)
+      selectionRegionId.value = null
+    }
     const cursor = getCursorElement()
     if (cursor) cursor.style.opacity = '1'
     return
+  }
+
+  // Remove stale draft before creating new one
+  if (selectionRegionId.value === '__draft_range__') {
+    _removeRegionById('__draft_range__')
+    selectionRegionId.value = null
   }
 
   const region = regionsPlugin.value.addRegion({
@@ -414,14 +430,25 @@ function renderIssueRegions() {
   isRenderingRegions.value = true
   regionsPlugin.value.clearRegions()
   selectionRegionId.value = null
+  highlightRegionId.value = null
 
   renderSelectionRegion()
+
+  // Restore highlight if one was active
+  if (activeRangeIssueId.value !== null) {
+    const issue = props.issues?.find(i => i.id === activeRangeIssueId.value)
+    if (issue && issue.issue_type === 'range' && issue.time_end !== null) {
+      _addHighlightRegion(issue as Issue & { time_end: number })
+    } else {
+      activeRangeIssueId.value = null
+    }
+  }
 
   isRenderingRegions.value = false
 }
 
 watch(() => props.issues, renderIssueRegions, { deep: true })
-watch(() => props.selectedRange, renderIssueRegions, { deep: true })
+watch(() => props.selectedRange, renderSelectionRegion, { deep: true })
 watch(duration, () => {
   activePointGroupKey.value = null
 })
@@ -496,33 +523,17 @@ onBeforeUnmount(() => {
   compareWaveSurfer.value?.destroy()
 })
 
-defineExpose({ seekTo, togglePlay })
+defineExpose({ seekTo, togglePlay, highlightIssue })
 </script>
 
 <template>
   <div class="card space-y-3">
     <div class="relative" :style="{ paddingBottom: overlayBottomOffset }">
       <div
-        v-if="hasIssues"
+        v-if="hasPointIssues"
         class="pointer-events-none absolute inset-x-0 top-0 z-10"
         :style="{ height: `${overlayHeight}px` }"
       >
-        <button
-          v-for="marker in rangeMarkers"
-          :key="marker.issue.id"
-          type="button"
-          class="pointer-events-auto absolute rounded-md border transition-colors"
-          :class="rangeClassForStatus(marker.status)"
-          :style="{ left: marker.left, width: marker.width, top: marker.top, height: `${rangeLaneHeight}px` }"
-          @click="selectIssue(marker.issue)"
-        >
-          <component
-            :is="iconForStatus(marker.status)"
-            class="absolute -top-4 left-1 h-3.5 w-3.5 rounded-full border p-0.5"
-            :class="iconClassForStatus(marker.status)"
-          />
-        </button>
-
         <div
           v-for="group in pointGroups"
           :key="group.key"
@@ -601,6 +612,31 @@ defineExpose({ seekTo, togglePlay })
         </div>
       </div>
     </div>
+
+    <!-- Range issue timeline -->
+    <div
+      v-if="rangeIssues.length > 0 && duration > 0"
+      class="relative mx-0.5 h-2 rounded-full bg-white/5"
+    >
+      <button
+        v-for="issue in rangeIssues"
+        :key="issue.id"
+        type="button"
+        class="group absolute top-0 h-full min-w-[3px] rounded-sm transition-opacity"
+        :class="activeRangeIssueId === issue.id ? 'opacity-100 ring-1 ring-white/40 z-10' : 'opacity-60 hover:opacity-100'"
+        :style="{
+          left: getMarkerPosition(issue.time_start),
+          width: getRangeWidth(issue.time_start, issue.time_end),
+          backgroundColor: severityColor(issue.severity),
+        }"
+        @click.stop="handleTimelineClick(issue)"
+      >
+        <span
+          class="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-card/95 px-1.5 py-0.5 text-[11px] text-foreground shadow border border-border opacity-0 group-hover:opacity-100 transition-opacity z-20"
+        >{{ issue.title }}</span>
+      </button>
+    </div>
+
     <div class="flex items-center gap-4">
       <button @click="togglePlay" class="text-cyan hover:text-cyan-dark transition-colors">
         <svg v-if="!isPlaying" class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">

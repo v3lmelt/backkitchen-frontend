@@ -149,7 +149,7 @@
   "peerReview": {
     "heading": "Peer Review: {title}",
     "subheading": "Assigned reviewer workflow for source v{version}",
-    "waveformHint": "Click the waveform to mark a peer review issue.",
+    "waveformHint": "Click to mark a point issue; drag to select a time range.",
     "issuesHeading": "Peer Issues ({count})",
     "startLabel": "Start (s)",
     "endLabel": "End (s)",
@@ -219,7 +219,7 @@
   "issueDetail": {
     "back": "Back",
     "created": "Created {date}",
-    "willFix": "Will Fix",
+    "markFixed": "Mark as Fixed",
     "disagree": "Disagree",
     "markResolved": "Mark Resolved",
     "commentsHeading": "Comments ({count})",

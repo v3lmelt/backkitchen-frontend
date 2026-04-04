@@ -149,7 +149,7 @@
   "peerReview": {
     "heading": "同行评审：{title}",
     "subheading": "源版本 v{version} 的同行评审工作流",
-    "waveformHint": "点击波形以添加评审问题。",
+    "waveformHint": "点击波形标记单点问题；拖拽选择时间段以标记范围问题。",
     "issuesHeading": "评审问题 ({count})",
     "startLabel": "起点（秒）",
     "endLabel": "终点（秒）",
@@ -219,7 +219,7 @@
   "issueDetail": {
     "back": "返回",
     "created": "创建于 {date}",
-    "willFix": "待修复",
+    "markFixed": "已修复",
     "disagree": "有异议",
     "markResolved": "标记为已解决",
     "commentsHeading": "评论 ({count})",

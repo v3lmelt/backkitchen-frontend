@@ -129,33 +129,28 @@ function cancelStatusChange() {
 
     <!-- Status Actions -->
     <div class="space-y-3">
-      <div class="flex gap-2">
+      <div v-if="issue.status === 'open' || issue.status === 'will_fix'" class="flex gap-2">
         <button
-          v-if="issue.status === 'open'"
-          @click="selectStatus('will_fix')"
-          class="btn-primary text-sm"
-          :class="{ 'ring-2 ring-blue-400': pendingStatus === 'will_fix' }"
+          @click="selectStatus('resolved')"
+          class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
+          :class="pendingStatus === 'resolved'
+            ? 'bg-primary text-black'
+            : 'bg-card border border-border text-foreground hover:bg-border'"
         >
-          {{ t('issueDetail.willFix') }}
+          {{ t('issueDetail.markFixed') }}
         </button>
         <button
           v-if="issue.status === 'open'"
           @click="selectStatus('disagreed')"
-          class="btn-secondary text-sm"
-          :class="{ 'ring-2 ring-gray-400': pendingStatus === 'disagreed' }"
+          class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
+          :class="pendingStatus === 'disagreed'
+            ? 'bg-error-bg text-error border border-error/30'
+            : 'bg-card border border-border text-foreground hover:bg-border'"
         >
           {{ t('issueDetail.disagree') }}
         </button>
-        <button
-          v-if="issue.status === 'will_fix'"
-          @click="selectStatus('resolved')"
-          class="bg-success-bg text-success font-medium px-4 py-2 rounded-full text-sm hover:opacity-80 transition-opacity"
-          :class="{ 'ring-2 ring-green-400': pendingStatus === 'resolved' }"
-        >
-          {{ t('issueDetail.markResolved') }}
-        </button>
       </div>
-      <div v-if="pendingStatus" class="mt-3 space-y-2">
+      <div v-if="pendingStatus" class="space-y-2">
         <textarea
           v-model="statusNote"
           :placeholder="t('issue.statusNotePlaceholder')"
@@ -163,10 +158,10 @@ function cancelStatusChange() {
           rows="3"
         ></textarea>
         <div class="flex gap-2">
-          <button @click="confirmStatusChange" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm">
+          <button @click="confirmStatusChange" class="btn-primary text-sm">
             {{ t('common.confirm') }}
           </button>
-          <button @click="cancelStatusChange" class="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm">
+          <button @click="cancelStatusChange" class="btn-secondary text-sm">
             {{ t('common.cancel') }}
           </button>
         </div>

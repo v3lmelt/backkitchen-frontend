@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { checklistApi, issueApi, trackApi } from '@/api'
@@ -72,10 +72,30 @@ async function loadPage() {
 
 const audioUrl = computed(() => track.value?.file_path ? `/api/tracks/${trackId.value}/audio` : '')
 
+const selectedRange = computed(() => {
+  if (newIssue.value.issue_type === 'range' && showNewIssue.value && newIssue.value.time_end !== null) {
+    return { start: newIssue.value.time_start, end: newIssue.value.time_end }
+  }
+  return null
+})
+
 function onWaveformClick(time: number) {
+  newIssue.value.issue_type = 'point'
   newIssue.value.time_start = roundToMilliseconds(time)
+  newIssue.value.time_end = null
   showNewIssue.value = true
 }
+
+function onRangeSelect(start: number, end: number) {
+  newIssue.value.issue_type = 'range'
+  newIssue.value.time_start = start
+  newIssue.value.time_end = end
+  showNewIssue.value = true
+}
+
+watch(() => newIssue.value.issue_type, (type) => {
+  if (type === 'point') newIssue.value.time_end = null
+})
 
 async function submitIssue() {
   const created = await issueApi.create(trackId.value, newIssue.value)
@@ -121,6 +141,7 @@ async function finish(decision: 'needs_revision' | 'pass') {
 
 function onIssueSelect(issue: Issue) {
   waveformRef.value?.seekTo(issue.time_start)
+  waveformRef.value?.highlightIssue(issue)
 }
 
 function formatTime(seconds: number): string {
@@ -151,8 +172,11 @@ function formatTime(seconds: number): string {
         ref="waveformRef"
         :audio-url="audioUrl"
         :issues="issues"
+        :selectable="true"
+        :selected-range="selectedRange"
         @click="onWaveformClick"
         @regionClick="onIssueSelect"
+        @rangeSelect="onRangeSelect"
       />
     </div>
 
