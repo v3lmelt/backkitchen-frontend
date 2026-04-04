@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { issueApi } from '@/api'
@@ -7,7 +7,7 @@ import { useAppStore } from '@/stores/app'
 import type { Issue, IssueStatus } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
-import { formatTimestamp } from '@/utils/time'
+import { formatTimestamp, formatLocaleDate } from '@/utils/time'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,7 +16,12 @@ const appStore = useAppStore()
 const issueId = computed(() => Number(route.params.id))
 
 const issue = ref<Issue | null>(null)
+const allTrackIssues = ref<Issue[]>([])
 const loading = ref(true)
+const widgetExpanded = ref(false)
+
+let loadCount = 0
+let cachedTrackId: number | null = null
 const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
 const newComment = ref('')
 
@@ -37,24 +42,59 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const pendingStatus = ref<Exclude<IssueStatus, 'open'> | null>(null)
 const statusNote = ref('')
 
-onMounted(async () => {
+async function loadIssue(id: number) {
+  const token = ++loadCount
+  loading.value = true
   try {
-    issue.value = await issueApi.get(issueId.value)
+    const fetched = await issueApi.get(id)
+    if (token !== loadCount) return
+    issue.value = fetched
+    if (fetched.track_id !== cachedTrackId) {
+      const all = await issueApi.listForTrack(fetched.track_id)
+      if (token !== loadCount) return
+      allTrackIssues.value = all
+      cachedTrackId = fetched.track_id
+    }
   } finally {
-    loading.value = false
+    if (token === loadCount) loading.value = false
   }
+}
+
+onMounted(() => loadIssue(issueId.value))
+watch(issueId, (id) => {
+  widgetExpanded.value = false
+  loadIssue(id)
+})
+onBeforeUnmount(() => {
+  imagePreviewUrls.value.forEach(url => URL.revokeObjectURL(url))
 })
 
-function formatTime(seconds: number): string {
-  return formatTimestamp(seconds)
-}
+const siblingIssues = computed(() => {
+  if (!issue.value) return []
+  const { phase, workflow_cycle } = issue.value
+  return allTrackIssues.value
+    .filter(i => i.phase === phase && i.workflow_cycle === workflow_cycle)
+    .sort((a, b) => a.time_start - b.time_start)
+})
 
-function formatDate(dateStr: string): string {
-  const localeStr = locale.value === 'zh-CN' ? 'zh-CN' : 'en-US'
-  return new Date(dateStr).toLocaleDateString(localeStr, {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  })
-}
+const currentSiblingIndex = computed(() =>
+  siblingIssues.value.findIndex(i => i.id === issueId.value)
+)
+const prevIssue = computed(() =>
+  currentSiblingIndex.value > 0 ? siblingIssues.value[currentSiblingIndex.value - 1] : null
+)
+const nextIssue = computed(() =>
+  currentSiblingIndex.value < siblingIssues.value.length - 1
+    ? siblingIssues.value[currentSiblingIndex.value + 1]
+    : null
+)
+
+const unresolvedIssues = computed(() =>
+  allTrackIssues.value.filter(i => i.status === 'open' || i.status === 'will_fix')
+)
+
+
+const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
 
 function onFileSelect(event: Event) {
   const input = event.target as HTMLInputElement
@@ -97,6 +137,8 @@ async function confirmStatusChange() {
     status: pendingStatus.value,
     status_note: statusNote.value || undefined,
   })
+  const idx = allTrackIssues.value.findIndex(i => i.id === issueId.value)
+  if (idx !== -1 && issue.value) allTrackIssues.value[idx] = issue.value
   pendingStatus.value = null
   statusNote.value = ''
 }
@@ -112,20 +154,45 @@ function cancelStatusChange() {
   <div v-else-if="issue" class="max-w-3xl mx-auto space-y-6">
     <!-- Header -->
     <div>
-      <button @click="router.back()" class="text-sm text-muted-foreground hover:text-foreground mb-2 inline-flex items-center gap-1">
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <polyline points="15 18 9 12 15 6" />
-        </svg>
-        {{ t('issueDetail.back') }}
-      </button>
+      <div class="flex items-center justify-between mb-2">
+        <button @click="router.back()" class="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          {{ t('issueDetail.back') }}
+        </button>
+        <div v-if="siblingIssues.length > 1" class="flex items-center gap-1 text-sm text-muted-foreground">
+          <button
+            @click="prevIssue && router.push(`/issues/${prevIssue.id}`)"
+            :disabled="!prevIssue"
+            class="p-1 rounded hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            :title="prevIssue?.title"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <span class="font-mono text-xs">{{ currentSiblingIndex + 1 }} / {{ siblingIssues.length }}</span>
+          <button
+            @click="nextIssue && router.push(`/issues/${nextIssue.id}`)"
+            :disabled="!nextIssue"
+            class="p-1 rounded hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            :title="nextIssue?.title"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+        </div>
+      </div>
       <h1 class="text-2xl font-sans font-bold text-foreground">{{ issue.title }}</h1>
       <div class="flex items-center gap-3 mt-2">
         <StatusBadge :status="issue.phase" type="phase" />
         <StatusBadge :status="issue.severity" type="severity" />
         <StatusBadge :status="issue.status" type="issue" />
         <span class="text-sm text-muted-foreground">
-          {{ formatTime(issue.time_start) }}
-          <span v-if="issue.time_end"> - {{ formatTime(issue.time_end) }}</span>
+          {{ formatTimestamp(issue.time_start) }}
+          <span v-if="issue.time_end"> - {{ formatTimestamp(issue.time_end) }}</span>
         </span>
         <span class="text-sm text-muted-foreground">
           {{ issue.issue_type === 'range' ? t('issueType.range') : t('issueType.point') }}
@@ -138,7 +205,7 @@ function cancelStatusChange() {
       <div class="px-4 pt-3 pb-2 border-b border-border flex items-center justify-between">
         <span class="text-xs font-mono font-medium text-muted-foreground">{{ t('issueDetail.audioContext') }}</span>
         <span class="text-xs text-muted-foreground font-mono">
-          {{ formatTime(issue.time_start) }}<span v-if="issue.time_end"> – {{ formatTime(issue.time_end) }}</span>
+          {{ formatTimestamp(issue.time_start) }}<span v-if="issue.time_end"> – {{ formatTimestamp(issue.time_end) }}</span>
         </span>
       </div>
       <WaveformPlayer
@@ -154,7 +221,7 @@ function cancelStatusChange() {
     <div class="card">
       <p class="text-sm text-foreground whitespace-pre-wrap">{{ issue.description }}</p>
       <div class="text-xs text-muted-foreground mt-3">
-        {{ t('issueDetail.created', { date: formatDate(issue.created_at) }) }}
+        {{ t('issueDetail.created', { date: fmtDate(issue.created_at) }) }}
       </div>
     </div>
 
@@ -206,10 +273,10 @@ function cancelStatusChange() {
       </h3>
 
       <template v-for="comment in issue.comments" :key="comment.id">
-        <div v-if="comment.is_status_note" class="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
-          <span class="text-xs font-semibold text-amber-400 block mb-1">{{ t('issue.revisionNote') }}</span>
+        <div v-if="comment.is_status_note" class="rounded-lg bg-warning-bg border border-warning/20 px-3 py-2">
+          <span class="text-xs font-semibold text-warning block mb-1">{{ t('issue.revisionNote') }}</span>
           <p class="text-sm text-foreground">{{ comment.content }}</p>
-          <p class="text-xs text-gray-500 mt-1">{{ comment.author?.display_name || t('issueDetail.unknown') }} · {{ formatDate(comment.created_at) }}</p>
+          <p class="text-xs text-muted-foreground mt-1">{{ comment.author?.display_name || t('issueDetail.unknown') }} · {{ fmtDate(comment.created_at) }}</p>
         </div>
         <div v-else class="card">
           <div class="flex items-center gap-2 mb-2">
@@ -223,7 +290,7 @@ function cancelStatusChange() {
             <span class="text-sm font-medium text-foreground">
               {{ comment.author?.display_name || t('issueDetail.unknown') }}
             </span>
-            <span class="text-xs text-muted-foreground">{{ formatDate(comment.created_at) }}</span>
+            <span class="text-xs text-muted-foreground">{{ fmtDate(comment.created_at) }}</span>
           </div>
           <p class="text-sm text-foreground whitespace-pre-wrap">{{ comment.content }}</p>
           <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-3">
@@ -295,4 +362,55 @@ function cancelStatusChange() {
       </div>
     </div>
   </div>
+
+  <!-- Floating unresolved issues widget -->
+  <Teleport to="body">
+    <div v-if="!loading && unresolvedIssues.length > 0" class="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2">
+      <Transition name="widget-slide">
+        <div v-if="widgetExpanded" class="bg-card border border-border w-72 shadow-[0_4px_16px_rgba(0,0,0,0.5)]">
+          <div class="flex items-center justify-between px-3 py-2 border-b border-border">
+            <span class="text-xs font-mono font-semibold text-foreground">
+              {{ t('issueDetail.unresolvedTitle') }} ({{ unresolvedIssues.length }})
+            </span>
+            <button @click="widgetExpanded = false" class="text-muted-foreground hover:text-foreground transition-colors">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          </div>
+          <div class="max-h-72 overflow-y-auto">
+            <div
+              v-for="item in unresolvedIssues"
+              :key="item.id"
+              @click="router.push(`/issues/${item.id}`)"
+              class="px-3 py-2 border-b border-border last:border-0 cursor-pointer transition-colors"
+              :class="item.id === issueId ? 'bg-border/40' : 'hover:bg-border/30'"
+            >
+              <div class="flex items-center gap-1.5 mb-0.5">
+                <StatusBadge :status="item.phase" type="phase" />
+                <StatusBadge :status="item.severity" type="severity" />
+              </div>
+              <p class="text-xs text-foreground truncate">{{ item.title }}</p>
+              <p class="text-xs text-muted-foreground font-mono">{{ formatTimestamp(item.time_start) }}</p>
+            </div>
+          </div>
+        </div>
+      </Transition>
+      <button
+        @click="widgetExpanded = !widgetExpanded"
+        class="btn-secondary text-xs inline-flex items-center gap-2 shadow-[0_4px_16px_rgba(0,0,0,0.5)]"
+      >
+        <span>{{ t('issueDetail.unresolvedTitle') }}</span>
+        <span class="bg-primary text-black rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold leading-none">{{ unresolvedIssues.length }}</span>
+        <svg class="w-3.5 h-3.5 transition-transform" :class="widgetExpanded ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
+        </svg>
+      </button>
+    </div>
+  </Teleport>
 </template>
+
+<style scoped>
+.widget-slide-enter-active, .widget-slide-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; }
+.widget-slide-enter-from, .widget-slide-leave-to { opacity: 0; transform: translateY(8px); }
+</style>

@@ -203,7 +203,8 @@
     "uploadHint": "Upload the next source version after responding to the issues above.",
     "uploading": "Uploading...",
     "submitBackToPeer": "Submit Back to Peer Review",
-    "submitBackToMastering": "Submit Back to Mastering"
+    "submitBackToMastering": "Submit Back to Mastering",
+    "staleIssuesHeading": "Prior Version Issues (reference only)"
   },
   "mastering": {
     "heading": "Mastering Review: {title}",
@@ -260,7 +261,8 @@
     "image": "Image",
     "addComment": "Add Comment",
     "audioContext": "Audio Location",
-    "noDescription": "No description"
+    "noDescription": "No description",
+    "unresolvedTitle": "Unresolved Issues"
   },
   "upload": {
     "heading": "Submit Track",

@@ -207,7 +207,8 @@
     "uploadHint": "响应上述问题后，上传下一个源版本。",
     "uploading": "上传中…",
     "submitBackToPeer": "提交回同行评审",
-    "submitBackToMastering": "提交回母带"
+    "submitBackToMastering": "提交回母带",
+    "staleIssuesHeading": "旧版本问题（仅供参考）"
   },
   "mastering": {
     "heading": "母带审核：{title}",
@@ -264,7 +265,8 @@
     "image": "图片",
     "addComment": "添加评论",
     "audioContext": "音频定位",
-    "noDescription": "暂无描述"
+    "noDescription": "暂无描述",
+    "unresolvedTitle": "待解决问题"
   },
   "upload": {
     "heading": "提交曲目",
