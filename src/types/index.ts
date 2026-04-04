@@ -13,7 +13,7 @@ export type RejectionMode = 'final' | 'resubmittable'
 export type IssueType = 'point' | 'range'
 export type IssueSeverity = 'critical' | 'major' | 'minor' | 'suggestion'
 export type IssueStatus = 'open' | 'will_fix' | 'disagreed' | 'resolved'
-export type IssuePhase = 'peer' | 'mastering' | 'final_review'
+export type IssuePhase = 'peer' | 'producer' | 'mastering' | 'final_review'
 export type UserRole = 'member' | 'producer' | 'mastering_engineer'
 
 export interface User {

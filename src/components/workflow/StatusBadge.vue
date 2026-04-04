@@ -16,7 +16,9 @@ const config = computed(() => {
       ? 'mastering_phase'
       : props.status === 'final_review'
         ? 'final_review_phase'
-        : 'peer'
+        : props.status === 'producer'
+          ? 'producer_phase'
+          : 'peer'
     : props.status
 
   const classMap: Record<string, string> = {
@@ -38,6 +40,7 @@ const config = computed(() => {
     minor: 'bg-info-bg text-info',
     suggestion: 'bg-success-bg text-success',
     peer: 'bg-info-bg text-info',
+    producer_phase: 'bg-primary/15 text-primary',
     mastering_phase: 'bg-warning-bg text-warning',
     final_review_phase: 'bg-primary/15 text-primary',
   }

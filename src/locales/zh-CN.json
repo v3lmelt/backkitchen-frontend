@@ -67,6 +67,7 @@
     "disagreed": "有异议",
     "resolved": "已解决",
     "peer": "同行",
+    "producer_phase": "制作人",
     "mastering_phase": "母带",
     "final_review_phase": "终审"
   },
@@ -202,6 +203,9 @@
     "checklistHeading": "同行评审清单",
     "issueSummaryHeading": "问题摘要",
     "noIssues": "暂无问题。",
+    "waveformHint": "点击波形或拖拽选择时间范围，以添加制作人标注问题。",
+    "producerIssuesHeading": "制作人标注 ({count})",
+    "peerIssueSummaryHeading": "同行评审问题摘要",
     "sendToMastering": "发送至母带",
     "requestRevision": "再次请求源版本修订"
   },

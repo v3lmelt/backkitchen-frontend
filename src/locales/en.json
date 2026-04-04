@@ -67,6 +67,7 @@
     "disagreed": "Disagreed",
     "resolved": "Resolved",
     "peer": "Peer",
+    "producer_phase": "Producer",
     "mastering_phase": "Mastering",
     "final_review_phase": "Final Review"
   },
@@ -202,6 +203,9 @@
     "checklistHeading": "Peer Review Checklist",
     "issueSummaryHeading": "Issue Summary",
     "noIssues": "No issues raised.",
+    "waveformHint": "Click or drag on the waveform to mark producer review issues.",
+    "producerIssuesHeading": "Producer Notes ({count})",
+    "peerIssueSummaryHeading": "Peer Review Issue Summary",
     "sendToMastering": "Send to Mastering",
     "requestRevision": "Request Another Source Revision"
   },
