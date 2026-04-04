@@ -70,6 +70,7 @@ function authorLabel(issue: Issue): string {
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2 mb-1">
             <span class="text-xs font-mono text-muted-foreground flex-shrink-0">#{{ index + 1 }}</span>
+            <StatusBadge :status="issue.phase" type="phase" />
             <StatusBadge :status="issue.severity" type="severity" />
             <StatusBadge :status="issue.status" type="issue" />
           </div>
