@@ -12,7 +12,14 @@ import StatusBadge from '@/components/workflow/StatusBadge.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
+
+function formatEventType(eventType: string, actorName?: string): string {
+  const key = `dashboard.events.${eventType}`
+  const name = actorName ?? t('trackDetail.system')
+  if (te(key)) return t(key, { name })
+  return `${name}: ${eventType.replaceAll('_', ' ')}`
+}
 const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
 const trackId = computed(() => Number(route.params.id))
 
@@ -192,10 +199,8 @@ const olderVersions = computed(() =>
           <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('trackDetail.timeline') }}</h3>
           <div v-if="events.length === 0" class="text-sm text-muted-foreground">{{ t('trackDetail.noEvents') }}</div>
           <div v-for="event in events" :key="event.id" class="border-b border-border last:border-0 pb-3 last:pb-0">
-            <div class="text-sm text-foreground">{{ event.event_type.replaceAll('_', ' ') }}</div>
-            <div class="text-xs text-muted-foreground mt-1">
-              {{ event.actor?.display_name || t('trackDetail.system') }} · {{ fmtDate(event.created_at) }}
-            </div>
+            <div class="text-sm text-foreground">{{ formatEventType(event.event_type, event.actor?.display_name) }}</div>
+            <div class="text-xs text-muted-foreground mt-1">{{ fmtDate(event.created_at) }}</div>
           </div>
         </div>
       </div>
