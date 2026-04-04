@@ -5,6 +5,7 @@
     "addIssue": "+ 添加问题",
     "submitIssue": "提交问题",
     "cancel": "取消",
+    "confirm": "确认",
     "newIssueAt": "在 {time} 处添加新问题",
     "issueTitlePlaceholder": "问题标题",
     "descriptionPlaceholder": "描述…",
@@ -47,6 +48,7 @@
       "finalReview": "终审",
       "upload": "提交曲目",
       "settings": "专辑设置",
+      "profile": "个人中心",
       "default": "BACK KITCHEN"
     }
   },
@@ -101,6 +103,7 @@
     "rejected": "已拒绝",
     "albums": "专辑",
     "tracksCount": "{n} 首曲目",
+    "tracks": "首曲目",
     "tracksHeading": "曲目",
     "filtered": "已筛选：{status}",
     "clearFilter": "清除",
@@ -112,7 +115,10 @@
     "colStatus": "状态",
     "colOpenIssues": "未解决问题",
     "colVersion": "版本",
-    "openCount": "{count} 待处理"
+    "openCount": "{count} 待处理",
+    "recentActivity": "近期动态",
+    "eventBy": "{action}，由 {name}",
+    "openIssues": "{count} 个未解决问题"
   },
   "trackDetail": {
     "workflowStatus": "工作流状态",
@@ -273,10 +279,78 @@
     "inviteErrorAlreadyMember": "用户已是成员。",
     "inviteErrorAlreadyInvited": "用户已有待处理的邀请。"
   },
+  "profile": {
+    "tabs": {
+      "profile": "基本信息",
+      "security": "安全设置",
+      "preferences": "偏好设置"
+    },
+    "basicInfo": "基本资料",
+    "basicInfoDesc": "管理你的个人信息和公开资料",
+    "displayName": "显示名称",
+    "username": "用户名",
+    "email": "邮箱地址",
+    "save": "保存更改",
+    "saving": "保存中…",
+    "saveSuccess": "资料已更新。",
+    "saveError": "保存失败，请重试。",
+    "roleInfo": "角色信息",
+    "roleInfoDesc": "你的账户角色与基本信息",
+    "currentRole": "当前角色",
+    "userId": "用户 ID",
+    "joinedAt": "加入于 {date}",
+    "joinedLabel": "加入时间",
+    "changePassword": "修改密码",
+    "changePasswordDesc": "设置一个新的账户密码",
+    "currentPassword": "当前密码",
+    "newPassword": "新密码",
+    "confirmPassword": "确认新密码",
+    "changePasswordBtn": "修改密码",
+    "passwordMismatch": "两次输入的密码不一致。",
+    "passwordChanged": "密码已修改。",
+    "passwordError": "修改失败，请检查当前密码是否正确。",
+    "preferences": "偏好设置",
+    "preferencesDesc": "个性化你的使用体验",
+    "preferencesComingSoon": "更多偏好设置即将推出。"
+  },
   "invitations": {
     "title": "专辑邀请",
     "from": "邀请者：{name}",
     "accept": "接受",
     "decline": "拒绝"
+  },
+  "notifications": {
+    "title": "通知",
+    "markAllRead": "全部已读",
+    "empty": "暂无通知"
+  },
+  "compare": {
+    "title": "版本对比",
+    "selectVersion": "对比版本",
+    "currentVersion": "当前版本",
+    "previousVersion": "旧版本",
+    "clear": "取消对比"
+  },
+  "issue": {
+    "selected": "个问题已选",
+    "statusNotePlaceholder": "描述你的修改内容（可选）",
+    "revisionNote": "修改说明",
+    "batchStatusNote": "批量修改说明（可选）",
+    "status": {
+      "will_fix": "待修复",
+      "resolved": "已解决",
+      "disagreed": "有异议"
+    }
+  },
+  "trackStatus": {
+    "submitted": "已提交",
+    "peer_review": "同行评审",
+    "peer_revision": "同行修订",
+    "producer_mastering_gate": "制作人审批",
+    "mastering": "母带制作",
+    "mastering_revision": "母带修订",
+    "final_review": "终审",
+    "completed": "已完成",
+    "rejected": "已拒绝"
   }
 }

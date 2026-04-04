@@ -4,16 +4,35 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Track, Album, TrackStatus } from '@/types'
+import type { Album, AlbumStats, Track, TrackStatus, WorkflowEvent } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
+import { formatRelativeTime } from '@/utils/time'
+import { TRACK_STATUS_COLORS } from '@/utils/status'
 
 const router = useRouter()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const appStore = useAppStore()
 const tracks = ref<Track[]>([])
 const albums = ref<Album[]>([])
+const albumStatsMap = ref<Record<number, AlbumStats>>({})
 const loading = ref(true)
 const filterStatus = ref<TrackStatus | ''>('')
+
+function statusColor(status: string): string {
+  return TRACK_STATUS_COLORS[status as TrackStatus] ?? '#6b7280'
+}
+
+function nonZeroStatuses(byStatus: Partial<Record<TrackStatus, number>>): [TrackStatus, number][] {
+  return Object.entries(byStatus).filter(([, count]) => (count ?? 0) > 0) as [TrackStatus, number][]
+}
+
+const albumNonZeroStatuses = computed(() => {
+  const result: Record<number, [TrackStatus, number][]> = {}
+  for (const [id, stats] of Object.entries(albumStatsMap.value)) {
+    result[Number(id)] = nonZeroStatuses(stats.by_status)
+  }
+  return result
+})
 
 onMounted(async () => {
   try {
@@ -21,6 +40,15 @@ onMounted(async () => {
     tracks.value = loadedTracks
     albums.value = loadedAlbums
     await appStore.loadPendingInvitations()
+
+    const statsResults = await Promise.allSettled(
+      loadedAlbums.map(album => albumApi.stats(album.id).then(stats => ({ id: album.id, stats })))
+    )
+    for (const result of statsResults) {
+      if (result.status === 'fulfilled') {
+        albumStatsMap.value[result.value.id] = result.value.stats
+      }
+    }
   } finally {
     loading.value = false
   }
@@ -31,7 +59,7 @@ const filteredTracks = computed(() => {
   return tracks.value.filter(track => track.status === filterStatus.value)
 })
 
-const stats = computed(() => ({
+const trackStats = computed(() => ({
   total: tracks.value.length,
   submitted: tracks.value.filter(track => track.status === 'submitted').length,
   peer_review: tracks.value.filter(track => ['peer_review', 'peer_revision'].includes(track.status)).length,
@@ -45,6 +73,11 @@ function formatDuration(seconds: number | null): string {
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+function formatEventDescription(event: WorkflowEvent): string {
+  const action = event.event_type.replaceAll('_', ' ')
+  return event.actor ? t('dashboard.eventBy', { action, name: event.actor.display_name }) : action
 }
 
 async function handleAccept(invitationId: number) {
@@ -93,46 +126,74 @@ async function handleDecline(invitationId: number) {
 
     <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
       <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = ''">
-        <div class="text-2xl font-bold text-foreground">{{ stats.total }}</div>
+        <div class="text-2xl font-bold text-foreground">{{ trackStats.total }}</div>
         <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.total') }}</div>
       </div>
       <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'submitted'">
-        <div class="text-2xl font-bold text-info">{{ stats.submitted }}</div>
+        <div class="text-2xl font-bold text-info">{{ trackStats.submitted }}</div>
         <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.submitted') }}</div>
       </div>
       <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'peer_review'">
-        <div class="text-2xl font-bold text-warning">{{ stats.peer_review }}</div>
+        <div class="text-2xl font-bold text-warning">{{ trackStats.peer_review }}</div>
         <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.peerFlow') }}</div>
       </div>
       <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'mastering'">
-        <div class="text-2xl font-bold text-warning">{{ stats.mastering }}</div>
+        <div class="text-2xl font-bold text-warning">{{ trackStats.mastering }}</div>
         <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.masteringFlow') }}</div>
       </div>
       <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'completed'">
-        <div class="text-2xl font-bold text-success">{{ stats.completed }}</div>
+        <div class="text-2xl font-bold text-success">{{ trackStats.completed }}</div>
         <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.completed') }}</div>
       </div>
       <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'rejected'">
-        <div class="text-2xl font-bold text-error">{{ stats.rejected }}</div>
+        <div class="text-2xl font-bold text-error">{{ trackStats.rejected }}</div>
         <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.rejected') }}</div>
       </div>
     </div>
 
+    <!-- 专辑进度看板 -->
     <div v-if="albums.length > 0">
       <h2 class="text-lg font-sans font-semibold text-foreground mb-3">{{ t('dashboard.albums') }}</h2>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div v-for="album in albums" :key="album.id" class="card">
-          <div class="flex items-center gap-3">
-            <div
-              class="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold"
-              :style="{ backgroundColor: album.cover_color }"
-            >
-              {{ album.title.charAt(0) }}
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div v-for="album in albums" :key="album.id" class="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+          <div class="h-1.5" :style="{ backgroundColor: album.cover_color }"></div>
+          <div class="p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-bold text-lg text-foreground">{{ album.title }}</h3>
+              <span v-if="albumStatsMap[album.id]?.open_issues > 0" class="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full">
+                {{ t('dashboard.openIssues', { count: albumStatsMap[album.id].open_issues }) }}
+              </span>
             </div>
-            <div>
-              <h3 class="text-sm font-medium text-foreground">{{ album.title }}</h3>
-              <p class="text-xs text-muted-foreground">{{ t('dashboard.tracksCount', { n: album.track_count }) }}</p>
-            </div>
+
+            <template v-if="albumStatsMap[album.id]">
+              <div class="flex h-2 rounded-full overflow-hidden gap-px mb-2">
+                <div
+                  v-for="[statusKey, count] in albumNonZeroStatuses[album.id]"
+                  :key="statusKey"
+                  :style="{ width: (count / albumStatsMap[album.id].total_tracks * 100) + '%', backgroundColor: statusColor(statusKey) }"
+                  :title="`${statusKey}: ${count}`"
+                ></div>
+              </div>
+              <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-400 mb-4">
+                <span v-for="[statusKey, count] in albumNonZeroStatuses[album.id]" :key="statusKey" class="flex items-center gap-1">
+                  <span class="h-2 w-2 rounded-full" :style="{ backgroundColor: statusColor(statusKey) }"></span>
+                  {{ t(`status.${statusKey}`, statusKey) }} ({{ count }})
+                </span>
+              </div>
+              <p class="text-xs text-gray-500 mb-4">{{ albumStatsMap[album.id].total_tracks }} {{ t('dashboard.tracks') }}</p>
+              <div v-if="albumStatsMap[album.id].recent_events.length > 0" class="space-y-1">
+                <p class="text-xs font-medium text-gray-400 mb-2">{{ t('dashboard.recentActivity') }}</p>
+                <div v-for="event in albumStatsMap[album.id].recent_events.slice(0, 3)" :key="event.id"
+                  class="flex items-center gap-2 text-xs text-gray-500">
+                  <span class="h-1.5 w-1.5 rounded-full bg-gray-600 flex-shrink-0"></span>
+                  <span class="flex-1 truncate">{{ formatEventDescription(event) }}</span>
+                  <span class="flex-shrink-0">{{ formatRelativeTime(event.created_at, locale) }}</span>
+                </div>
+              </div>
+            </template>
+            <template v-else>
+              <p class="text-xs text-gray-500">{{ t('dashboard.tracksCount', { n: album.track_count }) }}</p>
+            </template>
           </div>
         </div>
       </div>

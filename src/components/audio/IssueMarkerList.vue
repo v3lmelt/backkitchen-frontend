@@ -4,18 +4,34 @@ import type { Issue } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatTimestamp } from '@/utils/time'
 
-defineProps<{
+const props = withDefaults(defineProps<{
   issues: Issue[]
-}>()
+  selectable?: boolean
+  selectedIds?: number[]
+}>(), {
+  selectable: false,
+  selectedIds: () => [],
+})
 
 const emit = defineEmits<{
   select: [issue: Issue]
+  'update:selectedIds': [ids: number[]]
 }>()
 
 const { t } = useI18n()
 
 function formatTime(seconds: number): string {
   return formatTimestamp(seconds)
+}
+
+function toggleSelect(issueId: number) {
+  const current = props.selectedIds ?? []
+  const idx = current.indexOf(issueId)
+  if (idx === -1) {
+    emit('update:selectedIds', [...current, issueId])
+  } else {
+    emit('update:selectedIds', current.filter(id => id !== issueId))
+  }
 }
 </script>
 
@@ -27,8 +43,15 @@ function formatTime(seconds: number): string {
       @click="emit('select', issue)"
       class="card cursor-pointer hover:border-primary/50 transition-colors"
     >
-      <div class="flex items-start justify-between gap-2">
-        <div class="min-w-0">
+      <div class="flex items-start gap-2">
+        <input
+          v-if="selectable"
+          type="checkbox"
+          :checked="selectedIds?.includes(issue.id)"
+          @click.stop="toggleSelect(issue.id)"
+          class="mt-1 rounded border-border bg-card text-primary focus:ring-primary flex-shrink-0"
+        />
+        <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2 mb-1">
             <StatusBadge :status="issue.severity" type="severity" />
             <StatusBadge :status="issue.status" type="issue" />

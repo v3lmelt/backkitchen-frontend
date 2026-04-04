@@ -3,20 +3,28 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { issueApi, trackApi } from '@/api'
-import type { Issue, IssueStatus, Track } from '@/types'
+import type { Issue, IssueStatus, Track, TrackSourceVersion } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
-import { formatTimestamp } from '@/utils/time'
+import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
+import { formatTimestamp, formatLocaleDate } from '@/utils/time'
 
 const route = useRoute()
 const router = useRouter()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
+const sourceVersions = ref<TrackSourceVersion[]>([])
 const loading = ref(true)
 const selectedFile = ref<File | null>(null)
 const uploading = ref(false)
+const selectedIssueIds = ref<number[]>([])
+const showVersionCompare = ref(false)
+const selectedCompareVersionId = ref<number | null>(null)
+const showBatchModal = ref(false)
+const batchTargetStatus = ref<IssueStatus>('will_fix')
+const batchStatusNote = ref('')
 
 onMounted(loadPage)
 
@@ -25,6 +33,7 @@ async function loadPage() {
   try {
     const detail = await trackApi.get(trackId.value)
     track.value = detail.track
+    sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
     const phase = detail.track.status === 'mastering_revision' ? 'mastering' : 'peer'
     issues.value = detail.issues.filter(issue => issue.phase === phase && issue.workflow_cycle === detail.track.workflow_cycle)
   } finally {
@@ -43,6 +52,13 @@ const uploadButtonLabel = computed(() =>
   track.value?.status === 'mastering_revision'
     ? t('revision.submitBackToMastering')
     : t('revision.submitBackToPeer')
+)
+const audioUrl = computed(() => track.value?.file_path ? `/api/tracks/${trackId.value}/audio` : '')
+const currentVersionId = computed(() => track.value?.current_source_version?.id ?? null)
+const olderVersions = computed(() =>
+  sourceVersions.value
+    .filter(v => v.id !== currentVersionId.value)
+    .sort((a, b) => b.version_number - a.version_number)
 )
 
 function onFileSelect(event: Event) {
@@ -67,8 +83,36 @@ async function submitRevision() {
   }
 }
 
-function formatTime(seconds: number): string {
-  return formatTimestamp(seconds)
+const formatDate = (d: string) => formatLocaleDate(d, locale.value)
+
+function openBatchAction(status: IssueStatus) {
+  batchTargetStatus.value = status
+  batchStatusNote.value = ''
+  showBatchModal.value = true
+}
+
+async function confirmBatchAction() {
+  if (selectedIssueIds.value.length === 0) return
+  const updatedIssues = await issueApi.batchUpdate(trackId.value, {
+    issue_ids: selectedIssueIds.value,
+    status: batchTargetStatus.value,
+    status_note: batchStatusNote.value || undefined,
+  })
+  for (const updated of updatedIssues) {
+    const idx = issues.value.findIndex(i => i.id === updated.id)
+    if (idx !== -1) issues.value[idx] = updated
+  }
+  selectedIssueIds.value = []
+  showBatchModal.value = false
+}
+
+function onIssueSelectToggle(issueId: number) {
+  const idx = selectedIssueIds.value.indexOf(issueId)
+  if (idx === -1) {
+    selectedIssueIds.value.push(issueId)
+  } else {
+    selectedIssueIds.value.splice(idx, 1)
+  }
 }
 </script>
 
@@ -100,15 +144,51 @@ function formatTime(seconds: number): string {
       </div>
     </div>
 
+    <div v-if="audioUrl">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs text-muted-foreground">{{ t('peerReview.waveformHint') }}</span>
+        <button
+          v-if="sourceVersions.length > 1"
+          @click="showVersionCompare = !showVersionCompare"
+          class="text-xs btn-secondary px-3 py-1">
+          {{ t('compare.title') }}
+        </button>
+      </div>
+      <div v-if="showVersionCompare && olderVersions.length > 0" class="flex items-center gap-2 mb-3">
+        <span class="text-xs text-gray-400">{{ t('compare.selectVersion') }}</span>
+        <select v-model="selectedCompareVersionId" class="text-xs bg-white/10 border border-white/20 rounded px-2 py-1">
+          <option :value="null">-- {{ t('compare.selectVersion') }} --</option>
+          <option v-for="v in olderVersions" :key="v.id" :value="v.id">
+            V{{ v.version_number }} · {{ formatDate(v.created_at) }}
+          </option>
+        </select>
+        <button v-if="selectedCompareVersionId" @click="selectedCompareVersionId = null" class="text-xs text-gray-500 hover:text-gray-300">
+          {{ t('compare.clear') }}
+        </button>
+      </div>
+      <WaveformPlayer
+        :audio-url="audioUrl"
+        :issues="issues"
+        :track-id="trackId"
+        :compare-version-id="selectedCompareVersionId"
+      />
+    </div>
+
     <div v-if="pendingIssues.length > 0">
       <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('revision.openIssuesHeading') }}</h3>
       <div class="space-y-3">
         <div v-for="issue in pendingIssues" :key="issue.id" class="card">
-          <div class="flex items-start justify-between gap-4">
+          <div class="flex items-start gap-3">
+            <input
+              type="checkbox"
+              :checked="selectedIssueIds.includes(issue.id)"
+              @change="onIssueSelectToggle(issue.id)"
+              class="mt-1 rounded border-border bg-card text-primary focus:ring-primary flex-shrink-0"
+            />
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2 mb-1">
                 <StatusBadge :status="issue.severity" type="severity" />
-                <span class="text-xs text-muted-foreground">{{ formatTime(issue.time_start) }}</span>
+                <span class="text-xs text-muted-foreground">{{ formatTimestamp(issue.time_start) }}</span>
               </div>
               <h4 class="text-sm font-medium text-foreground">{{ issue.title }}</h4>
               <p class="text-xs text-muted-foreground mt-1">{{ issue.description }}</p>
@@ -131,7 +211,7 @@ function formatTime(seconds: number): string {
               <StatusBadge :status="issue.status" type="issue" />
               <span class="text-sm text-foreground">{{ issue.title }}</span>
             </div>
-            <span class="text-xs text-muted-foreground">{{ formatTime(issue.time_start) }}</span>
+            <span class="text-xs text-muted-foreground">{{ formatTimestamp(issue.time_start) }}</span>
           </div>
         </div>
       </div>
@@ -152,5 +232,54 @@ function formatTime(seconds: number): string {
         {{ uploading ? t('revision.uploading') : uploadButtonLabel }}
       </button>
     </div>
+
+    <Transition name="slide-up">
+      <div v-if="selectedIssueIds.length > 0"
+        class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 border border-white/20 rounded-2xl shadow-2xl px-5 py-3 flex items-center gap-3 z-50">
+        <span class="text-sm text-gray-400">{{ selectedIssueIds.length }} {{ t('issue.selected') }}</span>
+        <div class="h-4 w-px bg-white/20"></div>
+        <button @click="openBatchAction('will_fix')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm">
+          {{ t('issue.status.will_fix') }}
+        </button>
+        <button @click="openBatchAction('resolved')" class="px-3 py-1.5 bg-green-600 hover:bg-green-500 rounded-lg text-sm">
+          {{ t('issue.status.resolved') }}
+        </button>
+        <button @click="selectedIssueIds = []" class="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm">
+          {{ t('common.cancel') }}
+        </button>
+      </div>
+    </Transition>
+
+    <div v-if="showBatchModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <div class="bg-gray-900 border border-white/10 rounded-2xl p-6 w-full max-w-md space-y-4">
+        <h3 class="font-semibold text-foreground">{{ t('issue.batchStatusNote') }}</h3>
+        <textarea
+          v-model="batchStatusNote"
+          :placeholder="t('issue.batchStatusNote')"
+          class="w-full text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-2 resize-none text-foreground"
+          rows="3"
+        ></textarea>
+        <div class="flex gap-2">
+          <button @click="confirmBatchAction" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm">
+            {{ t('common.confirm') }}
+          </button>
+          <button @click="showBatchModal = false" class="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm">
+            {{ t('common.cancel') }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.2s ease;
+}
+.slide-up-enter-from,
+.slide-up-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(16px);
+}
+</style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import WaveSurfer from 'wavesurfer.js'
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
@@ -15,6 +15,8 @@ const props = defineProps<{
   height?: number
   selectable?: boolean
   selectedRange?: { start: number; end: number } | null
+  compareVersionId?: number | null
+  trackId?: number
 }>()
 
 const emit = defineEmits<{
@@ -28,7 +30,9 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const container = ref<HTMLDivElement>()
+const compareContainerRef = ref<HTMLDivElement>()
 const wavesurfer = ref<WaveSurfer | null>(null)
+const compareWaveSurfer = ref<WaveSurfer | null>(null)
 const regionsPlugin = ref<RegionsPlugin | null>(null)
 const isPlaying = ref(false)
 const currentTime = ref(0)
@@ -37,6 +41,8 @@ const isRenderingRegions = ref(false)
 const selectionRegionId = ref<string | null>(null)
 const lastSelectionAt = ref(0)
 const activePointGroupKey = ref<string | null>(null)
+const abMode = ref<'A' | 'B'>('A')
+const isCompareMode = computed(() => !!props.compareVersionId)
 const selectionVisualColor = 'rgba(34, 211, 238, 0.28)'
 const rangeLaneHeight = 18
 const rangeLaneGap = 6
@@ -344,6 +350,12 @@ onMounted(async () => {
   ws.on('timeupdate', (time: number) => {
     currentTime.value = time
     emit('timeupdate', time)
+    if (compareWaveSurfer.value && isCompareMode.value) {
+      const compareDuration = compareWaveSurfer.value.getDuration()
+      if (compareDuration > 0) {
+        compareWaveSurfer.value.seekTo(time / compareDuration)
+      }
+    }
   })
 
   ws.on('play', () => { isPlaying.value = true })
@@ -414,6 +426,61 @@ watch(duration, () => {
   activePointGroupKey.value = null
 })
 
+watch(() => props.compareVersionId, async (newId) => {
+  if (compareWaveSurfer.value) {
+    compareWaveSurfer.value.destroy()
+    compareWaveSurfer.value = null
+  }
+  if (!newId || !props.trackId) {
+    abMode.value = 'A'
+    wavesurfer.value?.setVolume(1)
+    return
+  }
+
+  await nextTick()
+  const compareContainer = compareContainerRef.value
+  if (!compareContainer) return
+
+  const ws = WaveSurfer.create({
+    container: compareContainer,
+    waveColor: 'rgba(249, 115, 22, 0.5)',
+    progressColor: 'rgba(249, 115, 22, 0.7)',
+    height: props.height || 128,
+    interact: false,
+  })
+
+  const compareUrl = `/api/tracks/${props.trackId}/source-versions/${newId}/audio`
+  try {
+    const token = localStorage.getItem(TOKEN_KEY)
+    const res = await fetch(compareUrl, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+    if (res.ok) {
+      const blob = await res.blob()
+      await ws.loadBlob(blob)
+    }
+  } catch {}
+
+  compareWaveSurfer.value = ws
+  if (abMode.value === 'A') {
+    ws.setVolume(0)
+  } else {
+    wavesurfer.value?.setVolume(0)
+    ws.setVolume(1)
+  }
+})
+
+watch(abMode, (mode) => {
+  if (!wavesurfer.value || !compareWaveSurfer.value) return
+  if (mode === 'A') {
+    wavesurfer.value.setVolume(1)
+    compareWaveSurfer.value.setVolume(0)
+  } else {
+    wavesurfer.value.setVolume(0)
+    compareWaveSurfer.value.setVolume(1)
+  }
+})
+
 function togglePlay() {
   wavesurfer.value?.playPause()
 }
@@ -426,6 +493,7 @@ function seekTo(time: number) {
 
 onBeforeUnmount(() => {
   wavesurfer.value?.destroy()
+  compareWaveSurfer.value?.destroy()
 })
 
 defineExpose({ seekTo, togglePlay })
@@ -507,11 +575,31 @@ defineExpose({ seekTo, togglePlay })
         </div>
       </div>
 
-      <div
-        ref="container"
-        class="relative z-0 overflow-hidden rounded-none bg-[#0D0D0D]"
-        :style="{ height: `${props.height || 128}px` }"
-      />
+      <div class="relative">
+        <div
+          ref="container"
+          class="relative z-0 overflow-hidden rounded-none bg-[#0D0D0D]"
+          :style="{ height: `${props.height || 128}px` }"
+        />
+        <div
+          v-if="isCompareMode"
+          ref="compareContainerRef"
+          class="absolute inset-0 pointer-events-none"
+        ></div>
+        <div v-if="isCompareMode" class="absolute top-2 right-2 flex items-center gap-1 bg-black/60 rounded-lg p-1 z-10">
+          <button
+            @click="abMode = 'A'"
+            :class="['px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'A' ? 'bg-blue-500 text-white' : 'text-gray-400 hover:text-white']">
+            A
+          </button>
+          <button
+            @click="abMode = 'B'"
+            :class="['px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'B' ? 'bg-orange-500 text-white' : 'text-gray-400 hover:text-white']">
+            B
+          </button>
+          <span class="text-xs text-gray-400 px-1">{{ abMode === 'A' ? $t('compare.currentVersion') : $t('compare.previousVersion') }}</span>
+        </div>
+      </div>
     </div>
     <div class="flex items-center gap-4">
       <button @click="togglePlay" class="text-cyan hover:text-cyan-dark transition-colors">

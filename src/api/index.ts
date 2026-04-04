@@ -1,10 +1,13 @@
 import type {
   Album,
+  AlbumStats,
   AuthResponse,
   ChecklistItem,
   Comment,
   Invitation,
   Issue,
+  IssueStatus,
+  Notification,
   Track,
   TrackDetailResponse,
   TrackStatus,
@@ -57,6 +60,7 @@ export const albumApi = {
   updateTeam: (id: number, data: { mastering_engineer_id: number | null; member_ids: number[] }) =>
     request<Album>(`/albums/${id}/team`, { method: 'PATCH', body: JSON.stringify(data) }),
   tracks: (id: number) => request<Track[]>(`/albums/${id}/tracks`),
+  stats: (id: number) => request<AlbumStats>(`/albums/${id}/stats`),
 }
 
 export const trackApi = {
@@ -99,8 +103,10 @@ export const issueApi = {
   get: (id: number) => request<Issue>(`/issues/${id}`),
   create: (trackId: number, data: Omit<Issue, 'id' | 'track_id' | 'author_id' | 'author' | 'workflow_cycle' | 'source_version_id' | 'master_delivery_id' | 'status' | 'created_at' | 'updated_at' | 'comment_count' | 'comments'>) =>
     request<Issue>(`/tracks/${trackId}/issues`, { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: number, data: Partial<Pick<Issue, 'status' | 'title' | 'description' | 'severity'>>) =>
+  update: (id: number, data: Partial<Pick<Issue, 'status' | 'title' | 'description' | 'severity'>> & { status_note?: string }) =>
     request<Issue>(`/issues/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  batchUpdate: (trackId: number, data: { issue_ids: number[]; status: IssueStatus; status_note?: string }) =>
+    request<Issue[]>(`/tracks/${trackId}/issues/batch`, { method: 'PATCH', body: JSON.stringify(data) }),
   addComment: (id: number, data: { content: string; images?: File[] }) => {
     const form = new FormData()
     form.append('content', data.content)
@@ -109,6 +115,12 @@ export const issueApi = {
     }
     return request<Comment>(`/issues/${id}/comments`, { method: 'POST', body: form })
   },
+}
+
+export const notificationApi = {
+  list: (): Promise<Notification[]> => request('/notifications'),
+  markRead: (id: number): Promise<Notification> => request(`/notifications/${id}/read`, { method: 'PATCH' }),
+  markAllRead: (): Promise<{ updated: number }> => request('/notifications/read-all', { method: 'PATCH' }),
 }
 
 export const checklistApi = {
@@ -128,6 +140,10 @@ export const authApi = {
   register: (data: { username: string; display_name: string; email: string; password: string }) =>
     request<AuthResponse>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   me: () => request<User>('/auth/me'),
+  updateProfile: (data: { display_name?: string; email?: string }) =>
+    request<User>('/auth/me', { method: 'PATCH', body: JSON.stringify(data) }),
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    request<void>('/auth/me/change-password', { method: 'POST', body: JSON.stringify(data) }),
 }
 
 export const invitationApi = {
