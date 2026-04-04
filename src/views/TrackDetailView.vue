@@ -3,7 +3,8 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi } from '@/api'
-import type { Track, Issue, WorkflowEvent } from '@/types'
+import type { Track, Issue, WorkflowEvent, TrackSourceVersion } from '@/types'
+import { formatLocaleDate } from '@/utils/time'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
@@ -11,14 +12,18 @@ import StatusBadge from '@/components/workflow/StatusBadge.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
 const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
 const events = ref<WorkflowEvent[]>([])
+const sourceVersions = ref<TrackSourceVersion[]>([])
 const loading = ref(true)
 const waveformRef = ref<InstanceType<typeof WaveformPlayer>>()
+const showVersionCompare = ref(false)
+const selectedCompareVersionId = ref<number | null>(null)
 
 onMounted(loadTrack)
 
@@ -29,6 +34,7 @@ async function loadTrack() {
     track.value = detail.track
     issues.value = detail.issues
     events.value = detail.events
+    sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
   } finally {
     loading.value = false
   }
@@ -55,9 +61,13 @@ function openPrimaryAction(action: string) {
   if (action === 'final_review') router.push(`/tracks/${trackId.value}/final-review`)
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleString()
-}
+
+const currentVersionId = computed(() => track.value?.current_source_version?.id ?? null)
+const olderVersions = computed(() =>
+  sourceVersions.value
+    .filter(v => v.id !== currentVersionId.value)
+    .sort((a, b) => b.version_number - a.version_number)
+)
 </script>
 
 <template>
@@ -96,11 +106,34 @@ function formatDate(dateStr: string): string {
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
       <div class="xl:col-span-2 space-y-6">
         <div v-if="audioUrl">
-          <h3 class="text-sm font-medium text-muted-foreground mb-2">{{ t('trackDetail.currentSourceAudio') }}</h3>
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-muted-foreground">{{ t('trackDetail.currentSourceAudio') }}</h3>
+            <button
+              v-if="sourceVersions.length > 1"
+              @click="showVersionCompare = !showVersionCompare"
+              class="text-xs btn-secondary px-3 py-1">
+              {{ t('compare.title') }}
+            </button>
+          </div>
+          <!-- 版本选择器 -->
+          <div v-if="showVersionCompare && olderVersions.length > 0" class="flex items-center gap-2 mb-3">
+            <span class="text-xs text-gray-400">{{ t('compare.selectVersion') }}</span>
+            <select v-model="selectedCompareVersionId" class="text-xs bg-white/10 border border-white/20 rounded px-2 py-1">
+              <option :value="null">-- {{ t('compare.selectVersion') }} --</option>
+              <option v-for="v in olderVersions" :key="v.id" :value="v.id">
+                V{{ v.version_number }} · {{ fmtDate(v.created_at) }}
+              </option>
+            </select>
+            <button v-if="selectedCompareVersionId" @click="selectedCompareVersionId = null" class="text-xs text-gray-500 hover:text-gray-300">
+              {{ t('compare.clear') }}
+            </button>
+          </div>
           <WaveformPlayer
             ref="waveformRef"
             :audio-url="audioUrl"
             :issues="currentCycleIssues"
+            :track-id="trackId"
+            :compare-version-id="selectedCompareVersionId"
             @regionClick="onIssueSelect"
           />
         </div>
@@ -161,7 +194,7 @@ function formatDate(dateStr: string): string {
           <div v-for="event in events" :key="event.id" class="border-b border-border last:border-0 pb-3 last:pb-0">
             <div class="text-sm text-foreground">{{ event.event_type.replaceAll('_', ' ') }}</div>
             <div class="text-xs text-muted-foreground mt-1">
-              {{ event.actor?.display_name || t('trackDetail.system') }} · {{ formatDate(event.created_at) }}
+              {{ event.actor?.display_name || t('trackDetail.system') }} · {{ fmtDate(event.created_at) }}
             </div>
           </div>
         </div>

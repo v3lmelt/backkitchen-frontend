@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { issueApi } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Issue } from '@/types'
+import type { Issue, IssueStatus } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatTimestamp } from '@/utils/time'
 
@@ -20,6 +20,8 @@ const newComment = ref('')
 const selectedImages = ref<File[]>([])
 const imagePreviewUrls = ref<string[]>([])
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const pendingStatus = ref<Exclude<IssueStatus, 'open'> | null>(null)
+const statusNote = ref('')
 
 onMounted(async () => {
   try {
@@ -70,9 +72,24 @@ async function addComment() {
   imagePreviewUrls.value = []
 }
 
-async function updateStatus(status: 'will_fix' | 'disagreed' | 'resolved') {
-  if (!issue.value) return
-  issue.value = await issueApi.update(issueId.value, { status })
+function selectStatus(status: Exclude<IssueStatus, 'open'>) {
+  pendingStatus.value = status
+  statusNote.value = ''
+}
+
+async function confirmStatusChange() {
+  if (!issue.value || !pendingStatus.value) return
+  issue.value = await issueApi.update(issueId.value, {
+    status: pendingStatus.value,
+    status_note: statusNote.value || undefined,
+  })
+  pendingStatus.value = null
+  statusNote.value = ''
+}
+
+function cancelStatusChange() {
+  pendingStatus.value = null
+  statusNote.value = ''
 }
 </script>
 
@@ -111,28 +128,49 @@ async function updateStatus(status: 'will_fix' | 'disagreed' | 'resolved') {
     </div>
 
     <!-- Status Actions -->
-    <div class="flex gap-2">
-      <button
-        v-if="issue.status === 'open'"
-        @click="updateStatus('will_fix')"
-        class="btn-primary text-sm"
-      >
-        {{ t('issueDetail.willFix') }}
-      </button>
-      <button
-        v-if="issue.status === 'open'"
-        @click="updateStatus('disagreed')"
-        class="btn-secondary text-sm"
-      >
-        {{ t('issueDetail.disagree') }}
-      </button>
-      <button
-        v-if="issue.status === 'will_fix'"
-        @click="updateStatus('resolved')"
-        class="bg-success-bg text-success font-medium px-4 py-2 rounded-full text-sm hover:opacity-80 transition-opacity"
-      >
-        {{ t('issueDetail.markResolved') }}
-      </button>
+    <div class="space-y-3">
+      <div class="flex gap-2">
+        <button
+          v-if="issue.status === 'open'"
+          @click="selectStatus('will_fix')"
+          class="btn-primary text-sm"
+          :class="{ 'ring-2 ring-blue-400': pendingStatus === 'will_fix' }"
+        >
+          {{ t('issueDetail.willFix') }}
+        </button>
+        <button
+          v-if="issue.status === 'open'"
+          @click="selectStatus('disagreed')"
+          class="btn-secondary text-sm"
+          :class="{ 'ring-2 ring-gray-400': pendingStatus === 'disagreed' }"
+        >
+          {{ t('issueDetail.disagree') }}
+        </button>
+        <button
+          v-if="issue.status === 'will_fix'"
+          @click="selectStatus('resolved')"
+          class="bg-success-bg text-success font-medium px-4 py-2 rounded-full text-sm hover:opacity-80 transition-opacity"
+          :class="{ 'ring-2 ring-green-400': pendingStatus === 'resolved' }"
+        >
+          {{ t('issueDetail.markResolved') }}
+        </button>
+      </div>
+      <div v-if="pendingStatus" class="mt-3 space-y-2">
+        <textarea
+          v-model="statusNote"
+          :placeholder="t('issue.statusNotePlaceholder')"
+          class="w-full text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-2 resize-none text-foreground"
+          rows="3"
+        ></textarea>
+        <div class="flex gap-2">
+          <button @click="confirmStatusChange" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm">
+            {{ t('common.confirm') }}
+          </button>
+          <button @click="cancelStatusChange" class="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm">
+            {{ t('common.cancel') }}
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Comments -->
@@ -141,37 +179,44 @@ async function updateStatus(status: 'will_fix' | 'disagreed' | 'resolved') {
         {{ t('issueDetail.commentsHeading', { count: issue.comments?.length || 0 }) }}
       </h3>
 
-      <div v-for="comment in issue.comments" :key="comment.id" class="card">
-        <div class="flex items-center gap-2 mb-2">
-          <div
-            v-if="comment.author"
-            class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
-            :style="{ backgroundColor: comment.author.avatar_color }"
-          >
-            {{ comment.author.display_name.charAt(0) }}
+      <template v-for="comment in issue.comments" :key="comment.id">
+        <div v-if="comment.is_status_note" class="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
+          <span class="text-xs font-semibold text-amber-400 block mb-1">{{ t('issue.revisionNote') }}</span>
+          <p class="text-sm text-foreground">{{ comment.content }}</p>
+          <p class="text-xs text-gray-500 mt-1">{{ comment.author?.display_name || t('issueDetail.unknown') }} · {{ formatDate(comment.created_at) }}</p>
+        </div>
+        <div v-else class="card">
+          <div class="flex items-center gap-2 mb-2">
+            <div
+              v-if="comment.author"
+              class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
+              :style="{ backgroundColor: comment.author.avatar_color }"
+            >
+              {{ comment.author.display_name.charAt(0) }}
+            </div>
+            <span class="text-sm font-medium text-foreground">
+              {{ comment.author?.display_name || t('issueDetail.unknown') }}
+            </span>
+            <span class="text-xs text-muted-foreground">{{ formatDate(comment.created_at) }}</span>
           </div>
-          <span class="text-sm font-medium text-foreground">
-            {{ comment.author?.display_name || t('issueDetail.unknown') }}
-          </span>
-          <span class="text-xs text-muted-foreground">{{ formatDate(comment.created_at) }}</span>
+          <p class="text-sm text-foreground whitespace-pre-wrap">{{ comment.content }}</p>
+          <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-3">
+            <a
+              v-for="img in comment.images"
+              :key="img.id"
+              :href="img.image_url"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                :src="img.image_url"
+                class="h-20 w-20 object-cover rounded border border-border cursor-pointer hover:opacity-80 transition-opacity"
+                alt="attachment"
+              />
+            </a>
+          </div>
         </div>
-        <p class="text-sm text-foreground whitespace-pre-wrap">{{ comment.content }}</p>
-        <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-3">
-          <a
-            v-for="img in comment.images"
-            :key="img.id"
-            :href="img.image_url"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <img
-              :src="img.image_url"
-              class="h-20 w-20 object-cover rounded border border-border cursor-pointer hover:opacity-80 transition-opacity"
-              alt="attachment"
-            />
-          </a>
-        </div>
-      </div>
+      </template>
 
       <!-- New Comment -->
       <div class="space-y-2">

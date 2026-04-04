@@ -39,6 +39,18 @@ export interface AlbumMember {
   user: User
 }
 
+export interface Invitation {
+  id: number
+  album_id: number
+  user_id: number
+  invited_by_user_id: number
+  status: 'pending' | 'accepted' | 'declined'
+  created_at: string
+  album?: { id: number; title: string; cover_color: string } | null
+  user?: User | null
+  invited_by_user?: User | null
+}
+
 export interface Album {
   id: number
   title: string
@@ -110,6 +122,7 @@ export interface Comment {
   author_id: number
   author?: User | null
   content: string
+  is_status_note: boolean
   created_at: string
   images?: CommentImage[]
 }
@@ -162,6 +175,7 @@ export interface Track {
   current_source_version?: TrackSourceVersion | null
   current_master_delivery?: MasterDelivery | null
   allowed_actions: string[]
+  source_versions?: TrackSourceVersion[]
 }
 
 export interface TrackDetailResponse {
@@ -169,4 +183,24 @@ export interface TrackDetailResponse {
   issues: Issue[]
   checklist_items: ChecklistItem[]
   events: WorkflowEvent[]
+  source_versions?: TrackSourceVersion[]
+}
+
+export interface Notification {
+  id: number
+  user_id: number
+  type: 'track_status_changed' | 'issue_created' | 'issue_status_changed' | 'comment_added' | 'track_assigned'
+  title: string
+  body: string
+  related_track_id?: number
+  related_issue_id?: number
+  is_read: boolean
+  created_at: string
+}
+
+export interface AlbumStats {
+  total_tracks: number
+  by_status: Partial<Record<TrackStatus, number>>
+  open_issues: number
+  recent_events: WorkflowEvent[]
 }

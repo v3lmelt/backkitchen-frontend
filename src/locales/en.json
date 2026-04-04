@@ -5,6 +5,7 @@
     "addIssue": "+ Add Issue",
     "submitIssue": "Submit Issue",
     "cancel": "Cancel",
+    "confirm": "Confirm",
     "newIssueAt": "New Issue at {time}",
     "issueTitlePlaceholder": "Issue title",
     "descriptionPlaceholder": "Description...",
@@ -47,6 +48,7 @@
       "finalReview": "Final Review",
       "upload": "Submit Track",
       "settings": "Album Settings",
+      "profile": "Profile",
       "default": "BACK KITCHEN"
     }
   },
@@ -101,6 +103,7 @@
     "rejected": "Rejected",
     "albums": "Albums",
     "tracksCount": "{n} tracks",
+    "tracks": "tracks",
     "tracksHeading": "Tracks",
     "filtered": "filtered: {status}",
     "clearFilter": "clear",
@@ -112,7 +115,10 @@
     "colStatus": "Status",
     "colOpenIssues": "Open Issues",
     "colVersion": "Version",
-    "openCount": "{count} open"
+    "openCount": "{count} open",
+    "recentActivity": "Recent Activity",
+    "eventBy": "{action} by {name}",
+    "openIssues": "{count} open issues"
   },
   "trackDetail": {
     "workflowStatus": "Workflow Status",
@@ -259,6 +265,92 @@
     "readOnlyNotice": "Team configuration can only be edited by the album producer.",
     "masteringEngineerInfo": "Mastering Engineer: {name}",
     "participantsInfo": "Participants: {list}",
-    "noneParticipants": "None"
+    "noneParticipants": "None",
+    "inviteMember": "Invite Member",
+    "inviteByUserId": "Invite by User ID",
+    "userIdPlaceholder": "Enter user ID",
+    "invite": "Invite",
+    "inviting": "Inviting...",
+    "pendingInvitations": "Pending Invitations",
+    "noPendingInvitations": "No pending invitations.",
+    "cancelInvitation": "Cancel",
+    "invitationSent": "Invitation sent.",
+    "invitationCancelled": "Invitation cancelled.",
+    "inviteErrorAlreadyMember": "User is already a member.",
+    "inviteErrorAlreadyInvited": "User already has a pending invitation."
+  },
+  "invitations": {
+    "title": "Album Invitations",
+    "from": "Invited by {name}",
+    "accept": "Accept",
+    "decline": "Decline"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark all read",
+    "empty": "No notifications"
+  },
+  "compare": {
+    "title": "Compare Versions",
+    "selectVersion": "Compare with",
+    "currentVersion": "Current",
+    "previousVersion": "Previous",
+    "clear": "Clear"
+  },
+  "issue": {
+    "selected": "issues selected",
+    "statusNotePlaceholder": "Describe your changes (optional)",
+    "revisionNote": "Revision Note",
+    "batchStatusNote": "Batch revision note (optional)",
+    "status": {
+      "will_fix": "Will Fix",
+      "resolved": "Resolved",
+      "disagreed": "Disagreed"
+    }
+  },
+  "trackStatus": {
+    "submitted": "Submitted",
+    "peer_review": "Peer Review",
+    "peer_revision": "Peer Revision",
+    "producer_mastering_gate": "Producer Gate",
+    "mastering": "Mastering",
+    "mastering_revision": "Master Revision",
+    "final_review": "Final Review",
+    "completed": "Completed",
+    "rejected": "Rejected"
+  },
+  "profile": {
+    "tabs": {
+      "profile": "Profile",
+      "security": "Security",
+      "preferences": "Preferences"
+    },
+    "basicInfo": "Basic Info",
+    "basicInfoDesc": "Manage your personal information and public profile",
+    "displayName": "Display Name",
+    "username": "Username",
+    "email": "Email Address",
+    "save": "Save Changes",
+    "saving": "Saving…",
+    "saveSuccess": "Profile updated.",
+    "saveError": "Failed to save. Please try again.",
+    "roleInfo": "Role & Account",
+    "roleInfoDesc": "Your account role and basic info",
+    "currentRole": "Current Role",
+    "userId": "User ID",
+    "joinedAt": "Joined {date}",
+    "joinedLabel": "Joined",
+    "changePassword": "Change Password",
+    "changePasswordDesc": "Set a new password for your account",
+    "currentPassword": "Current Password",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm New Password",
+    "changePasswordBtn": "Change Password",
+    "passwordMismatch": "Passwords do not match.",
+    "passwordChanged": "Password changed successfully.",
+    "passwordError": "Failed to change password. Check your current password.",
+    "preferences": "Preferences",
+    "preferencesDesc": "Customize your experience",
+    "preferencesComingSoon": "More preferences coming soon."
   }
 }
