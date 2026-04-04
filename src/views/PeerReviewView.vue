@@ -170,13 +170,13 @@ function formatTime(seconds: number): string {
           <input v-model="newIssue.title" class="input-field w-full" :placeholder="t('common.issueTitlePlaceholder')" />
           <textarea v-model="newIssue.description" class="input-field w-full h-20 resize-none" :placeholder="t('common.descriptionPlaceholder')" />
           <div class="grid grid-cols-2 gap-3">
-            <select v-model="newIssue.severity" class="input-field">
+            <select v-model="newIssue.severity" class="select-field">
               <option value="critical">{{ t('severity.critical') }}</option>
               <option value="major">{{ t('severity.major') }}</option>
               <option value="minor">{{ t('severity.minor') }}</option>
               <option value="suggestion">{{ t('severity.suggestion') }}</option>
             </select>
-            <select v-model="newIssue.issue_type" class="input-field">
+            <select v-model="newIssue.issue_type" class="select-field">
               <option value="point">{{ t('issueType.point') }}</option>
               <option value="range">{{ t('issueType.range') }}</option>
             </select>

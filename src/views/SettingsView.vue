@@ -163,7 +163,7 @@ function getUserDisplayName(userId: number): string {
           <template v-if="appStore.currentUser?.id === album.producer_id">
             <div>
               <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.masteringEngineerSelect') }}</label>
-              <select v-model="teamState[album.id].mastering_engineer_id" class="input-field w-full">
+              <select v-model="teamState[album.id].mastering_engineer_id" class="select-field w-full">
                 <option :value="null">{{ t('settings.noneOption') }}</option>
                 <option v-for="user in users" :key="user.id" :value="user.id">
                   {{ user.display_name }}

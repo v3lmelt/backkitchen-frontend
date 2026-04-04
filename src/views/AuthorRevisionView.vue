@@ -156,7 +156,7 @@ function onIssueSelectToggle(issueId: number) {
       </div>
       <div v-if="showVersionCompare && olderVersions.length > 0" class="flex items-center gap-2 mb-3">
         <span class="text-xs text-gray-400">{{ t('compare.selectVersion') }}</span>
-        <select v-model="selectedCompareVersionId" class="text-xs bg-white/10 border border-white/20 rounded px-2 py-1">
+        <select v-model="selectedCompareVersionId" class="select-field-sm">
           <option :value="null">-- {{ t('compare.selectVersion') }} --</option>
           <option v-for="v in olderVersions" :key="v.id" :value="v.id">
             V{{ v.version_number }} · {{ formatDate(v.created_at) }}
