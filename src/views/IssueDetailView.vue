@@ -6,6 +6,7 @@ import { issueApi } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Issue, IssueStatus } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
+import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import { formatTimestamp } from '@/utils/time'
 
 const route = useRoute()
@@ -16,7 +17,20 @@ const issueId = computed(() => Number(route.params.id))
 
 const issue = ref<Issue | null>(null)
 const loading = ref(true)
+const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
 const newComment = ref('')
+
+const audioUrl = computed(() =>
+  issue.value ? `/api/tracks/${issue.value.track_id}/audio` : ''
+)
+
+function onWaveformReady() {
+  if (!issue.value || !waveformRef.value) return
+  waveformRef.value.seekTo(issue.value.time_start)
+  if (issue.value.issue_type === 'range') {
+    waveformRef.value.highlightIssue(issue.value)
+  }
+}
 const selectedImages = ref<File[]>([])
 const imagePreviewUrls = ref<string[]>([])
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -117,6 +131,23 @@ function cancelStatusChange() {
           {{ issue.issue_type === 'range' ? t('issueType.range') : t('issueType.point') }}
         </span>
       </div>
+    </div>
+
+    <!-- Waveform -->
+    <div class="card overflow-hidden !p-0">
+      <div class="px-4 pt-3 pb-2 border-b border-border flex items-center justify-between">
+        <span class="text-xs font-mono font-medium text-muted-foreground">{{ t('issueDetail.audioContext') }}</span>
+        <span class="text-xs text-muted-foreground font-mono">
+          {{ formatTime(issue.time_start) }}<span v-if="issue.time_end"> – {{ formatTime(issue.time_end) }}</span>
+        </span>
+      </div>
+      <WaveformPlayer
+        ref="waveformRef"
+        :audio-url="audioUrl"
+        :issues="[issue]"
+        :height="80"
+        @ready="onWaveformReady"
+      />
     </div>
 
     <!-- Description -->

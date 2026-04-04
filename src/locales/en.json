@@ -15,7 +15,8 @@
     "back": "Back",
     "rangeStart": "Start (s)",
     "rangeEnd": "End (s)",
-    "requestFailed": "Request failed"
+    "requestFailed": "Request failed",
+    "downloadAudio": "Download Audio"
   },
   "severity": {
     "critical": "Critical",
@@ -248,7 +249,8 @@
     "unknown": "Unknown",
     "addCommentPlaceholder": "Add a comment...",
     "image": "Image",
-    "addComment": "Add Comment"
+    "addComment": "Add Comment",
+    "audioContext": "Audio Location"
   },
   "upload": {
     "heading": "Submit Track",
