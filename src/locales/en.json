@@ -138,6 +138,14 @@
       "issue_created": "{name} created an issue",
       "issue_updated": "{name} updated an issue",
       "issue_comment_added": "{name} added a comment"
+    },
+    "timeline": {
+      "issueCreated": "{name} created issue #{num}",
+      "issueCommented": "{name} commented on issue #{num}",
+      "issueUpdated": "{name} updated issue #{num}",
+      "issueResolved": "{name} closed issue #{num}",
+      "issueWillFix": "{name} confirmed fix for issue #{num}",
+      "issueDisagreed": "{name} disputed issue #{num}"
     }
   },
   "trackDetail": {

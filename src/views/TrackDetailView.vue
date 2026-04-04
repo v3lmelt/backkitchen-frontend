@@ -13,14 +13,74 @@ import StatusBadge from '@/components/workflow/StatusBadge.vue'
 const route = useRoute()
 const router = useRouter()
 const { t, te, locale } = useI18n()
-
-function formatEventType(eventType: string, actorName?: string): string {
-  const key = `dashboard.events.${eventType}`
-  const name = actorName ?? t('trackDetail.system')
-  if (te(key)) return t(key, { name })
-  return `${name}: ${eventType.replaceAll('_', ' ')}`
-}
 const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
+
+// FNV-1a 32-bit — must stay in sync with IssueMarkerList.vue
+function hashId(id: number): string {
+  let h = 2166136261
+  const s = String(id)
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return (h >>> 0).toString(16).padStart(8, '0').slice(0, 6).toUpperCase()
+}
+
+const issueNumberMap = computed(() => {
+  const m = new Map<number, number>()
+  issues.value.forEach((issue, idx) => m.set(issue.id, idx + 1))
+  return m
+})
+
+const issuePeerMap = computed(() => {
+  const m = new Map<number, boolean>()
+  issues.value.forEach(issue => m.set(issue.id, issue.phase === 'peer'))
+  return m
+})
+
+function formatTimelineEvent(event: WorkflowEvent): string {
+  const payload = event.payload ?? {}
+  const issueId = typeof payload.issue_id === 'number' ? payload.issue_id : null
+
+  // Peer-phase: check via issues map, or directly from issue_created payload
+  const isPeer = issueId != null
+    ? issuePeerMap.value.get(issueId) === true
+    : payload.phase === 'peer'
+
+  const rawName = event.actor?.display_name
+  const name = !rawName
+    ? t('trackDetail.system')
+    : isPeer && event.actor
+      ? `#${hashId(event.actor.id)}`
+      : rawName
+
+  const num = issueId != null ? (issueNumberMap.value.get(issueId) ?? null) : null
+
+  switch (event.event_type) {
+    case 'issue_created':
+      return num != null
+        ? t('dashboard.timeline.issueCreated', { name, num })
+        : t('dashboard.events.issue_created', { name })
+    case 'issue_comment_added':
+      return num != null
+        ? t('dashboard.timeline.issueCommented', { name, num })
+        : t('dashboard.events.issue_comment_added', { name })
+    case 'issue_updated': {
+      const s = payload.status as string | undefined
+      if (s === 'resolved') return t('dashboard.timeline.issueResolved', { name, num: num ?? '?' })
+      if (s === 'will_fix')  return t('dashboard.timeline.issueWillFix',  { name, num: num ?? '?' })
+      if (s === 'disagreed') return t('dashboard.timeline.issueDisagreed', { name, num: num ?? '?' })
+      return num != null
+        ? t('dashboard.timeline.issueUpdated', { name, num })
+        : t('dashboard.events.issue_updated', { name })
+    }
+    default: {
+      const key = `dashboard.events.${event.event_type}`
+      if (te(key)) return t(key, { name })
+      return `${name}: ${event.event_type.replaceAll('_', ' ')}`
+    }
+  }
+}
 const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
@@ -198,9 +258,11 @@ const olderVersions = computed(() =>
         <div class="card space-y-3">
           <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('trackDetail.timeline') }}</h3>
           <div v-if="events.length === 0" class="text-sm text-muted-foreground">{{ t('trackDetail.noEvents') }}</div>
-          <div v-for="event in events" :key="event.id" class="border-b border-border last:border-0 pb-3 last:pb-0">
-            <div class="text-sm text-foreground">{{ formatEventType(event.event_type, event.actor?.display_name) }}</div>
-            <div class="text-xs text-muted-foreground mt-1">{{ fmtDate(event.created_at) }}</div>
+          <div v-else class="max-h-80 overflow-y-auto space-y-0 -mx-1 px-1">
+            <div v-for="event in events" :key="event.id" class="border-b border-border last:border-0 py-3 first:pt-0">
+              <div class="text-sm text-foreground">{{ formatTimelineEvent(event) }}</div>
+              <div class="text-xs text-muted-foreground mt-0.5">{{ fmtDate(event.created_at) }}</div>
+            </div>
           </div>
         </div>
       </div>
