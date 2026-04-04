@@ -162,7 +162,6 @@ const rangeIssues = computed(() =>
 )
 
 const overlayHeight = computed(() => props.height || 128)
-const overlayBottomOffset = computed(() => '0px')
 const pointLineHeight = computed(() => `${Math.max((props.height || 128) - 28, 80)}px`)
 
 const hasPointIssues = computed(() => (props.issues ?? []).some(i => i.issue_type === 'point'))
@@ -221,9 +220,18 @@ function _addHighlightRegion(issue: Issue & { time_end: number }) {
 
 function highlightIssue(issue: Issue | null) {
   const newId = (issue?.issue_type === 'range' && issue.time_end !== null) ? issue.id : null
-  // Toggle off if same issue clicked again; otherwise activate the new one
   activeRangeIssueId.value = activeRangeIssueId.value === newId ? null : newId
-  renderIssueRegions()
+
+  if (highlightRegionId.value) {
+    _removeRegionById(highlightRegionId.value)
+    highlightRegionId.value = null
+  }
+  if (activeRangeIssueId.value !== null) {
+    const target = props.issues?.find(i => i.id === activeRangeIssueId.value)
+    if (target && target.issue_type === 'range' && target.time_end !== null) {
+      _addHighlightRegion(target as Issue & { time_end: number })
+    }
+  }
 }
 
 function handleTimelineClick(issue: Issue & { time_end: number }) {
@@ -384,6 +392,15 @@ onMounted(async () => {
     emit('click', ws.getCurrentTime())
   })
 
+  ws.on('interaction', (newTime: number) => {
+    if (compareWaveSurfer.value && isCompareMode.value) {
+      const compareDuration = compareWaveSurfer.value.getDuration()
+      if (compareDuration > 0) {
+        compareWaveSurfer.value.seekTo(newTime / compareDuration)
+      }
+    }
+  })
+
   regions.on('region-clicked', (region: any, e: Event) => {
     e.stopPropagation()
     const issue = props.issues?.find(i => String(i.id) === region.id)
@@ -450,8 +467,6 @@ function renderIssueRegions() {
 }
 
 watch(() => props.issues, (issues) => {
-  // Avoid clearRegions() on every issue update (causes visible flash).
-  // Only invalidate the highlight region if the highlighted issue is no longer valid.
   if (activeRangeIssueId.value === null) return
   const issue = issues?.find(i => i.id === activeRangeIssueId.value)
   if (!issue || issue.issue_type !== 'range' || issue.time_end === null) {
@@ -461,7 +476,7 @@ watch(() => props.issues, (issues) => {
       highlightRegionId.value = null
     }
   }
-}, { deep: true })
+})
 watch(() => props.selectedRange, renderSelectionRegion, { deep: true })
 watch(duration, () => {
   activePointGroupKey.value = null
@@ -484,10 +499,11 @@ watch(() => props.compareVersionId, async (newId) => {
 
   const ws = WaveSurfer.create({
     container: compareContainer,
-    waveColor: 'rgba(249, 115, 22, 0.5)',
-    progressColor: 'rgba(249, 115, 22, 0.7)',
+    waveColor: 'rgba(249,115,22,0.15)',
+    progressColor: 'rgba(249,115,22,0.2)',
     height: props.height || 128,
     interact: false,
+    cursorWidth: 0,
   })
 
   const compareUrl = `/api/tracks/${props.trackId}/source-versions/${newId}/audio`
@@ -525,9 +541,13 @@ watch(abMode, (mode) => {
   if (mode === 'A') {
     wavesurfer.value.setVolume(1)
     compareWaveSurfer.value.setVolume(0)
+    wavesurfer.value.setOptions({ waveColor: '#4A4A5A', progressColor: '#22D3EE', cursorWidth: 2 })
+    compareWaveSurfer.value.setOptions({ waveColor: 'rgba(249,115,22,0.15)', progressColor: 'rgba(249,115,22,0.2)', cursorWidth: 0 })
   } else {
     wavesurfer.value.setVolume(0)
     compareWaveSurfer.value.setVolume(1)
+    wavesurfer.value.setOptions({ waveColor: 'rgba(74,74,90,0.15)', progressColor: 'rgba(34,211,238,0.2)', cursorWidth: 0 })
+    compareWaveSurfer.value.setOptions({ waveColor: '#F97316', progressColor: '#FB923C', cursorWidth: 2 })
   }
 })
 
@@ -564,7 +584,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue })
 
 <template>
   <div class="card space-y-3">
-    <div class="relative" :style="{ paddingBottom: overlayBottomOffset }">
+    <div class="relative">
       <div
         v-if="hasPointIssues"
         class="pointer-events-none absolute inset-x-0 top-0 z-10"
@@ -625,13 +645,15 @@ defineExpose({ seekTo, togglePlay, highlightIssue })
       <div class="relative">
         <div
           ref="container"
-          class="relative z-0 overflow-hidden rounded-none bg-[#0D0D0D]"
+          class="relative overflow-hidden rounded-none bg-[#0D0D0D] transition-[z-index]"
+          :class="abMode === 'A' ? 'z-[2]' : 'z-0'"
           :style="{ height: `${props.height || 128}px` }"
         />
         <div
           v-if="isCompareMode"
           ref="compareContainerRef"
-          class="absolute inset-0 pointer-events-none"
+          class="absolute inset-0 pointer-events-none transition-[z-index]"
+          :class="abMode === 'B' ? 'z-[2]' : 'z-0'"
         ></div>
         <div v-if="isCompareMode" class="absolute top-2 right-2 flex items-center gap-1 bg-black/60 rounded-lg p-1 z-10">
           <button

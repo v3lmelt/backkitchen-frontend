@@ -1,20 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { issueApi, trackApi } from '@/api'
-import { useAppStore } from '@/stores/app'
+import { trackApi } from '@/api'
 import type { ChecklistItem, Issue, Track } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
-import { formatTimestamp, roundToMilliseconds } from '@/utils/time'
+import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
-const appStore = useAppStore()
 const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
@@ -22,17 +20,7 @@ const allCycleIssues = ref<Issue[]>([])
 const checklist = ref<ChecklistItem[]>([])
 const loading = ref(true)
 const waveformRef = ref<InstanceType<typeof WaveformPlayer>>()
-
-const showNewIssue = ref(false)
-const newIssue = ref({
-  title: '',
-  description: '',
-  severity: 'major' as const,
-  issue_type: 'point' as 'point' | 'range',
-  time_start: 0,
-  time_end: null as number | null,
-  phase: 'producer' as const,
-})
+const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 
 onMounted(loadPage)
 
@@ -61,46 +49,9 @@ const producerIssues = computed(() =>
 const peerIssues = computed(() =>
   allCycleIssues.value.filter(i => i.phase !== 'producer'),
 )
-
-const selectedRange = computed(() => {
-  if (newIssue.value.issue_type === 'range' && showNewIssue.value && newIssue.value.time_end !== null) {
-    return { start: newIssue.value.time_start, end: newIssue.value.time_end }
-  }
-  return null
-})
-
-function onWaveformClick(time: number) {
-  newIssue.value.issue_type = 'point'
-  newIssue.value.time_start = roundToMilliseconds(time)
-  newIssue.value.time_end = null
-  showNewIssue.value = true
-}
-
-function onRangeSelect(start: number, end: number) {
-  newIssue.value.issue_type = 'range'
-  newIssue.value.time_start = start
-  newIssue.value.time_end = end
-  showNewIssue.value = true
-}
-
-watch(() => newIssue.value.issue_type, (type) => {
-  if (type === 'point') newIssue.value.time_end = null
-})
-
-async function submitIssue() {
-  const created = await issueApi.create(trackId.value, newIssue.value)
-  allCycleIssues.value.push(created)
-  showNewIssue.value = false
-  newIssue.value = {
-    title: '',
-    description: '',
-    severity: 'major',
-    issue_type: 'point',
-    time_start: 0,
-    time_end: null,
-    phase: 'producer',
-  }
-}
+const openCount = computed(() => allCycleIssues.value.filter(i => i.status === 'open').length)
+const resolvedCount = computed(() => allCycleIssues.value.filter(i => i.status === 'resolved').length)
+const checklistPassedCount = computed(() => checklist.value.filter(item => item.passed).length)
 
 function onIssueSelect(issue: Issue) {
   waveformRef.value?.seekTo(issue.time_start)
@@ -115,10 +66,6 @@ async function handleIntake(decision: 'accept' | 'reject_final' | 'reject_resubm
 async function handleGate(decision: 'send_to_mastering' | 'request_peer_revision') {
   await trackApi.producerGate(trackId.value, decision)
   router.push(`/tracks/${trackId.value}`)
-}
-
-function formatTime(seconds: number): string {
-  return formatTimestamp(seconds)
 }
 </script>
 
@@ -143,15 +90,15 @@ function formatTime(seconds: number): string {
         <div class="text-xs text-muted-foreground">{{ t('producer.cycleIssues') }}</div>
       </div>
       <div class="card text-center">
-        <div class="text-2xl font-bold text-error">{{ allCycleIssues.filter(i => i.status === 'open').length }}</div>
+        <div class="text-2xl font-bold text-error">{{ openCount }}</div>
         <div class="text-xs text-muted-foreground">{{ t('producer.open') }}</div>
       </div>
       <div class="card text-center">
-        <div class="text-2xl font-bold text-success">{{ allCycleIssues.filter(i => i.status === 'resolved').length }}</div>
+        <div class="text-2xl font-bold text-success">{{ resolvedCount }}</div>
         <div class="text-xs text-muted-foreground">{{ t('producer.resolved') }}</div>
       </div>
       <div class="card text-center">
-        <div class="text-2xl font-bold text-primary">{{ checklist.filter(item => item.passed).length }}/{{ checklist.length }}</div>
+        <div class="text-2xl font-bold text-primary">{{ checklistPassedCount }}/{{ checklist.length }}</div>
         <div class="text-xs text-muted-foreground">{{ t('producer.checklistPassed') }}</div>
       </div>
     </div>
@@ -175,50 +122,28 @@ function formatTime(seconds: number): string {
           :audio-url="audioUrl"
           :issues="producerIssues"
           :selectable="true"
-          :selected-range="selectedRange"
-          @click="onWaveformClick"
+          :selected-range="issueFormRef?.selectedRange ?? null"
+          @click="(t: number) => issueFormRef?.handleClick(t)"
           @regionClick="onIssueSelect"
-          @rangeSelect="onRangeSelect"
+          @rangeSelect="(s: number, e: number) => issueFormRef?.handleRangeSelect(s, e)"
         />
       </div>
 
       <!-- Producer Issues -->
-      <div class="space-y-3">
-        <div class="flex items-center justify-between">
+      <IssueCreatePanel
+        ref="issueFormRef"
+        :track-id="trackId"
+        phase="producer"
+        @created="(issue: Issue) => allCycleIssues.push(issue)"
+      >
+        <template #heading>
           <h3 class="text-sm font-sans font-semibold text-foreground">
             {{ t('producer.producerIssuesHeading', { count: producerIssues.length }) }}
           </h3>
-          <button @click="showNewIssue = !showNewIssue" class="btn-primary text-xs">
-            {{ t('common.addIssue') }}
-          </button>
-        </div>
+        </template>
+      </IssueCreatePanel>
 
-        <div v-if="showNewIssue" class="card space-y-3 border-primary/50">
-          <h4 class="text-sm font-sans font-semibold text-foreground">
-            {{ t('common.newIssueAt', { time: formatTime(newIssue.time_start) }) }}
-          </h4>
-          <input v-model="newIssue.title" class="input-field w-full" :placeholder="t('common.issueTitlePlaceholder')" />
-          <textarea v-model="newIssue.description" class="textarea-field w-full h-20" :placeholder="t('common.descriptionPlaceholder')" />
-          <div class="grid grid-cols-2 gap-3">
-            <select v-model="newIssue.severity" class="select-field">
-              <option value="critical">{{ t('severity.critical') }}</option>
-              <option value="major">{{ t('severity.major') }}</option>
-              <option value="minor">{{ t('severity.minor') }}</option>
-              <option value="suggestion">{{ t('severity.suggestion') }}</option>
-            </select>
-            <select v-model="newIssue.issue_type" class="select-field">
-              <option value="point">{{ t('issueType.point') }}</option>
-              <option value="range">{{ t('issueType.range') }}</option>
-            </select>
-          </div>
-          <div class="flex gap-2">
-            <button @click="submitIssue" class="btn-primary text-sm">{{ t('common.submitIssue') }}</button>
-            <button @click="showNewIssue = false" class="btn-secondary text-sm">{{ t('common.cancel') }}</button>
-          </div>
-        </div>
-
-        <IssueMarkerList :issues="producerIssues" @select="onIssueSelect" />
-      </div>
+      <IssueMarkerList :issues="producerIssues" @select="onIssueSelect" />
 
       <!-- Checklist -->
       <div v-if="checklist.length > 0" class="card">
