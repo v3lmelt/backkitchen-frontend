@@ -121,8 +121,23 @@
     "colVersion": "Version",
     "openCount": "{count} open",
     "recentActivity": "Recent Activity",
-    "eventBy": "{action} by {name}",
-    "openIssues": "{count} open issues"
+    "openIssues": "{count} open issues",
+    "events": {
+      "track_submitted": "{name} submitted a track",
+      "source_version_uploaded": "{name} uploaded a new source version",
+      "submission_accepted": "{name} accepted the submission",
+      "submission_rejected": "{name} rejected the submission",
+      "peer_review_finished": "{name} finished peer review",
+      "producer_mastering_gate_decided": "{name} made the mastering gate decision",
+      "mastering_revision_requested": "{name} requested source revision",
+      "master_delivery_uploaded": "{name} uploaded a master delivery",
+      "final_review_approved_by_producer": "{name} approved the final review (producer)",
+      "final_review_approved_by_submitter": "{name} approved the final review (submitter)",
+      "returned_to_mastering": "{name} returned the track to mastering",
+      "issue_created": "{name} created an issue",
+      "issue_updated": "{name} updated an issue",
+      "issue_comment_added": "{name} added a comment"
+    }
   },
   "trackDetail": {
     "workflowStatus": "Workflow Status",

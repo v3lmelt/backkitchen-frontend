@@ -10,7 +10,7 @@ import { formatRelativeTime } from '@/utils/time'
 import { TRACK_STATUS_COLORS } from '@/utils/status'
 
 const router = useRouter()
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 const appStore = useAppStore()
 const tracks = ref<Track[]>([])
 const albums = ref<Album[]>([])
@@ -76,8 +76,10 @@ function formatDuration(seconds: number | null): string {
 }
 
 function formatEventDescription(event: WorkflowEvent): string {
-  const action = event.event_type.replaceAll('_', ' ')
-  return event.actor ? t('dashboard.eventBy', { action, name: event.actor.display_name }) : action
+  const name = event.actor?.display_name ?? '?'
+  const key = `dashboard.events.${event.event_type}`
+  if (te(key)) return t(key, { name })
+  return event.actor ? `${name}: ${event.event_type.replaceAll('_', ' ')}` : event.event_type.replaceAll('_', ' ')
 }
 
 async function handleAccept(invitationId: number) {
@@ -155,18 +157,18 @@ async function handleDecline(invitationId: number) {
     <div v-if="albums.length > 0">
       <h2 class="text-lg font-sans font-semibold text-foreground mb-3">{{ t('dashboard.albums') }}</h2>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div v-for="album in albums" :key="album.id" class="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
-          <div class="h-1.5" :style="{ backgroundColor: album.cover_color }"></div>
+        <div v-for="album in albums" :key="album.id" class="rounded-none border border-border bg-card overflow-hidden">
+          <div class="h-1" :style="{ backgroundColor: album.cover_color || '#FF8400' }"></div>
           <div class="p-5">
             <div class="flex items-center justify-between mb-4">
-              <h3 class="font-bold text-lg text-foreground">{{ album.title }}</h3>
-              <span v-if="albumStatsMap[album.id]?.open_issues > 0" class="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full">
+              <h3 class="font-mono font-bold text-base text-foreground">{{ album.title }}</h3>
+              <span v-if="albumStatsMap[album.id]?.open_issues > 0" class="text-xs bg-error-bg text-error px-2 py-0.5 rounded-full">
                 {{ t('dashboard.openIssues', { count: albumStatsMap[album.id].open_issues }) }}
               </span>
             </div>
 
             <template v-if="albumStatsMap[album.id]">
-              <div class="flex h-2 rounded-full overflow-hidden gap-px mb-2">
+              <div class="flex h-1.5 overflow-hidden gap-px mb-2">
                 <div
                   v-for="[statusKey, count] in albumNonZeroStatuses[album.id]"
                   :key="statusKey"
@@ -174,25 +176,25 @@ async function handleDecline(invitationId: number) {
                   :title="`${statusKey}: ${count}`"
                 ></div>
               </div>
-              <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-400 mb-4">
+              <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground mb-4">
                 <span v-for="[statusKey, count] in albumNonZeroStatuses[album.id]" :key="statusKey" class="flex items-center gap-1">
                   <span class="h-2 w-2 rounded-full" :style="{ backgroundColor: statusColor(statusKey) }"></span>
                   {{ t(`status.${statusKey}`, statusKey) }} ({{ count }})
                 </span>
               </div>
-              <p class="text-xs text-gray-500 mb-4">{{ albumStatsMap[album.id].total_tracks }} {{ t('dashboard.tracks') }}</p>
+              <p class="text-xs text-muted-foreground mb-4">{{ albumStatsMap[album.id].total_tracks }} {{ t('dashboard.tracks') }}</p>
               <div v-if="albumStatsMap[album.id].recent_events.length > 0" class="space-y-1">
-                <p class="text-xs font-medium text-gray-400 mb-2">{{ t('dashboard.recentActivity') }}</p>
+                <p class="text-xs font-mono font-medium text-muted-foreground mb-2">{{ t('dashboard.recentActivity') }}</p>
                 <div v-for="event in albumStatsMap[album.id].recent_events.slice(0, 3)" :key="event.id"
-                  class="flex items-center gap-2 text-xs text-gray-500">
-                  <span class="h-1.5 w-1.5 rounded-full bg-gray-600 flex-shrink-0"></span>
+                  class="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span class="h-1.5 w-1.5 rounded-full bg-border flex-shrink-0"></span>
                   <span class="flex-1 truncate">{{ formatEventDescription(event) }}</span>
                   <span class="flex-shrink-0">{{ formatRelativeTime(event.created_at, locale) }}</span>
                 </div>
               </div>
             </template>
             <template v-else>
-              <p class="text-xs text-gray-500">{{ t('dashboard.tracksCount', { n: album.track_count }) }}</p>
+              <p class="text-xs text-muted-foreground">{{ t('dashboard.tracksCount', { n: album.track_count }) }}</p>
             </template>
           </div>
         </div>
