@@ -139,7 +139,7 @@ function getUserDisplayName(userId: number): string {
       </div>
       <div>
         <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.description') }}</label>
-        <textarea v-model="newAlbum.description" class="input-field w-full h-20 resize-none" :placeholder="t('settings.descriptionPlaceholder')" />
+        <textarea v-model="newAlbum.description" class="textarea-field w-full h-20" :placeholder="t('settings.descriptionPlaceholder')" />
       </div>
       <button @click="createAlbum" class="btn-primary text-sm w-full">{{ t('settings.createButton') }}</button>
     </section>

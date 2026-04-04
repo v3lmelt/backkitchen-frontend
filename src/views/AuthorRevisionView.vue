@@ -256,7 +256,7 @@ function onIssueSelectToggle(issueId: number) {
         <textarea
           v-model="batchStatusNote"
           :placeholder="t('issue.batchStatusNote')"
-          class="w-full text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-2 resize-none text-foreground"
+          class="textarea-field w-full"
           rows="3"
         ></textarea>
         <div class="flex gap-2">

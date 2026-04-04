@@ -130,7 +130,7 @@ function formatTime(seconds: number): string {
         <div v-if="showNewIssue" class="card space-y-3 border-primary/50">
           <h4 class="text-sm font-sans font-semibold text-foreground">{{ t('common.newIssueAt', { time: formatTime(newIssue.time_start) }) }}</h4>
           <input v-model="newIssue.title" class="input-field w-full" :placeholder="t('common.issueTitlePlaceholder')" />
-          <textarea v-model="newIssue.description" class="input-field w-full h-20 resize-none" :placeholder="t('common.descriptionPlaceholder')" />
+          <textarea v-model="newIssue.description" class="textarea-field w-full h-20" :placeholder="t('common.descriptionPlaceholder')" />
           <div class="grid grid-cols-2 gap-3">
             <select v-model="newIssue.severity" class="select-field">
               <option value="critical">{{ t('severity.critical') }}</option>

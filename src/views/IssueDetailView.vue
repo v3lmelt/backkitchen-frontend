@@ -159,7 +159,7 @@ function cancelStatusChange() {
         <textarea
           v-model="statusNote"
           :placeholder="t('issue.statusNotePlaceholder')"
-          class="w-full text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-2 resize-none text-foreground"
+          class="textarea-field w-full"
           rows="3"
         ></textarea>
         <div class="flex gap-2">
@@ -222,7 +222,7 @@ function cancelStatusChange() {
       <div class="space-y-2">
         <textarea
           v-model="newComment"
-          class="input-field w-full h-20 resize-none"
+          class="textarea-field w-full h-20"
           :placeholder="t('issueDetail.addCommentPlaceholder')"
           @keydown.meta.enter="addComment"
           @keydown.ctrl.enter="addComment"
