@@ -166,7 +166,7 @@ const overlayBottomOffset = computed(() => '0px')
 const pointLineHeight = computed(() => `${Math.max((props.height || 128) - 28, 80)}px`)
 
 const hasPointIssues = computed(() => (props.issues ?? []).some(i => i.issue_type === 'point'))
-const hasIssues = computed(() => (props.issues?.length ?? 0) > 0)
+
 
 function togglePointGroup(groupKey: string) {
   activePointGroupKey.value = activePointGroupKey.value === groupKey ? null : groupKey
@@ -274,26 +274,17 @@ function renderSelectionRegion() {
     return
   }
 
-  // Skip re-render while user is actively dragging a region
-  if (selectionRegionId.value && selectionRegionId.value !== '__draft_range__') return
+  // Skip re-render if a region already exists — drag/resize events keep it in sync directly.
+  // Only proceed when there is no region yet and we need to create one from the prop.
+  if (selectionRegionId.value) return
 
   const start = roundToMilliseconds(Math.min(selectedRange.start, selectedRange.end))
   const end = roundToMilliseconds(Math.max(selectedRange.start, selectedRange.end))
 
   if (end <= start) {
-    if (selectionRegionId.value) {
-      _removeRegionById(selectionRegionId.value)
-      selectionRegionId.value = null
-    }
     const cursor = getCursorElement()
     if (cursor) cursor.style.opacity = '1'
     return
-  }
-
-  // Remove stale draft before creating new one
-  if (selectionRegionId.value === '__draft_range__') {
-    _removeRegionById('__draft_range__')
-    selectionRegionId.value = null
   }
 
   const region = regionsPlugin.value.addRegion({
@@ -363,13 +354,24 @@ onMounted(async () => {
     renderIssueRegions()
   })
 
+  let lastTimeUpdateMs = 0
   ws.on('timeupdate', (time: number) => {
-    currentTime.value = time
-    emit('timeupdate', time)
+    // Throttle Vue reactive updates to ~20fps to avoid flooding the reactivity
+    // system at 60fps and causing main-thread pressure that can stutter audio.
+    const now = Date.now()
+    if (now - lastTimeUpdateMs >= 50) {
+      currentTime.value = time
+      emit('timeupdate', time)
+      lastTimeUpdateMs = now
+    }
     if (compareWaveSurfer.value && isCompareMode.value) {
       const compareDuration = compareWaveSurfer.value.getDuration()
       if (compareDuration > 0) {
-        compareWaveSurfer.value.seekTo(time / compareDuration)
+        const compareTime = compareWaveSurfer.value.getCurrentTime()
+        // Correct drift if positions diverge by more than 0.15s
+        if (Math.abs(compareTime - time) > 0.15) {
+          compareWaveSurfer.value.seekTo(time / compareDuration)
+        }
       }
     }
   })
@@ -447,7 +449,19 @@ function renderIssueRegions() {
   isRenderingRegions.value = false
 }
 
-watch(() => props.issues, renderIssueRegions, { deep: true })
+watch(() => props.issues, (issues) => {
+  // Avoid clearRegions() on every issue update (causes visible flash).
+  // Only invalidate the highlight region if the highlighted issue is no longer valid.
+  if (activeRangeIssueId.value === null) return
+  const issue = issues?.find(i => i.id === activeRangeIssueId.value)
+  if (!issue || issue.issue_type !== 'range' || issue.time_end === null) {
+    activeRangeIssueId.value = null
+    if (highlightRegionId.value) {
+      _removeRegionById(highlightRegionId.value)
+      highlightRegionId.value = null
+    }
+  }
+}, { deep: true })
 watch(() => props.selectedRange, renderSelectionRegion, { deep: true })
 watch(duration, () => {
   activePointGroupKey.value = null
@@ -495,6 +509,15 @@ watch(() => props.compareVersionId, async (newId) => {
     wavesurfer.value?.setVolume(0)
     ws.setVolume(1)
   }
+  // If main player is already playing, start compare in sync
+  if (wavesurfer.value?.isPlaying()) {
+    const mainTime = wavesurfer.value.getCurrentTime()
+    const compDuration = ws.getDuration()
+    if (compDuration > 0) {
+      ws.seekTo(mainTime / compDuration)
+    }
+    ws.play()
+  }
 })
 
 watch(abMode, (mode) => {
@@ -510,11 +533,24 @@ watch(abMode, (mode) => {
 
 function togglePlay() {
   wavesurfer.value?.playPause()
+  if (compareWaveSurfer.value && isCompareMode.value) {
+    if (wavesurfer.value?.isPlaying()) {
+      compareWaveSurfer.value.play()
+    } else {
+      compareWaveSurfer.value.pause()
+    }
+  }
 }
 
 function seekTo(time: number) {
   if (wavesurfer.value && duration.value > 0) {
     wavesurfer.value.seekTo(time / duration.value)
+  }
+  if (compareWaveSurfer.value && isCompareMode.value) {
+    const compareDuration = compareWaveSurfer.value.getDuration()
+    if (compareDuration > 0) {
+      compareWaveSurfer.value.seekTo(time / compareDuration)
+    }
   }
 }
 
