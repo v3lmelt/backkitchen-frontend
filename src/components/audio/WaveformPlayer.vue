@@ -363,6 +363,7 @@ onMounted(async () => {
   })
 
   let lastTimeUpdateMs = 0
+  let lastInteractionMs = 0
   ws.on('timeupdate', (time: number) => {
     // Throttle Vue reactive updates to ~20fps to avoid flooding the reactivity
     // system at 60fps and causing main-thread pressure that can stutter audio.
@@ -372,7 +373,7 @@ onMounted(async () => {
       emit('timeupdate', time)
       lastTimeUpdateMs = now
     }
-    if (compareWaveSurfer.value && isCompareMode.value) {
+    if (compareWaveSurfer.value && isCompareMode.value && now - lastInteractionMs > 300) {
       const compareDuration = compareWaveSurfer.value.getDuration()
       if (compareDuration > 0) {
         const compareTime = compareWaveSurfer.value.getCurrentTime()
@@ -394,9 +395,10 @@ onMounted(async () => {
 
   ws.on('interaction', (newTime: number) => {
     if (compareWaveSurfer.value && isCompareMode.value) {
-      const compareDuration = compareWaveSurfer.value.getDuration()
-      if (compareDuration > 0) {
-        compareWaveSurfer.value.seekTo(newTime / compareDuration)
+      lastInteractionMs = Date.now()
+      const primaryDuration = ws.getDuration()
+      if (primaryDuration > 0) {
+        compareWaveSurfer.value.seekTo(newTime / primaryDuration)
       }
     }
   })

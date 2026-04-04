@@ -12,7 +12,10 @@
     "notesOptionalPlaceholder": "备注（可选）",
     "approved": "已批准",
     "pending": "待处理",
-    "back": "返回"
+    "back": "返回",
+    "rangeStart": "起点（秒）",
+    "rangeEnd": "终点（秒）",
+    "requestFailed": "请求失败"
   },
   "severity": {
     "critical": "严重",

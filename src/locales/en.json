@@ -12,7 +12,10 @@
     "notesOptionalPlaceholder": "Notes (optional)",
     "approved": "Approved",
     "pending": "Pending",
-    "back": "Back"
+    "back": "Back",
+    "rangeStart": "Start (s)",
+    "rangeEnd": "End (s)",
+    "requestFailed": "Request failed"
   },
   "severity": {
     "critical": "Critical",
