@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { trackApi } from '@/api'
 import type { Track, Issue, WorkflowEvent, TrackSourceVersion } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
+import { hashId } from '@/utils/hash'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
@@ -15,36 +16,24 @@ const router = useRouter()
 const { t, te, locale } = useI18n()
 const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
 
-// FNV-1a 32-bit — must stay in sync with IssueMarkerList.vue
-function hashId(id: number): string {
-  let h = 2166136261
-  const s = String(id)
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return (h >>> 0).toString(16).padStart(8, '0').slice(0, 6).toUpperCase()
-}
-
-const issueNumberMap = computed(() => {
-  const m = new Map<number, number>()
-  issues.value.forEach((issue, idx) => m.set(issue.id, idx + 1))
-  return m
-})
-
-const issuePeerMap = computed(() => {
-  const m = new Map<number, boolean>()
-  issues.value.forEach(issue => m.set(issue.id, issue.phase === 'peer'))
-  return m
+// Single pass over issues — builds both number and peer-phase lookup
+const issueMetadata = computed(() => {
+  const numberMap = new Map<number, number>()
+  const peerMap = new Map<number, boolean>()
+  issues.value.forEach((issue, idx) => {
+    numberMap.set(issue.id, idx + 1)
+    peerMap.set(issue.id, issue.phase === 'peer')
+  })
+  return { numberMap, peerMap }
 })
 
 function formatTimelineEvent(event: WorkflowEvent): string {
   const payload = event.payload ?? {}
   const issueId = typeof payload.issue_id === 'number' ? payload.issue_id : null
+  const { numberMap, peerMap } = issueMetadata.value
 
-  // Peer-phase: check via issues map, or directly from issue_created payload
   const isPeer = issueId != null
-    ? issuePeerMap.value.get(issueId) === true
+    ? peerMap.get(issueId) === true
     : payload.phase === 'peer'
 
   const rawName = event.actor?.display_name
@@ -54,7 +43,7 @@ function formatTimelineEvent(event: WorkflowEvent): string {
       ? `#${hashId(event.actor.id)}`
       : rawName
 
-  const num = issueId != null ? (issueNumberMap.value.get(issueId) ?? null) : null
+  const num = issueId != null ? (numberMap.get(issueId) ?? null) : null
 
   switch (event.event_type) {
     case 'issue_created':
@@ -67,9 +56,15 @@ function formatTimelineEvent(event: WorkflowEvent): string {
         : t('dashboard.events.issue_comment_added', { name })
     case 'issue_updated': {
       const s = payload.status as string | undefined
-      if (s === 'resolved') return t('dashboard.timeline.issueResolved', { name, num: num ?? '?' })
-      if (s === 'will_fix')  return t('dashboard.timeline.issueWillFix',  { name, num: num ?? '?' })
-      if (s === 'disagreed') return t('dashboard.timeline.issueDisagreed', { name, num: num ?? '?' })
+      if (s === 'resolved') return num != null
+        ? t('dashboard.timeline.issueResolved', { name, num })
+        : t('dashboard.events.issue_updated', { name })
+      if (s === 'will_fix') return num != null
+        ? t('dashboard.timeline.issueWillFix', { name, num })
+        : t('dashboard.events.issue_updated', { name })
+      if (s === 'disagreed') return num != null
+        ? t('dashboard.timeline.issueDisagreed', { name, num })
+        : t('dashboard.events.issue_updated', { name })
       return num != null
         ? t('dashboard.timeline.issueUpdated', { name, num })
         : t('dashboard.events.issue_updated', { name })

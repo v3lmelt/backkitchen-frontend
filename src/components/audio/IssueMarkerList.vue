@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import type { Issue } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatTimestamp } from '@/utils/time'
+import { hashId } from '@/utils/hash'
 
 const props = withDefaults(defineProps<{
   issues: Issue[]
@@ -34,19 +35,8 @@ function toggleSelect(issueId: number) {
   }
 }
 
-// FNV-1a 32-bit hash — deterministic, stable across sessions
-function hashAuthorId(id: number): string {
-  let h = 2166136261
-  const s = String(id)
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return (h >>> 0).toString(16).padStart(8, '0').slice(0, 6).toUpperCase()
-}
-
 function authorLabel(issue: Issue): string {
-  if (issue.phase === 'peer') return `#${hashAuthorId(issue.author_id)}`
+  if (issue.phase === 'peer') return `#${hashId(issue.author_id)}`
   return issue.author?.display_name ?? `#${issue.author_id}`
 }
 </script>
