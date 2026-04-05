@@ -97,6 +97,7 @@ async function loadTrack() {
     const detail = await trackApi.get(trackId.value)
     track.value = detail.track
     issues.value = detail.issues
+    discussions.value = detail.discussions ?? []
     events.value = detail.events
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
   } finally {
@@ -124,6 +125,22 @@ function openPrimaryAction(action: string) {
   if (action === 'final_review') router.push(`/tracks/${trackId.value}/final-review`)
 }
 
+
+async function postDiscussion() {
+  if (!newDiscussionContent.value.trim()) return
+  postingDiscussion.value = true
+  try {
+    const d = await discussionApi.create(trackId.value, { content: newDiscussionContent.value.trim() })
+    discussions.value.push(d)
+    newDiscussionContent.value = ''
+  } finally {
+    postingDiscussion.value = false
+  }
+}
+
+function openImage(url: string) {
+  window.open(url, '_blank')
+}
 
 const currentVersionId = computed(() => track.value?.current_source_version?.id ?? null)
 const olderVersions = computed(() =>
@@ -211,6 +228,58 @@ const olderVersions = computed(() =>
             {{ t('trackDetail.issuesHeading', { count: currentCycleIssues.length }) }}
           </h3>
           <IssueMarkerList :issues="currentCycleIssues" @select="onIssueSelect" />
+        </div>
+
+        <!-- Discussions -->
+        <div class="card space-y-4">
+          <h3 class="text-sm font-sans font-semibold text-foreground">
+            {{ t('trackDetail.discussionsHeading', { count: discussions.length }) }}
+          </h3>
+          <div v-if="discussions.length === 0" class="text-sm text-muted-foreground">
+            {{ t('trackDetail.noDiscussions') }}
+          </div>
+          <div v-else class="space-y-3">
+            <div v-for="d in discussions" :key="d.id" class="flex gap-3 py-3 border-b border-border last:border-0">
+              <div
+                class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                :style="{ backgroundColor: d.author?.avatar_color || '#6366f1' }"
+              >
+                {{ d.author?.display_name?.charAt(0) || '?' }}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-medium text-foreground">{{ d.author?.display_name || '?' }}</span>
+                  <span class="text-xs text-muted-foreground">{{ fmtDate(d.created_at) }}</span>
+                </div>
+                <p class="text-sm text-foreground mt-1 whitespace-pre-wrap">{{ d.content }}</p>
+                <div v-if="d.images?.length" class="flex gap-2 mt-2">
+                  <img
+                    v-for="img in d.images"
+                    :key="img.id"
+                    :src="img.image_url"
+                    class="h-20 rounded border border-border object-cover cursor-pointer"
+                    @click="openImage(img.image_url)"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <textarea
+              v-model="newDiscussionContent"
+              class="textarea-field flex-1 text-sm h-20"
+              :placeholder="t('trackDetail.discussionPlaceholder')"
+              @keydown.ctrl.enter="postDiscussion"
+              @keydown.meta.enter="postDiscussion"
+            />
+          </div>
+          <button
+            @click="postDiscussion"
+            :disabled="!newDiscussionContent.trim() || postingDiscussion"
+            class="btn-primary text-sm"
+          >
+            {{ postingDiscussion ? t('common.loading') : t('trackDetail.postDiscussion') }}
+          </button>
         </div>
       </div>
 
