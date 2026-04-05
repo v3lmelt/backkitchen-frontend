@@ -14,10 +14,16 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor': ['vue', 'vue-router', 'pinia'],
-          'wavesurfer': ['wavesurfer.js'],
-          'i18n': ['vue-i18n'],
+        manualChunks(id: string) {
+          if (id.includes('node_modules/vue/') || id.includes('node_modules/vue-router/') || id.includes('node_modules/pinia/') || id.includes('node_modules/@vue/')) {
+            return 'vendor'
+          }
+          if (id.includes('node_modules/wavesurfer.js/')) {
+            return 'wavesurfer'
+          }
+          if (id.includes('node_modules/vue-i18n/')) {
+            return 'i18n'
+          }
         },
       },
     },
