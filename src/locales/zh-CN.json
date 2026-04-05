@@ -286,6 +286,10 @@
     "addComment": "添加评论",
     "audioContext": "音频定位",
     "noDescription": "暂无描述",
+    "issueList": "问题清单 ({count})",
+    "onlyUnresolved": "只显示未解决项",
+    "noVisibleIssues": "当前筛选下没有可显示的问题",
+    "currentIssue": "当前问题",
     "unresolvedTitle": "待解决问题"
   },
   "upload": {

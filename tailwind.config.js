@@ -8,7 +8,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Geist', '"Noto Sans SC"', '"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei"', '"SimHei"', 'system-ui', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace', '"Microsoft YaHei"', '"PingFang SC"', '"Hiragino Sans GB"', 'sans-serif'],
+        mono: ['"JetBrains Mono"', '"Noto Sans SC"', '"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei"', '"SimHei"', 'ui-monospace', 'monospace', 'sans-serif'],
       },
       colors: {
         background: '#111111',

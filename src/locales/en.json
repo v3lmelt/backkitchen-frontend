@@ -282,6 +282,10 @@
     "addComment": "Add Comment",
     "audioContext": "Audio Location",
     "noDescription": "No description",
+    "issueList": "Issue List ({count})",
+    "onlyUnresolved": "Only show unresolved",
+    "noVisibleIssues": "No issues match the current filter",
+    "currentIssue": "Current",
     "unresolvedTitle": "Unresolved Issues"
   },
   "upload": {
