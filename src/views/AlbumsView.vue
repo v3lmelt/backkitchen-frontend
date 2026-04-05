@@ -77,15 +77,29 @@ function roleBadgeClass(album: Album): string {
         @click="router.push(`/albums/${album.id}/settings`)"
         class="bg-card border border-border rounded-none overflow-hidden shadow-[0_1px_1.75px_rgba(0,0,0,0.05)] text-left hover:border-primary/50 transition-colors group cursor-pointer"
       >
-        <div class="h-1 w-full" :style="{ backgroundColor: album.cover_color }"></div>
+        <!-- Cover image if available, otherwise no visual accent -->
+        <div v-if="album.cover_image" class="w-full h-32 overflow-hidden">
+          <img :src="`/uploads/${album.cover_image}`" :alt="album.title" class="w-full h-full object-cover" />
+        </div>
         <div class="p-4 space-y-2">
           <div class="flex items-start justify-between gap-2">
-            <h3 class="text-sm font-mono font-semibold text-foreground group-hover:text-primary transition-colors leading-tight">
-              {{ album.title }}
-            </h3>
+            <div class="min-w-0">
+              <h3 class="text-sm font-mono font-semibold text-foreground group-hover:text-primary transition-colors leading-tight">
+                {{ album.title }}
+              </h3>
+              <p v-if="album.circle_name" class="text-xs text-muted-foreground mt-0.5">{{ album.circle_name }}</p>
+            </div>
             <span class="flex-shrink-0 text-xs font-mono px-2 py-0.5 rounded-full" :class="roleBadgeClass(album)">
               {{ userRoleInAlbum(album) }}
             </span>
+          </div>
+          <div v-if="album.catalog_number || album.release_date" class="flex items-center gap-2">
+            <span v-if="album.catalog_number" class="text-xs font-mono text-muted-foreground">{{ album.catalog_number }}</span>
+            <span v-if="album.catalog_number && album.release_date" class="text-muted-foreground">·</span>
+            <span v-if="album.release_date" class="text-xs text-muted-foreground">{{ album.release_date.slice(0, 10) }}</span>
+          </div>
+          <div v-if="album.genres?.length" class="flex flex-wrap gap-1">
+            <span v-for="genre in album.genres" :key="genre" class="text-xs bg-info-bg text-info px-2 py-0.5 rounded-full font-mono">{{ genre }}</span>
           </div>
           <p class="text-xs text-muted-foreground line-clamp-2">
             {{ album.description || t('settings.noDescription') }}
