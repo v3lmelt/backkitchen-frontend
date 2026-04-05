@@ -3,6 +3,7 @@ import { ref, computed, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { authApi } from '@/api'
 import { useAppStore } from '@/stores/app'
+import { parseUTC } from '@/utils/time'
 
 const { t, locale } = useI18n()
 const appStore = useAppStore()
@@ -52,7 +53,7 @@ const roleLabel = computed(() => {
 const joinDate = computed(() => {
   const d = appStore.currentUser?.created_at
   if (!d) return '—'
-  return new Date(d).toLocaleDateString(locale.value, { year: 'numeric', month: 'long', day: 'numeric' })
+  return parseUTC(d).toLocaleDateString(locale.value, { year: 'numeric', month: 'long', day: 'numeric' })
 })
 
 async function saveProfile() {

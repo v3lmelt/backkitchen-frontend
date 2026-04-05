@@ -6,7 +6,7 @@ import { trackApi, albumApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Album, AlbumStats, Track, TrackStatus, WorkflowEvent } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
-import { formatRelativeTime } from '@/utils/time'
+import { formatRelativeTime, parseUTC } from '@/utils/time'
 import { TRACK_STATUS_COLORS } from '@/utils/status'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 
@@ -126,7 +126,7 @@ function completedCount(albumId: number): number {
 function deadlineInfo(albumId: number): { text: string; overdue: boolean } | null {
   const stats = albumStatsMap.value[albumId]
   if (!stats?.deadline) return null
-  const dl = new Date(stats.deadline)
+  const dl = parseUTC(stats.deadline)
   const now = new Date()
   const diffMs = dl.getTime() - now.getTime()
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
@@ -160,7 +160,7 @@ async function handleExport(albumId: number) {
     <div v-if="appStore.pendingInvitations.length > 0" class="card border-primary/30 bg-primary/5">
       <h2 class="text-lg font-mono font-semibold text-foreground mb-3">{{ t('invitations.title') }}</h2>
       <div class="space-y-3">
-        <div v-for="inv in appStore.pendingInvitations" :key="inv.id" class="flex items-center justify-between gap-4 p-3 bg-card rounded-none border border-border">
+        <div v-for="inv in appStore.pendingInvitations" :key="inv.id" class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-3 bg-card rounded-none border border-border">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 overflow-hidden rounded-none border border-border flex-shrink-0">
               <img
@@ -188,7 +188,7 @@ async function handleExport(albumId: number) {
       </div>
     </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+    <div class="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-4">
       <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = ''">
         <div class="text-2xl font-bold text-foreground">{{ trackStats.total }}</div>
         <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.total') }}</div>
@@ -306,15 +306,15 @@ async function handleExport(albumId: number) {
 
     <!-- 曲目列表（按专辑分组） -->
     <div>
-      <div class="flex items-center justify-between mb-3">
-        <h2 class="text-lg font-mono font-semibold text-foreground">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+        <h2 class="text-base sm:text-lg font-mono font-semibold text-foreground">
           {{ t('dashboard.tracksHeading') }}
           <span v-if="filterStatus" class="text-sm font-normal text-muted-foreground ml-2">
             ({{ t('dashboard.filtered', { status: filterStatus }) }})
             <button @click="filterStatus = ''" class="text-primary hover:underline ml-1">{{ t('dashboard.clearFilter') }}</button>
           </span>
         </h2>
-        <button @click="router.push('/upload')" class="btn-primary text-sm">
+        <button @click="router.push('/upload')" class="btn-primary text-sm flex-shrink-0 self-start sm:self-auto">
           {{ t('dashboard.submitTrack') }}
         </button>
       </div>
@@ -330,7 +330,8 @@ async function handleExport(albumId: number) {
             <span class="text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider flex-shrink-0">{{ group.albumTitle }}</span>
             <div class="flex-1 h-px bg-border"></div>
           </div>
-          <div class="bg-card border border-border rounded-none overflow-hidden">
+          <!-- Desktop table -->
+          <div class="bg-card border border-border rounded-none overflow-hidden hidden md:block">
             <table class="w-full">
               <thead>
                 <tr class="border-b border-border text-left text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider">
@@ -363,6 +364,29 @@ async function handleExport(albumId: number) {
                 </tr>
               </tbody>
             </table>
+          </div>
+          <!-- Mobile card list -->
+          <div class="space-y-2 md:hidden">
+            <div
+              v-for="track in group.tracks"
+              :key="track.id"
+              @click="router.push(`/tracks/${track.id}`)"
+              class="bg-card border border-border p-3 cursor-pointer active:bg-white/5 transition-colors"
+            >
+              <div class="flex items-center justify-between gap-2 mb-1.5">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span v-if="track.track_number" class="text-xs text-muted-foreground font-mono flex-shrink-0">#{{ track.track_number }}</span>
+                  <span class="text-sm font-medium text-foreground truncate">{{ track.title }}</span>
+                </div>
+                <StatusBadge :status="track.status" type="track" />
+              </div>
+              <div class="flex items-center gap-3 text-xs text-muted-foreground">
+                <span>{{ track.artist }}</span>
+                <span class="font-mono">{{ formatDuration(track.duration) }}</span>
+                <span class="font-mono">v{{ track.version }}</span>
+                <span v-if="track.open_issue_count" class="text-error">{{ t('dashboard.openCount', { count: track.open_issue_count }) }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

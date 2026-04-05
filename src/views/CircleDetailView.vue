@@ -181,6 +181,7 @@ import { useAppStore } from '@/stores/app'
 import { circleApi, API_ORIGIN } from '@/api'
 import type { Circle, InviteCode } from '@/types'
 import { useToast } from '@/composables/useToast'
+import { parseUTC } from '@/utils/time'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -309,6 +310,6 @@ async function copyCode(code: string) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString()
+  return parseUTC(iso).toLocaleDateString()
 }
 </script>

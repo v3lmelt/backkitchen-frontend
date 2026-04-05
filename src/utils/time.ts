@@ -2,8 +2,15 @@ export function roundToMilliseconds(value: number): number {
   return Math.round(value * 1000) / 1000
 }
 
+/** Ensure a backend datetime string is parsed as UTC.
+ *  SQLite drops timezone info, so strings arrive without a Z suffix. */
+export function parseUTC(dateStr: string): Date {
+  const s = dateStr.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(dateStr) ? dateStr : dateStr + 'Z'
+  return new Date(s)
+}
+
 export function formatRelativeTime(dateStr: string, locale: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
+  const diff = Date.now() - parseUTC(dateStr).getTime()
   const minutes = Math.floor(diff / 60000)
   const hours = Math.floor(diff / 3600000)
   const days = Math.floor(diff / 86400000)
@@ -21,7 +28,7 @@ export function formatRelativeTime(dateStr: string, locale: string): string {
 
 export function formatLocaleDate(dateStr: string, locale: string): string {
   const localeStr = locale === 'zh-CN' ? 'zh-CN' : 'en-US'
-  return new Date(dateStr).toLocaleDateString(localeStr, {
+  return parseUTC(dateStr).toLocaleDateString(localeStr, {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 }

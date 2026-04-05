@@ -7,7 +7,7 @@ import type { Comment, Issue, IssueStatus } from '@/types'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
 import TimestampText from '@/components/common/TimestampText.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
-import { formatTimestamp, formatDuration } from '@/utils/time'
+import { formatTimestamp, formatDuration, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import type { TimeReference, TimestampTarget } from '@/utils/timestamps'
 
@@ -82,7 +82,7 @@ async function handleCommentReference(comment: Comment, reference: TimeReference
 }
 
 function formatDate(d: string) {
-  return new Date(d).toLocaleDateString(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', {
+  return parseUTC(d).toLocaleDateString(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 }
