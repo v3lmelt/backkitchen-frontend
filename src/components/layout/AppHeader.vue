@@ -51,7 +51,10 @@ const pageTitle = computed(() => {
     'mastering-review': t('header.pages.masteringReview'),
     'final-review': t('header.pages.finalReview'),
     upload: t('header.pages.upload'),
-    settings: t('header.pages.settings'),
+    settings: t('header.pages.albums'),
+    albums: t('header.pages.albums'),
+    'album-new': t('header.pages.albumNew'),
+    'album-settings': t('header.pages.albums'),
     profile: t('header.pages.profile'),
   }
   return map[name] || t('header.pages.default')
@@ -59,7 +62,13 @@ const pageTitle = computed(() => {
 
 const breadcrumbs = computed(() => {
   const crumbs = [{ label: t('header.home'), path: '/' }]
-  if (route.name !== 'dashboard') {
+  if (route.name === 'dashboard') return crumbs
+  if (route.name === 'album-new') {
+    crumbs.push({ label: t('header.pages.albums'), path: '/albums' })
+    crumbs.push({ label: t('header.pages.albumNew'), path: '/albums/new' })
+  } else if (route.name === 'album-settings') {
+    crumbs.push({ label: t('header.pages.albums'), path: '/albums' })
+  } else {
     crumbs.push({ label: pageTitle.value, path: route.path })
   }
   return crumbs

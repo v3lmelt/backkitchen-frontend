@@ -194,21 +194,36 @@ async function handleExport(albumId: number) {
       <h2 class="text-lg font-sans font-semibold text-foreground mb-3">{{ t('dashboard.albums') }}</h2>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div v-for="album in albums" :key="album.id" class="rounded-none border border-border bg-card overflow-hidden">
-          <div class="h-1" :style="{ backgroundColor: album.cover_color || '#FF8400' }"></div>
+          <!-- Cover: image if available, else color bar -->
+          <template v-if="album.cover_image">
+            <img :src="`/uploads/${album.cover_image}`" class="w-full h-28 object-cover" :alt="album.title" />
+          </template>
+          <template v-else>
+            <div class="h-1" :style="{ backgroundColor: album.cover_color || '#FF8400' }"></div>
+          </template>
           <div class="p-5">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="font-mono font-bold text-base text-foreground">{{ album.title }}</h3>
-              <div class="flex items-center gap-2">
-                <span v-if="deadlineInfo(album.id)" class="text-xs px-2 py-0.5 rounded-full" :class="deadlineInfo(album.id)!.overdue ? 'bg-error-bg text-error' : 'bg-warning-bg text-warning'">
-                  {{ deadlineInfo(album.id)!.text }}
-                </span>
-                <span v-if="albumStatsMap[album.id]?.overdue_track_count" class="text-xs bg-error-bg text-error px-2 py-0.5 rounded-full">
-                  {{ t('dashboard.overdueCount', { count: albumStatsMap[album.id].overdue_track_count }) }}
-                </span>
-                <span v-if="albumStatsMap[album.id]?.open_issues > 0" class="text-xs bg-error-bg text-error px-2 py-0.5 rounded-full">
-                  {{ t('dashboard.openIssues', { count: albumStatsMap[album.id].open_issues }) }}
-                </span>
+            <div class="flex items-start justify-between mb-3">
+              <div class="min-w-0 flex-1 mr-3">
+                <h3 class="font-mono font-bold text-base text-foreground truncate">{{ album.title }}</h3>
+                <div v-if="album.circle_name" class="text-xs text-muted-foreground mt-0.5 truncate">{{ album.circle_name }}</div>
               </div>
+              <div class="flex flex-col items-end gap-1 flex-shrink-0">
+                <span v-if="album.catalog_number" class="text-xs font-mono text-muted-foreground">{{ album.catalog_number }}</span>
+                <div class="flex items-center gap-1 flex-wrap justify-end">
+                  <span v-if="deadlineInfo(album.id)" class="text-xs px-2 py-0.5 rounded-full" :class="deadlineInfo(album.id)!.overdue ? 'bg-error-bg text-error' : 'bg-warning-bg text-warning'">
+                    {{ deadlineInfo(album.id)!.text }}
+                  </span>
+                  <span v-if="albumStatsMap[album.id]?.overdue_track_count" class="text-xs bg-error-bg text-error px-2 py-0.5 rounded-full">
+                    {{ t('dashboard.overdueCount', { count: albumStatsMap[album.id].overdue_track_count }) }}
+                  </span>
+                  <span v-if="albumStatsMap[album.id]?.open_issues > 0" class="text-xs bg-error-bg text-error px-2 py-0.5 rounded-full">
+                    {{ t('dashboard.openIssues', { count: albumStatsMap[album.id].open_issues }) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div v-if="album.genres?.length" class="flex flex-wrap gap-1 mb-3">
+              <span v-for="genre in album.genres" :key="genre" class="text-xs bg-info-bg text-info px-2 py-0.5 rounded-full font-mono">{{ genre }}</span>
             </div>
 
             <template v-if="albumStatsMap[album.id]">

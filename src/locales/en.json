@@ -37,7 +37,8 @@
   "nav": {
     "dashboard": "Dashboard",
     "submit": "Submit",
-    "settings": "Settings"
+    "settings": "Settings",
+    "albums": "Albums"
   },
   "header": {
     "logout": "Logout",
@@ -53,6 +54,9 @@
       "finalReview": "Final Review",
       "upload": "Submit Track",
       "settings": "Album Settings",
+      "albums": "Albums",
+      "albumNew": "New Album",
+      "albumSettings": "Album Settings",
       "profile": "Profile",
       "default": "BACK KITCHEN"
     }
@@ -361,7 +365,21 @@
     "webhookEvents": "Trigger Events",
     "webhookSave": "Save Webhook",
     "webhookTest": "Test",
-    "webhookSaved": "Webhook config saved"
+    "webhookSaved": "Webhook config saved",
+    "albumMetadata": "Album Metadata",
+    "circleName": "Circle Name",
+    "circleNamePlaceholder": "Circle name",
+    "catalogNumber": "Catalog Number",
+    "catalogNumberPlaceholder": "e.g. BK-001",
+    "releaseDate": "Release Date",
+    "genres": "Genres",
+    "genrePlaceholder": "Type a genre and press Enter",
+    "addGenre": "Add",
+    "saveMetadata": "Save Metadata",
+    "metadataSaved": "Metadata saved",
+    "coverImageLabel": "Cover Image",
+    "uploadCover": "Upload Cover",
+    "coverUploaded": "Cover image updated"
   },
   "invitations": {
     "title": "Album Invitations",
@@ -390,6 +408,49 @@
       "will_fix": "Will Fix",
       "resolved": "Resolved",
       "disagreed": "Disagreed"
+    }
+  },
+  "albums": {
+    "heading": "Albums",
+    "newAlbum": "New Album",
+    "noAlbums": "No Albums",
+    "noAlbumsHint": "Waiting for a producer to invite you",
+    "trackCount": "{n} tracks"
+  },
+  "albumNew": {
+    "heading": "New Album",
+    "albumTitle": "Album Title *",
+    "albumTitlePlaceholder": "Album title",
+    "coverColor": "Cover Color",
+    "description": "Description",
+    "descriptionPlaceholder": "Album description (optional)",
+    "createButton": "Create Album",
+    "creating": "Creating...",
+    "titleRequired": "Please enter an album title"
+  },
+  "albumSettings": {
+    "tabs": {
+      "team": "Team",
+      "deadlines": "Deadlines",
+      "checklist": "Checklist Template",
+      "order": "Track Order",
+      "webhook": "Webhook"
+    },
+    "team": {
+      "producer": "Producer",
+      "masteringEngineer": "Mastering Engineer",
+      "members": "Members",
+      "unassigned": "Unassigned",
+      "noMembers": "No members",
+      "readOnlyNotice": "Team configuration can only be edited by the producer"
+    },
+    "deadlines": {
+      "readOnlyNotice": "Deadlines are set by the producer",
+      "notSet": "Not set"
+    },
+    "checklist": {
+      "readOnlyNotice": "Checklist template is set by the producer",
+      "noItems": "No checklist items"
     }
   },
   "trackStatus": {

@@ -63,8 +63,22 @@ const router = createRouter({
     },
     {
       path: '/settings',
-      name: 'settings',
-      component: () => import('@/views/SettingsView.vue'),
+      redirect: '/albums',
+    },
+    {
+      path: '/albums',
+      name: 'albums',
+      component: () => import('@/views/AlbumsView.vue'),
+    },
+    {
+      path: '/albums/new',
+      name: 'album-new',
+      component: () => import('@/views/AlbumNewView.vue'),
+    },
+    {
+      path: '/albums/:albumId/settings',
+      name: 'album-settings',
+      component: () => import('@/views/AlbumSettingsView.vue'),
     },
     {
       path: '/profile',

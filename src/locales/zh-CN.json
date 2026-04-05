@@ -37,7 +37,8 @@
   "nav": {
     "dashboard": "仪表盘",
     "submit": "提交",
-    "settings": "设置"
+    "settings": "设置",
+    "albums": "专辑管理"
   },
   "header": {
     "logout": "退出登录",
@@ -53,6 +54,9 @@
       "finalReview": "终审",
       "upload": "提交曲目",
       "settings": "专辑设置",
+      "albums": "专辑管理",
+      "albumNew": "新建专辑",
+      "albumSettings": "专辑设置",
       "profile": "个人中心",
       "default": "BACK KITCHEN"
     }
@@ -365,7 +369,21 @@
     "webhookEvents": "触发事件",
     "webhookSave": "保存 Webhook",
     "webhookTest": "测试",
-    "webhookSaved": "Webhook 配置已保存"
+    "webhookSaved": "Webhook 配置已保存",
+    "albumMetadata": "专辑元数据",
+    "circleName": "社团名",
+    "circleNamePlaceholder": "社团名称",
+    "catalogNumber": "品番 (Catalog No.)",
+    "catalogNumberPlaceholder": "如 BK-001",
+    "releaseDate": "发行日期",
+    "genres": "风格标签",
+    "genrePlaceholder": "输入风格后回车添加",
+    "addGenre": "添加",
+    "saveMetadata": "保存元数据",
+    "metadataSaved": "元数据已保存",
+    "coverImageLabel": "封面图",
+    "uploadCover": "上传封面图",
+    "coverUploaded": "封面图已更新"
   },
   "profile": {
     "tabs": {
@@ -428,6 +446,49 @@
       "will_fix": "待修复",
       "resolved": "已解决",
       "disagreed": "有异议"
+    }
+  },
+  "albums": {
+    "heading": "专辑管理",
+    "newAlbum": "新建专辑",
+    "noAlbums": "暂无专辑",
+    "noAlbumsHint": "等待制作人邀请",
+    "trackCount": "{n} 首曲目"
+  },
+  "albumNew": {
+    "heading": "新建专辑",
+    "albumTitle": "专辑标题 *",
+    "albumTitlePlaceholder": "专辑标题",
+    "coverColor": "封面颜色",
+    "description": "描述",
+    "descriptionPlaceholder": "专辑描述（可选）",
+    "createButton": "创建专辑",
+    "creating": "创建中…",
+    "titleRequired": "请输入专辑标题"
+  },
+  "albumSettings": {
+    "tabs": {
+      "team": "团队成员",
+      "deadlines": "截止日期",
+      "checklist": "Checklist 模板",
+      "order": "曲目排序",
+      "webhook": "Webhook"
+    },
+    "team": {
+      "producer": "制作人",
+      "masteringEngineer": "母带工程师",
+      "members": "成员",
+      "unassigned": "未分配",
+      "noMembers": "暂无成员",
+      "readOnlyNotice": "团队配置只能由制作人编辑"
+    },
+    "deadlines": {
+      "readOnlyNotice": "截止日期由制作人设置",
+      "notSet": "未设置"
+    },
+    "checklist": {
+      "readOnlyNotice": "Checklist 模板由制作人设置",
+      "noItems": "暂无检查项"
     }
   },
   "trackStatus": {

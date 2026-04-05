@@ -59,7 +59,15 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 export const albumApi = {
   list: () => request<Album[]>('/albums'),
   get: (id: number) => request<Album>(`/albums/${id}`),
-  create: (data: { title: string; description?: string; cover_color?: string }) =>
+  create: (data: {
+    title: string
+    description?: string
+    cover_color?: string
+    release_date?: string | null
+    catalog_number?: string | null
+    circle_name?: string | null
+    genres?: string[] | null
+  }) =>
     request<Album>('/albums', { method: 'POST', body: JSON.stringify(data) }),
   updateTeam: (id: number, data: { mastering_engineer_id: number | null; member_ids: number[] }) =>
     request<Album>(`/albums/${id}/team`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -81,6 +89,18 @@ export const albumApi = {
       method: 'PATCH',
       body: JSON.stringify({ track_ids: trackIds }),
     }),
+  updateMetadata: (id: number, data: {
+    release_date?: string | null
+    catalog_number?: string | null
+    circle_name?: string | null
+    genres?: string[] | null
+  }) =>
+    request<Album>(`/albums/${id}/metadata`, { method: 'PATCH', body: JSON.stringify(data) }),
+  uploadCover: (id: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<Album>(`/albums/${id}/cover`, { method: 'POST', body: form })
+  },
   export: async (id: number): Promise<Blob> => {
     const token = localStorage.getItem(TOKEN_KEY)
     const res = await fetch(`${BASE}/albums/${id}/export`, {

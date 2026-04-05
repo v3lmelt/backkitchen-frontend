@@ -46,7 +46,21 @@ const WEBHOOK_EVENT_TYPES = [
   'track_status_changed', 'new_issue', 'issue_status_changed', 'new_comment', 'new_discussion',
 ]
 
-const newAlbum = ref({ title: '', description: '', cover_color: '#A855F7' })
+const newAlbum = ref({ title: '', description: '', cover_color: '#A855F7', release_date: '', catalog_number: '', circle_name: '' })
+const newAlbumGenreInput = ref('')
+const newAlbumGenres = ref<string[]>([])
+
+// Metadata state (per album)
+const albumMetadataState = reactive<Record<number, {
+  release_date: string
+  catalog_number: string
+  circle_name: string
+  genres: string[]
+  genre_input: string
+}>>({})
+const savingMetadataAlbumId = ref<number | null>(null)
+const uploadingCoverAlbumId = ref<number | null>(null)
+
 const teamState = reactive<Record<number, { mastering_engineer_id: number | null; member_ids: number[] }>>({})
 
 onMounted(async () => {
@@ -57,6 +71,7 @@ onMounted(async () => {
     albums.value = loadedAlbums
     syncTeamState()
     syncDeadlineState(loadedAlbums)
+    syncMetadataState(loadedAlbums)
     const producerAlbums = loadedAlbums.filter(album => appStore.currentUser?.id === album.producer_id)
     await Promise.all([
       ...producerAlbums.map(album =>
@@ -95,10 +110,31 @@ function syncTeamState() {
 
 async function createAlbum() {
   if (!newAlbum.value.title) return
-  const album = await albumApi.create(newAlbum.value)
+  const album = await albumApi.create({
+    ...newAlbum.value,
+    release_date: newAlbum.value.release_date || null,
+    catalog_number: newAlbum.value.catalog_number || null,
+    circle_name: newAlbum.value.circle_name || null,
+    genres: newAlbumGenres.value.length ? [...newAlbumGenres.value] : null,
+  })
   albums.value.push(album)
   syncTeamState()
-  newAlbum.value = { title: '', description: '', cover_color: '#A855F7' }
+  syncMetadataState([album])
+  newAlbum.value = { title: '', description: '', cover_color: '#A855F7', release_date: '', catalog_number: '', circle_name: '' }
+  newAlbumGenres.value = []
+  newAlbumGenreInput.value = ''
+}
+
+function addNewAlbumGenre() {
+  const tag = newAlbumGenreInput.value.trim()
+  if (tag && !newAlbumGenres.value.includes(tag)) {
+    newAlbumGenres.value.push(tag)
+  }
+  newAlbumGenreInput.value = ''
+}
+
+function removeNewAlbumGenre(genre: string) {
+  newAlbumGenres.value = newAlbumGenres.value.filter(g => g !== genre)
 }
 
 function toggleMember(albumId: number, userId: number) {
@@ -267,6 +303,74 @@ function syncDeadlineState(albumList: Album[]) {
   }
 }
 
+function syncMetadataState(albumList: Album[]) {
+  for (const album of albumList) {
+    albumMetadataState[album.id] = {
+      release_date: album.release_date ? album.release_date.slice(0, 10) : '',
+      catalog_number: album.catalog_number || '',
+      circle_name: album.circle_name || '',
+      genres: album.genres ? [...album.genres] : [],
+      genre_input: '',
+    }
+  }
+}
+
+function addGenreToAlbum(albumId: number) {
+  const state = albumMetadataState[albumId]
+  if (!state) return
+  const tag = state.genre_input.trim()
+  if (tag && !state.genres.includes(tag)) {
+    state.genres.push(tag)
+  }
+  state.genre_input = ''
+}
+
+function removeGenreFromAlbum(albumId: number, genre: string) {
+  const state = albumMetadataState[albumId]
+  if (!state) return
+  state.genres = state.genres.filter(g => g !== genre)
+}
+
+async function saveMetadata(albumId: number) {
+  const state = albumMetadataState[albumId]
+  if (!state) return
+  savingMetadataAlbumId.value = albumId
+  try {
+    const updated = await albumApi.updateMetadata(albumId, {
+      release_date: state.release_date || null,
+      catalog_number: state.catalog_number || null,
+      circle_name: state.circle_name || null,
+      genres: state.genres.length ? [...state.genres] : null,
+    })
+    const idx = albums.value.findIndex(a => a.id === updated.id)
+    if (idx !== -1) albums.value[idx] = updated
+    syncMetadataState([updated])
+    toastSuccess(t('settings.metadataSaved'))
+  } catch {
+    // error handled by request layer
+  } finally {
+    savingMetadataAlbumId.value = null
+  }
+}
+
+async function handleCoverUpload(albumId: number, event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  uploadingCoverAlbumId.value = albumId
+  try {
+    const updated = await albumApi.uploadCover(albumId, file)
+    const idx = albums.value.findIndex(a => a.id === updated.id)
+    if (idx !== -1) albums.value[idx] = updated
+    toastSuccess(t('settings.coverUploaded'))
+  } catch {
+    // error handled by request layer
+  } finally {
+    uploadingCoverAlbumId.value = null
+    input.value = ''
+  }
+}
+
 function toggleWebhookEvent(albumId: number, event: string) {
   const wh = albumWebhooks[albumId]
   if (!wh) return
@@ -338,10 +442,46 @@ async function saveDeadlines(albumId: number) {
           <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.coverColor') }}</label>
           <input v-model="newAlbum.cover_color" type="color" class="input-field w-full h-10" />
         </div>
+        <div>
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.circleName') }}</label>
+          <input v-model="newAlbum.circle_name" class="input-field w-full" :placeholder="t('settings.circleNamePlaceholder')" />
+        </div>
+        <div>
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.catalogNumber') }}</label>
+          <input v-model="newAlbum.catalog_number" class="input-field w-full" :placeholder="t('settings.catalogNumberPlaceholder')" />
+        </div>
+        <div>
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.releaseDate') }}</label>
+          <input v-model="newAlbum.release_date" type="date" class="input-field w-full" />
+        </div>
       </div>
       <div>
         <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.description') }}</label>
         <textarea v-model="newAlbum.description" class="textarea-field w-full h-20" :placeholder="t('settings.descriptionPlaceholder')" />
+      </div>
+      <div>
+        <label class="block text-xs text-muted-foreground mb-2">{{ t('settings.genres') }}</label>
+        <div class="flex items-center gap-2 mb-2">
+          <input
+            v-model="newAlbumGenreInput"
+            class="input-field flex-1 text-sm"
+            :placeholder="t('settings.genrePlaceholder')"
+            @keyup.enter="addNewAlbumGenre"
+          />
+          <button @click="addNewAlbumGenre" class="btn-secondary text-xs px-3 py-1.5 flex-shrink-0">
+            {{ t('settings.addGenre') }}
+          </button>
+        </div>
+        <div v-if="newAlbumGenres.length" class="flex flex-wrap gap-1">
+          <span
+            v-for="genre in newAlbumGenres"
+            :key="genre"
+            class="inline-flex items-center gap-1 text-xs bg-info-bg text-info px-2 py-0.5 rounded-full font-mono"
+          >
+            {{ genre }}
+            <button @click="removeNewAlbumGenre(genre)" class="hover:opacity-70 ml-0.5">×</button>
+          </span>
+        </div>
       </div>
       <button @click="createAlbum" class="btn-primary text-sm w-full">{{ t('settings.createButton') }}</button>
     </section>
@@ -512,6 +652,79 @@ async function saveDeadlines(albumId: number) {
                   {{ t('settings.resetToDefault') }}
                 </button>
               </div>
+            </div>
+
+            <!-- Album Metadata & Cover -->
+            <div v-if="albumMetadataState[album.id]" class="border-t border-border pt-4 mt-4 space-y-4">
+              <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('settings.albumMetadata') }}</h4>
+
+              <!-- Cover image -->
+              <div>
+                <label class="block text-xs text-muted-foreground mb-2">{{ t('settings.coverImageLabel') }}</label>
+                <div class="flex items-center gap-3">
+                  <template v-if="album.cover_image">
+                    <img :src="`/uploads/${album.cover_image}`" class="w-16 h-16 object-cover rounded-none border border-border" :alt="album.title" />
+                  </template>
+                  <label class="btn-secondary text-xs px-3 py-1.5 cursor-pointer">
+                    {{ uploadingCoverAlbumId === album.id ? t('common.loading') : t('settings.uploadCover') }}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      class="hidden"
+                      :disabled="uploadingCoverAlbumId === album.id"
+                      @change="handleCoverUpload(album.id, $event)"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.circleName') }}</label>
+                  <input v-model="albumMetadataState[album.id].circle_name" class="input-field w-full text-sm" :placeholder="t('settings.circleNamePlaceholder')" />
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.catalogNumber') }}</label>
+                  <input v-model="albumMetadataState[album.id].catalog_number" class="input-field w-full text-sm" :placeholder="t('settings.catalogNumberPlaceholder')" />
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.releaseDate') }}</label>
+                  <input v-model="albumMetadataState[album.id].release_date" type="date" class="input-field w-full text-sm" />
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs text-muted-foreground mb-2">{{ t('settings.genres') }}</label>
+                <div class="flex items-center gap-2 mb-2">
+                  <input
+                    v-model="albumMetadataState[album.id].genre_input"
+                    class="input-field flex-1 text-sm"
+                    :placeholder="t('settings.genrePlaceholder')"
+                    @keyup.enter="addGenreToAlbum(album.id)"
+                  />
+                  <button @click="addGenreToAlbum(album.id)" class="btn-secondary text-xs px-3 py-1.5 flex-shrink-0">
+                    {{ t('settings.addGenre') }}
+                  </button>
+                </div>
+                <div v-if="albumMetadataState[album.id].genres.length" class="flex flex-wrap gap-1">
+                  <span
+                    v-for="genre in albumMetadataState[album.id].genres"
+                    :key="genre"
+                    class="inline-flex items-center gap-1 text-xs bg-info-bg text-info px-2 py-0.5 rounded-full font-mono"
+                  >
+                    {{ genre }}
+                    <button @click="removeGenreFromAlbum(album.id, genre)" class="hover:opacity-70 ml-0.5">×</button>
+                  </span>
+                </div>
+              </div>
+
+              <button
+                @click="saveMetadata(album.id)"
+                :disabled="savingMetadataAlbumId === album.id"
+                class="btn-primary text-xs px-4 py-2"
+              >
+                {{ savingMetadataAlbumId === album.id ? t('settings.saving') : t('settings.saveMetadata') }}
+              </button>
             </div>
           </template>
         </div>

@@ -46,7 +46,7 @@ export interface Invitation {
   invited_by_user_id: number
   status: 'pending' | 'accepted' | 'declined'
   created_at: string
-  album?: { id: number; title: string; cover_color: string } | null
+  album?: { id: number; title: string; cover_color: string; cover_image?: string | null; circle_name?: string | null } | null
   user?: User | null
   invited_by_user?: User | null
 }
@@ -56,6 +56,11 @@ export interface Album {
   title: string
   description: string | null
   cover_color: string
+  release_date?: string | null
+  catalog_number?: string | null
+  circle_name?: string | null
+  genres?: string[] | null
+  cover_image?: string | null
   producer_id: number | null
   mastering_engineer_id: number | null
   deadline?: string | null
