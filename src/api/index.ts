@@ -5,9 +5,12 @@ import type {
   ChecklistItem,
   ChecklistTemplateItem,
   ChecklistTemplateRead,
+  Circle,
+  CircleSummary,
   Comment,
   Discussion,
   Invitation,
+  InviteCode,
   WebhookConfig,
   Issue,
   IssueStatus,
@@ -65,6 +68,7 @@ export const albumApi = {
     cover_color?: string
     release_date?: string | null
     catalog_number?: string | null
+    circle_id?: number | null
     circle_name?: string | null
     genres?: string[] | null
   }) =>
@@ -112,6 +116,33 @@ export const albumApi = {
     }
     return res.blob()
   },
+}
+
+export const circleApi = {
+  list: () => request<CircleSummary[]>('/circles'),
+  get: (id: number) => request<Circle>(`/circles/${id}`),
+  create: (data: { name: string; description?: string | null; website?: string | null }) =>
+    request<Circle>('/circles', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: { name?: string; description?: string | null; website?: string | null }) =>
+    request<Circle>(`/circles/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  uploadLogo: (id: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<Circle>(`/circles/${id}/logo`, { method: 'POST', body: form })
+  },
+  join: (code: string) =>
+    request<CircleSummary>('/circles/join', { method: 'POST', body: JSON.stringify({ code }) }),
+  removeMember: (circleId: number, userId: number) =>
+    request<void>(`/circles/${circleId}/members/${userId}`, { method: 'DELETE' }),
+  listInviteCodes: (circleId: number) =>
+    request<InviteCode[]>(`/circles/${circleId}/invite-codes`),
+  createInviteCode: (circleId: number, data: { role?: string; expires_in_days?: number }) =>
+    request<InviteCode>(`/circles/${circleId}/invite-codes`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  revokeInviteCode: (circleId: number, codeId: number) =>
+    request<void>(`/circles/${circleId}/invite-codes/${codeId}`, { method: 'DELETE' }),
 }
 
 export const trackApi = {

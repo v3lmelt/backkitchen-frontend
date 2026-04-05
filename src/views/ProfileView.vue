@@ -114,7 +114,7 @@ async function changePassword() {
         </h1>
         <div class="flex items-center gap-3 mt-1 flex-wrap">
           <span class="text-sm text-muted-foreground">@{{ appStore.currentUser?.username }}</span>
-          <span class="text-xs px-2 py-0.5 rounded-full bg-warning/20 text-warning font-medium">
+          <span class="text-xs px-2 py-0.5 rounded-full bg-warning-bg text-warning font-mono">
             {{ roleLabel }}
           </span>
         </div>
@@ -184,7 +184,7 @@ async function changePassword() {
           <div class="space-y-3 text-sm">
             <div class="flex items-center justify-between">
               <span class="text-muted-foreground">{{ t('profile.currentRole') }}</span>
-              <span class="text-xs px-2 py-0.5 rounded-full bg-warning/20 text-warning font-medium">
+              <span class="text-xs px-2 py-0.5 rounded-full bg-warning-bg text-warning font-mono">
                 {{ roleLabel }}
               </span>
             </div>

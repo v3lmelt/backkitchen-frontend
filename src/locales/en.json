@@ -6,6 +6,8 @@
     "submitIssue": "Submit Issue",
     "cancel": "Cancel",
     "confirm": "Confirm",
+    "save": "Save",
+    "saved": "Saved",
     "newIssueAt": "New Issue at {time}",
     "issueTitlePlaceholder": "Issue title",
     "descriptionPlaceholder": "Description...",
@@ -38,7 +40,8 @@
     "dashboard": "Dashboard",
     "submit": "Submit",
     "settings": "Settings",
-    "albums": "Albums"
+    "albums": "Albums",
+    "circles": "Circles"
   },
   "header": {
     "logout": "Logout",
@@ -57,6 +60,9 @@
       "albums": "Albums",
       "albumNew": "New Album",
       "albumSettings": "Album Settings",
+      "circles": "Circles",
+      "circleNew": "New Circle",
+      "circleDetail": "Circle Detail",
       "profile": "Profile",
       "default": "BACK KITCHEN"
     }
@@ -495,6 +501,60 @@
       "readOnlyNotice": "Checklist template is set by the producer",
       "noItems": "No checklist items"
     }
+  },
+  "circles": {
+    "heading": "Circles",
+    "subheading": "Manage your doujin circles",
+    "newCircle": "New Circle",
+    "joinCircle": "Join Circle",
+    "join": "Join",
+    "inviteCode": "Invite Code",
+    "inviteCodePlaceholder": "Enter invite code",
+    "noCircles": "No circles yet",
+    "noCirclesHint": "Wait for an invite or create a new circle",
+    "members": "members",
+    "joinSuccess": "Joined circle successfully"
+  },
+  "circleNew": {
+    "heading": "New Circle",
+    "logoSection": "Circle Logo",
+    "logoHint": "Click to upload a logo (JPG / PNG, square recommended)",
+    "basicInfo": "Basic Info",
+    "name": "Circle Name",
+    "namePlaceholder": "e.g. Phantom Sound Studio",
+    "description": "Description",
+    "descriptionPlaceholder": "Circle description...",
+    "website": "Website",
+    "websitePlaceholder": "https://...",
+    "create": "Create Circle"
+  },
+  "circleDetail": {
+    "tabs": {
+      "info": "Info",
+      "members": "Members",
+      "invites": "Invite Codes"
+    },
+    "name": "Circle Name",
+    "description": "Description",
+    "website": "Website",
+    "logoUpdated": "Logo updated",
+    "remove": "Remove",
+    "memberRemoved": "Member removed",
+    "roles": {
+      "owner": "Owner",
+      "member": "Member",
+      "mastering_engineer": "Mastering Engineer"
+    },
+    "createInvite": "Create Invite Code",
+    "inviteRole": "Role",
+    "expiresDays": "Valid (days)",
+    "generate": "Generate",
+    "active": "Active",
+    "revoked": "Revoked",
+    "expires": "Expires",
+    "revoke": "Revoke",
+    "noInvites": "No invite codes yet",
+    "codeCopied": "Code copied"
   },
   "trackStatus": {
     "submitted": "Submitted",

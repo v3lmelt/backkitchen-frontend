@@ -173,9 +173,9 @@ async function handleExport(albumId: number) {
 <template>
   <div class="space-y-6">
     <div v-if="appStore.pendingInvitations.length > 0" class="card border-primary/30 bg-primary/5">
-      <h2 class="text-lg font-sans font-semibold text-foreground mb-3">{{ t('invitations.title') }}</h2>
+      <h2 class="text-lg font-mono font-semibold text-foreground mb-3">{{ t('invitations.title') }}</h2>
       <div class="space-y-3">
-        <div v-for="inv in appStore.pendingInvitations" :key="inv.id" class="flex items-center justify-between gap-4 p-3 bg-card rounded-lg border border-border">
+        <div v-for="inv in appStore.pendingInvitations" :key="inv.id" class="flex items-center justify-between gap-4 p-3 bg-card rounded-none border border-border">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 overflow-hidden rounded-none border border-border flex-shrink-0">
               <img
@@ -233,7 +233,7 @@ async function handleExport(albumId: number) {
     <!-- 专辑进度看板 -->
     <div v-if="albums.length > 0">
       <div class="flex items-center justify-between mb-3">
-        <h2 class="text-lg font-sans font-semibold text-foreground">{{ t('dashboard.albums') }}</h2>
+        <h2 class="text-lg font-mono font-semibold text-foreground">{{ t('dashboard.albums') }}</h2>
         <RouterLink to="/albums" class="text-xs text-muted-foreground hover:text-primary transition-colors">
           {{ t('dashboard.manageAlbums') }}
         </RouterLink>
@@ -328,7 +328,7 @@ async function handleExport(albumId: number) {
     <!-- 曲目列表（按专辑分组） -->
     <div>
       <div class="flex items-center justify-between mb-3">
-        <h2 class="text-lg font-sans font-semibold text-foreground">
+        <h2 class="text-lg font-mono font-semibold text-foreground">
           {{ t('dashboard.tracksHeading') }}
           <span v-if="filterStatus" class="text-sm font-normal text-muted-foreground ml-2">
             ({{ t('dashboard.filtered', { status: filterStatus }) }})
@@ -354,7 +354,7 @@ async function handleExport(albumId: number) {
           <div class="bg-card border border-border rounded-none overflow-hidden">
             <table class="w-full">
               <thead>
-                <tr class="border-b border-border text-left text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wider">
+                <tr class="border-b border-border text-left text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider">
                   <th class="px-4 py-3">{{ t('dashboard.colNumber') }}</th>
                   <th class="px-4 py-3">{{ t('dashboard.colTitle') }}</th>
                   <th class="px-4 py-3">{{ t('dashboard.colArtist') }}</th>

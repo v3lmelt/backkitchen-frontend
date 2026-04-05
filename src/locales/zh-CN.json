@@ -6,6 +6,8 @@
     "submitIssue": "提交问题",
     "cancel": "取消",
     "confirm": "确认",
+    "save": "保存",
+    "saved": "已保存",
     "newIssueAt": "在 {time} 处添加新问题",
     "issueTitlePlaceholder": "问题标题",
     "descriptionPlaceholder": "描述…",
@@ -38,7 +40,8 @@
     "dashboard": "仪表盘",
     "submit": "提交",
     "settings": "设置",
-    "albums": "专辑管理"
+    "albums": "专辑管理",
+    "circles": "社团管理"
   },
   "header": {
     "logout": "退出登录",
@@ -57,6 +60,9 @@
       "albums": "专辑管理",
       "albumNew": "新建专辑",
       "albumSettings": "专辑设置",
+      "circles": "社团管理",
+      "circleNew": "新建社团",
+      "circleDetail": "社团详情",
       "profile": "个人中心",
       "default": "BACK KITCHEN"
     }
@@ -533,6 +539,60 @@
       "readOnlyNotice": "Checklist 模板由制作人设置",
       "noItems": "暂无检查项"
     }
+  },
+  "circles": {
+    "heading": "社团管理",
+    "subheading": "管理你所属的同人社团",
+    "newCircle": "新建社团",
+    "joinCircle": "加入社团",
+    "join": "加入",
+    "inviteCode": "邀请码",
+    "inviteCodePlaceholder": "输入邀请码",
+    "noCircles": "暂无社团",
+    "noCirclesHint": "等待社团邀请，或新建一个社团",
+    "members": "成员",
+    "joinSuccess": "成功加入社团"
+  },
+  "circleNew": {
+    "heading": "新建社团",
+    "logoSection": "社团标志",
+    "logoHint": "点击上传社团 Logo（JPG / PNG，建议正方形）",
+    "basicInfo": "基本信息",
+    "name": "社团名称",
+    "namePlaceholder": "例：幻音制作组",
+    "description": "简介",
+    "descriptionPlaceholder": "社团简介…",
+    "website": "官网",
+    "websitePlaceholder": "https://…",
+    "create": "创建社团"
+  },
+  "circleDetail": {
+    "tabs": {
+      "info": "社团信息",
+      "members": "成员",
+      "invites": "邀请码"
+    },
+    "name": "社团名称",
+    "description": "简介",
+    "website": "官网",
+    "logoUpdated": "Logo 已更新",
+    "remove": "移除",
+    "memberRemoved": "成员已移除",
+    "roles": {
+      "owner": "创建者",
+      "member": "成员",
+      "mastering_engineer": "母带工程师"
+    },
+    "createInvite": "创建邀请码",
+    "inviteRole": "邀请身份",
+    "expiresDays": "有效天数",
+    "generate": "生成",
+    "active": "有效",
+    "revoked": "已撤销",
+    "expires": "到期",
+    "revoke": "撤销",
+    "noInvites": "暂无邀请码",
+    "codeCopied": "邀请码已复制"
   },
   "trackStatus": {
     "submitted": "已提交",

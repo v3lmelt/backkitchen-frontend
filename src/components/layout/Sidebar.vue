@@ -12,6 +12,7 @@ const navItems = computed(() => [
   { label: t('nav.dashboard'), icon: 'grid', path: '/' },
   { label: t('nav.submit'), icon: 'upload', path: '/upload' },
   { label: t('nav.albums'), icon: 'albums', path: '/albums' },
+  { label: t('nav.circles'), icon: 'circles', path: '/circles' },
 ])
 
 const roleLabel = computed(() => {
@@ -69,6 +70,9 @@ const collapsed = computed(() => appStore.sidebarCollapsed)
         </svg>
         <svg v-else-if="item.icon === 'albums'" class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+        <svg v-else-if="item.icon === 'circles'" class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" /><path stroke-linecap="round" stroke-linejoin="round" d="M8 14s1.5 2 4 2 4-2 4-2" /><line x1="9" y1="9" x2="9.01" y2="9" /><line x1="15" y1="9" x2="15.01" y2="9" />
         </svg>
         <span v-if="!collapsed" class="whitespace-nowrap">{{ item.label }}</span>
       </RouterLink>

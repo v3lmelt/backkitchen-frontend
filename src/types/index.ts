@@ -58,6 +58,7 @@ export interface Album {
   cover_color: string
   release_date?: string | null
   catalog_number?: string | null
+  circle_id?: number | null
   circle_name?: string | null
   genres?: string[] | null
   cover_image?: string | null
@@ -71,6 +72,46 @@ export interface Album {
   created_at: string
   updated_at: string
   track_count: number
+}
+
+export interface CircleMember {
+  id: number
+  circle_id: number
+  user_id: number
+  role: 'owner' | 'member' | 'mastering_engineer'
+  joined_at: string
+  user: User
+}
+
+export interface Circle {
+  id: number
+  name: string
+  description: string | null
+  website: string | null
+  logo_url: string | null
+  created_by: number
+  created_at: string
+  members: CircleMember[]
+}
+
+export interface CircleSummary {
+  id: number
+  name: string
+  description: string | null
+  logo_url: string | null
+  created_by: number
+  member_count: number
+}
+
+export interface InviteCode {
+  id: number
+  circle_id: number
+  code: string
+  role: string
+  expires_at: string
+  is_active: boolean
+  created_at: string
+  created_by_user: User
 }
 
 export interface TrackSourceVersion {

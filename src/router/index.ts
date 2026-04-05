@@ -81,6 +81,21 @@ const router = createRouter({
       component: () => import('@/views/AlbumSettingsView.vue'),
     },
     {
+      path: '/circles',
+      name: 'circles',
+      component: () => import('@/views/CirclesView.vue'),
+    },
+    {
+      path: '/circles/new',
+      name: 'circle-new',
+      component: () => import('@/views/CircleNewView.vue'),
+    },
+    {
+      path: '/circles/:circleId',
+      name: 'circle-detail',
+      component: () => import('@/views/CircleDetailView.vue'),
+    },
+    {
       path: '/profile',
       name: 'profile',
       component: () => import('@/views/ProfileView.vue'),

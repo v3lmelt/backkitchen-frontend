@@ -55,6 +55,9 @@ const pageTitle = computed(() => {
     albums: t('header.pages.albums'),
     'album-new': t('header.pages.albumNew'),
     'album-settings': t('header.pages.albums'),
+    circles: t('header.pages.circles'),
+    'circle-new': t('header.pages.circleNew'),
+    'circle-detail': t('header.pages.circles'),
     profile: t('header.pages.profile'),
   }
   return map[name] || t('header.pages.default')
@@ -68,6 +71,11 @@ const breadcrumbs = computed(() => {
     crumbs.push({ label: t('header.pages.albumNew'), path: '/albums/new' })
   } else if (route.name === 'album-settings') {
     crumbs.push({ label: t('header.pages.albums'), path: '/albums' })
+  } else if (route.name === 'circle-new') {
+    crumbs.push({ label: t('header.pages.circles'), path: '/circles' })
+    crumbs.push({ label: t('header.pages.circleNew'), path: '/circles/new' })
+  } else if (route.name === 'circle-detail') {
+    crumbs.push({ label: t('header.pages.circles'), path: '/circles' })
   } else {
     crumbs.push({ label: pageTitle.value, path: route.path })
   }
