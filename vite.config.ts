@@ -9,6 +9,17 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor': ['vue', 'vue-router', 'pinia'],
+          'wavesurfer': ['wavesurfer.js'],
+          'i18n': ['vue-i18n'],
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       '/api': {

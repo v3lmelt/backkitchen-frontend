@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
-import { useDashboardPins } from '@/composables/useDashboardPins'
 import type { Album, AlbumStats, Track, TrackStatus, WorkflowEvent } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatRelativeTime } from '@/utils/time'
@@ -20,8 +19,6 @@ const albumStatsMap = ref<Record<number, AlbumStats>>({})
 const loading = ref(true)
 const filterStatus = ref<TrackStatus | ''>('')
 const exportingAlbum = ref<number | null>(null)
-
-const { isPinned } = useDashboardPins(appStore.currentUser?.id)
 
 function statusColor(status: string): string {
   return TRACK_STATUS_COLORS[status as TrackStatus] ?? '#6b7280'
@@ -59,30 +56,18 @@ onMounted(async () => {
   }
 })
 
-// Only pinned albums appear on the dashboard; nothing shown if nothing is pinned
-const dashboardAlbums = computed(() =>
-  albums.value.filter(a => isPinned(a.id))
-)
-
-const pinnedAlbumIds = computed(() => new Set(dashboardAlbums.value.map(a => a.id)))
-
-// Tracks scoped to pinned albums only
-const dashboardTracks = computed(() =>
-  tracks.value.filter(t => pinnedAlbumIds.value.has(t.album_id))
-)
-
 const filteredTracks = computed(() => {
-  if (!filterStatus.value) return dashboardTracks.value
-  return dashboardTracks.value.filter(track => track.status === filterStatus.value)
+  if (!filterStatus.value) return tracks.value
+  return tracks.value.filter(track => track.status === filterStatus.value)
 })
 
 const trackStats = computed(() => ({
-  total: dashboardTracks.value.length,
-  submitted: dashboardTracks.value.filter(t => t.status === 'submitted').length,
-  peer_review: dashboardTracks.value.filter(t => ['peer_review', 'peer_revision'].includes(t.status)).length,
-  mastering: dashboardTracks.value.filter(t => ['mastering', 'mastering_revision', 'final_review'].includes(t.status)).length,
-  completed: dashboardTracks.value.filter(t => t.status === 'completed').length,
-  rejected: dashboardTracks.value.filter(t => t.status === 'rejected').length,
+  total: tracks.value.length,
+  submitted: tracks.value.filter(t => t.status === 'submitted').length,
+  peer_review: tracks.value.filter(t => ['peer_review', 'peer_revision'].includes(t.status)).length,
+  mastering: tracks.value.filter(t => ['mastering', 'mastering_revision', 'final_review'].includes(t.status)).length,
+  completed: tracks.value.filter(t => t.status === 'completed').length,
+  rejected: tracks.value.filter(t => t.status === 'rejected').length,
 }))
 
 // Group tracks by album, preserving order of first appearance
@@ -239,14 +224,8 @@ async function handleExport(albumId: number) {
         </RouterLink>
       </div>
 
-      <!-- Empty state: albums exist but none are pinned -->
-      <div v-if="dashboardAlbums.length === 0" class="flex items-center justify-between p-4 bg-card border border-border rounded-none">
-        <p class="text-sm text-muted-foreground">{{ t('dashboard.noPinnedAlbums') }}</p>
-        <RouterLink to="/albums" class="text-sm text-primary hover:underline font-mono">{{ t('dashboard.goPin') }}</RouterLink>
-      </div>
-
-      <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div v-for="album in dashboardAlbums" :key="album.id" class="rounded-none border border-border bg-card overflow-hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div v-for="album in albums" :key="album.id" class="rounded-none border border-border bg-card overflow-hidden">
           <!-- Cover image or placeholder — no color bar -->
           <div class="w-full h-28 overflow-hidden">
             <img

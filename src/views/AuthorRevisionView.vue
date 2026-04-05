@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { issueApi, trackApi, API_ORIGIN } from '@/api'
+import { issueApi, trackApi, uploadWithProgress, API_ORIGIN } from '@/api'
 import type { Issue, IssueStatus, Track, TrackSourceVersion } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
@@ -20,6 +20,7 @@ const sourceVersions = ref<TrackSourceVersion[]>([])
 const loading = ref(true)
 const selectedFile = ref<File | null>(null)
 const uploading = ref(false)
+const uploadProgress = ref(0)
 const selectedIssueIds = ref<number[]>([])
 const showVersionCompare = ref(false)
 const selectedCompareVersionId = ref<number | null>(null)
@@ -85,8 +86,13 @@ async function respondToIssue(issue: Issue, status: IssueStatus) {
 async function submitRevision() {
   if (!selectedFile.value) return
   uploading.value = true
+  uploadProgress.value = 0
   try {
-    await trackApi.uploadSourceVersion(trackId.value, selectedFile.value)
+    const form = new FormData()
+    form.append('file', selectedFile.value)
+    await uploadWithProgress(
+      `/tracks/${trackId.value}/source-versions`, form, (p) => { uploadProgress.value = p }
+    )
     router.push(`/tracks/${trackId.value}`)
   } finally {
     uploading.value = false
@@ -246,6 +252,12 @@ function onIssueSelectToggle(issueId: number) {
       >
         {{ uploading ? t('revision.uploading') : uploadButtonLabel }}
       </button>
+      <div v-if="uploading" class="space-y-1">
+        <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
+          <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
+        </div>
+        <p class="text-xs text-muted-foreground text-right">{{ uploadProgress }}%</p>
+      </div>
     </div>
 
     <Transition name="slide-up">
