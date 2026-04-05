@@ -1,11 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { authApi } from '@/api'
-import { useAppStore } from '@/stores/app'
-
-const router = useRouter()
-const appStore = useAppStore()
 
 const firstName = ref('')
 const lastName = ref('')
@@ -15,6 +10,9 @@ const confirmPassword = ref('')
 const termsAccepted = ref(false)
 const error = ref('')
 const loading = ref(false)
+const registeredEmail = ref('')
+const resendLoading = ref(false)
+const resendDone = ref(false)
 
 async function handleSubmit() {
   error.value = ''
@@ -35,14 +33,13 @@ async function handleSubmit() {
   loading.value = true
   try {
     const display_name = `${firstName.value} ${lastName.value}`.trim()
-    const auth = await authApi.register({
+    const res = await authApi.register({
       username: email.value,
       display_name,
       email: email.value,
       password: password.value,
     })
-    appStore.setAuth(auth.user, auth.access_token)
-    router.push('/')
+    registeredEmail.value = res.email
   } catch (e: any) {
     if (e.message?.includes('409') || e.message?.toLowerCase().includes('unique') || e.message?.toLowerCase().includes('already')) {
       error.value = 'An account with this email already exists.'
@@ -51,6 +48,17 @@ async function handleSubmit() {
     }
   } finally {
     loading.value = false
+  }
+}
+
+async function handleResend() {
+  resendLoading.value = true
+  resendDone.value = false
+  try {
+    await authApi.resendVerification(registeredEmail.value)
+    resendDone.value = true
+  } finally {
+    resendLoading.value = false
   }
 }
 </script>
@@ -113,12 +121,44 @@ async function handleSubmit() {
     <!-- Right form panel -->
     <div class="flex-1 flex items-center justify-center px-6 overflow-y-auto py-8">
       <div class="w-full max-w-md">
-        <div class="bg-[#1A1A1A] border border-[#2E2E2E] rounded-2xl p-10">
+
+        <!-- Check email state -->
+        <div v-if="registeredEmail" class="bg-[#1A1A1A] border border-[#2E2E2E] rounded-2xl p-10 text-center">
+          <div class="w-14 h-14 rounded-full bg-[#222924] flex items-center justify-center mx-auto mb-6">
+            <svg class="w-7 h-7 text-[#B6FFCE]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+            </svg>
+          </div>
+          <h1 class="font-mono text-2xl font-bold text-white mb-2">Check your inbox</h1>
+          <p class="text-[#B8B9B6] text-sm font-sans mb-1">We sent a verification link to</p>
+          <p class="text-white text-sm font-mono font-semibold mb-6">{{ registeredEmail }}</p>
+          <p class="text-[#888888] text-xs font-sans mb-8">Click the link in the email to activate your account. The link expires in 30 minutes.</p>
+
+          <div v-if="resendDone" class="mb-4 px-4 py-2.5 rounded-full bg-[#222924] border border-[#2E2E2E] text-[#B6FFCE] text-sm font-sans">
+            Verification email resent.
+          </div>
+          <button
+            v-else
+            class="btn-secondary w-full flex items-center justify-center gap-2"
+            :disabled="resendLoading"
+            @click="handleResend"
+          >
+            <span v-if="resendLoading" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+            {{ resendLoading ? 'Sending…' : 'Resend verification email' }}
+          </button>
+
+          <p class="mt-6 text-center text-sm text-[#888888] font-sans">
+            <RouterLink to="/login" class="text-[#FF8400] hover:text-[#FFB366]">Back to sign in</RouterLink>
+          </p>
+        </div>
+
+        <!-- Registration form -->
+        <div v-else class="bg-[#1A1A1A] border border-[#2E2E2E] rounded-2xl p-10">
           <h1 class="font-mono text-2xl font-bold text-white mb-1">Create account</h1>
           <p class="text-[#888888] text-sm font-sans mb-8">Fill in the details below to get started</p>
 
           <!-- Error alert -->
-          <div v-if="error" class="mb-6 px-4 py-3 rounded-lg bg-red-900/30 border border-red-700/50 text-red-400 text-sm">
+          <div v-if="error" class="mb-6 px-4 py-3 rounded-lg bg-[#24100B] border border-[#FF5C33]/30 text-[#FF5C33] text-sm font-sans">
             {{ error }}
           </div>
 
@@ -126,7 +166,7 @@ async function handleSubmit() {
             <!-- Name row -->
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-sans text-[#AAAAAA] mb-1.5">First name</label>
+                <label class="block text-xs font-sans text-[#B8B9B6] mb-1">First name</label>
                 <input
                   v-model="firstName"
                   type="text"
@@ -136,7 +176,7 @@ async function handleSubmit() {
                 />
               </div>
               <div>
-                <label class="block text-sm font-sans text-[#AAAAAA] mb-1.5">Last name</label>
+                <label class="block text-xs font-sans text-[#B8B9B6] mb-1">Last name</label>
                 <input
                   v-model="lastName"
                   type="text"
@@ -148,7 +188,7 @@ async function handleSubmit() {
             </div>
 
             <div>
-              <label class="block text-sm font-sans text-[#AAAAAA] mb-1.5">Email address</label>
+              <label class="block text-xs font-sans text-[#B8B9B6] mb-1">Email address</label>
               <input
                 v-model="email"
                 type="email"
@@ -159,7 +199,7 @@ async function handleSubmit() {
             </div>
 
             <div>
-              <label class="block text-sm font-sans text-[#AAAAAA] mb-1.5">Password</label>
+              <label class="block text-xs font-sans text-[#B8B9B6] mb-1">Password</label>
               <input
                 v-model="password"
                 type="password"
@@ -170,7 +210,7 @@ async function handleSubmit() {
             </div>
 
             <div>
-              <label class="block text-sm font-sans text-[#AAAAAA] mb-1.5">Confirm password</label>
+              <label class="block text-xs font-sans text-[#B8B9B6] mb-1">Confirm password</label>
               <input
                 v-model="confirmPassword"
                 type="password"
@@ -202,6 +242,7 @@ async function handleSubmit() {
             <RouterLink to="/login" class="text-[#FF8400] hover:text-[#FFB366] ml-1">Sign in</RouterLink>
           </p>
         </div>
+
       </div>
     </div>
   </div>

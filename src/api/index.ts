@@ -19,6 +19,7 @@ import type {
   TrackDetailResponse,
   TrackStatus,
   User,
+  UserRole,
 } from '@/types'
 
 const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL ?? '') as string
@@ -249,12 +250,23 @@ export const authApi = {
   login: (email: string, password: string) =>
     request<AuthResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   register: (data: { username: string; display_name: string; email: string; password: string }) =>
-    request<AuthResponse>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+    request<{ email: string; message: string }>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+  verifyEmail: (token: string) =>
+    request<AuthResponse>(`/auth/verify-email?token=${encodeURIComponent(token)}`, { method: 'POST' }),
+  resendVerification: (email: string) =>
+    request<void>(`/auth/resend-verification?email=${encodeURIComponent(email)}`, { method: 'POST' }),
   me: () => request<User>('/auth/me'),
   updateProfile: (data: { display_name?: string; email?: string }) =>
     request<User>('/auth/me', { method: 'PATCH', body: JSON.stringify(data) }),
   changePassword: (data: { current_password: string; new_password: string }) =>
     request<void>('/auth/me/change-password', { method: 'POST', body: JSON.stringify(data) }),
+}
+
+export const adminApi = {
+  listUsers: () => request<User[]>('/admin/users'),
+  updateUser: (id: number, data: { role?: UserRole; is_admin?: boolean; email_verified?: boolean }) =>
+    request<User>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteUser: (id: number) => request<void>(`/admin/users/${id}`, { method: 'DELETE' }),
 }
 
 export const invitationApi = {

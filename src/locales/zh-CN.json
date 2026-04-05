@@ -41,7 +41,8 @@
     "submit": "提交",
     "settings": "设置",
     "albums": "专辑管理",
-    "circles": "社团管理"
+    "circles": "社团管理",
+    "admin": "后台管理"
   },
   "header": {
     "logout": "退出登录",
@@ -604,5 +605,21 @@
     "final_review": "终审",
     "completed": "已完成",
     "rejected": "已拒绝"
+  },
+  "admin": {
+    "title": "后台管理",
+    "userManagement": "用户管理",
+    "displayName": "显示名称",
+    "username": "用户名",
+    "email": "邮箱",
+    "role": "角色",
+    "adminFlag": "管理员",
+    "verified": "已验证",
+    "actions": "操作",
+    "delete": "删除",
+    "confirmDelete": "确认删除用户 {name}？此操作不可撤销。",
+    "updateSuccess": "用户已更新",
+    "deleteSuccess": "用户已删除",
+    "noAccess": "无权访问管理后台"
   }
 }
