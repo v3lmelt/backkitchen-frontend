@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, API_ORIGIN } from '@/api'
+import { trackApi, uploadWithProgress, API_ORIGIN } from '@/api'
 import type { Issue, Track } from '@/types'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
@@ -20,6 +20,7 @@ const loading = ref(true)
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 const masterFile = ref<File | null>(null)
 const uploading = ref(false)
+const uploadProgress = ref(0)
 
 onMounted(loadPage)
 
@@ -61,8 +62,13 @@ function onMasterFileSelect(event: Event) {
 async function uploadMasterDelivery() {
   if (!masterFile.value) return
   uploading.value = true
+  uploadProgress.value = 0
   try {
-    await trackApi.uploadMasterDelivery(trackId.value, masterFile.value)
+    const form = new FormData()
+    form.append('file', masterFile.value)
+    await uploadWithProgress(
+      `/tracks/${trackId.value}/master-deliveries`, form, (p) => { uploadProgress.value = p }
+    )
     router.push(`/tracks/${trackId.value}`)
   } finally {
     uploading.value = false
@@ -135,6 +141,12 @@ async function uploadMasterDelivery() {
           >
             {{ uploading ? t('mastering.uploading') : t('mastering.uploadMaster') }}
           </button>
+          <div v-if="uploading" class="space-y-1">
+            <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
+              <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
+            </div>
+            <p class="text-xs text-muted-foreground text-right">{{ uploadProgress }}%</p>
+          </div>
         </div>
       </div>
     </div>

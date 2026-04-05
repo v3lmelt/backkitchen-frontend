@@ -222,20 +222,30 @@ async function handleCommentReference(comment: Comment, reference: TimeReference
   await playTrackReference(reference)
 }
 
+const submittingComment = ref(false)
+const commentUploadProgress = ref(0)
+
 async function addComment() {
   if ((!newComment.value.trim() && !selectedImages.value.length && !selectedAudios.value.length) || !appStore.currentUser || !issue.value) return
-  const comment = await issueApi.addComment(issueId.value, {
-    content: newComment.value,
-    images: selectedImages.value.length ? selectedImages.value : undefined,
-    audios: selectedAudios.value.length ? selectedAudios.value : undefined,
-  })
-  if (!issue.value.comments) issue.value.comments = []
-  issue.value.comments.push(comment)
-  newComment.value = ''
-  imagePreviewUrls.value.forEach(url => URL.revokeObjectURL(url))
-  selectedImages.value = []
-  imagePreviewUrls.value = []
-  selectedAudios.value = []
+  if (submittingComment.value) return
+  submittingComment.value = true
+  commentUploadProgress.value = 0
+  try {
+    const comment = await issueApi.addComment(issueId.value, {
+      content: newComment.value,
+      images: selectedImages.value.length ? selectedImages.value : undefined,
+      audios: selectedAudios.value.length ? selectedAudios.value : undefined,
+    }, (p) => { commentUploadProgress.value = p })
+    if (!issue.value.comments) issue.value.comments = []
+    issue.value.comments.push(comment)
+    newComment.value = ''
+    imagePreviewUrls.value.forEach(url => URL.revokeObjectURL(url))
+    selectedImages.value = []
+    imagePreviewUrls.value = []
+    selectedAudios.value = []
+  } finally {
+    submittingComment.value = false
+  }
 }
 
 function selectStatus(status: Exclude<IssueStatus, 'open'>) {
@@ -596,9 +606,15 @@ function openVersionCompare() {
                 </svg>
                 {{ t('issueDetail.audio') }}
               </button>
-              <button @click="addComment" :disabled="!newComment.trim() && !selectedImages.length && !selectedAudios.length" class="btn-primary text-sm">
-                {{ t('issueDetail.addComment') }}
+              <button @click="addComment" :disabled="submittingComment || (!newComment.trim() && !selectedImages.length && !selectedAudios.length)" class="btn-primary text-sm">
+                {{ submittingComment ? t('common.loading') : t('issueDetail.addComment') }}
               </button>
+            </div>
+            <div v-if="submittingComment && (selectedAudios.length || selectedImages.length)" class="space-y-1">
+              <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
+                <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: commentUploadProgress + '%' }"></div>
+              </div>
+              <p class="text-xs text-muted-foreground text-right">{{ commentUploadProgress }}%</p>
             </div>
           </div>
         </div>

@@ -44,6 +44,47 @@ function authHeaders(headers?: HeadersInit): HeadersInit {
   }
 }
 
+export function uploadWithProgress<T>(
+  url: string,
+  body: FormData,
+  onProgress?: (percent: number) => void,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${BASE}${url}`)
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+
+    if (onProgress) {
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
+      })
+    }
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        if (xhr.status === 204) return resolve(undefined as T)
+        resolve(JSON.parse(xhr.responseText))
+      } else {
+        if (xhr.status === 401) {
+          localStorage.removeItem(TOKEN_KEY)
+          localStorage.removeItem('backkitchen_user')
+        }
+        let msg = `Request failed: ${xhr.status}`
+        try {
+          const parsed = JSON.parse(xhr.responseText)
+          const detail = parseErrorDetail(parsed.detail)
+          if (detail) msg = detail
+        } catch {}
+        reject(new Error(msg))
+      }
+    })
+    xhr.addEventListener('error', () => reject(new Error('Network error')))
+    xhr.addEventListener('abort', () => reject(new Error('Upload aborted')))
+    xhr.send(body)
+  })
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const isFormData = options?.body instanceof FormData
   const headers: HeadersInit = isFormData
@@ -193,7 +234,7 @@ export const issueApi = {
     request<Issue>(`/issues/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   batchUpdate: (trackId: number, data: { issue_ids: number[]; status: IssueStatus; status_note?: string }) =>
     request<Issue[]>(`/tracks/${trackId}/issues/batch`, { method: 'PATCH', body: JSON.stringify(data) }),
-  addComment: (id: number, data: { content: string; images?: File[]; audios?: File[] }) => {
+  addComment: (id: number, data: { content: string; images?: File[]; audios?: File[] }, onProgress?: (percent: number) => void) => {
     const form = new FormData()
     form.append('content', data.content)
     if (data.images) {
@@ -201,6 +242,9 @@ export const issueApi = {
     }
     if (data.audios) {
       for (const audio of data.audios) form.append('audios', audio)
+    }
+    if (onProgress) {
+      return uploadWithProgress<Comment>(`/issues/${id}/comments`, form, onProgress)
     }
     return request<Comment>(`/issues/${id}/comments`, { method: 'POST', body: form })
   },

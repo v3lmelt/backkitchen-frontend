@@ -2,8 +2,8 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, albumApi } from '@/api'
-import type { Album } from '@/types'
+import { albumApi, uploadWithProgress } from '@/api'
+import type { Album, Track } from '@/types'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
@@ -11,6 +11,7 @@ const { t } = useI18n()
 const { error: toastError, success: toastSuccess } = useToast()
 const albums = ref<Album[]>([])
 const uploading = ref(false)
+const uploadProgress = ref(0)
 const dragOver = ref(false)
 
 const form = ref({
@@ -55,6 +56,7 @@ async function upload() {
     return
   }
   uploading.value = true
+  uploadProgress.value = 0
   try {
     const formData = new FormData()
     formData.append('file', selectedFile.value)
@@ -63,7 +65,9 @@ async function upload() {
     formData.append('album_id', String(form.value.album_id))
     if (form.value.bpm) formData.append('bpm', String(form.value.bpm))
 
-    const track = await trackApi.upload(formData)
+    const track = await uploadWithProgress<Track>(
+      '/tracks', formData, (p) => { uploadProgress.value = p }
+    )
     toastSuccess(t('upload.uploadSuccess'))
     router.push(`/tracks/${track.id}`)
   } catch (err: any) {
@@ -148,6 +152,12 @@ function formatFileSize(bytes: number): string {
       >
         {{ uploading ? t('upload.uploading') : t('upload.submit') }}
       </button>
+      <div v-if="uploading" class="space-y-1">
+        <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
+          <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
+        </div>
+        <p class="text-xs text-muted-foreground text-right">{{ uploadProgress }}%</p>
+      </div>
     </div>
   </div>
 </template>

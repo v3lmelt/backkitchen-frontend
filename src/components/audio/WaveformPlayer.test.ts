@@ -10,7 +10,7 @@ const regionsOnMock = vi.fn()
 type HandlerMap = Record<string, (...args: any[]) => void>
 type WaveSurferInstance = {
   handlers: HandlerMap
-  loadBlob: ReturnType<typeof vi.fn>
+  load: ReturnType<typeof vi.fn>
   playPause: ReturnType<typeof vi.fn>
   play: ReturnType<typeof vi.fn>
   pause: ReturnType<typeof vi.fn>
@@ -45,7 +45,7 @@ vi.mock('wavesurfer.js', () => ({
       const handlers: HandlerMap = {}
       const instance: WaveSurferInstance = {
         handlers,
-        loadBlob: vi.fn(),
+        load: vi.fn(),
         playPause: vi.fn(),
         play: vi.fn(),
         pause: vi.fn(),
@@ -62,7 +62,7 @@ vi.mock('wavesurfer.js', () => ({
         on: (event: string, handler: (...args: any[]) => void) => {
           handlers[event] = handler
         },
-        loadBlob: instance.loadBlob,
+        load: instance.load,
         playPause: instance.playPause,
         play: instance.play,
         pause: instance.pause,
@@ -82,7 +82,6 @@ import WaveformPlayer from './WaveformPlayer.vue'
 
 describe('WaveformPlayer', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['audio']) }))
     waveSurferInstances.length = 0
     addRegionMock.mockReset()
     clearRegionsMock.mockReset()
@@ -91,7 +90,7 @@ describe('WaveformPlayer', () => {
     localStorage.clear()
   })
 
-  it('loads audio with bearer auth and enables drag selection', async () => {
+  it('loads audio with token query param and enables drag selection', async () => {
     localStorage.setItem('backkitchen_token', 'token-1')
     mountWithPlugins(WaveformPlayer, {
       props: {
@@ -104,10 +103,9 @@ describe('WaveformPlayer', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(fetch).toHaveBeenCalledWith('/api/tracks/1/audio', {
-      headers: { Authorization: 'Bearer token-1' },
-    })
-    expect(waveSurferInstances[0].loadBlob).toHaveBeenCalledTimes(1)
+    expect(waveSurferInstances[0].load).toHaveBeenCalledWith(
+      '/api/tracks/1/audio?token=token-1',
+    )
     expect(enableDragSelectionMock).toHaveBeenCalledTimes(1)
   })
 

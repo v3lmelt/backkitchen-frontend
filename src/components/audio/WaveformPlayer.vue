@@ -6,8 +6,7 @@ import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
 import { CircleAlert, CircleCheckBig } from 'lucide-vue-next'
 import type { Issue } from '@/types'
 import { formatTimestamp, roundToMilliseconds } from '@/utils/time'
-
-const TOKEN_KEY = 'backkitchen_token'
+import { withAuthToken } from '@/utils/url'
 
 const props = defineProps<{
   audioUrl: string
@@ -560,21 +559,8 @@ onMounted(async () => {
     })
   }
 
-  // Audio endpoints are auth-protected, so load them through fetch with Bearer auth.
-  try {
-    const token = localStorage.getItem(TOKEN_KEY)
-    const res = await fetch(props.audioUrl, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    })
-    if (!res.ok) {
-      throw new Error(`Failed to load audio: ${res.status}`)
-    }
-    const blob = await res.blob()
-    loadedAudioUrl = props.audioUrl
-    await ws.loadBlob(blob)
-  } catch {
-    // Keep the player mounted but avoid a second unauthenticated request loop.
-  }
+  loadedAudioUrl = props.audioUrl
+  ws.load(withAuthToken(props.audioUrl))
 
   wavesurfer.value = ws
 })
@@ -582,21 +568,11 @@ onMounted(async () => {
 // When audioUrl changes (different track/version), reload audio into the
 // existing WaveSurfer instance instead of destroying and recreating it.
 let loadedAudioUrl = ''
-watch(() => props.audioUrl, async (newUrl) => {
+watch(() => props.audioUrl, (newUrl) => {
   if (!newUrl || !wavesurfer.value) return
   if (newUrl === loadedAudioUrl) return
   loadedAudioUrl = newUrl
-  try {
-    const token = localStorage.getItem(TOKEN_KEY)
-    const res = await fetch(newUrl, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    })
-    if (!res.ok) return
-    const blob = await res.blob()
-    await wavesurfer.value.loadBlob(blob)
-  } catch {
-    // ignore
-  }
+  wavesurfer.value.load(withAuthToken(newUrl))
 })
 
 function renderIssueRegions() {
@@ -684,6 +660,7 @@ watch(() => props.compareVersionId, async (newId) => {
       ws.play()
     }
   })
+  ws.on('error', () => { isCompareLoading.value = false })
   let lastCompareUpdateMs = 0
   ws.on('timeupdate', (t: number) => {
     const now = Date.now()
@@ -697,20 +674,7 @@ watch(() => props.compareVersionId, async (newId) => {
   compareWaveSurfer.value = ws
   applyCompareMode(abMode.value)
 
-  try {
-    const token = localStorage.getItem(TOKEN_KEY)
-    const res = await fetch(compareUrl, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    })
-    if (res.ok) {
-      const blob = await res.blob()
-      await ws.loadBlob(blob)
-    } else {
-      isCompareLoading.value = false
-    }
-  } catch {
-    isCompareLoading.value = false
-  }
+  ws.load(withAuthToken(compareUrl))
 })
 
 watch(abMode, (mode) => {
