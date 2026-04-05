@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { albumApi } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Album } from '@/types'
+import albumPlaceholder from '@/assets/album-placeholder.svg'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -77,9 +78,13 @@ function roleBadgeClass(album: Album): string {
         @click="router.push(`/albums/${album.id}/settings`)"
         class="bg-card border border-border rounded-none overflow-hidden shadow-[0_1px_1.75px_rgba(0,0,0,0.05)] text-left hover:border-primary/50 transition-colors group cursor-pointer"
       >
-        <!-- Cover image if available, otherwise no visual accent -->
-        <div v-if="album.cover_image" class="w-full h-32 overflow-hidden">
-          <img :src="`/uploads/${album.cover_image}`" :alt="album.title" class="w-full h-full object-cover" />
+        <!-- Cover image or default placeholder -->
+        <div class="w-full h-32 overflow-hidden">
+          <img
+            :src="album.cover_image ? `/uploads/${album.cover_image}` : albumPlaceholder"
+            :alt="album.title"
+            class="w-full h-full object-cover"
+          />
         </div>
         <div class="p-4 space-y-2">
           <div class="flex items-start justify-between gap-2">
