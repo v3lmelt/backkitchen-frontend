@@ -40,7 +40,7 @@
       >
         <!-- logo -->
         <div class="shrink-0 w-12 h-12 rounded-full overflow-hidden bg-border flex items-center justify-center">
-          <img v-if="circle.logo_url" :src="circle.logo_url" alt="" class="w-full h-full object-cover" />
+          <img v-if="circle.logo_url" :src="`${API_ORIGIN}${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
           <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
         </div>
         <div class="flex-1 min-w-0">
@@ -84,7 +84,7 @@ import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { circleApi } from '@/api'
+import { circleApi, API_ORIGIN } from '@/api'
 import type { CircleSummary } from '@/types'
 import { useToast } from '@/composables/useToast'
 
