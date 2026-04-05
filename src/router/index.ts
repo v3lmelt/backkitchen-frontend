@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-const PUBLIC_ROUTES = ['/login', '/register']
+const PUBLIC_ROUTES = ['/login', '/register', '/verify-email']
 const TOKEN_KEY = 'backkitchen_token'
 
 const router = createRouter({
@@ -15,6 +15,11 @@ const router = createRouter({
       path: '/register',
       name: 'register',
       component: () => import('@/views/RegisterView.vue'),
+    },
+    {
+      path: '/verify-email',
+      name: 'verify-email',
+      component: () => import('@/views/VerifyEmailView.vue'),
     },
     {
       path: '/',
@@ -100,11 +105,17 @@ const router = createRouter({
       name: 'profile',
       component: () => import('@/views/ProfileView.vue'),
     },
+    {
+      path: '/admin',
+      name: 'admin',
+      component: () => import('@/views/AdminView.vue'),
+    },
   ],
 })
 
 router.beforeEach((to) => {
   const token = localStorage.getItem(TOKEN_KEY)
+  if (to.path === '/verify-email') return true
   if (PUBLIC_ROUTES.includes(to.path)) {
     if (token) return '/'
     return true

@@ -41,7 +41,8 @@
     "submit": "Submit",
     "settings": "Settings",
     "albums": "Albums",
-    "circles": "Circles"
+    "circles": "Circles",
+    "admin": "Admin"
   },
   "header": {
     "logout": "Logout",
@@ -600,5 +601,21 @@
     "preferences": "Preferences",
     "preferencesDesc": "Customize your experience",
     "preferencesComingSoon": "More preferences coming soon."
+  },
+  "admin": {
+    "title": "Admin Panel",
+    "userManagement": "User Management",
+    "displayName": "Display Name",
+    "username": "Username",
+    "email": "Email",
+    "role": "Role",
+    "adminFlag": "Admin",
+    "verified": "Verified",
+    "actions": "Actions",
+    "delete": "Delete",
+    "confirmDelete": "Delete user {name}? This cannot be undone.",
+    "updateSuccess": "User updated",
+    "deleteSuccess": "User deleted",
+    "noAccess": "No access to admin panel"
   }
 }
