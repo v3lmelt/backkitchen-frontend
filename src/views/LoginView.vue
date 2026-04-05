@@ -25,7 +25,11 @@ async function handleSubmit() {
     appStore.setAuth(auth.user, auth.access_token)
     router.push('/')
   } catch (e: any) {
-    error.value = e.message || 'Invalid email or password.'
+    if (e.message?.toLowerCase().includes('not verified')) {
+      error.value = 'Email not verified. Please check your inbox for the verification link.'
+    } else {
+      error.value = e.message || 'Invalid email or password.'
+    }
   } finally {
     loading.value = false
   }
