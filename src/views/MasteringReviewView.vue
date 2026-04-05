@@ -2,11 +2,12 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { issueApi, trackApi } from '@/api'
+import { trackApi, API_ORIGIN } from '@/api'
 import type { Issue, Track } from '@/types'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
-import { formatTimestamp, roundToMilliseconds } from '@/utils/time'
+import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
+import { useAudioDownload } from '@/composables/useAudioDownload'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,20 +17,9 @@ const trackId = computed(() => Number(route.params.id))
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
 const loading = ref(true)
-const waveformRef = ref<InstanceType<typeof WaveformPlayer>>()
+const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 const masterFile = ref<File | null>(null)
 const uploading = ref(false)
-
-const showNewIssue = ref(false)
-const newIssue = ref({
-  title: '',
-  description: '',
-  severity: 'major' as const,
-  issue_type: 'point' as 'point' | 'range',
-  time_start: 0,
-  time_end: null as number | null,
-  phase: 'mastering' as const,
-})
 
 onMounted(loadPage)
 
@@ -44,26 +34,18 @@ async function loadPage() {
   }
 }
 
-const audioUrl = computed(() => track.value?.file_path ? `/api/tracks/${trackId.value}/audio` : '')
+const audioUrl = computed(() => track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio` : '')
+const waveformIssues = computed(() => {
+  const currentVersion = track.value?.version
+  if (currentVersion == null) return issues.value
+  return issues.value.filter(issue => issue.source_version_number == null || issue.source_version_number === currentVersion)
+})
 
-function onWaveformClick(time: number) {
-  newIssue.value.time_start = roundToMilliseconds(time)
-  showNewIssue.value = true
-}
+const { downloading, downloadTrackAudio } = useAudioDownload()
+const handleDownload = () => downloadTrackAudio(audioUrl, track)
 
-async function submitIssue() {
-  const created = await issueApi.create(trackId.value, newIssue.value)
-  issues.value.push(created)
-  showNewIssue.value = false
-  newIssue.value = {
-    title: '',
-    description: '',
-    severity: 'major',
-    issue_type: 'point',
-    time_start: 0,
-    time_end: null,
-    phase: 'mastering',
-  }
+function onIssueSelect(issue: Issue) {
+  router.push(`/issues/${issue.id}`)
 }
 
 async function requestRevision() {
@@ -86,14 +68,6 @@ async function uploadMasterDelivery() {
     uploading.value = false
   }
 }
-
-function onIssueSelect(issue: Issue) {
-  waveformRef.value?.seekTo(issue.time_start)
-}
-
-function formatTime(seconds: number): string {
-  return formatTimestamp(seconds)
-}
 </script>
 
 <template>
@@ -110,46 +84,37 @@ function formatTime(seconds: number): string {
     </div>
 
     <div v-if="audioUrl">
-      <p class="text-xs text-muted-foreground mb-2">{{ t('mastering.waveformHint') }}</p>
+      <div class="flex items-center justify-between mb-2">
+        <p class="text-xs text-muted-foreground">{{ t('mastering.waveformHint') }}</p>
+        <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+          {{ downloading ? '…' : t('common.downloadAudio') }}
+        </button>
+      </div>
       <WaveformPlayer
-        ref="waveformRef"
         :audio-url="audioUrl"
-        :issues="issues"
-        @click="onWaveformClick"
+        :issues="waveformIssues"
+        :selectable="true"
+        :selected-range="issueFormRef?.selectedRange ?? null"
+        @click="(t: number) => issueFormRef?.handleClick(t)"
         @regionClick="onIssueSelect"
+        @rangeSelect="(s: number, e: number) => issueFormRef?.handleRangeSelect(s, e)"
       />
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div class="space-y-4">
-        <div class="flex items-center justify-between">
-          <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('mastering.issuesHeading', { count: issues.length }) }}</h3>
-          <button @click="showNewIssue = !showNewIssue" class="btn-primary text-xs">{{ t('common.addIssue') }}</button>
-        </div>
+        <IssueCreatePanel
+          ref="issueFormRef"
+          :track-id="trackId"
+          phase="mastering"
+          @created="(issue: Issue) => issues.push(issue)"
+        >
+          <template #heading>
+            <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('mastering.issuesHeading', { count: issues.length }) }}</h3>
+          </template>
+        </IssueCreatePanel>
 
-        <div v-if="showNewIssue" class="card space-y-3 border-primary/50">
-          <h4 class="text-sm font-sans font-semibold text-foreground">{{ t('common.newIssueAt', { time: formatTime(newIssue.time_start) }) }}</h4>
-          <input v-model="newIssue.title" class="input-field w-full" :placeholder="t('common.issueTitlePlaceholder')" />
-          <textarea v-model="newIssue.description" class="input-field w-full h-20 resize-none" :placeholder="t('common.descriptionPlaceholder')" />
-          <div class="grid grid-cols-2 gap-3">
-            <select v-model="newIssue.severity" class="input-field">
-              <option value="critical">{{ t('severity.critical') }}</option>
-              <option value="major">{{ t('severity.major') }}</option>
-              <option value="minor">{{ t('severity.minor') }}</option>
-              <option value="suggestion">{{ t('severity.suggestion') }}</option>
-            </select>
-            <select v-model="newIssue.issue_type" class="input-field">
-              <option value="point">{{ t('issueType.point') }}</option>
-              <option value="range">{{ t('issueType.range') }}</option>
-            </select>
-          </div>
-          <div class="flex gap-2">
-            <button @click="submitIssue" class="btn-primary text-sm">{{ t('common.submitIssue') }}</button>
-            <button @click="showNewIssue = false" class="btn-secondary text-sm">{{ t('common.cancel') }}</button>
-          </div>
-        </div>
-
-        <IssueMarkerList :issues="issues" @select="onIssueSelect" />
+        <IssueMarkerList :issues="issues" :current-source-version-number="track.version" @select="onIssueSelect" />
       </div>
 
       <div class="card space-y-4">

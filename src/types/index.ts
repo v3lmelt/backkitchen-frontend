@@ -13,7 +13,7 @@ export type RejectionMode = 'final' | 'resubmittable'
 export type IssueType = 'point' | 'range'
 export type IssueSeverity = 'critical' | 'major' | 'minor' | 'suggestion'
 export type IssueStatus = 'open' | 'will_fix' | 'disagreed' | 'resolved'
-export type IssuePhase = 'peer' | 'mastering' | 'final_review'
+export type IssuePhase = 'peer' | 'producer' | 'mastering' | 'final_review'
 export type UserRole = 'member' | 'producer' | 'mastering_engineer'
 
 export interface User {
@@ -46,7 +46,7 @@ export interface Invitation {
   invited_by_user_id: number
   status: 'pending' | 'accepted' | 'declined'
   created_at: string
-  album?: { id: number; title: string; cover_color: string } | null
+  album?: { id: number; title: string; cover_color: string; cover_image?: string | null; circle_name?: string | null } | null
   user?: User | null
   invited_by_user?: User | null
 }
@@ -56,14 +56,62 @@ export interface Album {
   title: string
   description: string | null
   cover_color: string
+  release_date?: string | null
+  catalog_number?: string | null
+  circle_id?: number | null
+  circle_name?: string | null
+  genres?: string[] | null
+  cover_image?: string | null
   producer_id: number | null
   mastering_engineer_id: number | null
+  deadline?: string | null
+  phase_deadlines?: Record<string, string> | null
   producer?: User | null
   mastering_engineer?: User | null
   members: AlbumMember[]
   created_at: string
   updated_at: string
   track_count: number
+}
+
+export interface CircleMember {
+  id: number
+  circle_id: number
+  user_id: number
+  role: 'owner' | 'member' | 'mastering_engineer'
+  joined_at: string
+  user: User
+}
+
+export interface Circle {
+  id: number
+  name: string
+  description: string | null
+  website: string | null
+  logo_url: string | null
+  created_by: number
+  created_at: string
+  members: CircleMember[]
+}
+
+export interface CircleSummary {
+  id: number
+  name: string
+  description: string | null
+  logo_url: string | null
+  created_by: number
+  member_count: number
+}
+
+export interface InviteCode {
+  id: number
+  circle_id: number
+  code: string
+  role: string
+  expires_at: string
+  is_active: boolean
+  created_at: string
+  created_by_user: User
 }
 
 export interface TrackSourceVersion {
@@ -95,6 +143,7 @@ export interface Issue {
   phase: IssuePhase
   workflow_cycle: number
   source_version_id: number | null
+  source_version_number?: number | null
   master_delivery_id: number | null
   title: string
   description: string
@@ -116,6 +165,15 @@ export interface CommentImage {
   created_at: string
 }
 
+export interface CommentAudio {
+  id: number
+  comment_id: number
+  audio_url: string
+  original_filename: string
+  duration: number | null
+  created_at: string
+}
+
 export interface Comment {
   id: number
   issue_id: number
@@ -125,6 +183,7 @@ export interface Comment {
   is_status_note: boolean
   created_at: string
   images?: CommentImage[]
+  audios?: CommentAudio[]
 }
 
 export interface ChecklistItem {
@@ -158,6 +217,7 @@ export interface Track {
   file_path: string | null
   duration: number | null
   bpm: number | null
+  track_number?: number | null
   status: TrackStatus
   rejection_mode: RejectionMode | null
   version: number
@@ -184,6 +244,7 @@ export interface TrackDetailResponse {
   checklist_items: ChecklistItem[]
   events: WorkflowEvent[]
   source_versions?: TrackSourceVersion[]
+  discussions?: Discussion[]
 }
 
 export interface Notification {
@@ -198,9 +259,46 @@ export interface Notification {
   created_at: string
 }
 
+export interface ChecklistTemplateItem {
+  label: string
+  description?: string | null
+  required: boolean
+  sort_order: number
+}
+
+export interface ChecklistTemplateRead {
+  items: ChecklistTemplateItem[]
+  is_default: boolean
+}
+
+export interface DiscussionImage {
+  id: number
+  discussion_id: number
+  image_url: string
+  created_at: string
+}
+
+export interface Discussion {
+  id: number
+  track_id: number
+  author_id: number
+  content: string
+  created_at: string
+  author?: User | null
+  images?: DiscussionImage[]
+}
+
+export interface WebhookConfig {
+  url: string
+  enabled: boolean
+  events: string[]
+}
+
 export interface AlbumStats {
   total_tracks: number
   by_status: Partial<Record<TrackStatus, number>>
   open_issues: number
   recent_events: WorkflowEvent[]
+  deadline?: string | null
+  overdue_track_count?: number
 }

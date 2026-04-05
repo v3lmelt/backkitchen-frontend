@@ -11,12 +11,13 @@ const props = defineProps<{
 const { t } = useI18n()
 
 const config = computed(() => {
+  const phaseKeyMap: Record<string, string> = {
+    mastering: 'mastering_phase',
+    final_review: 'final_review_phase',
+    producer: 'producer_phase',
+  }
   const statusKey = props.type === 'phase'
-    ? props.status === 'mastering'
-      ? 'mastering_phase'
-      : props.status === 'final_review'
-        ? 'final_review_phase'
-        : 'peer'
+    ? phaseKeyMap[props.status] ?? props.status
     : props.status
 
   const classMap: Record<string, string> = {
@@ -38,6 +39,7 @@ const config = computed(() => {
     minor: 'bg-info-bg text-info',
     suggestion: 'bg-success-bg text-success',
     peer: 'bg-info-bg text-info',
+    producer_phase: 'bg-primary/15 text-primary',
     mastering_phase: 'bg-warning-bg text-warning',
     final_review_phase: 'bg-primary/15 text-primary',
   }

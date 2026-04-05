@@ -6,13 +6,20 @@
     "submitIssue": "提交问题",
     "cancel": "取消",
     "confirm": "确认",
+    "save": "保存",
+    "saved": "已保存",
     "newIssueAt": "在 {time} 处添加新问题",
     "issueTitlePlaceholder": "问题标题",
     "descriptionPlaceholder": "描述…",
     "notesOptionalPlaceholder": "备注（可选）",
     "approved": "已批准",
     "pending": "待处理",
-    "back": "返回"
+    "back": "返回",
+    "rangeStart": "起点（秒）",
+    "rangeEnd": "终点（秒）",
+    "requestFailed": "请求失败",
+    "downloadAudio": "下载音频",
+    "downloadFailed": "下载失败"
   },
   "severity": {
     "critical": "严重",
@@ -32,7 +39,9 @@
   "nav": {
     "dashboard": "仪表盘",
     "submit": "提交",
-    "settings": "设置"
+    "settings": "设置",
+    "albums": "专辑管理",
+    "circles": "社团管理"
   },
   "header": {
     "logout": "退出登录",
@@ -48,6 +57,12 @@
       "finalReview": "终审",
       "upload": "提交曲目",
       "settings": "专辑设置",
+      "albums": "专辑管理",
+      "albumNew": "新建专辑",
+      "albumSettings": "专辑设置",
+      "circles": "社团管理",
+      "circleNew": "新建社团",
+      "circleDetail": "社团详情",
       "profile": "个人中心",
       "default": "BACK KITCHEN"
     }
@@ -66,7 +81,12 @@
     "will_fix": "待修复",
     "disagreed": "有异议",
     "resolved": "已解决",
+    "critical": "严重",
+    "major": "重要",
+    "minor": "轻微",
+    "suggestion": "建议",
     "peer": "同行",
+    "producer_phase": "制作人",
     "mastering_phase": "母带",
     "final_review_phase": "终审"
   },
@@ -109,6 +129,12 @@
     "clearFilter": "清除",
     "submitTrack": "+ 提交曲目",
     "noTracks": "暂无曲目。",
+    "colNumber": "#",
+    "exportAlbum": "导出",
+    "deadlineOverdue": "逾期 {days} 天",
+    "deadlineToday": "今日截止",
+    "deadlineDaysLeft": "还剩 {days} 天",
+    "overdueCount": "{count} 首逾期",
     "colTitle": "标题",
     "colArtist": "艺术家",
     "colDuration": "时长",
@@ -117,8 +143,35 @@
     "colVersion": "版本",
     "openCount": "{count} 待处理",
     "recentActivity": "近期动态",
-    "eventBy": "{action}，由 {name}",
-    "openIssues": "{count} 个未解决问题"
+    "pinnedOnly": "仅显示已固定",
+    "manageAlbums": "管理专辑",
+    "noPinnedAlbums": "尚未固定任何专辑到仪表盘",
+    "goPin": "前往固定",
+    "openIssues": "{count} 个未解决问题",
+    "events": {
+      "track_submitted": "{name} 提交了曲目",
+      "source_version_uploaded": "{name} 上传了新的源文件",
+      "submission_accepted": "{name} 通过了投稿审核",
+      "submission_rejected": "{name} 驳回了投稿",
+      "peer_review_finished": "{name} 完成了同行审核",
+      "producer_mastering_gate_decided": "{name} 完成了制作人审核",
+      "mastering_revision_requested": "{name} 请求修改源文件",
+      "master_delivery_uploaded": "{name} 上传了母带音频",
+      "final_review_approved_by_producer": "{name} 批准了终审（制作人）",
+      "final_review_approved_by_submitter": "{name} 批准了终审（作者）",
+      "returned_to_mastering": "{name} 将曲目退回了混音阶段",
+      "issue_created": "{name} 创建了问题",
+      "issue_updated": "{name} 更新了问题",
+      "issue_comment_added": "{name} 添加了评论"
+    },
+    "timeline": {
+      "issueCreated": "{name} 创建了问题 #{num}",
+      "issueCommented": "{name} 回应了问题 #{num}",
+      "issueUpdated": "{name} 更新了问题 #{num}",
+      "issueResolved": "{name} 关闭了问题 #{num}",
+      "issueWillFix": "{name} 确认修复问题 #{num}",
+      "issueDisagreed": "{name} 对问题 #{num} 提出异议"
+    }
   },
   "trackDetail": {
     "workflowStatus": "工作流状态",
@@ -132,6 +185,10 @@
     "currentMaster": "当前母带",
     "finalApprovals": "终审批准",
     "producer": "制作人",
+    "discussionsHeading": "讨论 ({count})",
+    "noDiscussions": "暂无讨论。",
+    "discussionPlaceholder": "输入讨论内容…",
+    "postDiscussion": "发送",
     "timeline": "时间线",
     "noEvents": "暂无工作流事件。",
     "system": "系统",
@@ -149,7 +206,7 @@
   "peerReview": {
     "heading": "同行评审：{title}",
     "subheading": "源版本 v{version} 的同行评审工作流",
-    "waveformHint": "点击波形以添加评审问题。",
+    "waveformHint": "点击波形标记单点问题；拖拽选择时间段以标记范围问题。",
     "issuesHeading": "评审问题 ({count})",
     "startLabel": "起点（秒）",
     "endLabel": "终点（秒）",
@@ -174,7 +231,8 @@
     "uploadHint": "响应上述问题后，上传下一个源版本。",
     "uploading": "上传中…",
     "submitBackToPeer": "提交回同行评审",
-    "submitBackToMastering": "提交回母带"
+    "submitBackToMastering": "提交回母带",
+    "staleIssuesHeading": "旧版本问题（仅供参考）"
   },
   "mastering": {
     "heading": "母带审核：{title}",
@@ -202,6 +260,9 @@
     "checklistHeading": "同行评审清单",
     "issueSummaryHeading": "问题摘要",
     "noIssues": "暂无问题。",
+    "waveformHint": "点击波形或拖拽选择时间范围，以添加制作人标注问题。",
+    "producerIssuesHeading": "制作人标注 ({count})",
+    "peerIssueSummaryHeading": "同行评审问题摘要",
     "sendToMastering": "发送至母带",
     "requestRevision": "再次请求源版本修订"
   },
@@ -219,14 +280,29 @@
   "issueDetail": {
     "back": "返回",
     "created": "创建于 {date}",
-    "willFix": "待修复",
+    "markFixed": "已修复",
     "disagree": "有异议",
     "markResolved": "标记为已解决",
     "commentsHeading": "评论 ({count})",
     "unknown": "未知",
     "addCommentPlaceholder": "添加评论…",
     "image": "图片",
-    "addComment": "添加评论"
+    "audio": "音频",
+    "audioMaxReached": "每条评论最多附加 {max} 个音频文件",
+    "addComment": "添加评论",
+    "audioContext": "音频定位",
+    "noDescription": "暂无描述",
+    "issueList": "问题清单 ({count})",
+    "onlyUnresolved": "只显示未解决项",
+    "noVisibleIssues": "当前筛选下没有可显示的问题",
+    "currentIssue": "当前问题",
+    "unresolvedTitle": "待解决问题",
+    "outdatedVersionTitle": "该问题创建于 source v{issueVersion}，当前曲目已更新到 v{currentVersion}",
+    "outdatedVersionBody": "当前详情页已切换到该问题所属的旧版本音频，并会显示对应标记。你也可以打开版本对比查看新旧版本。",
+    "outdatedVersionUnavailable": "当前缺少该旧版本音频文件，因此无法在本页还原原始标记位置。你仍然可以打开曲目页查看当前版本上下文。",
+    "openVersionCompare": "打开版本对比",
+    "outdatedWaveformHint": "当前波形已切换到问题所属的旧版本音频，并显示该问题标记。",
+    "outdatedWaveformUnavailable": "无法加载该问题所属的旧版本音频，因此这里不显示问题标记。"
   },
   "upload": {
     "heading": "提交曲目",
@@ -242,7 +318,9 @@
     "bpmPlaceholder": "例如 128",
     "uploading": "上传中…",
     "submit": "提交曲目",
-    "uploadFailed": "上传失败"
+    "uploadFailed": "上传失败",
+    "uploadSuccess": "曲目提交成功",
+    "albumRequired": "请先选择专辑再提交"
   },
   "settings": {
     "heading": "专辑设置",
@@ -277,7 +355,55 @@
     "invitationSent": "邀请已发送。",
     "invitationCancelled": "邀请已取消。",
     "inviteErrorAlreadyMember": "用户已是成员。",
-    "inviteErrorAlreadyInvited": "用户已有待处理的邀请。"
+    "inviteErrorAlreadyInvited": "用户已有待处理的邀请。",
+    "checklistTemplate": "审核清单模板",
+    "templateItem": "检查项",
+    "addItem": "添加检查项",
+    "removeItem": "移除",
+    "required": "必填",
+    "optional": "选填",
+    "itemLabel": "标签",
+    "itemDescription": "描述（可选）",
+    "saveTemplate": "保存模板",
+    "resetToDefault": "恢复默认",
+    "templateSaved": "模板已保存",
+    "templateReset": "已恢复默认模板",
+    "templateSaveFailed": "保存模板失败",
+    "usingDefaultTemplate": "当前使用默认模板",
+    "templateItemLabelRequired": "标签不能为空",
+    "trackOrder": "曲目排序",
+    "saveOrder": "保存排序",
+    "orderSaved": "排序已保存",
+    "orderSaveFailed": "保存排序失败",
+    "dragToReorder": "拖拽以调整顺序",
+    "deadlines": "截止日期",
+    "albumDeadline": "专辑总截止日期",
+    "peerReviewDeadline": "同行评审截止",
+    "masteringDeadline": "母带制作截止",
+    "finalReviewDeadline": "终审截止",
+    "saveDeadlines": "保存截止日期",
+    "deadlinesSaved": "截止日期已保存",
+    "webhookTitle": "Webhook 通知",
+    "webhookUrl": "Webhook URL",
+    "webhookEnabled": "启用 Webhook",
+    "webhookEvents": "触发事件",
+    "webhookSave": "保存 Webhook",
+    "webhookTest": "测试",
+    "webhookSaved": "Webhook 配置已保存",
+    "albumMetadata": "专辑元数据",
+    "circleName": "社团名",
+    "circleNamePlaceholder": "社团名称",
+    "catalogNumber": "品番 (Catalog No.)",
+    "catalogNumberPlaceholder": "如 BK-001",
+    "releaseDate": "发行日期",
+    "genres": "风格标签",
+    "genrePlaceholder": "输入风格后回车添加",
+    "addGenre": "添加",
+    "saveMetadata": "保存元数据",
+    "metadataSaved": "元数据已保存",
+    "coverImageLabel": "封面图",
+    "uploadCover": "上传封面图",
+    "coverUploaded": "封面图已更新"
   },
   "profile": {
     "tabs": {
@@ -331,6 +457,19 @@
     "previousVersion": "旧版本",
     "clear": "取消对比"
   },
+  "timestamp": {
+    "syntaxTitle": "时间点语法",
+    "syntaxDescription": "输入时间点或时间段后，发布后会高亮并可点击跳转播放。评论默认指向附件音频，问题描述默认指向曲目音频。",
+    "detectedTitle": "已识别的时间信息",
+    "trackAudio": "曲目音频",
+    "attachmentAudio": "附件音频",
+    "examples": {
+      "point": "单个时间点",
+      "range": "时间段，点击后从起点播放",
+      "track": "显式指定曲目音频",
+      "attachment": "显式指定附件音频"
+    }
+  },
   "issue": {
     "selected": "个问题已选",
     "statusNotePlaceholder": "描述你的修改内容（可选）",
@@ -341,6 +480,119 @@
       "resolved": "已解决",
       "disagreed": "有异议"
     }
+  },
+  "albums": {
+    "heading": "专辑管理",
+    "newAlbum": "新建专辑",
+    "noAlbums": "暂无专辑",
+    "noAlbumsHint": "等待制作人邀请",
+    "trackCount": "{n} 首曲目",
+    "pinDashboard": "固定到仪表盘",
+    "unpinDashboard": "从仪表盘移除",
+    "pinHint": "点击图钉图标可将专辑固定到仪表盘",
+    "pinHintActive": "已固定的专辑将显示在仪表盘"
+  },
+  "albumNew": {
+    "heading": "新建专辑",
+    "basicInfo": "基本信息",
+    "albumTitle": "专辑标题 *",
+    "albumTitlePlaceholder": "专辑标题",
+    "coverColor": "封面颜色",
+    "coverImageHint": "点击上传封面图",
+    "description": "描述",
+    "descriptionPlaceholder": "专辑描述（可选）",
+    "teamSection": "团队（可选）",
+    "deadlinesSection": "截止日期（可选）",
+    "createButton": "创建专辑",
+    "creating": "创建中…",
+    "titleRequired": "请输入专辑标题"
+  },
+  "albumSettings": {
+    "tabs": {
+      "info": "专辑信息",
+      "team": "团队成员",
+      "deadlines": "截止日期",
+      "checklist": "Checklist 模板",
+      "order": "曲目排序",
+      "webhook": "Webhook"
+    },
+    "info": {
+      "coverHint": "点击更换封面图",
+      "saveCover": "保存封面",
+      "coverSaved": "封面已更新",
+      "uploading": "上传中…",
+      "coverColor": "封面颜色"
+    },
+    "team": {
+      "producer": "制作人",
+      "masteringEngineer": "母带工程师",
+      "members": "成员",
+      "unassigned": "未分配",
+      "noMembers": "暂无成员",
+      "readOnlyNotice": "团队配置只能由制作人编辑"
+    },
+    "deadlines": {
+      "readOnlyNotice": "截止日期由制作人设置",
+      "notSet": "未设置"
+    },
+    "checklist": {
+      "readOnlyNotice": "Checklist 模板由制作人设置",
+      "noItems": "暂无检查项"
+    }
+  },
+  "circles": {
+    "heading": "社团管理",
+    "subheading": "管理你所属的同人社团",
+    "newCircle": "新建社团",
+    "joinCircle": "加入社团",
+    "join": "加入",
+    "inviteCode": "邀请码",
+    "inviteCodePlaceholder": "输入邀请码",
+    "noCircles": "暂无社团",
+    "noCirclesHint": "等待社团邀请，或新建一个社团",
+    "members": "成员",
+    "joinSuccess": "成功加入社团"
+  },
+  "circleNew": {
+    "heading": "新建社团",
+    "logoSection": "社团标志",
+    "logoHint": "点击上传社团 Logo（JPG / PNG，建议正方形）",
+    "basicInfo": "基本信息",
+    "name": "社团名称",
+    "namePlaceholder": "例：幻音制作组",
+    "description": "简介",
+    "descriptionPlaceholder": "社团简介…",
+    "website": "官网",
+    "websitePlaceholder": "https://…",
+    "create": "创建社团"
+  },
+  "circleDetail": {
+    "tabs": {
+      "info": "社团信息",
+      "members": "成员",
+      "invites": "邀请码"
+    },
+    "name": "社团名称",
+    "description": "简介",
+    "website": "官网",
+    "logoUpdated": "Logo 已更新",
+    "remove": "移除",
+    "memberRemoved": "成员已移除",
+    "roles": {
+      "owner": "创建者",
+      "member": "成员",
+      "mastering_engineer": "母带工程师"
+    },
+    "createInvite": "创建邀请码",
+    "inviteRole": "邀请身份",
+    "expiresDays": "有效天数",
+    "generate": "生成",
+    "active": "有效",
+    "revoked": "已撤销",
+    "expires": "到期",
+    "revoke": "撤销",
+    "noInvites": "暂无邀请码",
+    "codeCopied": "邀请码已复制"
   },
   "trackStatus": {
     "submitted": "已提交",

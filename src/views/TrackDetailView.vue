@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi } from '@/api'
-import type { Track, Issue, WorkflowEvent, TrackSourceVersion } from '@/types'
+import { trackApi, discussionApi, API_ORIGIN } from '@/api'
+import type { Track, Issue, Discussion, WorkflowEvent, TrackSourceVersion } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
+import { hashId } from '@/utils/hash'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
@@ -12,16 +13,79 @@ import StatusBadge from '@/components/workflow/StatusBadge.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
+
+// Single pass over issues — builds both number and peer-phase lookup
+const issueMetadata = computed(() => {
+  const numberMap = new Map<number, number>()
+  const peerMap = new Map<number, boolean>()
+  issues.value.forEach((issue, idx) => {
+    numberMap.set(issue.id, idx + 1)
+    peerMap.set(issue.id, issue.phase === 'peer')
+  })
+  return { numberMap, peerMap }
+})
+
+function formatTimelineEvent(event: WorkflowEvent): string {
+  const payload = event.payload ?? {}
+  const issueId = typeof payload.issue_id === 'number' ? payload.issue_id : null
+  const { numberMap, peerMap } = issueMetadata.value
+
+  const isPeer = issueId != null
+    ? peerMap.get(issueId) === true
+    : payload.phase === 'peer'
+
+  const rawName = event.actor?.display_name
+  const name = !rawName
+    ? t('trackDetail.system')
+    : isPeer && event.actor
+      ? `#${hashId(event.actor.id)}`
+      : rawName
+
+  const num = issueId != null ? (numberMap.get(issueId) ?? null) : null
+
+  switch (event.event_type) {
+    case 'issue_created':
+      return num != null
+        ? t('dashboard.timeline.issueCreated', { name, num })
+        : t('dashboard.events.issue_created', { name })
+    case 'issue_comment_added':
+      return num != null
+        ? t('dashboard.timeline.issueCommented', { name, num })
+        : t('dashboard.events.issue_comment_added', { name })
+    case 'issue_updated': {
+      const s = payload.status as string | undefined
+      if (s === 'resolved') return num != null
+        ? t('dashboard.timeline.issueResolved', { name, num })
+        : t('dashboard.events.issue_updated', { name })
+      if (s === 'will_fix') return num != null
+        ? t('dashboard.timeline.issueWillFix', { name, num })
+        : t('dashboard.events.issue_updated', { name })
+      if (s === 'disagreed') return num != null
+        ? t('dashboard.timeline.issueDisagreed', { name, num })
+        : t('dashboard.events.issue_updated', { name })
+      return num != null
+        ? t('dashboard.timeline.issueUpdated', { name, num })
+        : t('dashboard.events.issue_updated', { name })
+    }
+    default: {
+      const key = `dashboard.events.${event.event_type}`
+      if (te(key)) return t(key, { name })
+      return `${name}: ${event.event_type.replaceAll('_', ' ')}`
+    }
+  }
+}
 const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
+const discussions = ref<Discussion[]>([])
 const events = ref<WorkflowEvent[]>([])
 const sourceVersions = ref<TrackSourceVersion[]>([])
 const loading = ref(true)
-const waveformRef = ref<InstanceType<typeof WaveformPlayer>>()
+const newDiscussionContent = ref('')
+const postingDiscussion = ref(false)
 const showVersionCompare = ref(false)
 const selectedCompareVersionId = ref<number | null>(null)
 
@@ -33,6 +97,7 @@ async function loadTrack() {
     const detail = await trackApi.get(trackId.value)
     track.value = detail.track
     issues.value = detail.issues
+    discussions.value = detail.discussions ?? []
     events.value = detail.events
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
   } finally {
@@ -40,8 +105,13 @@ async function loadTrack() {
   }
 }
 
-const audioUrl = computed(() => track.value?.file_path ? `/api/tracks/${trackId.value}/audio` : '')
+const audioUrl = computed(() => track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio` : '')
 const currentCycleIssues = computed(() => issues.value.filter(issue => issue.workflow_cycle === track.value?.workflow_cycle))
+const currentWaveformIssues = computed(() => {
+  const currentVersion = track.value?.version
+  if (currentVersion == null) return currentCycleIssues.value
+  return currentCycleIssues.value.filter(issue => issue.source_version_number == null || issue.source_version_number === currentVersion)
+})
 
 const actionLabel = (action: string) => {
   const key = `trackDetail.actions.${action}`
@@ -49,7 +119,6 @@ const actionLabel = (action: string) => {
 }
 
 function onIssueSelect(issue: Issue) {
-  waveformRef.value?.seekTo(issue.time_start)
   router.push(`/issues/${issue.id}`)
 }
 
@@ -62,12 +131,40 @@ function openPrimaryAction(action: string) {
 }
 
 
+async function postDiscussion() {
+  if (!newDiscussionContent.value.trim()) return
+  postingDiscussion.value = true
+  try {
+    const d = await discussionApi.create(trackId.value, { content: newDiscussionContent.value.trim() })
+    discussions.value.push(d)
+    newDiscussionContent.value = ''
+  } finally {
+    postingDiscussion.value = false
+  }
+}
+
+function openImage(url: string) {
+  window.open(url, '_blank')
+}
+
 const currentVersionId = computed(() => track.value?.current_source_version?.id ?? null)
 const olderVersions = computed(() =>
   sourceVersions.value
     .filter(v => v.id !== currentVersionId.value)
     .sort((a, b) => b.version_number - a.version_number)
 )
+
+watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, versions, compareVersion]) => {
+  if (!currentTrack) return
+  const rawValue = Array.isArray(compareVersion) ? compareVersion[0] : compareVersion
+  if (!rawValue) return
+  const parsed = Number(rawValue)
+  if (!Number.isFinite(parsed)) return
+  if (versions.some(version => version.id === parsed)) {
+    showVersionCompare.value = true
+    selectedCompareVersionId.value = parsed
+  }
+}, { immediate: true })
 </script>
 
 <template>
@@ -81,7 +178,10 @@ const olderVersions = computed(() =>
             {{ t('trackDetail.rejectionMode', { mode: track.rejection_mode }) }}
           </span>
         </div>
-        <h1 class="text-2xl font-sans font-bold text-foreground">{{ track.title }}</h1>
+        <h1 class="text-2xl font-sans font-bold text-foreground">
+          <span v-if="track.track_number" class="text-muted-foreground font-mono">#{{ track.track_number }}</span>
+          {{ track.title }}
+        </h1>
         <p class="text-muted-foreground">
           {{ track.artist }} · source v{{ track.version }} · cycle {{ track.workflow_cycle }}
         </p>
@@ -117,21 +217,20 @@ const olderVersions = computed(() =>
           </div>
           <!-- 版本选择器 -->
           <div v-if="showVersionCompare && olderVersions.length > 0" class="flex items-center gap-2 mb-3">
-            <span class="text-xs text-gray-400">{{ t('compare.selectVersion') }}</span>
-            <select v-model="selectedCompareVersionId" class="text-xs bg-white/10 border border-white/20 rounded px-2 py-1">
+            <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+            <select v-model="selectedCompareVersionId" class="select-field-sm">
               <option :value="null">-- {{ t('compare.selectVersion') }} --</option>
               <option v-for="v in olderVersions" :key="v.id" :value="v.id">
                 V{{ v.version_number }} · {{ fmtDate(v.created_at) }}
               </option>
             </select>
-            <button v-if="selectedCompareVersionId" @click="selectedCompareVersionId = null" class="text-xs text-gray-500 hover:text-gray-300">
+            <button v-if="selectedCompareVersionId" @click="selectedCompareVersionId = null" class="text-xs text-muted-foreground hover:text-foreground">
               {{ t('compare.clear') }}
             </button>
           </div>
           <WaveformPlayer
-            ref="waveformRef"
             :audio-url="audioUrl"
-            :issues="currentCycleIssues"
+            :issues="currentWaveformIssues"
             :track-id="trackId"
             :compare-version-id="selectedCompareVersionId"
             @regionClick="onIssueSelect"
@@ -145,7 +244,59 @@ const olderVersions = computed(() =>
           <h3 class="text-sm font-sans font-semibold text-foreground mb-3">
             {{ t('trackDetail.issuesHeading', { count: currentCycleIssues.length }) }}
           </h3>
-          <IssueMarkerList :issues="currentCycleIssues" @select="onIssueSelect" />
+          <IssueMarkerList :issues="currentCycleIssues" :current-source-version-number="track.version" @select="onIssueSelect" />
+        </div>
+
+        <!-- Discussions -->
+        <div class="card space-y-4">
+          <h3 class="text-sm font-sans font-semibold text-foreground">
+            {{ t('trackDetail.discussionsHeading', { count: discussions.length }) }}
+          </h3>
+          <div v-if="discussions.length === 0" class="text-sm text-muted-foreground">
+            {{ t('trackDetail.noDiscussions') }}
+          </div>
+          <div v-else class="space-y-3">
+            <div v-for="d in discussions" :key="d.id" class="flex gap-3 py-3 border-b border-border last:border-0">
+              <div
+                class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                :style="{ backgroundColor: d.author?.avatar_color || '#6366f1' }"
+              >
+                {{ d.author?.display_name?.charAt(0) || '?' }}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-medium text-foreground">{{ d.author?.display_name || '?' }}</span>
+                  <span class="text-xs text-muted-foreground">{{ fmtDate(d.created_at) }}</span>
+                </div>
+                <p class="text-sm text-foreground mt-1 whitespace-pre-wrap">{{ d.content }}</p>
+                <div v-if="d.images?.length" class="flex gap-2 mt-2">
+                  <img
+                    v-for="img in d.images"
+                    :key="img.id"
+                    :src="img.image_url"
+                    class="h-20 rounded border border-border object-cover cursor-pointer"
+                    @click="openImage(img.image_url)"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <textarea
+              v-model="newDiscussionContent"
+              class="textarea-field flex-1 text-sm h-20"
+              :placeholder="t('trackDetail.discussionPlaceholder')"
+              @keydown.ctrl.enter="postDiscussion"
+              @keydown.meta.enter="postDiscussion"
+            />
+          </div>
+          <button
+            @click="postDiscussion"
+            :disabled="!newDiscussionContent.trim() || postingDiscussion"
+            class="btn-primary text-sm"
+          >
+            {{ postingDiscussion ? t('common.loading') : t('trackDetail.postDiscussion') }}
+          </button>
         </div>
       </div>
 
@@ -158,7 +309,7 @@ const olderVersions = computed(() =>
           </div>
           <div class="flex justify-between">
             <span class="text-muted-foreground">{{ t('trackDetail.peerReviewer') }}</span>
-            <span class="text-foreground">{{ track.peer_reviewer?.display_name || '--' }}</span>
+            <span class="text-foreground font-mono">{{ track.peer_reviewer ? `#${hashId(track.peer_reviewer.id)}` : '--' }}</span>
           </div>
           <div class="flex justify-between">
             <span class="text-muted-foreground">{{ t('trackDetail.openIssues') }}</span>
@@ -191,10 +342,10 @@ const olderVersions = computed(() =>
         <div class="card space-y-3">
           <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('trackDetail.timeline') }}</h3>
           <div v-if="events.length === 0" class="text-sm text-muted-foreground">{{ t('trackDetail.noEvents') }}</div>
-          <div v-for="event in events" :key="event.id" class="border-b border-border last:border-0 pb-3 last:pb-0">
-            <div class="text-sm text-foreground">{{ event.event_type.replaceAll('_', ' ') }}</div>
-            <div class="text-xs text-muted-foreground mt-1">
-              {{ event.actor?.display_name || t('trackDetail.system') }} · {{ fmtDate(event.created_at) }}
+          <div v-else class="max-h-80 overflow-y-auto space-y-0 -mx-1 px-1">
+            <div v-for="event in events" :key="event.id" class="border-b border-border last:border-0 py-3 first:pt-0">
+              <div class="text-sm text-foreground">{{ formatTimelineEvent(event) }}</div>
+              <div class="text-xs text-muted-foreground mt-0.5">{{ fmtDate(event.created_at) }}</div>
             </div>
           </div>
         </div>

@@ -24,6 +24,7 @@ export function mountWithPlugins(component: unknown, options: Record<string, unk
       plugins: [pinia, i18n, ...(((options.global as any)?.plugins ?? []) as any[])],
       stubs: {
         transition: false,
+        RouterLink: { template: '<a><slot /></a>' },
         ...(options.global as any)?.stubs,
       },
       ...(options.global as any),

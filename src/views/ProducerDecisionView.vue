@@ -2,10 +2,14 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi } from '@/api'
+import { trackApi, API_ORIGIN } from '@/api'
 import type { ChecklistItem, Issue, Track } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
+import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
+import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
+import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
+import { useAudioDownload } from '@/composables/useAudioDownload'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,9 +17,10 @@ const { t } = useI18n()
 const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
-const issues = ref<Issue[]>([])
+const allCycleIssues = ref<Issue[]>([])
 const checklist = ref<ChecklistItem[]>([])
 const loading = ref(true)
+const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 
 onMounted(loadPage)
 
@@ -24,7 +29,9 @@ async function loadPage() {
   try {
     const detail = await trackApi.get(trackId.value)
     track.value = detail.track
-    issues.value = detail.issues.filter(issue => issue.workflow_cycle === detail.track.workflow_cycle)
+    allCycleIssues.value = detail.issues.filter(
+      issue => issue.workflow_cycle === detail.track.workflow_cycle,
+    )
     checklist.value = detail.checklist_items
   } finally {
     loading.value = false
@@ -33,6 +40,30 @@ async function loadPage() {
 
 const isSubmittedState = computed(() => track.value?.status === 'submitted')
 const isMasteringGateState = computed(() => track.value?.status === 'producer_mastering_gate')
+
+const audioUrl = computed(() => track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio` : '')
+
+const { downloading, downloadTrackAudio } = useAudioDownload()
+const handleDownload = () => downloadTrackAudio(audioUrl, track)
+
+const producerIssues = computed(() =>
+  allCycleIssues.value.filter(i => i.phase === 'producer'),
+)
+const waveformIssues = computed(() => {
+  const currentVersion = track.value?.version
+  if (currentVersion == null) return producerIssues.value
+  return producerIssues.value.filter(issue => issue.source_version_number == null || issue.source_version_number === currentVersion)
+})
+const peerIssues = computed(() =>
+  allCycleIssues.value.filter(i => i.phase !== 'producer'),
+)
+const openCount = computed(() => allCycleIssues.value.filter(i => i.status === 'open').length)
+const resolvedCount = computed(() => allCycleIssues.value.filter(i => i.status === 'resolved').length)
+const checklistPassedCount = computed(() => checklist.value.filter(item => item.passed).length)
+
+function onIssueSelect(issue: Issue) {
+  router.push(`/issues/${issue.id}`)
+}
 
 async function handleIntake(decision: 'accept' | 'reject_final' | 'reject_resubmittable') {
   await trackApi.intakeDecision(trackId.value, decision)
@@ -62,19 +93,19 @@ async function handleGate(decision: 'send_to_mastering' | 'request_peer_revision
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
       <div class="card text-center">
-        <div class="text-2xl font-bold text-foreground">{{ issues.length }}</div>
+        <div class="text-2xl font-bold text-foreground">{{ allCycleIssues.length }}</div>
         <div class="text-xs text-muted-foreground">{{ t('producer.cycleIssues') }}</div>
       </div>
       <div class="card text-center">
-        <div class="text-2xl font-bold text-error">{{ issues.filter(issue => issue.status === 'open').length }}</div>
+        <div class="text-2xl font-bold text-error">{{ openCount }}</div>
         <div class="text-xs text-muted-foreground">{{ t('producer.open') }}</div>
       </div>
       <div class="card text-center">
-        <div class="text-2xl font-bold text-success">{{ issues.filter(issue => issue.status === 'resolved').length }}</div>
+        <div class="text-2xl font-bold text-success">{{ resolvedCount }}</div>
         <div class="text-xs text-muted-foreground">{{ t('producer.resolved') }}</div>
       </div>
       <div class="card text-center">
-        <div class="text-2xl font-bold text-primary">{{ checklist.filter(item => item.passed).length }}/{{ checklist.length }}</div>
+        <div class="text-2xl font-bold text-primary">{{ checklistPassedCount }}/{{ checklist.length }}</div>
         <div class="text-xs text-muted-foreground">{{ t('producer.checklistPassed') }}</div>
       </div>
     </div>
@@ -90,6 +121,42 @@ async function handleGate(decision: 'send_to_mastering' | 'request_peer_revision
     </div>
 
     <template v-if="isMasteringGateState">
+      <!-- Waveform Player -->
+      <div v-if="audioUrl">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-muted-foreground">{{ t('producer.waveformHint') }}</p>
+          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+            {{ downloading ? '…' : t('common.downloadAudio') }}
+          </button>
+        </div>
+        <WaveformPlayer
+          :audio-url="audioUrl"
+          :issues="waveformIssues"
+          :selectable="true"
+          :selected-range="issueFormRef?.selectedRange ?? null"
+          @click="(t: number) => issueFormRef?.handleClick(t)"
+          @regionClick="onIssueSelect"
+          @rangeSelect="(s: number, e: number) => issueFormRef?.handleRangeSelect(s, e)"
+        />
+      </div>
+
+      <!-- Producer Issues -->
+      <IssueCreatePanel
+        ref="issueFormRef"
+        :track-id="trackId"
+        phase="producer"
+        @created="(issue: Issue) => allCycleIssues.push(issue)"
+      >
+        <template #heading>
+          <h3 class="text-sm font-sans font-semibold text-foreground">
+            {{ t('producer.producerIssuesHeading', { count: producerIssues.length }) }}
+          </h3>
+        </template>
+      </IssueCreatePanel>
+
+      <IssueMarkerList :issues="producerIssues" :current-source-version-number="track.version" @select="onIssueSelect" />
+
+      <!-- Checklist -->
       <div v-if="checklist.length > 0" class="card">
         <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('producer.checklistHeading') }}</h3>
         <div class="space-y-2">
@@ -103,10 +170,11 @@ async function handleGate(decision: 'send_to_mastering' | 'request_peer_revision
         </div>
       </div>
 
+      <!-- Peer Issue Summary -->
       <div class="card">
-        <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('producer.issueSummaryHeading') }}</h3>
+        <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('producer.peerIssueSummaryHeading') }}</h3>
         <div class="space-y-2">
-          <div v-for="issue in issues" :key="issue.id" class="flex items-center justify-between py-1">
+          <div v-for="issue in peerIssues" :key="issue.id" class="flex items-center justify-between py-1">
             <div class="flex items-center gap-2">
               <StatusBadge :status="issue.phase" type="phase" />
               <StatusBadge :status="issue.severity" type="severity" />
@@ -114,10 +182,11 @@ async function handleGate(decision: 'send_to_mastering' | 'request_peer_revision
             </div>
             <StatusBadge :status="issue.status" type="issue" />
           </div>
-          <div v-if="issues.length === 0" class="text-sm text-muted-foreground">{{ t('producer.noIssues') }}</div>
+          <div v-if="peerIssues.length === 0" class="text-sm text-muted-foreground">{{ t('producer.noIssues') }}</div>
         </div>
       </div>
 
+      <!-- Gate Decision -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <button @click="handleGate('send_to_mastering')" class="btn-primary text-sm py-3">
           {{ t('producer.sendToMastering') }}

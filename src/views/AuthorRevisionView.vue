@@ -2,10 +2,11 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { issueApi, trackApi } from '@/api'
+import { issueApi, trackApi, API_ORIGIN } from '@/api'
 import type { Issue, IssueStatus, Track, TrackSourceVersion } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
+import { useAudioDownload } from '@/composables/useAudioDownload'
 import { formatTimestamp, formatLocaleDate } from '@/utils/time'
 
 const route = useRoute()
@@ -53,7 +54,16 @@ const uploadButtonLabel = computed(() =>
     ? t('revision.submitBackToMastering')
     : t('revision.submitBackToPeer')
 )
-const audioUrl = computed(() => track.value?.file_path ? `/api/tracks/${trackId.value}/audio` : '')
+const audioUrl = computed(() => track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio` : '')
+const waveformIssues = computed(() => {
+  const currentVersion = track.value?.version
+  if (currentVersion == null) return issues.value
+  return issues.value.filter(issue => issue.source_version_number == null || issue.source_version_number === currentVersion)
+})
+
+const { downloading, downloadTrackAudio } = useAudioDownload()
+const handleDownload = () => downloadTrackAudio(audioUrl, track)
+
 const currentVersionId = computed(() => track.value?.current_source_version?.id ?? null)
 const olderVersions = computed(() =>
   sourceVersions.value
@@ -147,28 +157,33 @@ function onIssueSelectToggle(issueId: number) {
     <div v-if="audioUrl">
       <div class="flex items-center justify-between mb-2">
         <span class="text-xs text-muted-foreground">{{ t('peerReview.waveformHint') }}</span>
-        <button
-          v-if="sourceVersions.length > 1"
-          @click="showVersionCompare = !showVersionCompare"
-          class="text-xs btn-secondary px-3 py-1">
-          {{ t('compare.title') }}
-        </button>
+        <div class="flex items-center gap-2">
+          <button
+            v-if="sourceVersions.length > 1"
+            @click="showVersionCompare = !showVersionCompare"
+            class="text-xs btn-secondary px-3 py-1">
+            {{ t('compare.title') }}
+          </button>
+          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+            {{ downloading ? '…' : t('common.downloadAudio') }}
+          </button>
+        </div>
       </div>
       <div v-if="showVersionCompare && olderVersions.length > 0" class="flex items-center gap-2 mb-3">
-        <span class="text-xs text-gray-400">{{ t('compare.selectVersion') }}</span>
-        <select v-model="selectedCompareVersionId" class="text-xs bg-white/10 border border-white/20 rounded px-2 py-1">
+        <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+        <select v-model="selectedCompareVersionId" class="select-field-sm">
           <option :value="null">-- {{ t('compare.selectVersion') }} --</option>
           <option v-for="v in olderVersions" :key="v.id" :value="v.id">
             V{{ v.version_number }} · {{ formatDate(v.created_at) }}
           </option>
         </select>
-        <button v-if="selectedCompareVersionId" @click="selectedCompareVersionId = null" class="text-xs text-gray-500 hover:text-gray-300">
+        <button v-if="selectedCompareVersionId" @click="selectedCompareVersionId = null" class="text-xs text-muted-foreground hover:text-foreground">
           {{ t('compare.clear') }}
         </button>
       </div>
       <WaveformPlayer
         :audio-url="audioUrl"
-        :issues="issues"
+        :issues="waveformIssues"
         :track-id="trackId"
         :compare-version-id="selectedCompareVersionId"
       />
@@ -235,35 +250,35 @@ function onIssueSelectToggle(issueId: number) {
 
     <Transition name="slide-up">
       <div v-if="selectedIssueIds.length > 0"
-        class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 border border-white/20 rounded-2xl shadow-2xl px-5 py-3 flex items-center gap-3 z-50">
-        <span class="text-sm text-gray-400">{{ selectedIssueIds.length }} {{ t('issue.selected') }}</span>
-        <div class="h-4 w-px bg-white/20"></div>
-        <button @click="openBatchAction('will_fix')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm">
+        class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-card border border-border rounded-2xl shadow-2xl px-5 py-3 flex items-center gap-3 z-50">
+        <span class="text-sm text-muted-foreground">{{ selectedIssueIds.length }} {{ t('issue.selected') }}</span>
+        <div class="h-4 w-px bg-border"></div>
+        <button @click="openBatchAction('will_fix')" class="px-3 py-1.5 rounded-full text-sm bg-warning-bg text-warning border border-warning/30 hover:bg-warning/20 transition-colors">
           {{ t('issue.status.will_fix') }}
         </button>
-        <button @click="openBatchAction('resolved')" class="px-3 py-1.5 bg-green-600 hover:bg-green-500 rounded-lg text-sm">
+        <button @click="openBatchAction('resolved')" class="px-3 py-1.5 rounded-full text-sm bg-success-bg text-success border border-success/30 hover:bg-success/20 transition-colors">
           {{ t('issue.status.resolved') }}
         </button>
-        <button @click="selectedIssueIds = []" class="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm">
+        <button @click="selectedIssueIds = []" class="btn-secondary text-sm">
           {{ t('common.cancel') }}
         </button>
       </div>
     </Transition>
 
     <div v-if="showBatchModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div class="bg-gray-900 border border-white/10 rounded-2xl p-6 w-full max-w-md space-y-4">
+      <div class="bg-card border border-border rounded-2xl p-6 w-full max-w-md space-y-4">
         <h3 class="font-semibold text-foreground">{{ t('issue.batchStatusNote') }}</h3>
         <textarea
           v-model="batchStatusNote"
           :placeholder="t('issue.batchStatusNote')"
-          class="w-full text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-2 resize-none text-foreground"
+          class="textarea-field w-full"
           rows="3"
         ></textarea>
         <div class="flex gap-2">
-          <button @click="confirmBatchAction" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm">
+          <button @click="confirmBatchAction" class="btn-primary text-sm">
             {{ t('common.confirm') }}
           </button>
-          <button @click="showBatchModal = false" class="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm">
+          <button @click="showBatchModal = false" class="btn-secondary text-sm">
             {{ t('common.cancel') }}
           </button>
         </div>

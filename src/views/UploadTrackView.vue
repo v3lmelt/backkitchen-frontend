@@ -4,9 +4,11 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi } from '@/api'
 import type { Album } from '@/types'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
 const { t } = useI18n()
+const { error: toastError, success: toastSuccess } = useToast()
 const albums = ref<Album[]>([])
 const uploading = ref(false)
 const dragOver = ref(false)
@@ -48,19 +50,24 @@ function onDrop(e: DragEvent) {
 
 async function upload() {
   if (!selectedFile.value || !form.value.title || !form.value.artist) return
+  if (!form.value.album_id) {
+    toastError(t('upload.albumRequired'))
+    return
+  }
   uploading.value = true
   try {
     const formData = new FormData()
     formData.append('file', selectedFile.value)
     formData.append('title', form.value.title)
     formData.append('artist', form.value.artist)
-    if (form.value.album_id) formData.append('album_id', String(form.value.album_id))
+    formData.append('album_id', String(form.value.album_id))
     if (form.value.bpm) formData.append('bpm', String(form.value.bpm))
 
     const track = await trackApi.upload(formData)
+    toastSuccess(t('upload.uploadSuccess'))
     router.push(`/tracks/${track.id}`)
   } catch (err: any) {
-    alert(err.message || t('upload.uploadFailed'))
+    toastError(err.message || t('upload.uploadFailed'))
   } finally {
     uploading.value = false
   }
@@ -75,7 +82,7 @@ function formatFileSize(bytes: number): string {
 
 <template>
   <div class="max-w-2xl mx-auto space-y-6">
-    <h1 class="text-2xl font-sans font-bold text-foreground">{{ t('upload.heading') }}</h1>
+    <h1 class="text-2xl font-mono font-bold text-foreground">{{ t('upload.heading') }}</h1>
 
     <!-- Drop Zone -->
     <div
@@ -116,7 +123,7 @@ function formatFileSize(bytes: number): string {
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.album') }}</label>
-          <select v-model="form.album_id" class="input-field w-full">
+          <select v-model="form.album_id" class="select-field w-full">
             <option value="">{{ t('upload.noAlbum') }}</option>
             <option v-for="album in albums" :key="album.id" :value="album.id">
               {{ album.title }}

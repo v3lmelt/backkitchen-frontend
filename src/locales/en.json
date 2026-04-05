@@ -6,13 +6,20 @@
     "submitIssue": "Submit Issue",
     "cancel": "Cancel",
     "confirm": "Confirm",
+    "save": "Save",
+    "saved": "Saved",
     "newIssueAt": "New Issue at {time}",
     "issueTitlePlaceholder": "Issue title",
     "descriptionPlaceholder": "Description...",
     "notesOptionalPlaceholder": "Notes (optional)",
     "approved": "Approved",
     "pending": "Pending",
-    "back": "Back"
+    "back": "Back",
+    "rangeStart": "Start (s)",
+    "rangeEnd": "End (s)",
+    "requestFailed": "Request failed",
+    "downloadAudio": "Download Audio",
+    "downloadFailed": "Download failed"
   },
   "severity": {
     "critical": "Critical",
@@ -32,7 +39,9 @@
   "nav": {
     "dashboard": "Dashboard",
     "submit": "Submit",
-    "settings": "Settings"
+    "settings": "Settings",
+    "albums": "Albums",
+    "circles": "Circles"
   },
   "header": {
     "logout": "Logout",
@@ -48,6 +57,12 @@
       "finalReview": "Final Review",
       "upload": "Submit Track",
       "settings": "Album Settings",
+      "albums": "Albums",
+      "albumNew": "New Album",
+      "albumSettings": "Album Settings",
+      "circles": "Circles",
+      "circleNew": "New Circle",
+      "circleDetail": "Circle Detail",
       "profile": "Profile",
       "default": "BACK KITCHEN"
     }
@@ -67,6 +82,7 @@
     "disagreed": "Disagreed",
     "resolved": "Resolved",
     "peer": "Peer",
+    "producer_phase": "Producer",
     "mastering_phase": "Mastering",
     "final_review_phase": "Final Review"
   },
@@ -109,6 +125,12 @@
     "clearFilter": "clear",
     "submitTrack": "+ Submit Track",
     "noTracks": "No tracks found.",
+    "colNumber": "#",
+    "exportAlbum": "Export",
+    "deadlineOverdue": "{days}d overdue",
+    "deadlineToday": "Due today",
+    "deadlineDaysLeft": "{days}d left",
+    "overdueCount": "{count} overdue",
     "colTitle": "Title",
     "colArtist": "Artist",
     "colDuration": "Duration",
@@ -117,8 +139,35 @@
     "colVersion": "Version",
     "openCount": "{count} open",
     "recentActivity": "Recent Activity",
-    "eventBy": "{action} by {name}",
-    "openIssues": "{count} open issues"
+    "pinnedOnly": "Pinned only",
+    "manageAlbums": "Manage albums",
+    "noPinnedAlbums": "No albums pinned to the dashboard yet",
+    "goPin": "Pin an album",
+    "openIssues": "{count} open issues",
+    "events": {
+      "track_submitted": "{name} submitted a track",
+      "source_version_uploaded": "{name} uploaded a new source version",
+      "submission_accepted": "{name} accepted the submission",
+      "submission_rejected": "{name} rejected the submission",
+      "peer_review_finished": "{name} finished peer review",
+      "producer_mastering_gate_decided": "{name} made the mastering gate decision",
+      "mastering_revision_requested": "{name} requested source revision",
+      "master_delivery_uploaded": "{name} uploaded a master delivery",
+      "final_review_approved_by_producer": "{name} approved the final review (producer)",
+      "final_review_approved_by_submitter": "{name} approved the final review (submitter)",
+      "returned_to_mastering": "{name} returned the track to mastering",
+      "issue_created": "{name} created an issue",
+      "issue_updated": "{name} updated an issue",
+      "issue_comment_added": "{name} added a comment"
+    },
+    "timeline": {
+      "issueCreated": "{name} created issue #{num}",
+      "issueCommented": "{name} commented on issue #{num}",
+      "issueUpdated": "{name} updated issue #{num}",
+      "issueResolved": "{name} closed issue #{num}",
+      "issueWillFix": "{name} confirmed fix for issue #{num}",
+      "issueDisagreed": "{name} disputed issue #{num}"
+    }
   },
   "trackDetail": {
     "workflowStatus": "Workflow Status",
@@ -132,6 +181,10 @@
     "currentMaster": "Current Master",
     "finalApprovals": "Final approvals",
     "producer": "Producer",
+    "discussionsHeading": "Discussion ({count})",
+    "noDiscussions": "No discussions yet.",
+    "discussionPlaceholder": "Write a discussion message…",
+    "postDiscussion": "Post",
     "timeline": "Timeline",
     "noEvents": "No workflow events yet.",
     "system": "System",
@@ -149,7 +202,7 @@
   "peerReview": {
     "heading": "Peer Review: {title}",
     "subheading": "Assigned reviewer workflow for source v{version}",
-    "waveformHint": "Click the waveform to mark a peer review issue.",
+    "waveformHint": "Click to mark a point issue; drag to select a time range.",
     "issuesHeading": "Peer Issues ({count})",
     "startLabel": "Start (s)",
     "endLabel": "End (s)",
@@ -174,7 +227,8 @@
     "uploadHint": "Upload the next source version after responding to the issues above.",
     "uploading": "Uploading...",
     "submitBackToPeer": "Submit Back to Peer Review",
-    "submitBackToMastering": "Submit Back to Mastering"
+    "submitBackToMastering": "Submit Back to Mastering",
+    "staleIssuesHeading": "Prior Version Issues (reference only)"
   },
   "mastering": {
     "heading": "Mastering Review: {title}",
@@ -202,6 +256,9 @@
     "checklistHeading": "Peer Review Checklist",
     "issueSummaryHeading": "Issue Summary",
     "noIssues": "No issues raised.",
+    "waveformHint": "Click or drag on the waveform to mark producer review issues.",
+    "producerIssuesHeading": "Producer Notes ({count})",
+    "peerIssueSummaryHeading": "Peer Review Issue Summary",
     "sendToMastering": "Send to Mastering",
     "requestRevision": "Request Another Source Revision"
   },
@@ -219,14 +276,29 @@
   "issueDetail": {
     "back": "Back",
     "created": "Created {date}",
-    "willFix": "Will Fix",
+    "markFixed": "Mark as Fixed",
     "disagree": "Disagree",
     "markResolved": "Mark Resolved",
     "commentsHeading": "Comments ({count})",
     "unknown": "Unknown",
     "addCommentPlaceholder": "Add a comment...",
     "image": "Image",
-    "addComment": "Add Comment"
+    "audio": "Audio",
+    "audioMaxReached": "At most {max} audio files per comment",
+    "addComment": "Add Comment",
+    "audioContext": "Audio Location",
+    "noDescription": "No description",
+    "issueList": "Issue List ({count})",
+    "onlyUnresolved": "Only show unresolved",
+    "noVisibleIssues": "No issues match the current filter",
+    "currentIssue": "Current",
+    "unresolvedTitle": "Unresolved Issues",
+    "outdatedVersionTitle": "This issue was raised on source v{issueVersion}; the track is now on v{currentVersion}",
+    "outdatedVersionBody": "This detail view has switched to the source audio version where the issue was raised, and the marker is shown in that original context. You can still open version compare to inspect it against the current version.",
+    "outdatedVersionUnavailable": "The original source-version audio is unavailable, so this page cannot restore the marker in its original context. You can still return to the track page for the current-version view.",
+    "openVersionCompare": "Open Version Compare",
+    "outdatedWaveformHint": "The waveform is now playing the source-version audio where this issue was originally raised, with the marker restored.",
+    "outdatedWaveformUnavailable": "The source-version audio for this issue is unavailable, so the marker is hidden here."
   },
   "upload": {
     "heading": "Submit Track",
@@ -242,7 +314,9 @@
     "bpmPlaceholder": "e.g. 128",
     "uploading": "Uploading...",
     "submit": "Submit Track",
-    "uploadFailed": "Upload failed"
+    "uploadFailed": "Upload failed",
+    "uploadSuccess": "Track submitted successfully",
+    "albumRequired": "Please select an album before submitting"
   },
   "settings": {
     "heading": "Album Settings",
@@ -277,7 +351,55 @@
     "invitationSent": "Invitation sent.",
     "invitationCancelled": "Invitation cancelled.",
     "inviteErrorAlreadyMember": "User is already a member.",
-    "inviteErrorAlreadyInvited": "User already has a pending invitation."
+    "inviteErrorAlreadyInvited": "User already has a pending invitation.",
+    "checklistTemplate": "Review Checklist Template",
+    "templateItem": "Check Item",
+    "addItem": "Add Item",
+    "removeItem": "Remove",
+    "required": "Required",
+    "optional": "Optional",
+    "itemLabel": "Label",
+    "itemDescription": "Description (optional)",
+    "saveTemplate": "Save Template",
+    "resetToDefault": "Reset to Default",
+    "templateSaved": "Template saved",
+    "templateReset": "Template reset to default",
+    "templateSaveFailed": "Failed to save template",
+    "usingDefaultTemplate": "Using default template",
+    "templateItemLabelRequired": "Label cannot be empty",
+    "trackOrder": "Track Order",
+    "saveOrder": "Save Order",
+    "orderSaved": "Order saved",
+    "orderSaveFailed": "Failed to save order",
+    "dragToReorder": "Drag to reorder",
+    "deadlines": "Deadlines",
+    "albumDeadline": "Album Deadline",
+    "peerReviewDeadline": "Peer Review Deadline",
+    "masteringDeadline": "Mastering Deadline",
+    "finalReviewDeadline": "Final Review Deadline",
+    "saveDeadlines": "Save Deadlines",
+    "deadlinesSaved": "Deadlines saved",
+    "webhookTitle": "Webhook",
+    "webhookUrl": "Webhook URL",
+    "webhookEnabled": "Enable Webhook",
+    "webhookEvents": "Trigger Events",
+    "webhookSave": "Save Webhook",
+    "webhookTest": "Test",
+    "webhookSaved": "Webhook config saved",
+    "albumMetadata": "Album Metadata",
+    "circleName": "Circle Name",
+    "circleNamePlaceholder": "Circle name",
+    "catalogNumber": "Catalog Number",
+    "catalogNumberPlaceholder": "e.g. BK-001",
+    "releaseDate": "Release Date",
+    "genres": "Genres",
+    "genrePlaceholder": "Type a genre and press Enter",
+    "addGenre": "Add",
+    "saveMetadata": "Save Metadata",
+    "metadataSaved": "Metadata saved",
+    "coverImageLabel": "Cover Image",
+    "uploadCover": "Upload Cover",
+    "coverUploaded": "Cover image updated"
   },
   "invitations": {
     "title": "Album Invitations",
@@ -297,6 +419,19 @@
     "previousVersion": "Previous",
     "clear": "Clear"
   },
+  "timestamp": {
+    "syntaxTitle": "Timestamp Syntax",
+    "syntaxDescription": "Enter timestamps or ranges to create highlighted playback links after posting. Comments default to attachment audio, while issue descriptions default to track audio.",
+    "detectedTitle": "Detected time references",
+    "trackAudio": "Track audio",
+    "attachmentAudio": "Attachment audio",
+    "examples": {
+      "point": "Single timestamp",
+      "range": "Time range, plays from the start",
+      "track": "Explicitly target track audio",
+      "attachment": "Explicitly target attachment audio"
+    }
+  },
   "issue": {
     "selected": "issues selected",
     "statusNotePlaceholder": "Describe your changes (optional)",
@@ -307,6 +442,119 @@
       "resolved": "Resolved",
       "disagreed": "Disagreed"
     }
+  },
+  "albums": {
+    "heading": "Albums",
+    "newAlbum": "New Album",
+    "noAlbums": "No Albums",
+    "noAlbumsHint": "Waiting for a producer to invite you",
+    "trackCount": "{n} tracks",
+    "pinDashboard": "Pin to Dashboard",
+    "unpinDashboard": "Unpin from Dashboard",
+    "pinHint": "Click the pin icon to show an album on the dashboard",
+    "pinHintActive": "Only pinned albums are shown on the dashboard"
+  },
+  "albumNew": {
+    "heading": "New Album",
+    "basicInfo": "Basic Info",
+    "albumTitle": "Album Title *",
+    "albumTitlePlaceholder": "Album title",
+    "coverColor": "Cover Color",
+    "coverImageHint": "Click to upload cover",
+    "description": "Description",
+    "descriptionPlaceholder": "Album description (optional)",
+    "teamSection": "Team (optional)",
+    "deadlinesSection": "Deadlines (optional)",
+    "createButton": "Create Album",
+    "creating": "Creating...",
+    "titleRequired": "Please enter an album title"
+  },
+  "albumSettings": {
+    "tabs": {
+      "info": "Album Info",
+      "team": "Team",
+      "deadlines": "Deadlines",
+      "checklist": "Checklist Template",
+      "order": "Track Order",
+      "webhook": "Webhook"
+    },
+    "info": {
+      "coverHint": "Click to change cover",
+      "saveCover": "Save Cover",
+      "coverSaved": "Cover updated",
+      "uploading": "Uploading...",
+      "coverColor": "Cover Color"
+    },
+    "team": {
+      "producer": "Producer",
+      "masteringEngineer": "Mastering Engineer",
+      "members": "Members",
+      "unassigned": "Unassigned",
+      "noMembers": "No members",
+      "readOnlyNotice": "Team configuration can only be edited by the producer"
+    },
+    "deadlines": {
+      "readOnlyNotice": "Deadlines are set by the producer",
+      "notSet": "Not set"
+    },
+    "checklist": {
+      "readOnlyNotice": "Checklist template is set by the producer",
+      "noItems": "No checklist items"
+    }
+  },
+  "circles": {
+    "heading": "Circles",
+    "subheading": "Manage your doujin circles",
+    "newCircle": "New Circle",
+    "joinCircle": "Join Circle",
+    "join": "Join",
+    "inviteCode": "Invite Code",
+    "inviteCodePlaceholder": "Enter invite code",
+    "noCircles": "No circles yet",
+    "noCirclesHint": "Wait for an invite or create a new circle",
+    "members": "members",
+    "joinSuccess": "Joined circle successfully"
+  },
+  "circleNew": {
+    "heading": "New Circle",
+    "logoSection": "Circle Logo",
+    "logoHint": "Click to upload a logo (JPG / PNG, square recommended)",
+    "basicInfo": "Basic Info",
+    "name": "Circle Name",
+    "namePlaceholder": "e.g. Phantom Sound Studio",
+    "description": "Description",
+    "descriptionPlaceholder": "Circle description...",
+    "website": "Website",
+    "websitePlaceholder": "https://...",
+    "create": "Create Circle"
+  },
+  "circleDetail": {
+    "tabs": {
+      "info": "Info",
+      "members": "Members",
+      "invites": "Invite Codes"
+    },
+    "name": "Circle Name",
+    "description": "Description",
+    "website": "Website",
+    "logoUpdated": "Logo updated",
+    "remove": "Remove",
+    "memberRemoved": "Member removed",
+    "roles": {
+      "owner": "Owner",
+      "member": "Member",
+      "mastering_engineer": "Mastering Engineer"
+    },
+    "createInvite": "Create Invite Code",
+    "inviteRole": "Role",
+    "expiresDays": "Valid (days)",
+    "generate": "Generate",
+    "active": "Active",
+    "revoked": "Revoked",
+    "expires": "Expires",
+    "revoke": "Revoke",
+    "noInvites": "No invite codes yet",
+    "codeCopied": "Code copied"
   },
   "trackStatus": {
     "submitted": "Submitted",

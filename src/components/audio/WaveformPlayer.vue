@@ -39,14 +39,53 @@ const currentTime = ref(0)
 const duration = ref(0)
 const isRenderingRegions = ref(false)
 const selectionRegionId = ref<string | null>(null)
+const highlightRegionId = ref<string | null>(null)
+const activeRangeIssueId = ref<number | null>(null)
 const lastSelectionAt = ref(0)
 const activePointGroupKey = ref<string | null>(null)
 const abMode = ref<'A' | 'B'>('A')
 const isCompareMode = computed(() => !!props.compareVersionId)
+const isCompareLoading = ref(false)
+const isCompareReady = ref(false)
+const compareDuration = ref(0)
+const compareCurrentTime = ref(0)
+const activeDuration = computed(() => abMode.value === 'B' && compareDuration.value > 0 ? compareDuration.value : duration.value)
+const activeCurrentTime = computed(() => abMode.value === 'B' && compareDuration.value > 0 ? compareCurrentTime.value : currentTime.value)
 const selectionVisualColor = 'rgba(34, 211, 238, 0.28)'
-const rangeLaneHeight = 18
-const rangeLaneGap = 6
-const markerIconOffset = 18
+
+const SEVERITY_REGION_COLORS: Record<string, string> = {
+  critical: 'rgba(239,68,68,0.22)',
+  major: 'rgba(249,115,22,0.22)',
+  minor: 'rgba(234,179,8,0.22)',
+  suggestion: 'rgba(59,130,246,0.22)',
+}
+
+const RANGE_TONES: Record<string, { edge: string; fill: string; soft: string; glow: string }> = {
+  critical: {
+    edge: '#FF5C33',
+    fill: 'rgba(255, 92, 51, 0.78)',
+    soft: 'rgba(255, 92, 51, 0.30)',
+    glow: 'rgba(255, 92, 51, 0.22)',
+  },
+  major: {
+    edge: '#FF8400',
+    fill: 'rgba(255, 132, 0, 0.78)',
+    soft: 'rgba(255, 132, 0, 0.28)',
+    glow: 'rgba(255, 132, 0, 0.22)',
+  },
+  minor: {
+    edge: '#B2B2FF',
+    fill: 'rgba(178, 178, 255, 0.70)',
+    soft: 'rgba(178, 178, 255, 0.24)',
+    glow: 'rgba(178, 178, 255, 0.20)',
+  },
+  suggestion: {
+    edge: '#B8B9B6',
+    fill: 'rgba(184, 185, 182, 0.62)',
+    soft: 'rgba(184, 185, 182, 0.22)',
+    glow: 'rgba(184, 185, 182, 0.18)',
+  },
+}
 
 type MarkerStatus = 'unresolved' | 'resolved'
 
@@ -61,14 +100,11 @@ interface PointMarkerGroup {
   popoverAlign: 'left' | 'center' | 'right'
 }
 
-interface RangeMarker {
-  issue: Issue
+interface RangeLaneItem {
+  issue: Issue & { time_end: number }
   lane: number
-  left: string
-  width: string
-  top: string
-  status: MarkerStatus
 }
+
 
 function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, value))
@@ -151,56 +187,40 @@ const pointGroups = computed<PointMarkerGroup[]>(() => {
     .sort((a, b) => a.time - b.time)
 })
 
-const rangeMarkers = computed<RangeMarker[]>(() => {
-  if (!props.issues?.length || duration.value <= 0) return []
+const rangeIssues = computed(() =>
+  (props.issues ?? []).filter(
+    (i): i is Issue & { time_end: number } => i.issue_type === 'range' && i.time_end !== null,
+  ),
+)
 
-  const ranges = props.issues
-    .filter((issue): issue is Issue & { time_end: number } => issue.issue_type === 'range' && issue.time_end !== null)
-    .slice()
-    .sort((a, b) => {
-      if (a.time_start !== b.time_start) return a.time_start - b.time_start
-      if ((a.time_end ?? a.time_start) !== (b.time_end ?? b.time_start)) {
-        return (a.time_end ?? a.time_start) - (b.time_end ?? b.time_start)
+const rangeLaneItems = computed<RangeLaneItem[]>(() => {
+  const laneEnds: number[] = []
+
+  return [...rangeIssues.value]
+    .sort((a, b) => a.time_start - b.time_start || a.time_end - b.time_end)
+    .map((issue) => {
+      let lane = laneEnds.findIndex(end => issue.time_start >= end)
+      if (lane === -1) {
+        lane = laneEnds.length
+        laneEnds.push(issue.time_end)
+      } else {
+        laneEnds[lane] = issue.time_end
       }
-      return a.created_at.localeCompare(b.created_at)
+
+      return { issue, lane }
     })
-
-  const laneEndTimes: number[] = []
-  const markers: RangeMarker[] = []
-
-  for (const issue of ranges) {
-    const end = issue.time_end ?? issue.time_start
-    let lane = laneEndTimes.findIndex(laneEnd => laneEnd <= issue.time_start)
-    if (lane === -1) {
-      lane = laneEndTimes.length
-      laneEndTimes.push(end)
-    } else {
-      laneEndTimes[lane] = end
-    }
-
-    markers.push({
-      issue,
-      lane,
-      left: getMarkerPosition(issue.time_start),
-      width: getRangeWidth(issue.time_start, end),
-      top: `${markerIconOffset + lane * (rangeLaneHeight + rangeLaneGap)}px`,
-      status: getMarkerStatus([issue]),
-    })
-  }
-
-  return markers
 })
 
-const overlayHeight = computed(() => {
-  const laneCount = rangeMarkers.value.reduce((max, marker) => Math.max(max, marker.lane + 1), 0)
-  const rangeHeight = laneCount > 0 ? markerIconOffset + laneCount * rangeLaneHeight + Math.max(0, laneCount - 1) * rangeLaneGap : 0
-  return Math.max(props.height || 128, rangeHeight + 12)
-})
+const rangeLaneCount = computed(() =>
+  rangeLaneItems.value.reduce((max, item) => Math.max(max, item.lane + 1), 0),
+)
 
-const overlayBottomOffset = computed(() => `${Math.max(overlayHeight.value - (props.height || 128), 0)}px`)
-const pointLineHeight = computed(() => `${Math.max(overlayHeight.value - 28, 108)}px`)
+const overlayHeight = computed(() => props.height || 128)
 
-const hasIssues = computed(() => (props.issues?.length ?? 0) > 0)
+const hasPointIssues = computed(() => (props.issues ?? []).some(i => i.issue_type === 'point'))
+const hasRangeIssues = computed(() => rangeLaneItems.value.length > 0)
+const rangeRulerHeight = computed(() => Math.max(rangeLaneCount.value, 1) * 6)
+
 
 function togglePointGroup(groupKey: string) {
   activePointGroupKey.value = activePointGroupKey.value === groupKey ? null : groupKey
@@ -225,10 +245,120 @@ function lineClassForStatus(status: MarkerStatus) {
   return status === 'resolved' ? 'bg-success/90' : 'bg-error/90'
 }
 
-function rangeClassForStatus(status: MarkerStatus) {
-  return status === 'resolved'
-    ? 'border-success/60 bg-success/20 hover:bg-success/28'
-    : 'border-warning/70 bg-warning/25 hover:bg-warning/35'
+function severityRegionColor(severity: string): string {
+  return SEVERITY_REGION_COLORS[severity] ?? 'rgba(99,102,241,0.22)'
+}
+
+function rangeTone(severity: string) {
+  return RANGE_TONES[severity] ?? RANGE_TONES.major
+}
+
+function rangeRulerBarStyle(issue: Issue) {
+  const tone = rangeTone(issue.severity)
+  const isActive = activeRangeIssueId.value === issue.id
+  const isResolved = issue.status === 'resolved'
+
+  return {
+    background: isActive ? tone.fill : tone.soft,
+    borderBottom: `2px solid ${tone.edge}`,
+    opacity: isResolved && !isActive ? '0.5' : '1',
+  }
+}
+
+function rangeRulerTooltipStyle(issue: Issue) {
+  const tone = rangeTone(issue.severity)
+  return {
+    borderColor: tone.edge,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.32)',
+  }
+}
+
+function rangeLaneOffset(lane: number): string {
+  return `${lane * 6}px`
+}
+
+function applyCompareMode(mode: 'A' | 'B') {
+  if (!wavesurfer.value) return
+
+  if (!compareWaveSurfer.value || !isCompareReady.value) {
+    wavesurfer.value.setVolume(1)
+    wavesurfer.value.setOptions({ waveColor: '#4A4A5A', progressColor: '#22D3EE', cursorWidth: 2 })
+    return
+  }
+
+  if (mode === 'A') {
+    wavesurfer.value.setVolume(1)
+    compareWaveSurfer.value.setVolume(0)
+    wavesurfer.value.setOptions({ waveColor: '#4A4A5A', progressColor: '#22D3EE', cursorWidth: 2 })
+    compareWaveSurfer.value.setOptions({ waveColor: 'rgba(249,115,22,0.15)', progressColor: 'rgba(249,115,22,0.2)', cursorWidth: 0 })
+    return
+  }
+
+  syncCompareToPrimaryTime()
+  wavesurfer.value.setVolume(0)
+  compareWaveSurfer.value.setVolume(1)
+  wavesurfer.value.setOptions({ waveColor: 'rgba(74,74,90,0.15)', progressColor: 'rgba(34,211,238,0.2)', cursorWidth: 0 })
+  compareWaveSurfer.value.setOptions({ waveColor: '#F97316', progressColor: '#FB923C', cursorWidth: 2 })
+}
+
+function syncCompareToPrimaryTime(time = wavesurfer.value?.getCurrentTime() ?? 0) {
+  if (!compareWaveSurfer.value) return
+
+  const compDur = compareWaveSurfer.value.getDuration()
+  if (compDur <= 0) return
+
+  const targetTime = Math.min(Math.max(time, 0), compDur)
+  compareWaveSurfer.value.seekTo(targetTime / compDur)
+}
+
+function syncPrimaryToCompareTime(time: number) {
+  if (!wavesurfer.value || duration.value <= 0) return
+
+  const targetTime = Math.min(Math.max(time, 0), duration.value)
+  wavesurfer.value.seekTo(targetTime / duration.value)
+}
+
+function _removeRegionById(id: string) {
+  const region = (regionsPlugin.value as any)?.getRegions?.()?.find(
+    (r: { id: string; remove?: () => void }) => r.id === id,
+  )
+  region?.remove?.()
+}
+
+function _addHighlightRegion(issue: Issue & { time_end: number }) {
+  if (!regionsPlugin.value) return
+  const region = regionsPlugin.value.addRegion({
+    start: issue.time_start,
+    end: issue.time_end,
+    color: severityRegionColor(issue.severity),
+    drag: false,
+    resize: false,
+    id: `__hl_${issue.id}__`,
+  })
+  const el = (region as any).element as HTMLElement | undefined
+  if (el) el.style.pointerEvents = 'none'
+  highlightRegionId.value = region.id
+}
+
+function highlightIssue(issue: Issue | null) {
+  const newId = (issue?.issue_type === 'range' && issue.time_end !== null) ? issue.id : null
+  activeRangeIssueId.value = activeRangeIssueId.value === newId ? null : newId
+
+  if (highlightRegionId.value) {
+    _removeRegionById(highlightRegionId.value)
+    highlightRegionId.value = null
+  }
+  if (activeRangeIssueId.value !== null) {
+    const target = props.issues?.find(i => i.id === activeRangeIssueId.value)
+    if (target && target.issue_type === 'range' && target.time_end !== null) {
+      _addHighlightRegion(target as Issue & { time_end: number })
+    }
+  }
+}
+
+function handleTimelineClick(issue: Issue & { time_end: number }) {
+  seekTo(issue.time_start)
+  emit('regionClick', issue)  // parent's onIssueSelect will call highlightIssue
 }
 
 function getCursorElement(): HTMLElement | null {
@@ -263,18 +393,25 @@ function syncSelectedRange(region: { id: string; start: number; end: number; rem
 function renderSelectionRegion() {
   if (!regionsPlugin.value) return
   const selectedRange = props.selectedRange
+
   if (!selectedRange) {
-    selectionRegionId.value = null
+    if (selectionRegionId.value) {
+      _removeRegionById(selectionRegionId.value)
+      selectionRegionId.value = null
+    }
     const cursor = getCursorElement()
     if (cursor) cursor.style.opacity = '1'
     return
   }
 
+  // Skip re-render if a region already exists — drag/resize events keep it in sync directly.
+  // Only proceed when there is no region yet and we need to create one from the prop.
+  if (selectionRegionId.value) return
+
   const start = roundToMilliseconds(Math.min(selectedRange.start, selectedRange.end))
   const end = roundToMilliseconds(Math.max(selectedRange.start, selectedRange.end))
 
   if (end <= start) {
-    selectionRegionId.value = null
     const cursor = getCursorElement()
     if (cursor) cursor.style.opacity = '1'
     return
@@ -347,13 +484,27 @@ onMounted(async () => {
     renderIssueRegions()
   })
 
+  let lastTimeUpdateMs = 0
+  let lastInteractionMs = 0
   ws.on('timeupdate', (time: number) => {
-    currentTime.value = time
-    emit('timeupdate', time)
-    if (compareWaveSurfer.value && isCompareMode.value) {
-      const compareDuration = compareWaveSurfer.value.getDuration()
-      if (compareDuration > 0) {
-        compareWaveSurfer.value.seekTo(time / compareDuration)
+    // Throttle Vue reactive updates to ~20fps to avoid flooding the reactivity
+    // system at 60fps and causing main-thread pressure that can stutter audio.
+    const now = Date.now()
+    if (now - lastTimeUpdateMs >= 50) {
+      currentTime.value = time
+      emit('timeupdate', time)
+      lastTimeUpdateMs = now
+    }
+    // A track remains the transport master for compare mode, so keep B aligned to
+    // the same absolute timestamp after seeks and while playback is running.
+    if (compareWaveSurfer.value && isCompareMode.value && now - lastInteractionMs > 300) {
+      const compDur = compareWaveSurfer.value.getDuration()
+      if (compDur > 0) {
+        const compareTime = compareWaveSurfer.value.getCurrentTime()
+        const targetTime = Math.min(time, compDur)
+        if (Math.abs(compareTime - targetTime) > 0.15) {
+          syncCompareToPrimaryTime(time)
+        }
       }
     }
   })
@@ -364,6 +515,24 @@ onMounted(async () => {
   ws.on('click', () => {
     if (Date.now() - lastSelectionAt.value < 250) return
     emit('click', ws.getCurrentTime())
+  })
+
+  ws.on('interaction', (newTime: number) => {
+    if (compareWaveSurfer.value && isCompareMode.value) {
+      lastInteractionMs = Date.now()
+      if (abMode.value === 'B') {
+        const primaryDur = ws.getDuration()
+        const compDur = compareWaveSurfer.value.getDuration()
+        if (primaryDur > 0 && compDur > 0) {
+          const clickedRatio = Math.min(Math.max(newTime / primaryDur, 0), 1)
+          const compareTime = clickedRatio * compDur
+          syncPrimaryToCompareTime(compareTime)
+          syncCompareToPrimaryTime(compareTime)
+          return
+        }
+      }
+      syncCompareToPrimaryTime(newTime)
+    }
   })
 
   regions.on('region-clicked', (region: any, e: Event) => {
@@ -401,6 +570,7 @@ onMounted(async () => {
       throw new Error(`Failed to load audio: ${res.status}`)
     }
     const blob = await res.blob()
+    loadedAudioUrl = props.audioUrl
     await ws.loadBlob(blob)
   } catch {
     // Keep the player mounted but avoid a second unauthenticated request loop.
@@ -409,19 +579,60 @@ onMounted(async () => {
   wavesurfer.value = ws
 })
 
+// When audioUrl changes (different track/version), reload audio into the
+// existing WaveSurfer instance instead of destroying and recreating it.
+let loadedAudioUrl = ''
+watch(() => props.audioUrl, async (newUrl) => {
+  if (!newUrl || !wavesurfer.value) return
+  if (newUrl === loadedAudioUrl) return
+  loadedAudioUrl = newUrl
+  try {
+    const token = localStorage.getItem(TOKEN_KEY)
+    const res = await fetch(newUrl, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+    if (!res.ok) return
+    const blob = await res.blob()
+    await wavesurfer.value.loadBlob(blob)
+  } catch {
+    // ignore
+  }
+})
+
 function renderIssueRegions() {
   if (!regionsPlugin.value) return
   isRenderingRegions.value = true
   regionsPlugin.value.clearRegions()
   selectionRegionId.value = null
+  highlightRegionId.value = null
 
   renderSelectionRegion()
+
+  // Restore highlight if one was active
+  if (activeRangeIssueId.value !== null) {
+    const issue = props.issues?.find(i => i.id === activeRangeIssueId.value)
+    if (issue && issue.issue_type === 'range' && issue.time_end !== null) {
+      _addHighlightRegion(issue as Issue & { time_end: number })
+    } else {
+      activeRangeIssueId.value = null
+    }
+  }
 
   isRenderingRegions.value = false
 }
 
-watch(() => props.issues, renderIssueRegions, { deep: true })
-watch(() => props.selectedRange, renderIssueRegions, { deep: true })
+watch(() => props.issues, (issues) => {
+  if (activeRangeIssueId.value === null) return
+  const issue = issues?.find(i => i.id === activeRangeIssueId.value)
+  if (!issue || issue.issue_type !== 'range' || issue.time_end === null) {
+    activeRangeIssueId.value = null
+    if (highlightRegionId.value) {
+      _removeRegionById(highlightRegionId.value)
+      highlightRegionId.value = null
+    }
+  }
+})
+watch(() => props.selectedRange, renderSelectionRegion, { deep: true })
 watch(duration, () => {
   activePointGroupKey.value = null
 })
@@ -430,26 +641,62 @@ watch(() => props.compareVersionId, async (newId) => {
   if (compareWaveSurfer.value) {
     compareWaveSurfer.value.destroy()
     compareWaveSurfer.value = null
+    compareDuration.value = 0
+    compareCurrentTime.value = 0
   }
+  isCompareLoading.value = false
+  isCompareReady.value = false
   if (!newId || !props.trackId) {
     abMode.value = 'A'
-    wavesurfer.value?.setVolume(1)
+    applyCompareMode('A')
     return
   }
 
+  isCompareLoading.value = true
   await nextTick()
   const compareContainer = compareContainerRef.value
-  if (!compareContainer) return
+  if (!compareContainer) {
+    isCompareLoading.value = false
+    return
+  }
 
   const ws = WaveSurfer.create({
     container: compareContainer,
-    waveColor: 'rgba(249, 115, 22, 0.5)',
-    progressColor: 'rgba(249, 115, 22, 0.7)',
+    waveColor: 'rgba(249,115,22,0.5)',
+    progressColor: 'rgba(249,115,22,0.7)',
     height: props.height || 128,
+    barWidth: 2,
+    barGap: 1,
+    barRadius: 2,
     interact: false,
+    cursorWidth: 0,
+  })
+
+  ws.on('ready', () => {
+    compareDuration.value = ws.getDuration()
+    isCompareLoading.value = false
+    isCompareReady.value = true
+    syncCompareToPrimaryTime()
+    applyCompareMode(abMode.value)
+
+    if (wavesurfer.value?.isPlaying()) {
+      syncCompareToPrimaryTime()
+      ws.play()
+    }
+  })
+  let lastCompareUpdateMs = 0
+  ws.on('timeupdate', (t: number) => {
+    const now = Date.now()
+    if (now - lastCompareUpdateMs >= 50) {
+      compareCurrentTime.value = t
+      lastCompareUpdateMs = now
+    }
   })
 
   const compareUrl = `/api/tracks/${props.trackId}/source-versions/${newId}/audio`
+  compareWaveSurfer.value = ws
+  applyCompareMode(abMode.value)
+
   try {
     const token = localStorage.getItem(TOKEN_KEY)
     const res = await fetch(compareUrl, {
@@ -458,37 +705,55 @@ watch(() => props.compareVersionId, async (newId) => {
     if (res.ok) {
       const blob = await res.blob()
       await ws.loadBlob(blob)
+    } else {
+      isCompareLoading.value = false
     }
-  } catch {}
-
-  compareWaveSurfer.value = ws
-  if (abMode.value === 'A') {
-    ws.setVolume(0)
-  } else {
-    wavesurfer.value?.setVolume(0)
-    ws.setVolume(1)
+  } catch {
+    isCompareLoading.value = false
   }
 })
 
 watch(abMode, (mode) => {
-  if (!wavesurfer.value || !compareWaveSurfer.value) return
-  if (mode === 'A') {
-    wavesurfer.value.setVolume(1)
-    compareWaveSurfer.value.setVolume(0)
-  } else {
-    wavesurfer.value.setVolume(0)
-    compareWaveSurfer.value.setVolume(1)
-  }
+  applyCompareMode(mode)
 })
 
 function togglePlay() {
   wavesurfer.value?.playPause()
+  if (compareWaveSurfer.value && isCompareMode.value) {
+    if (wavesurfer.value?.isPlaying()) {
+      syncCompareToPrimaryTime()
+      compareWaveSurfer.value.play()
+    } else {
+      compareWaveSurfer.value.pause()
+    }
+  }
+}
+
+async function play() {
+  if (!wavesurfer.value) return
+  await wavesurfer.value.play()
+
+  if (compareWaveSurfer.value && isCompareMode.value) {
+    syncCompareToPrimaryTime()
+    await compareWaveSurfer.value.play()
+  }
 }
 
 function seekTo(time: number) {
   if (wavesurfer.value && duration.value > 0) {
     wavesurfer.value.seekTo(time / duration.value)
   }
+  if (compareWaveSurfer.value && isCompareMode.value) {
+    const compDur = compareWaveSurfer.value.getDuration()
+    if (compDur > 0) {
+      compareWaveSurfer.value.seekTo(time / compDur)
+    }
+  }
+}
+
+async function playFrom(time: number) {
+  seekTo(time)
+  await play()
 }
 
 onBeforeUnmount(() => {
@@ -496,57 +761,41 @@ onBeforeUnmount(() => {
   compareWaveSurfer.value?.destroy()
 })
 
-defineExpose({ seekTo, togglePlay })
+defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom })
 </script>
 
 <template>
   <div class="card space-y-3">
-    <div class="relative" :style="{ paddingBottom: overlayBottomOffset }">
+    <div class="relative" :style="{ paddingTop: hasPointIssues ? '24px' : '0' }">
       <div
-        v-if="hasIssues"
-        class="pointer-events-none absolute inset-x-0 top-0 z-10"
-        :style="{ height: `${overlayHeight}px` }"
+        v-if="hasPointIssues"
+        class="pointer-events-none absolute inset-x-0 top-0 z-10 overflow-visible"
+        :style="{ height: `${overlayHeight + 24}px` }"
       >
-        <button
-          v-for="marker in rangeMarkers"
-          :key="marker.issue.id"
-          type="button"
-          class="pointer-events-auto absolute rounded-md border transition-colors"
-          :class="rangeClassForStatus(marker.status)"
-          :style="{ left: marker.left, width: marker.width, top: marker.top, height: `${rangeLaneHeight}px` }"
-          @click="selectIssue(marker.issue)"
-        >
-          <component
-            :is="iconForStatus(marker.status)"
-            class="absolute -top-4 left-1 h-3.5 w-3.5 rounded-full border p-0.5"
-            :class="iconClassForStatus(marker.status)"
-          />
-        </button>
-
         <div
           v-for="group in pointGroups"
           :key="group.key"
           class="absolute top-0 flex flex-col items-center"
           :class="markerAnchorClass(group.markerAlign)"
-          :style="{ left: group.left }"
+          :style="{ left: group.left, height: '100%' }"
         >
           <button
             type="button"
-            class="pointer-events-auto flex flex-col items-center"
+            class="pointer-events-auto flex h-full flex-col items-center"
             @click="togglePointGroup(group.key)"
           >
             <component
               :is="iconForStatus(group.status)"
-              class="h-4 w-4 rounded-full border p-0.5"
+              class="h-4 w-4 shrink-0 rounded-full border p-0.5"
               :class="iconClassForStatus(group.status)"
             />
             <span
               v-if="group.issues.length > 1"
-              class="mt-1 inline-flex min-w-5 items-center justify-center rounded-full border border-border bg-card px-1 text-[10px] font-semibold leading-4 text-foreground shadow"
+              class="mt-0.5 inline-flex min-w-5 shrink-0 items-center justify-center rounded-full border border-border bg-card px-1 text-[10px] font-semibold leading-4 text-foreground shadow"
             >
               {{ group.issues.length }}
             </span>
-            <span class="mt-1 min-h-[108px] w-px" :class="lineClassForStatus(group.status)" :style="{ height: pointLineHeight }" />
+            <span class="mt-0.5 w-px flex-1" :class="lineClassForStatus(group.status)" />
           </button>
 
           <div
@@ -575,32 +824,69 @@ defineExpose({ seekTo, togglePlay })
         </div>
       </div>
 
-      <div class="relative">
+      <div class="relative" :style="{ paddingTop: hasRangeIssues && duration > 0 ? `${rangeRulerHeight + 4}px` : '0' }">
+        <!-- Range ruler bar above waveform -->
+        <div
+          v-if="hasRangeIssues && duration > 0"
+          class="absolute inset-x-0 top-0 z-10"
+          :style="{ height: `${rangeRulerHeight}px` }"
+        >
+          <button
+            v-for="item in rangeLaneItems"
+            :key="item.issue.id"
+            type="button"
+            class="group absolute min-w-[4px] cursor-pointer transition-all duration-150"
+            :class="activeRangeIssueId === item.issue.id ? 'z-10' : 'z-[1]'"
+            :style="{
+              left: getMarkerPosition(item.issue.time_start),
+              width: getRangeWidth(item.issue.time_start, item.issue.time_end),
+              bottom: rangeLaneOffset(item.lane),
+              height: '4px',
+              ...rangeRulerBarStyle(item.issue),
+            }"
+            @click.stop="handleTimelineClick(item.issue)"
+          >
+            <span
+              class="pointer-events-none absolute left-1/2 bottom-full z-20 mb-1.5 min-w-max -translate-x-1/2 whitespace-nowrap rounded-full border bg-card px-2 py-0.5 text-[11px] font-mono text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+              :class="activeRangeIssueId === item.issue.id ? 'opacity-100' : ''"
+              :style="rangeRulerTooltipStyle(item.issue)"
+            >{{ formatTime(item.issue.time_start) }} - {{ formatTime(item.issue.time_end) }}</span>
+          </button>
+        </div>
         <div
           ref="container"
-          class="relative z-0 overflow-hidden rounded-none bg-[#0D0D0D]"
+          class="relative overflow-hidden rounded-none bg-[#0D0D0D] transition-[z-index]"
+          :class="abMode === 'A' ? 'z-[2]' : 'z-0'"
           :style="{ height: `${props.height || 128}px` }"
         />
         <div
           v-if="isCompareMode"
           ref="compareContainerRef"
-          class="absolute inset-0 pointer-events-none"
+          class="absolute inset-0 pointer-events-none transition-[z-index]"
+          :class="abMode === 'B' ? 'z-[2]' : 'z-0'"
         ></div>
         <div v-if="isCompareMode" class="absolute top-2 right-2 flex items-center gap-1 bg-black/60 rounded-lg p-1 z-10">
           <button
             @click="abMode = 'A'"
-            :class="['px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'A' ? 'bg-blue-500 text-white' : 'text-gray-400 hover:text-white']">
+            :class="['px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'A' ? 'bg-primary text-background' : 'text-muted-foreground hover:text-white']">
             A
           </button>
           <button
             @click="abMode = 'B'"
-            :class="['px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'B' ? 'bg-orange-500 text-white' : 'text-gray-400 hover:text-white']">
+            :class="[
+              'px-2 py-0.5 rounded text-xs font-bold transition-colors',
+              abMode === 'B' ? 'bg-primary text-background' : 'text-muted-foreground hover:text-white',
+              isCompareLoading ? 'cursor-wait' : '',
+            ]">
             B
           </button>
-          <span class="text-xs text-gray-400 px-1">{{ abMode === 'A' ? $t('compare.currentVersion') : $t('compare.previousVersion') }}</span>
+          <span class="text-xs text-muted-foreground px-1">
+            {{ isCompareLoading ? 'Loading B...' : (abMode === 'A' ? $t('compare.currentVersion') : $t('compare.previousVersion')) }}
+          </span>
         </div>
       </div>
     </div>
+
     <div class="flex items-center gap-4">
       <button @click="togglePlay" class="text-cyan hover:text-cyan-dark transition-colors">
         <svg v-if="!isPlaying" class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
@@ -611,7 +897,7 @@ defineExpose({ seekTo, togglePlay })
         </svg>
       </button>
       <span class="text-sm text-muted-foreground font-mono">
-        {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
+        {{ formatTime(activeCurrentTime) }} / {{ formatTime(activeDuration) }}
       </span>
     </div>
   </div>

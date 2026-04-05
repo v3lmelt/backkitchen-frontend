@@ -3,8 +3,15 @@ import type {
   AlbumStats,
   AuthResponse,
   ChecklistItem,
+  ChecklistTemplateItem,
+  ChecklistTemplateRead,
+  Circle,
+  CircleSummary,
   Comment,
+  Discussion,
   Invitation,
+  InviteCode,
+  WebhookConfig,
   Issue,
   IssueStatus,
   Notification,
@@ -14,8 +21,11 @@ import type {
   User,
 } from '@/types'
 
-const BASE = '/api'
+const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL ?? '') as string
+const BASE = API_ORIGIN + '/api'
 const TOKEN_KEY = 'backkitchen_token'
+
+export { API_ORIGIN }
 
 function parseErrorDetail(detail: unknown): string {
   if (typeof detail === 'string') return detail
@@ -55,12 +65,87 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 export const albumApi = {
   list: () => request<Album[]>('/albums'),
   get: (id: number) => request<Album>(`/albums/${id}`),
-  create: (data: { title: string; description?: string; cover_color?: string }) =>
+  create: (data: {
+    title: string
+    description?: string
+    cover_color?: string
+    release_date?: string | null
+    catalog_number?: string | null
+    circle_id?: number | null
+    circle_name?: string | null
+    genres?: string[] | null
+  }) =>
     request<Album>('/albums', { method: 'POST', body: JSON.stringify(data) }),
   updateTeam: (id: number, data: { mastering_engineer_id: number | null; member_ids: number[] }) =>
     request<Album>(`/albums/${id}/team`, { method: 'PATCH', body: JSON.stringify(data) }),
   tracks: (id: number) => request<Track[]>(`/albums/${id}/tracks`),
   stats: (id: number) => request<AlbumStats>(`/albums/${id}/stats`),
+  updateDeadlines: (id: number, data: { deadline?: string | null; phase_deadlines?: Record<string, string> | null }) =>
+    request<Album>(`/albums/${id}/deadlines`, { method: 'PATCH', body: JSON.stringify(data) }),
+  getWebhook: (id: number) =>
+    request<WebhookConfig>(`/albums/${id}/webhook`),
+  updateWebhook: (id: number, data: WebhookConfig) =>
+    request<WebhookConfig>(`/albums/${id}/webhook`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  testWebhook: (id: number) =>
+    request<{ success: boolean }>(`/albums/${id}/webhook/test`, { method: 'POST' }),
+  reorderTracks: (albumId: number, trackIds: number[]) =>
+    request<Track[]>(`/albums/${albumId}/track-order`, {
+      method: 'PATCH',
+      body: JSON.stringify({ track_ids: trackIds }),
+    }),
+  updateMetadata: (id: number, data: {
+    release_date?: string | null
+    catalog_number?: string | null
+    circle_name?: string | null
+    genres?: string[] | null
+  }) =>
+    request<Album>(`/albums/${id}/metadata`, { method: 'PATCH', body: JSON.stringify(data) }),
+  uploadCover: (id: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<Album>(`/albums/${id}/cover`, { method: 'POST', body: form })
+  },
+  export: async (id: number): Promise<Blob> => {
+    const token = localStorage.getItem(TOKEN_KEY)
+    const res = await fetch(`${BASE}/albums/${id}/export`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(parseErrorDetail(body.detail) || `Export failed: ${res.status}`)
+    }
+    return res.blob()
+  },
+}
+
+export const circleApi = {
+  list: () => request<CircleSummary[]>('/circles'),
+  get: (id: number) => request<Circle>(`/circles/${id}`),
+  create: (data: { name: string; description?: string | null; website?: string | null }) =>
+    request<Circle>('/circles', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: { name?: string; description?: string | null; website?: string | null }) =>
+    request<Circle>(`/circles/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  uploadLogo: (id: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<Circle>(`/circles/${id}/logo`, { method: 'POST', body: form })
+  },
+  join: (code: string) =>
+    request<CircleSummary>('/circles/join', { method: 'POST', body: JSON.stringify({ code }) }),
+  removeMember: (circleId: number, userId: number) =>
+    request<void>(`/circles/${circleId}/members/${userId}`, { method: 'DELETE' }),
+  listInviteCodes: (circleId: number) =>
+    request<InviteCode[]>(`/circles/${circleId}/invite-codes`),
+  createInviteCode: (circleId: number, data: { role?: string; expires_in_days?: number }) =>
+    request<InviteCode>(`/circles/${circleId}/invite-codes`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  revokeInviteCode: (circleId: number, codeId: number) =>
+    request<void>(`/circles/${circleId}/invite-codes/${codeId}`, { method: 'DELETE' }),
 }
 
 export const trackApi = {
@@ -107,11 +192,14 @@ export const issueApi = {
     request<Issue>(`/issues/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   batchUpdate: (trackId: number, data: { issue_ids: number[]; status: IssueStatus; status_note?: string }) =>
     request<Issue[]>(`/tracks/${trackId}/issues/batch`, { method: 'PATCH', body: JSON.stringify(data) }),
-  addComment: (id: number, data: { content: string; images?: File[] }) => {
+  addComment: (id: number, data: { content: string; images?: File[]; audios?: File[] }) => {
     const form = new FormData()
     form.append('content', data.content)
     if (data.images) {
       for (const img of data.images) form.append('images', img)
+    }
+    if (data.audios) {
+      for (const audio of data.audios) form.append('audios', audio)
     }
     return request<Comment>(`/issues/${id}/comments`, { method: 'POST', body: form })
   },
@@ -127,6 +215,29 @@ export const checklistApi = {
   get: (trackId: number) => request<ChecklistItem[]>(`/tracks/${trackId}/checklist`),
   submit: (trackId: number, items: { label: string; passed: boolean; note?: string }[]) =>
     request<ChecklistItem[]>(`/tracks/${trackId}/checklist`, { method: 'POST', body: JSON.stringify({ items }) }),
+  getTemplate: (albumId: number) =>
+    request<ChecklistTemplateRead>(`/albums/${albumId}/checklist-template`),
+  updateTemplate: (albumId: number, items: ChecklistTemplateItem[]) =>
+    request<ChecklistTemplateRead>(`/albums/${albumId}/checklist-template`, {
+      method: 'PUT',
+      body: JSON.stringify({ items }),
+    }),
+  resetTemplate: (albumId: number) =>
+    request<void>(`/albums/${albumId}/checklist-template`, {
+      method: 'DELETE',
+    }),
+}
+
+export const discussionApi = {
+  list: (trackId: number) => request<Discussion[]>(`/tracks/${trackId}/discussions`),
+  create: (trackId: number, data: { content: string; images?: File[] }) => {
+    const form = new FormData()
+    form.append('content', data.content)
+    if (data.images) {
+      for (const img of data.images) form.append('images', img)
+    }
+    return request<Discussion>(`/tracks/${trackId}/discussions`, { method: 'POST', body: form })
+  },
 }
 
 export const userApi = {

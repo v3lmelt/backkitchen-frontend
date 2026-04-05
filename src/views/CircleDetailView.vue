@@ -1,0 +1,314 @@
+<template>
+  <div class="max-w-4xl mx-auto space-y-6">
+    <!-- loading -->
+    <div v-if="loading" class="flex items-center justify-center py-24">
+      <div class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+
+    <template v-else-if="circle">
+      <!-- header -->
+      <div class="flex items-start gap-5 mb-8">
+        <div
+          class="w-16 h-16 rounded-full overflow-hidden border border-border bg-border flex items-center justify-center shrink-0 relative group"
+          :class="{ 'cursor-pointer': isOwner }"
+          @click="isOwner && logoInputRef?.click()"
+        >
+          <img v-if="circle.logo_url" :src="circle.logo_url" alt="" class="w-full h-full object-cover" />
+          <svg v-else xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          <div v-if="isOwner" class="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+        </div>
+        <input v-if="isOwner" ref="logoInputRef" type="file" accept="image/*" class="hidden" @change="uploadLogo" />
+
+        <div class="flex-1">
+          <h1 class="text-2xl font-semibold font-mono text-foreground">{{ circle.name }}</h1>
+          <p v-if="circle.description" class="text-sm text-muted-foreground mt-1">{{ circle.description }}</p>
+          <p v-if="circle.website" class="text-xs text-primary mt-1">{{ circle.website }}</p>
+        </div>
+      </div>
+
+      <!-- tabs -->
+      <div class="flex gap-0 border-b border-border mb-6">
+        <button
+          v-for="tab in tabs"
+          :key="tab.id"
+          class="px-5 py-2.5 text-sm font-mono border-b-2 -mb-px transition-colors"
+          :class="activeTab === tab.id
+            ? 'border-primary text-primary'
+            : 'border-transparent text-muted-foreground hover:text-foreground'"
+          @click="activeTab = tab.id"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
+
+      <!-- info tab -->
+      <div v-if="activeTab === 'info'" class="flex flex-col gap-6 max-w-xl">
+        <div class="bg-card border border-border rounded-none p-6 flex flex-col gap-5">
+          <div>
+            <label class="block text-xs text-muted-foreground mb-2 font-mono">{{ t('circleDetail.name') }}</label>
+            <input
+              v-model="editForm.name"
+              type="text"
+              :disabled="!isOwner"
+              class="w-full bg-transparent border border-border rounded-full px-4 py-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary outline-none disabled:opacity-60"
+            />
+          </div>
+          <div>
+            <label class="block text-xs text-muted-foreground mb-2 font-mono">{{ t('circleDetail.description') }}</label>
+            <textarea
+              v-model="editForm.description"
+              rows="3"
+              :disabled="!isOwner"
+              class="w-full bg-transparent border border-border rounded-2xl px-4 py-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary outline-none resize-none disabled:opacity-60"
+            />
+          </div>
+          <div>
+            <label class="block text-xs text-muted-foreground mb-2 font-mono">{{ t('circleDetail.website') }}</label>
+            <input
+              v-model="editForm.website"
+              type="text"
+              :disabled="!isOwner"
+              class="w-full bg-transparent border border-border rounded-full px-4 py-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary outline-none disabled:opacity-60"
+            />
+          </div>
+          <div v-if="isOwner" class="flex justify-end">
+            <button class="btn-primary" :disabled="savingInfo" @click="saveInfo">
+              {{ savingInfo ? t('common.loading') : t('common.save') }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- members tab -->
+      <div v-if="activeTab === 'members'" class="flex flex-col gap-4 max-w-xl">
+        <div class="bg-card border border-border rounded-none">
+          <div
+            v-for="member in circle.members"
+            :key="member.id"
+            class="flex items-center gap-3 px-6 py-3 border-b border-border last:border-b-0"
+          >
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-mono font-semibold shrink-0" :style="{ backgroundColor: member.user.avatar_color }">
+              {{ member.user.display_name.charAt(0).toUpperCase() }}
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-mono text-foreground">{{ member.user.display_name }}</p>
+              <p class="text-xs text-muted-foreground">{{ member.user.username }}</p>
+            </div>
+            <span class="text-xs font-mono px-2 py-0.5 rounded-full" :class="roleBadgeClass(member.role)">
+              {{ t(`circleDetail.roles.${member.role}`) }}
+            </span>
+            <button
+              v-if="isOwner && member.user_id !== currentUserId"
+              class="text-error text-xs hover:underline"
+              @click="removeMember(member.user_id)"
+            >
+              {{ t('circleDetail.remove') }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- invite codes tab (owner only) -->
+      <div v-if="activeTab === 'invites' && isOwner" class="flex flex-col gap-6 max-w-xl">
+        <!-- create new code -->
+        <div class="bg-card border border-border rounded-none p-6 flex flex-col gap-4">
+          <h2 class="font-mono font-semibold text-sm text-foreground">{{ t('circleDetail.createInvite') }}</h2>
+          <div class="flex gap-4 items-end">
+            <div class="flex-1">
+              <label class="block text-xs text-muted-foreground mb-2 font-mono">{{ t('circleDetail.inviteRole') }}</label>
+              <select
+                v-model="newCodeRole"
+                class="w-full bg-background border border-border rounded-full px-4 py-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+              >
+                <option value="member">{{ t('circleDetail.roles.member') }}</option>
+                <option value="mastering_engineer">{{ t('circleDetail.roles.mastering_engineer') }}</option>
+              </select>
+            </div>
+            <div class="flex-1">
+              <label class="block text-xs text-muted-foreground mb-2 font-mono">{{ t('circleDetail.expiresDays') }}</label>
+              <input
+                v-model.number="newCodeDays"
+                type="number"
+                min="1"
+                max="30"
+                class="w-full bg-transparent border border-border rounded-full px-4 py-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+              />
+            </div>
+            <button class="btn-primary shrink-0" :disabled="creatingCode" @click="createInviteCode">
+              {{ creatingCode ? t('common.loading') : t('circleDetail.generate') }}
+            </button>
+          </div>
+        </div>
+
+        <!-- existing codes -->
+        <div v-if="inviteCodes.length > 0" class="bg-card border border-border rounded-none">
+          <div
+            v-for="code in inviteCodes"
+            :key="code.id"
+            class="flex items-center gap-3 px-6 py-3 border-b border-border last:border-b-0"
+          >
+            <span
+              class="font-mono text-sm select-all cursor-pointer px-3 py-1 rounded-full border transition-colors"
+              :class="code.is_active ? 'border-border text-foreground hover:border-primary' : 'border-border text-muted-foreground line-through'"
+              @click="copyCode(code.code)"
+            >
+              {{ code.code }}
+            </span>
+            <span class="text-xs font-mono px-2 py-0.5 rounded-full" :class="code.is_active ? 'bg-success-bg text-success' : 'bg-border text-muted-foreground'">
+              {{ code.is_active ? t('circleDetail.active') : t('circleDetail.revoked') }}
+            </span>
+            <span class="text-xs text-muted-foreground flex-1">
+              {{ t(`circleDetail.roles.${code.role}`) }} · {{ t('circleDetail.expires') }} {{ formatDate(code.expires_at) }}
+            </span>
+            <button v-if="code.is_active" class="text-error text-xs hover:underline" @click="revokeCode(code.id)">
+              {{ t('circleDetail.revoke') }}
+            </button>
+          </div>
+        </div>
+        <p v-else class="text-muted-foreground text-sm">{{ t('circleDetail.noInvites') }}</p>
+      </div>
+    </template>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { useAppStore } from '@/stores/app'
+import { circleApi } from '@/api'
+import type { Circle, InviteCode } from '@/types'
+import { useToast } from '@/composables/useToast'
+
+const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
+const appStore = useAppStore()
+const toast = useToast()
+
+const loading = ref(true)
+const circle = ref<Circle | null>(null)
+const inviteCodes = ref<InviteCode[]>([])
+const logoInputRef = ref<HTMLInputElement | null>(null)
+const activeTab = ref('info')
+const savingInfo = ref(false)
+const creatingCode = ref(false)
+const newCodeRole = ref('member')
+const newCodeDays = ref(7)
+
+const editForm = reactive({ name: '', description: '', website: '' })
+
+const currentUserId = computed(() => appStore.currentUser?.id)
+const isOwner = computed(() =>
+  circle.value ? circle.value.created_by === currentUserId.value : false
+)
+
+const tabs = computed(() => {
+  const base = [
+    { id: 'info', label: t('circleDetail.tabs.info') },
+    { id: 'members', label: t('circleDetail.tabs.members') },
+  ]
+  if (isOwner.value) base.push({ id: 'invites', label: t('circleDetail.tabs.invites') })
+  return base
+})
+
+onMounted(async () => {
+  const id = Number(route.params.circleId)
+  try {
+    circle.value = await circleApi.get(id)
+    editForm.name = circle.value.name
+    editForm.description = circle.value.description ?? ''
+    editForm.website = circle.value.website ?? ''
+    if (circle.value.created_by === currentUserId.value) {
+      inviteCodes.value = await circleApi.listInviteCodes(id)
+    }
+  } catch {
+    router.replace('/circles')
+  } finally {
+    loading.value = false
+  }
+})
+
+function roleBadgeClass(role: string) {
+  if (role === 'owner') return 'bg-warning-bg text-warning'
+  if (role === 'mastering_engineer') return 'bg-info-bg text-info'
+  return 'bg-border text-muted-foreground'
+}
+
+async function uploadLogo(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file || !circle.value) return
+  try {
+    circle.value = await circleApi.uploadLogo(circle.value.id, file)
+    toast.success(t('circleDetail.logoUpdated'))
+  } catch (e: any) {
+    toast.error(e.message)
+  }
+}
+
+async function saveInfo() {
+  if (!circle.value) return
+  savingInfo.value = true
+  try {
+    circle.value = await circleApi.update(circle.value.id, {
+      name: editForm.name.trim() || undefined,
+      description: editForm.description.trim() || null,
+      website: editForm.website.trim() || null,
+    })
+    toast.success(t('common.saved'))
+  } catch (e: any) {
+    toast.error(e.message)
+  } finally {
+    savingInfo.value = false
+  }
+}
+
+async function removeMember(userId: number) {
+  if (!circle.value) return
+  try {
+    await circleApi.removeMember(circle.value.id, userId)
+    circle.value.members = circle.value.members.filter(m => m.user_id !== userId)
+    toast.success(t('circleDetail.memberRemoved'))
+  } catch (e: any) {
+    toast.error(e.message)
+  }
+}
+
+async function createInviteCode() {
+  if (!circle.value) return
+  creatingCode.value = true
+  try {
+    const code = await circleApi.createInviteCode(circle.value.id, {
+      role: newCodeRole.value,
+      expires_in_days: newCodeDays.value,
+    })
+    inviteCodes.value.unshift(code)
+  } catch (e: any) {
+    toast.error(e.message)
+  } finally {
+    creatingCode.value = false
+  }
+}
+
+async function revokeCode(codeId: number) {
+  if (!circle.value) return
+  try {
+    await circleApi.revokeInviteCode(circle.value.id, codeId)
+    const item = inviteCodes.value.find(c => c.id === codeId)
+    if (item) item.is_active = false
+  } catch (e: any) {
+    toast.error(e.message)
+  }
+}
+
+async function copyCode(code: string) {
+  await navigator.clipboard.writeText(code)
+  toast.success(t('circleDetail.codeCopied'))
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString()
+}
+</script>

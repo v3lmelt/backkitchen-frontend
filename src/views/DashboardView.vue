@@ -2,21 +2,26 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, albumApi } from '@/api'
+import { trackApi, albumApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
+import { useDashboardPins } from '@/composables/useDashboardPins'
 import type { Album, AlbumStats, Track, TrackStatus, WorkflowEvent } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatRelativeTime } from '@/utils/time'
 import { TRACK_STATUS_COLORS } from '@/utils/status'
+import albumPlaceholder from '@/assets/album-placeholder.svg'
 
 const router = useRouter()
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 const appStore = useAppStore()
 const tracks = ref<Track[]>([])
 const albums = ref<Album[]>([])
 const albumStatsMap = ref<Record<number, AlbumStats>>({})
 const loading = ref(true)
 const filterStatus = ref<TrackStatus | ''>('')
+const exportingAlbum = ref<number | null>(null)
+
+const { isPinned } = useDashboardPins(appStore.currentUser?.id)
 
 function statusColor(status: string): string {
   return TRACK_STATUS_COLORS[status as TrackStatus] ?? '#6b7280'
@@ -54,19 +59,55 @@ onMounted(async () => {
   }
 })
 
+// Only pinned albums appear on the dashboard; nothing shown if nothing is pinned
+const dashboardAlbums = computed(() =>
+  albums.value.filter(a => isPinned(a.id))
+)
+
+const pinnedAlbumIds = computed(() => new Set(dashboardAlbums.value.map(a => a.id)))
+
+// Tracks scoped to pinned albums only
+const dashboardTracks = computed(() =>
+  tracks.value.filter(t => pinnedAlbumIds.value.has(t.album_id))
+)
+
 const filteredTracks = computed(() => {
-  if (!filterStatus.value) return tracks.value
-  return tracks.value.filter(track => track.status === filterStatus.value)
+  if (!filterStatus.value) return dashboardTracks.value
+  return dashboardTracks.value.filter(track => track.status === filterStatus.value)
 })
 
 const trackStats = computed(() => ({
-  total: tracks.value.length,
-  submitted: tracks.value.filter(track => track.status === 'submitted').length,
-  peer_review: tracks.value.filter(track => ['peer_review', 'peer_revision'].includes(track.status)).length,
-  mastering: tracks.value.filter(track => ['mastering', 'mastering_revision', 'final_review'].includes(track.status)).length,
-  completed: tracks.value.filter(track => track.status === 'completed').length,
-  rejected: tracks.value.filter(track => track.status === 'rejected').length,
+  total: dashboardTracks.value.length,
+  submitted: dashboardTracks.value.filter(t => t.status === 'submitted').length,
+  peer_review: dashboardTracks.value.filter(t => ['peer_review', 'peer_revision'].includes(t.status)).length,
+  mastering: dashboardTracks.value.filter(t => ['mastering', 'mastering_revision', 'final_review'].includes(t.status)).length,
+  completed: dashboardTracks.value.filter(t => t.status === 'completed').length,
+  rejected: dashboardTracks.value.filter(t => t.status === 'rejected').length,
 }))
+
+// Group tracks by album, preserving order of first appearance
+const albumMap = computed(() => new Map(albums.value.map(a => [a.id, a])))
+
+const groupedTracks = computed(() => {
+  const groups = new Map<number, Track[]>()
+  for (const track of filteredTracks.value) {
+    if (!groups.has(track.album_id)) groups.set(track.album_id, [])
+    groups.get(track.album_id)!.push(track)
+  }
+  const result: { albumId: number; albumTitle: string; tracks: Track[] }[] = []
+  const seen = new Set<number>()
+  for (const track of filteredTracks.value) {
+    if (!seen.has(track.album_id)) {
+      seen.add(track.album_id)
+      result.push({
+        albumId: track.album_id,
+        albumTitle: albumMap.value.get(track.album_id)?.title ?? `Album #${track.album_id}`,
+        tracks: groups.get(track.album_id)!,
+      })
+    }
+  }
+  return result
+})
 
 function formatDuration(seconds: number | null): string {
   if (!seconds) return '--:--'
@@ -76,8 +117,10 @@ function formatDuration(seconds: number | null): string {
 }
 
 function formatEventDescription(event: WorkflowEvent): string {
-  const action = event.event_type.replaceAll('_', ' ')
-  return event.actor ? t('dashboard.eventBy', { action, name: event.actor.display_name }) : action
+  const name = event.actor?.display_name ?? '?'
+  const key = `dashboard.events.${event.event_type}`
+  if (te(key)) return t(key, { name })
+  return event.actor ? `${name}: ${event.event_type.replaceAll('_', ' ')}` : event.event_type.replaceAll('_', ' ')
 }
 
 async function handleAccept(invitationId: number) {
@@ -90,20 +133,56 @@ async function handleAccept(invitationId: number) {
 async function handleDecline(invitationId: number) {
   await appStore.declineInvitation(invitationId)
 }
+
+function completedCount(albumId: number): number {
+  return albumStatsMap.value[albumId]?.by_status?.completed ?? 0
+}
+
+function deadlineInfo(albumId: number): { text: string; overdue: boolean } | null {
+  const stats = albumStatsMap.value[albumId]
+  if (!stats?.deadline) return null
+  const dl = new Date(stats.deadline)
+  const now = new Date()
+  const diffMs = dl.getTime() - now.getTime()
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+  if (diffDays < 0) return { text: t('dashboard.deadlineOverdue', { days: Math.abs(diffDays) }), overdue: true }
+  if (diffDays === 0) return { text: t('dashboard.deadlineToday'), overdue: true }
+  return { text: t('dashboard.deadlineDaysLeft', { days: diffDays }), overdue: false }
+}
+
+async function handleExport(albumId: number) {
+  exportingAlbum.value = albumId
+  try {
+    const blob = await albumApi.export(albumId)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${albums.value.find(al => al.id === albumId)?.title ?? 'album'}.zip`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch {
+    // error is shown by the request layer
+  } finally {
+    exportingAlbum.value = null
+  }
+}
 </script>
 
 <template>
   <div class="space-y-6">
     <div v-if="appStore.pendingInvitations.length > 0" class="card border-primary/30 bg-primary/5">
-      <h2 class="text-lg font-sans font-semibold text-foreground mb-3">{{ t('invitations.title') }}</h2>
+      <h2 class="text-lg font-mono font-semibold text-foreground mb-3">{{ t('invitations.title') }}</h2>
       <div class="space-y-3">
-        <div v-for="inv in appStore.pendingInvitations" :key="inv.id" class="flex items-center justify-between gap-4 p-3 bg-card rounded-lg border border-border">
+        <div v-for="inv in appStore.pendingInvitations" :key="inv.id" class="flex items-center justify-between gap-4 p-3 bg-card rounded-none border border-border">
           <div class="flex items-center gap-3">
-            <div
-              class="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm"
-              :style="{ backgroundColor: inv.album?.cover_color || '#8b5cf6' }"
-            >
-              {{ inv.album?.title?.charAt(0) || '?' }}
+            <div class="w-10 h-10 overflow-hidden rounded-none border border-border flex-shrink-0">
+              <img
+                :src="inv.album?.cover_image ? `${API_ORIGIN}/uploads/${inv.album.cover_image}` : albumPlaceholder"
+                :alt="inv.album?.title || ''"
+                class="w-full h-full object-cover"
+              />
             </div>
             <div>
               <div class="text-sm font-medium text-foreground">{{ inv.album?.title }}</div>
@@ -153,20 +232,56 @@ async function handleDecline(invitationId: number) {
 
     <!-- 专辑进度看板 -->
     <div v-if="albums.length > 0">
-      <h2 class="text-lg font-sans font-semibold text-foreground mb-3">{{ t('dashboard.albums') }}</h2>
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div v-for="album in albums" :key="album.id" class="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
-          <div class="h-1.5" :style="{ backgroundColor: album.cover_color }"></div>
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-mono font-semibold text-foreground">{{ t('dashboard.albums') }}</h2>
+        <RouterLink to="/albums" class="text-xs text-muted-foreground hover:text-primary transition-colors">
+          {{ t('dashboard.manageAlbums') }}
+        </RouterLink>
+      </div>
+
+      <!-- Empty state: albums exist but none are pinned -->
+      <div v-if="dashboardAlbums.length === 0" class="flex items-center justify-between p-4 bg-card border border-border rounded-none">
+        <p class="text-sm text-muted-foreground">{{ t('dashboard.noPinnedAlbums') }}</p>
+        <RouterLink to="/albums" class="text-sm text-primary hover:underline font-mono">{{ t('dashboard.goPin') }}</RouterLink>
+      </div>
+
+      <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div v-for="album in dashboardAlbums" :key="album.id" class="rounded-none border border-border bg-card overflow-hidden">
+          <!-- Cover image or placeholder — no color bar -->
+          <div class="w-full h-28 overflow-hidden">
+            <img
+              :src="album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : albumPlaceholder"
+              :alt="album.title"
+              class="w-full h-full object-cover"
+            />
+          </div>
           <div class="p-5">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="font-bold text-lg text-foreground">{{ album.title }}</h3>
-              <span v-if="albumStatsMap[album.id]?.open_issues > 0" class="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full">
-                {{ t('dashboard.openIssues', { count: albumStatsMap[album.id].open_issues }) }}
-              </span>
+            <div class="flex items-start justify-between mb-3">
+              <div class="min-w-0 flex-1 mr-3">
+                <h3 class="font-mono font-bold text-base text-foreground truncate">{{ album.title }}</h3>
+                <div v-if="album.circle_name" class="text-xs text-muted-foreground mt-0.5 truncate">{{ album.circle_name }}</div>
+              </div>
+              <div class="flex flex-col items-end gap-1 flex-shrink-0">
+                <span v-if="album.catalog_number" class="text-xs font-mono text-muted-foreground">{{ album.catalog_number }}</span>
+                <div class="flex items-center gap-1 flex-wrap justify-end">
+                  <span v-if="deadlineInfo(album.id)" class="text-xs px-2 py-0.5 rounded-full" :class="deadlineInfo(album.id)!.overdue ? 'bg-error-bg text-error' : 'bg-warning-bg text-warning'">
+                    {{ deadlineInfo(album.id)!.text }}
+                  </span>
+                  <span v-if="albumStatsMap[album.id]?.overdue_track_count" class="text-xs bg-error-bg text-error px-2 py-0.5 rounded-full">
+                    {{ t('dashboard.overdueCount', { count: albumStatsMap[album.id].overdue_track_count }) }}
+                  </span>
+                  <span v-if="albumStatsMap[album.id]?.open_issues > 0" class="text-xs bg-error-bg text-error px-2 py-0.5 rounded-full">
+                    {{ t('dashboard.openIssues', { count: albumStatsMap[album.id].open_issues }) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div v-if="album.genres?.length" class="flex flex-wrap gap-1 mb-3">
+              <span v-for="genre in album.genres" :key="genre" class="text-xs bg-info-bg text-info px-2 py-0.5 rounded-full font-mono">{{ genre }}</span>
             </div>
 
             <template v-if="albumStatsMap[album.id]">
-              <div class="flex h-2 rounded-full overflow-hidden gap-px mb-2">
+              <div class="flex h-1.5 overflow-hidden gap-px mb-2">
                 <div
                   v-for="[statusKey, count] in albumNonZeroStatuses[album.id]"
                   :key="statusKey"
@@ -174,34 +289,46 @@ async function handleDecline(invitationId: number) {
                   :title="`${statusKey}: ${count}`"
                 ></div>
               </div>
-              <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-400 mb-4">
+              <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground mb-4">
                 <span v-for="[statusKey, count] in albumNonZeroStatuses[album.id]" :key="statusKey" class="flex items-center gap-1">
                   <span class="h-2 w-2 rounded-full" :style="{ backgroundColor: statusColor(statusKey) }"></span>
                   {{ t(`status.${statusKey}`, statusKey) }} ({{ count }})
                 </span>
               </div>
-              <p class="text-xs text-gray-500 mb-4">{{ albumStatsMap[album.id].total_tracks }} {{ t('dashboard.tracks') }}</p>
+              <div class="flex items-center justify-between mb-4">
+                <p class="text-xs text-muted-foreground">{{ albumStatsMap[album.id].total_tracks }} {{ t('dashboard.tracks') }}</p>
+                <button
+                  v-if="album.producer_id === appStore.currentUser?.id && completedCount(album.id) > 0"
+                  @click.stop="handleExport(album.id)"
+                  :disabled="exportingAlbum === album.id"
+                  class="btn-secondary text-xs px-3 py-1"
+                >
+                  <template v-if="exportingAlbum === album.id">{{ t('common.loading') }}</template>
+                  <template v-else>{{ t('dashboard.exportAlbum') }} ({{ completedCount(album.id) }}/{{ albumStatsMap[album.id].total_tracks }})</template>
+                </button>
+              </div>
               <div v-if="albumStatsMap[album.id].recent_events.length > 0" class="space-y-1">
-                <p class="text-xs font-medium text-gray-400 mb-2">{{ t('dashboard.recentActivity') }}</p>
+                <p class="text-xs font-mono font-medium text-muted-foreground mb-2">{{ t('dashboard.recentActivity') }}</p>
                 <div v-for="event in albumStatsMap[album.id].recent_events.slice(0, 3)" :key="event.id"
-                  class="flex items-center gap-2 text-xs text-gray-500">
-                  <span class="h-1.5 w-1.5 rounded-full bg-gray-600 flex-shrink-0"></span>
+                  class="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span class="h-1.5 w-1.5 rounded-full bg-border flex-shrink-0"></span>
                   <span class="flex-1 truncate">{{ formatEventDescription(event) }}</span>
                   <span class="flex-shrink-0">{{ formatRelativeTime(event.created_at, locale) }}</span>
                 </div>
               </div>
             </template>
             <template v-else>
-              <p class="text-xs text-gray-500">{{ t('dashboard.tracksCount', { n: album.track_count }) }}</p>
+              <p class="text-xs text-muted-foreground">{{ t('dashboard.tracksCount', { n: album.track_count }) }}</p>
             </template>
           </div>
         </div>
       </div>
     </div>
 
+    <!-- 曲目列表（按专辑分组） -->
     <div>
       <div class="flex items-center justify-between mb-3">
-        <h2 class="text-lg font-sans font-semibold text-foreground">
+        <h2 class="text-lg font-mono font-semibold text-foreground">
           {{ t('dashboard.tracksHeading') }}
           <span v-if="filterStatus" class="text-sm font-normal text-muted-foreground ml-2">
             ({{ t('dashboard.filtered', { status: filterStatus }) }})
@@ -217,37 +344,48 @@ async function handleDecline(invitationId: number) {
       <div v-else-if="filteredTracks.length === 0" class="text-center text-muted-foreground py-12">
         {{ t('dashboard.noTracks') }}
       </div>
-      <div v-else class="bg-card border border-border rounded-none overflow-hidden">
-        <table class="w-full">
-          <thead>
-            <tr class="border-b border-border text-left text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wider">
-              <th class="px-4 py-3">{{ t('dashboard.colTitle') }}</th>
-              <th class="px-4 py-3">{{ t('dashboard.colArtist') }}</th>
-              <th class="px-4 py-3">{{ t('dashboard.colDuration') }}</th>
-              <th class="px-4 py-3">{{ t('dashboard.colStatus') }}</th>
-              <th class="px-4 py-3">{{ t('dashboard.colOpenIssues') }}</th>
-              <th class="px-4 py-3">{{ t('dashboard.colVersion') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="track in filteredTracks"
-              :key="track.id"
-              @click="router.push(`/tracks/${track.id}`)"
-              class="border-b border-border last:border-0 hover:bg-white/5 cursor-pointer transition-colors"
-            >
-              <td class="px-4 py-3 text-sm font-medium text-foreground">{{ track.title }}</td>
-              <td class="px-4 py-3 text-sm text-muted-foreground">{{ track.artist }}</td>
-              <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ formatDuration(track.duration) }}</td>
-              <td class="px-4 py-3"><StatusBadge :status="track.status" type="track" /></td>
-              <td class="px-4 py-3 text-sm text-muted-foreground">
-                <span v-if="track.open_issue_count" class="text-error">{{ t('dashboard.openCount', { count: track.open_issue_count }) }}</span>
-                <span v-else>--</span>
-              </td>
-              <td class="px-4 py-3 text-sm text-muted-foreground">v{{ track.version }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div v-else class="space-y-5">
+        <div v-for="group in groupedTracks" :key="group.albumId">
+          <!-- Album section header -->
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider flex-shrink-0">{{ group.albumTitle }}</span>
+            <div class="flex-1 h-px bg-border"></div>
+          </div>
+          <div class="bg-card border border-border rounded-none overflow-hidden">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-border text-left text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider">
+                  <th class="px-4 py-3">{{ t('dashboard.colNumber') }}</th>
+                  <th class="px-4 py-3">{{ t('dashboard.colTitle') }}</th>
+                  <th class="px-4 py-3">{{ t('dashboard.colArtist') }}</th>
+                  <th class="px-4 py-3">{{ t('dashboard.colDuration') }}</th>
+                  <th class="px-4 py-3">{{ t('dashboard.colStatus') }}</th>
+                  <th class="px-4 py-3">{{ t('dashboard.colOpenIssues') }}</th>
+                  <th class="px-4 py-3">{{ t('dashboard.colVersion') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="track in group.tracks"
+                  :key="track.id"
+                  @click="router.push(`/tracks/${track.id}`)"
+                  class="border-b border-border last:border-0 hover:bg-white/5 cursor-pointer transition-colors"
+                >
+                  <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ track.track_number || '—' }}</td>
+                  <td class="px-4 py-3 text-sm font-medium text-foreground">{{ track.title }}</td>
+                  <td class="px-4 py-3 text-sm text-muted-foreground">{{ track.artist }}</td>
+                  <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ formatDuration(track.duration) }}</td>
+                  <td class="px-4 py-3"><StatusBadge :status="track.status" type="track" /></td>
+                  <td class="px-4 py-3 text-sm text-muted-foreground">
+                    <span v-if="track.open_issue_count" class="text-error">{{ t('dashboard.openCount', { count: track.open_issue_count }) }}</span>
+                    <span v-else>--</span>
+                  </td>
+                  <td class="px-4 py-3 text-sm text-muted-foreground">v{{ track.version }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </div>
