@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { issueApi, trackApi } from '@/api'
+import { issueApi, trackApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Comment, Issue, IssueStatus } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
@@ -48,24 +48,42 @@ let loadCount = 0
 let cachedTrackId: number | null = null
 const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
 const newComment = ref('')
-const commentInputFocused = ref(false)
+const commentCursorPos = ref(0)
 const commentAudioRefs = new Map<string, HTMLAudioElement>()
 
 const audioUrl = computed(() => {
   if (!issue.value) return ''
   if (canOpenIssueSourceAudio.value) {
-    return `/api/tracks/${issue.value.track_id}/source-versions/${issue.value.source_version_id}/audio`
+    return `${API_ORIGIN}/api/tracks/${issue.value.track_id}/source-versions/${issue.value.source_version_id}/audio`
   }
-  return `/api/tracks/${issue.value.track_id}/audio`
+  return `${API_ORIGIN}/api/tracks/${issue.value.track_id}/audio`
 })
 
 function onWaveformReady() {
+  seekWaveformToIssue()
+}
+
+function seekWaveformToIssue() {
   if (!issue.value || !waveformRef.value) return
   waveformRef.value.seekTo(issue.value.time_start)
   if (issue.value.issue_type === 'range') {
     waveformRef.value.highlightIssue(issue.value)
   }
 }
+
+// When switching issues with the same audio, the WaveformPlayer persists (no
+// new "ready" event). Detect this and seek to the new issue's timestamp.
+let prevAudioUrl = ''
+watch(issueId, () => {
+  nextTick(() => {
+    const url = audioUrl.value
+    if (url && url === prevAudioUrl) {
+      seekWaveformToIssue()
+    }
+    prevAudioUrl = url
+  })
+})
+watch(audioUrl, (url) => { prevAudioUrl = url }, { immediate: true })
 const selectedImages = ref<File[]>([])
 const imagePreviewUrls = ref<string[]>([])
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -360,243 +378,243 @@ function openVersionCompare() {
               {{ t(canOpenIssueSourceAudio ? 'issueDetail.outdatedWaveformHint' : 'issueDetail.outdatedWaveformUnavailable') }}
             </div>
           </div>
-
-          <!-- Description -->
-          <div class="card">
-            <TimestampText
-              :text="issue.description"
-              class="text-sm text-foreground"
-              @activate="(reference) => playTrackReference(reference)"
-            />
-            <div class="text-xs text-muted-foreground mt-3">
-              {{ t('issueDetail.created', { date: fmtDate(issue.created_at) }) }}
-            </div>
+        <!-- Description -->
+        <div class="card">
+          <TimestampText
+            :text="issue.description"
+            class="text-sm text-foreground"
+            @activate="(reference) => playTrackReference(reference)"
+          />
+          <div class="text-xs text-muted-foreground mt-3">
+            {{ t('issueDetail.created', { date: fmtDate(issue.created_at) }) }}
           </div>
+        </div>
 
-          <!-- Status Actions -->
-          <div class="space-y-3">
-            <div v-if="issue.status === 'open' || issue.status === 'will_fix'" class="flex gap-2">
-              <button
-                @click="selectStatus('resolved')"
-                class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
-                :class="pendingStatus === 'resolved'
-                  ? 'bg-primary text-black'
-                  : 'bg-card border border-border text-foreground hover:bg-border'"
-              >
-                {{ t('issueDetail.markFixed') }}
-              </button>
-              <button
-                v-if="issue.status === 'open'"
-                @click="selectStatus('disagreed')"
-                class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
-                :class="pendingStatus === 'disagreed'
-                  ? 'bg-error-bg text-error border border-error/30'
-                  : 'bg-card border border-border text-foreground hover:bg-border'"
-              >
-                {{ t('issueDetail.disagree') }}
-              </button>
-            </div>
-            <div v-if="pendingStatus" class="space-y-2">
-              <textarea
-                v-model="statusNote"
-                :placeholder="t('issue.statusNotePlaceholder')"
-                class="textarea-field w-full"
-                rows="3"
-              ></textarea>
-              <div class="flex gap-2">
-                <button @click="confirmStatusChange" class="btn-primary text-sm">
-                  {{ t('common.confirm') }}
-                </button>
-                <button @click="cancelStatusChange" class="btn-secondary text-sm">
-                  {{ t('common.cancel') }}
-                </button>
-              </div>
-            </div>
+        <!-- Status Actions -->
+        <div class="space-y-3">
+          <div v-if="issue.status === 'open' || issue.status === 'will_fix'" class="flex gap-2">
+            <button
+              @click="selectStatus('resolved')"
+              class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
+              :class="pendingStatus === 'resolved'
+                ? 'bg-primary text-black'
+                : 'bg-card border border-border text-foreground hover:bg-border'"
+            >
+              {{ t('issueDetail.markFixed') }}
+            </button>
+            <button
+              v-if="issue.status === 'open'"
+              @click="selectStatus('disagreed')"
+              class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
+              :class="pendingStatus === 'disagreed'
+                ? 'bg-error-bg text-error border border-error/30'
+                : 'bg-card border border-border text-foreground hover:bg-border'"
+            >
+              {{ t('issueDetail.disagree') }}
+            </button>
           </div>
-
-          <!-- Comments -->
-          <div class="space-y-4">
-            <h3 class="text-sm font-sans font-semibold text-foreground">
-              {{ t('issueDetail.commentsHeading', { count: issue.comments?.length || 0 }) }}
-            </h3>
-
-            <template v-for="comment in issue.comments" :key="comment.id">
-              <div v-if="comment.is_status_note" class="rounded-lg bg-warning-bg border border-warning/20 px-3 py-2">
-                <span class="text-xs font-semibold text-warning block mb-1">{{ t('issue.revisionNote') }}</span>
-                <TimestampText
-                  :text="comment.content"
-                  class="text-sm text-foreground"
-                  :default-target="comment.audios?.length ? 'attachment' : 'track'"
-                  @activate="(reference, target) => handleCommentReference(comment, reference, target)"
-                />
-                <p class="text-xs text-muted-foreground mt-1">{{ comment.author?.display_name || t('issueDetail.unknown') }} · {{ fmtDate(comment.created_at) }}</p>
-              </div>
-              <div v-else class="card">
-                <div class="flex items-center gap-2 mb-2">
-                  <div
-                    v-if="comment.author"
-                    class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                    :style="{ backgroundColor: comment.author.avatar_color }"
-                  >
-                    {{ comment.author.display_name.charAt(0) }}
-                  </div>
-                  <span class="text-sm font-medium text-foreground">
-                    {{ comment.author?.display_name || t('issueDetail.unknown') }}
-                  </span>
-                  <span class="text-xs text-muted-foreground">{{ fmtDate(comment.created_at) }}</span>
-                </div>
-                <TimestampText
-                  :text="comment.content"
-                  class="text-sm text-foreground"
-                  :default-target="comment.audios?.length ? 'attachment' : 'track'"
-                  @activate="(reference, target) => handleCommentReference(comment, reference, target)"
-                />
-                <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-3">
-                  <a
-                    v-for="img in comment.images"
-                    :key="img.id"
-                    :href="img.image_url"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <img
-                      :src="img.image_url"
-                      class="h-20 w-20 object-cover rounded border border-border cursor-pointer hover:opacity-80 transition-opacity"
-                      alt="attachment"
-                    />
-                  </a>
-                </div>
-                <div v-if="comment.audios && comment.audios.length" class="flex flex-col gap-2 mt-3">
-                  <div
-                    v-for="(audio, index) in comment.audios"
-                    :key="audio.id"
-                    class="bg-background border border-border rounded-2xl px-4 py-3 space-y-2"
-                  >
-                    <div class="flex items-center gap-2">
-                      <svg class="w-4 h-4 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                      </svg>
-                      <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
-                      <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
-                    </div>
-                    <audio
-                      :ref="(element) => setCommentAudioRef(comment.id, index, element)"
-                      :src="audio.audio_url"
-                      controls
-                      class="w-full h-8"
-                      style="accent-color: #FF8400;"
-                    />
-                  </div>
-                </div>
-              </div>
-            </template>
-
-            <!-- New Comment -->
-            <div class="space-y-2">
-              <div class="relative">
-                <textarea
-                  v-model="newComment"
-                  class="textarea-field w-full h-20"
-                  :placeholder="t('issueDetail.addCommentPlaceholder')"
-                  @focus="commentInputFocused = true"
-                  @blur="commentInputFocused = false"
-                  @keydown.meta.enter="addComment"
-                  @keydown.ctrl.enter="addComment"
-                />
-                <TimestampSyntaxPopover
-                  :visible="commentInputFocused"
-                  :text="newComment"
-                  default-target="attachment"
-                />
-              </div>
-
-              <!-- Image previews -->
-              <div v-if="imagePreviewUrls.length" class="flex flex-wrap gap-2">
-                <div
-                  v-for="(url, i) in imagePreviewUrls"
-                  :key="i"
-                  class="relative"
-                >
-                  <img :src="url" class="h-16 w-16 object-cover rounded border border-border" alt="preview" />
-                  <button
-                    @click="removeSelectedImage(i)"
-                    class="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground rounded-full text-xs flex items-center justify-center leading-none"
-                    title="Remove"
-                  >×</button>
-                </div>
-              </div>
-
-              <!-- Audio previews -->
-              <div v-if="selectedAudios.length" class="flex flex-wrap gap-2">
-                <div
-                  v-for="(file, i) in selectedAudios"
-                  :key="i"
-                  class="flex items-center gap-1.5 bg-background border border-border rounded-full px-3 py-1"
-                >
-                  <svg class="w-3.5 h-3.5 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                  </svg>
-                  <span class="text-xs font-mono text-foreground max-w-[120px] truncate">{{ file.name }}</span>
-                  <button @click="removeSelectedAudio(i)" class="text-muted-foreground hover:text-error transition-colors leading-none">×</button>
-                </div>
-              </div>
-
-              <div class="flex items-center gap-2">
-                <input
-                  ref="fileInputRef"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  class="hidden"
-                  @change="onFileSelect"
-                />
-                <input
-                  ref="audioInputRef"
-                  type="file"
-                  :accept="AUDIO_ACCEPT"
-                  multiple
-                  class="hidden"
-                  @change="onAudioSelect"
-                />
-                <button
-                  @click="fileInputRef?.click()"
-                  class="btn-secondary text-sm inline-flex items-center gap-1"
-                >
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  {{ t('issueDetail.image') }}
-                </button>
-                <button
-                  @click="selectedAudios.length < MAX_AUDIOS && audioInputRef?.click()"
-                  :disabled="selectedAudios.length >= MAX_AUDIOS"
-                  :title="selectedAudios.length >= MAX_AUDIOS ? t('issueDetail.audioMaxReached', { max: MAX_AUDIOS }) : undefined"
-                  class="btn-secondary text-sm inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                  </svg>
-                  {{ t('issueDetail.audio') }}
-                </button>
-                <button @click="addComment" :disabled="!newComment.trim() && !selectedImages.length && !selectedAudios.length" class="btn-primary text-sm">
-                  {{ t('issueDetail.addComment') }}
-                </button>
-              </div>
+          <div v-if="pendingStatus" class="space-y-2">
+            <textarea
+              v-model="statusNote"
+              :placeholder="t('issue.statusNotePlaceholder')"
+              class="textarea-field w-full"
+              rows="3"
+            ></textarea>
+            <div class="flex gap-2">
+              <button @click="confirmStatusChange" class="btn-primary text-sm">
+                {{ t('common.confirm') }}
+              </button>
+              <button @click="cancelStatusChange" class="btn-secondary text-sm">
+                {{ t('common.cancel') }}
+              </button>
             </div>
           </div>
         </div>
+
+        <!-- Comments -->
+        <div class="space-y-4">
+          <h3 class="text-sm font-sans font-semibold text-foreground">
+            {{ t('issueDetail.commentsHeading', { count: issue.comments?.length || 0 }) }}
+          </h3>
+
+          <template v-for="comment in issue.comments" :key="comment.id">
+            <div v-if="comment.is_status_note" class="rounded-lg bg-warning-bg border border-warning/20 px-3 py-2">
+              <span class="text-xs font-semibold text-warning block mb-1">{{ t('issue.revisionNote') }}</span>
+              <TimestampText
+                :text="comment.content"
+                class="text-sm text-foreground"
+                :default-target="comment.audios?.length ? 'attachment' : 'track'"
+                @activate="(reference, target) => handleCommentReference(comment, reference, target)"
+              />
+              <p class="text-xs text-muted-foreground mt-1">{{ comment.author?.display_name || t('issueDetail.unknown') }} · {{ fmtDate(comment.created_at) }}</p>
+            </div>
+            <div v-else class="card">
+              <div class="flex items-center gap-2 mb-2">
+                <div
+                  v-if="comment.author"
+                  class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                  :style="{ backgroundColor: comment.author.avatar_color }"
+                >
+                  {{ comment.author.display_name.charAt(0) }}
+                </div>
+                <span class="text-sm font-medium text-foreground">
+                  {{ comment.author?.display_name || t('issueDetail.unknown') }}
+                </span>
+                <span class="text-xs text-muted-foreground">{{ fmtDate(comment.created_at) }}</span>
+              </div>
+              <TimestampText
+                :text="comment.content"
+                class="text-sm text-foreground"
+                :default-target="comment.audios?.length ? 'attachment' : 'track'"
+                @activate="(reference, target) => handleCommentReference(comment, reference, target)"
+              />
+              <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-3">
+                <a
+                  v-for="img in comment.images"
+                  :key="img.id"
+                  :href="img.image_url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <img
+                    :src="img.image_url"
+                    class="h-20 w-20 object-cover rounded border border-border cursor-pointer hover:opacity-80 transition-opacity"
+                    alt="attachment"
+                  />
+                </a>
+              </div>
+              <div v-if="comment.audios && comment.audios.length" class="flex flex-col gap-2 mt-3">
+                <div
+                  v-for="(audio, index) in comment.audios"
+                  :key="audio.id"
+                  class="bg-background border border-border rounded-2xl px-4 py-3 space-y-2"
+                >
+                  <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                    </svg>
+                    <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
+                    <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
+                  </div>
+                  <audio
+                    :ref="(element) => setCommentAudioRef(comment.id, index, element)"
+                    :src="audio.audio_url"
+                    controls
+                    class="w-full h-8"
+                    style="accent-color: #FF8400;"
+                  />
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- New Comment -->
+          <div class="space-y-2">
+            <div class="relative">
+              <textarea
+                v-model="newComment"
+                class="textarea-field w-full h-20 pr-8"
+                :placeholder="t('issueDetail.addCommentPlaceholder')"
+                @keydown.meta.enter="addComment"
+                @keydown.ctrl.enter="addComment"
+                @input="(e) => commentCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
+                @click="(e) => commentCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
+                @keyup="(e) => commentCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
+              />
+              <TimestampSyntaxPopover
+                :text="newComment"
+                :cursor-pos="commentCursorPos"
+                default-target="attachment"
+              />
+            </div>
+
+            <!-- Image previews -->
+            <div v-if="imagePreviewUrls.length" class="flex flex-wrap gap-2">
+              <div
+                v-for="(url, i) in imagePreviewUrls"
+                :key="i"
+                class="relative"
+              >
+                <img :src="url" class="h-16 w-16 object-cover rounded border border-border" alt="preview" />
+                <button
+                  @click="removeSelectedImage(i)"
+                  class="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground rounded-full text-xs flex items-center justify-center leading-none"
+                  title="Remove"
+                >×</button>
+              </div>
+            </div>
+
+            <!-- Audio previews -->
+            <div v-if="selectedAudios.length" class="flex flex-wrap gap-2">
+              <div
+                v-for="(file, i) in selectedAudios"
+                :key="i"
+                class="flex items-center gap-1.5 bg-background border border-border rounded-full px-3 py-1"
+              >
+                <svg class="w-3.5 h-3.5 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+                <span class="text-xs font-mono text-foreground max-w-[120px] truncate">{{ file.name }}</span>
+                <button @click="removeSelectedAudio(i)" class="text-muted-foreground hover:text-error transition-colors leading-none">×</button>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <input
+                ref="fileInputRef"
+                type="file"
+                accept="image/*"
+                multiple
+                class="hidden"
+                @change="onFileSelect"
+              />
+              <input
+                ref="audioInputRef"
+                type="file"
+                :accept="AUDIO_ACCEPT"
+                multiple
+                class="hidden"
+                @change="onAudioSelect"
+              />
+              <button
+                @click="fileInputRef?.click()"
+                class="btn-secondary text-sm inline-flex items-center gap-1"
+              >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                {{ t('issueDetail.image') }}
+              </button>
+              <button
+                @click="selectedAudios.length < MAX_AUDIOS && audioInputRef?.click()"
+                :disabled="selectedAudios.length >= MAX_AUDIOS"
+                :title="selectedAudios.length >= MAX_AUDIOS ? t('issueDetail.audioMaxReached', { max: MAX_AUDIOS }) : undefined"
+                class="btn-secondary text-sm inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+                {{ t('issueDetail.audio') }}
+              </button>
+              <button @click="addComment" :disabled="!newComment.trim() && !selectedImages.length && !selectedAudios.length" class="btn-primary text-sm">
+                {{ t('issueDetail.addComment') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
       </Transition>
 
-      <aside class="min-w-0 lg:sticky lg:top-8">
-        <div class="card space-y-4">
-          <div class="flex items-center justify-between gap-3">
+      <aside class="min-w-0 lg:sticky lg:top-0 lg:max-h-[calc(100vh-3rem)] lg:flex lg:flex-col">
+        <div class="card space-y-4 lg:flex lg:flex-col lg:overflow-hidden">
+          <div class="flex items-center justify-between gap-3 shrink-0">
             <h3 class="text-sm font-sans font-semibold text-foreground">
               {{ t('issueDetail.issueList', { count: visibleSiblingIssues.length }) }}
             </h3>
             <span class="text-xs font-mono text-muted-foreground">{{ currentSiblingIndex + 1 }} / {{ siblingIssues.length }}</span>
           </div>
 
-          <label class="flex items-center justify-between gap-3 rounded-full border border-border bg-background px-3 py-2 text-sm text-foreground cursor-pointer select-none">
+          <label class="flex items-center justify-between gap-3 rounded-full border border-border bg-background px-3 py-2 text-sm text-foreground cursor-pointer select-none shrink-0">
             <span>{{ t('issueDetail.onlyUnresolved') }}</span>
             <button
               type="button"
@@ -612,7 +630,7 @@ function openVersionCompare() {
             </button>
           </label>
 
-          <div class="space-y-2 lg:max-h-[70vh] lg:overflow-y-auto lg:pr-1">
+          <div class="space-y-2 lg:overflow-y-auto lg:pr-1 lg:min-h-0">
             <button
               v-for="(item, index) in visibleSiblingIssues"
               :key="item.id"

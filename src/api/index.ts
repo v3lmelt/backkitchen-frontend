@@ -21,8 +21,11 @@ import type {
   User,
 } from '@/types'
 
-const BASE = '/api'
+const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL ?? '') as string
+const BASE = API_ORIGIN + '/api'
 const TOKEN_KEY = 'backkitchen_token'
+
+export { API_ORIGIN }
 
 function parseErrorDetail(detail: unknown): string {
   if (typeof detail === 'string') return detail

@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi } from '@/api'
+import { trackApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Issue, Track } from '@/types'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
@@ -35,7 +35,7 @@ async function loadPage() {
   }
 }
 
-const masterAudioUrl = computed(() => track.value?.current_master_delivery ? `/api/tracks/${trackId.value}/master-audio` : '')
+const masterAudioUrl = computed(() => track.value?.current_master_delivery ? `${API_ORIGIN}/api/tracks/${trackId.value}/master-audio` : '')
 const masterDeliveryId = computed(() => track.value?.current_master_delivery?.id ?? null)
 
 const { downloading, downloadTrackAudio } = useAudioDownload()

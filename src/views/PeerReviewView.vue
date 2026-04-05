@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { checklistApi, trackApi } from '@/api'
+import { checklistApi, trackApi, API_ORIGIN } from '@/api'
 import type { ChecklistItem, ChecklistTemplateItem, Issue, Track } from '@/types'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
@@ -86,7 +86,7 @@ async function loadPage() {
   }
 }
 
-const audioUrl = computed(() => track.value?.file_path ? `/api/tracks/${trackId.value}/audio` : '')
+const audioUrl = computed(() => track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio` : '')
 const waveformIssues = computed(() => {
   const currentVersion = track.value?.version
   if (currentVersion == null) return issues.value

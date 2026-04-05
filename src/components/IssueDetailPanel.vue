@@ -24,6 +24,7 @@ const appStore = useAppStore()
 const fullIssue = ref<Issue | null>(null)
 const loading = ref(false)
 const newComment = ref('')
+const commentCursorPos = ref(0)
 const pendingStatus = ref<Exclude<IssueStatus, 'open'> | null>(null)
 const statusNote = ref('')
 const selectedImages = ref<File[]>([])
@@ -33,13 +34,13 @@ const AUDIO_ACCEPT = 'audio/mpeg,audio/wav,audio/flac,audio/aac,audio/ogg,.mp3,.
 const MAX_AUDIOS = 3
 const selectedAudios = ref<File[]>([])
 const audioInputRef = ref<HTMLInputElement | null>(null)
-const commentInputFocused = ref(false)
 const commentAudioRefs = new Map<number, HTMLAudioElement[]>()
 
 watch(() => props.issue, async (issue) => {
   pendingStatus.value = null
   statusNote.value = ''
   newComment.value = ''
+  commentCursorPos.value = 0
   imagePreviewUrls.value.forEach(url => URL.revokeObjectURL(url))
   selectedImages.value = []
   imagePreviewUrls.value = []
@@ -132,11 +133,11 @@ async function addComment() {
   if (!fullIssue.value.comments) fullIssue.value.comments = []
   fullIssue.value.comments.push(comment)
   newComment.value = ''
+  commentCursorPos.value = 0
   imagePreviewUrls.value.forEach(url => URL.revokeObjectURL(url))
   selectedImages.value = []
   imagePreviewUrls.value = []
   selectedAudios.value = []
-  commentInputFocused.value = false
   commentAudioRefs.clear()
 }
 
@@ -340,17 +341,18 @@ function removeImage(i: number) {
             <div class="relative">
               <textarea
                 v-model="newComment"
-                class="textarea-field w-full text-sm"
+                class="textarea-field w-full text-sm pr-8"
                 :placeholder="t('issueDetail.addCommentPlaceholder')"
                 rows="3"
-                @focus="commentInputFocused = true"
-                @blur="commentInputFocused = false"
                 @keydown.meta.enter="addComment"
                 @keydown.ctrl.enter="addComment"
+                @input="(e) => commentCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
+                @click="(e) => commentCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
+                @keyup="(e) => commentCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
               />
               <TimestampSyntaxPopover
-                :visible="commentInputFocused"
                 :text="newComment"
+                :cursor-pos="commentCursorPos"
                 default-target="attachment"
               />
             </div>

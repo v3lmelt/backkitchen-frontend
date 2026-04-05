@@ -2,7 +2,7 @@
 import { reactive, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import draggable from 'vuedraggable'
-import { albumApi, checklistApi, invitationApi, userApi } from '@/api'
+import { albumApi, checklistApi, invitationApi, userApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
 import type { Album, ChecklistTemplateItem, Invitation, Track, User } from '@/types'
@@ -663,7 +663,7 @@ async function saveDeadlines(albumId: number) {
                 <label class="block text-xs text-muted-foreground mb-2">{{ t('settings.coverImageLabel') }}</label>
                 <div class="flex items-center gap-3">
                   <template v-if="album.cover_image">
-                    <img :src="`/uploads/${album.cover_image}`" class="w-16 h-16 object-cover rounded-none border border-border" :alt="album.title" />
+                    <img :src="`${API_ORIGIN}/uploads/${album.cover_image}`" class="w-16 h-16 object-cover rounded-none border border-border" :alt="album.title" />
                   </template>
                   <label class="btn-secondary text-xs px-3 py-1.5 cursor-pointer">
                     {{ uploadingCoverAlbumId === album.id ? t('common.loading') : t('settings.uploadCover') }}

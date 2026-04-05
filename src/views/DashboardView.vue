@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, albumApi } from '@/api'
+import { trackApi, albumApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useDashboardPins } from '@/composables/useDashboardPins'
 import type { Album, AlbumStats, Track, TrackStatus, WorkflowEvent } from '@/types'
@@ -179,7 +179,7 @@ async function handleExport(albumId: number) {
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 overflow-hidden rounded-none border border-border flex-shrink-0">
               <img
-                :src="inv.album?.cover_image ? `/uploads/${inv.album.cover_image}` : albumPlaceholder"
+                :src="inv.album?.cover_image ? `${API_ORIGIN}/uploads/${inv.album.cover_image}` : albumPlaceholder"
                 :alt="inv.album?.title || ''"
                 class="w-full h-full object-cover"
               />
@@ -250,7 +250,7 @@ async function handleExport(albumId: number) {
           <!-- Cover image or placeholder — no color bar -->
           <div class="w-full h-28 overflow-hidden">
             <img
-              :src="album.cover_image ? `/uploads/${album.cover_image}` : albumPlaceholder"
+              :src="album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : albumPlaceholder"
               :alt="album.title"
               class="w-full h-full object-cover"
             />

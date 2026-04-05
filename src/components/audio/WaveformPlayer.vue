@@ -216,9 +216,10 @@ const rangeLaneCount = computed(() =>
 )
 
 const overlayHeight = computed(() => props.height || 128)
-const pointLineHeight = computed(() => `${Math.max((props.height || 128) - 28, 0)}px`)
 
 const hasPointIssues = computed(() => (props.issues ?? []).some(i => i.issue_type === 'point'))
+const hasRangeIssues = computed(() => rangeLaneItems.value.length > 0)
+const rangeRulerHeight = computed(() => Math.max(rangeLaneCount.value, 1) * 6)
 
 
 function togglePointGroup(groupKey: string) {
@@ -252,41 +253,28 @@ function rangeTone(severity: string) {
   return RANGE_TONES[severity] ?? RANGE_TONES.major
 }
 
-function rangeTrackStyle(issue: Issue) {
+function rangeRulerBarStyle(issue: Issue) {
   const tone = rangeTone(issue.severity)
   const isActive = activeRangeIssueId.value === issue.id
   const isResolved = issue.status === 'resolved'
 
   return {
-    background: isActive
-      ? `linear-gradient(90deg, ${tone.soft} 0%, ${tone.fill} 18%, ${tone.fill} 82%, ${tone.soft} 100%)`
-      : tone.soft,
-    borderColor: tone.edge,
-    boxShadow: isActive
-      ? `0 0 0 1px ${tone.edge}, inset 0 1px 0 rgba(255,255,255,0.16)`
-      : `0 0 0 1px ${tone.edge}, inset 0 1px 0 rgba(255,255,255,0.08)`,
-    opacity: isResolved && !isActive ? '0.72' : '1',
+    background: isActive ? tone.fill : tone.soft,
+    borderBottom: `2px solid ${tone.edge}`,
+    opacity: isResolved && !isActive ? '0.5' : '1',
   }
 }
 
-function rangeCapStyle(issue: Issue) {
-  const tone = rangeTone(issue.severity)
-  return {
-    backgroundColor: tone.edge,
-    boxShadow: `0 0 10px ${tone.glow}`,
-  }
-}
-
-function rangeTooltipStyle(issue: Issue) {
+function rangeRulerTooltipStyle(issue: Issue) {
   const tone = rangeTone(issue.severity)
   return {
     borderColor: tone.edge,
-    boxShadow: '0 6px 18px rgba(0,0,0,0.28)',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.32)',
   }
 }
 
 function rangeLaneOffset(lane: number): string {
-  return `${lane * 8}px`
+  return `${lane * 6}px`
 }
 
 function applyCompareMode(mode: 'A' | 'B') {
@@ -582,12 +570,33 @@ onMounted(async () => {
       throw new Error(`Failed to load audio: ${res.status}`)
     }
     const blob = await res.blob()
+    loadedAudioUrl = props.audioUrl
     await ws.loadBlob(blob)
   } catch {
     // Keep the player mounted but avoid a second unauthenticated request loop.
   }
 
   wavesurfer.value = ws
+})
+
+// When audioUrl changes (different track/version), reload audio into the
+// existing WaveSurfer instance instead of destroying and recreating it.
+let loadedAudioUrl = ''
+watch(() => props.audioUrl, async (newUrl) => {
+  if (!newUrl || !wavesurfer.value) return
+  if (newUrl === loadedAudioUrl) return
+  loadedAudioUrl = newUrl
+  try {
+    const token = localStorage.getItem(TOKEN_KEY)
+    const res = await fetch(newUrl, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+    if (!res.ok) return
+    const blob = await res.blob()
+    await wavesurfer.value.loadBlob(blob)
+  } catch {
+    // ignore
+  }
 })
 
 function renderIssueRegions() {
@@ -757,36 +766,36 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom })
 
 <template>
   <div class="card space-y-3">
-    <div class="relative">
+    <div class="relative" :style="{ paddingTop: hasPointIssues ? '24px' : '0' }">
       <div
         v-if="hasPointIssues"
-        class="pointer-events-none absolute inset-x-0 top-0 z-10"
-        :style="{ height: `${overlayHeight}px` }"
+        class="pointer-events-none absolute inset-x-0 top-0 z-10 overflow-visible"
+        :style="{ height: `${overlayHeight + 24}px` }"
       >
         <div
           v-for="group in pointGroups"
           :key="group.key"
           class="absolute top-0 flex flex-col items-center"
           :class="markerAnchorClass(group.markerAlign)"
-          :style="{ left: group.left }"
+          :style="{ left: group.left, height: '100%' }"
         >
           <button
             type="button"
-            class="pointer-events-auto flex flex-col items-center"
+            class="pointer-events-auto flex h-full flex-col items-center"
             @click="togglePointGroup(group.key)"
           >
             <component
               :is="iconForStatus(group.status)"
-              class="h-4 w-4 rounded-full border p-0.5"
+              class="h-4 w-4 shrink-0 rounded-full border p-0.5"
               :class="iconClassForStatus(group.status)"
             />
             <span
               v-if="group.issues.length > 1"
-              class="mt-1 inline-flex min-w-5 items-center justify-center rounded-full border border-border bg-card px-1 text-[10px] font-semibold leading-4 text-foreground shadow"
+              class="mt-0.5 inline-flex min-w-5 shrink-0 items-center justify-center rounded-full border border-border bg-card px-1 text-[10px] font-semibold leading-4 text-foreground shadow"
             >
               {{ group.issues.length }}
             </span>
-            <span class="mt-1 w-px" :class="lineClassForStatus(group.status)" :style="{ height: pointLineHeight }" />
+            <span class="mt-0.5 w-px flex-1" :class="lineClassForStatus(group.status)" />
           </button>
 
           <div
@@ -815,47 +824,41 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom })
         </div>
       </div>
 
-      <div class="relative">
+      <div class="relative" :style="{ paddingTop: hasRangeIssues && duration > 0 ? `${rangeRulerHeight + 4}px` : '0' }">
+        <!-- Range ruler bar above waveform -->
+        <div
+          v-if="hasRangeIssues && duration > 0"
+          class="absolute inset-x-0 top-0 z-10"
+          :style="{ height: `${rangeRulerHeight}px` }"
+        >
+          <button
+            v-for="item in rangeLaneItems"
+            :key="item.issue.id"
+            type="button"
+            class="group absolute min-w-[4px] cursor-pointer transition-all duration-150"
+            :class="activeRangeIssueId === item.issue.id ? 'z-10' : 'z-[1]'"
+            :style="{
+              left: getMarkerPosition(item.issue.time_start),
+              width: getRangeWidth(item.issue.time_start, item.issue.time_end),
+              bottom: rangeLaneOffset(item.lane),
+              height: '4px',
+              ...rangeRulerBarStyle(item.issue),
+            }"
+            @click.stop="handleTimelineClick(item.issue)"
+          >
+            <span
+              class="pointer-events-none absolute left-1/2 bottom-full z-20 mb-1.5 min-w-max -translate-x-1/2 whitespace-nowrap rounded-full border bg-card px-2 py-0.5 text-[11px] font-mono text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+              :class="activeRangeIssueId === item.issue.id ? 'opacity-100' : ''"
+              :style="rangeRulerTooltipStyle(item.issue)"
+            >{{ formatTime(item.issue.time_start) }} - {{ formatTime(item.issue.time_end) }}</span>
+          </button>
+        </div>
         <div
           ref="container"
           class="relative overflow-hidden rounded-none bg-[#0D0D0D] transition-[z-index]"
           :class="abMode === 'A' ? 'z-[2]' : 'z-0'"
           :style="{ height: `${props.height || 128}px` }"
         />
-        <div
-          v-if="rangeLaneItems.length > 0 && duration > 0"
-          class="pointer-events-none absolute inset-x-2 bottom-2 z-10 overflow-visible"
-          :style="{ height: `${Math.max(rangeLaneCount, 1) * 8}px` }"
-        >
-          <button
-            v-for="item in rangeLaneItems"
-            :key="item.issue.id"
-            type="button"
-            class="group pointer-events-auto absolute h-1.5 min-w-[6px] rounded-full border transition-all duration-150"
-            :class="activeRangeIssueId === item.issue.id ? 'z-10' : 'z-[1]'"
-            :style="{
-              left: getMarkerPosition(item.issue.time_start),
-              width: getRangeWidth(item.issue.time_start, item.issue.time_end),
-              bottom: rangeLaneOffset(item.lane),
-              ...rangeTrackStyle(item.issue),
-            }"
-            @click.stop="handleTimelineClick(item.issue)"
-          >
-            <span
-              class="pointer-events-none absolute left-0 top-1/2 h-2.5 w-px -translate-y-1/2"
-              :style="rangeCapStyle(item.issue)"
-            />
-            <span
-              class="pointer-events-none absolute right-0 top-1/2 h-2.5 w-px -translate-y-1/2"
-              :style="rangeCapStyle(item.issue)"
-            />
-            <span
-              class="pointer-events-none absolute left-1/2 bottom-full z-20 mb-2 min-w-max -translate-x-1/2 whitespace-nowrap rounded-full bg-card px-2 py-0.5 text-[11px] font-mono text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-              :class="activeRangeIssueId === item.issue.id ? 'opacity-100' : ''"
-              :style="rangeTooltipStyle(item.issue)"
-            >{{ formatTime(item.issue.time_start) }} - {{ formatTime(item.issue.time_end) }}</span>
-          </button>
-        </div>
         <div
           v-if="isCompareMode"
           ref="compareContainerRef"

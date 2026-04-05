@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi } from '@/api'
+import { trackApi, API_ORIGIN } from '@/api'
 import type { ChecklistItem, Issue, Track } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
@@ -41,7 +41,7 @@ async function loadPage() {
 const isSubmittedState = computed(() => track.value?.status === 'submitted')
 const isMasteringGateState = computed(() => track.value?.status === 'producer_mastering_gate')
 
-const audioUrl = computed(() => track.value?.file_path ? `/api/tracks/${trackId.value}/audio` : '')
+const audioUrl = computed(() => track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio` : '')
 
 const { downloading, downloadTrackAudio } = useAudioDownload()
 const handleDownload = () => downloadTrackAudio(audioUrl, track)

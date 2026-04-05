@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { issueApi, trackApi } from '@/api'
+import { issueApi, trackApi, API_ORIGIN } from '@/api'
 import type { Issue, IssueStatus, Track, TrackSourceVersion } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
@@ -54,7 +54,7 @@ const uploadButtonLabel = computed(() =>
     ? t('revision.submitBackToMastering')
     : t('revision.submitBackToPeer')
 )
-const audioUrl = computed(() => track.value?.file_path ? `/api/tracks/${trackId.value}/audio` : '')
+const audioUrl = computed(() => track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio` : '')
 const waveformIssues = computed(() => {
   const currentVersion = track.value?.version
   if (currentVersion == null) return issues.value

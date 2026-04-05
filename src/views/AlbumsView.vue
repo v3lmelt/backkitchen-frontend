@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { albumApi } from '@/api'
+import { albumApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useDashboardPins } from '@/composables/useDashboardPins'
 import type { Album } from '@/types'
@@ -109,7 +109,7 @@ function roleBadgeClass(album: Album): string {
           <!-- Cover image or default placeholder -->
           <div class="w-full h-32 overflow-hidden">
             <img
-              :src="album.cover_image ? `/uploads/${album.cover_image}` : albumPlaceholder"
+              :src="album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : albumPlaceholder"
               :alt="album.title"
               class="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200"
             />
