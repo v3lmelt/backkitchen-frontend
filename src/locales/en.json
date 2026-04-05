@@ -133,6 +133,8 @@
     "colVersion": "Version",
     "openCount": "{count} open",
     "recentActivity": "Recent Activity",
+    "pinnedOnly": "Pinned only",
+    "manageAlbums": "Manage albums",
     "openIssues": "{count} open issues",
     "events": {
       "track_submitted": "{name} submitted a track",
@@ -415,26 +417,42 @@
     "newAlbum": "New Album",
     "noAlbums": "No Albums",
     "noAlbumsHint": "Waiting for a producer to invite you",
-    "trackCount": "{n} tracks"
+    "trackCount": "{n} tracks",
+    "pinDashboard": "Pin to Dashboard",
+    "unpinDashboard": "Unpin from Dashboard",
+    "pinHint": "Click the pin icon to show an album on the dashboard",
+    "pinHintActive": "Only pinned albums are shown on the dashboard"
   },
   "albumNew": {
     "heading": "New Album",
+    "basicInfo": "Basic Info",
     "albumTitle": "Album Title *",
     "albumTitlePlaceholder": "Album title",
     "coverColor": "Cover Color",
+    "coverImageHint": "Click to upload cover",
     "description": "Description",
     "descriptionPlaceholder": "Album description (optional)",
+    "teamSection": "Team (optional)",
+    "deadlinesSection": "Deadlines (optional)",
     "createButton": "Create Album",
     "creating": "Creating...",
     "titleRequired": "Please enter an album title"
   },
   "albumSettings": {
     "tabs": {
+      "info": "Album Info",
       "team": "Team",
       "deadlines": "Deadlines",
       "checklist": "Checklist Template",
       "order": "Track Order",
       "webhook": "Webhook"
+    },
+    "info": {
+      "coverHint": "Click to change cover",
+      "saveCover": "Save Cover",
+      "coverSaved": "Cover updated",
+      "uploading": "Uploading...",
+      "coverColor": "Cover Color"
     },
     "team": {
       "producer": "Producer",

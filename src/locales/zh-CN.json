@@ -137,6 +137,8 @@
     "colVersion": "版本",
     "openCount": "{count} 待处理",
     "recentActivity": "近期动态",
+    "pinnedOnly": "仅显示已固定",
+    "manageAlbums": "管理专辑",
     "openIssues": "{count} 个未解决问题",
     "events": {
       "track_submitted": "{name} 提交了曲目",
@@ -453,26 +455,42 @@
     "newAlbum": "新建专辑",
     "noAlbums": "暂无专辑",
     "noAlbumsHint": "等待制作人邀请",
-    "trackCount": "{n} 首曲目"
+    "trackCount": "{n} 首曲目",
+    "pinDashboard": "固定到仪表盘",
+    "unpinDashboard": "从仪表盘移除",
+    "pinHint": "点击图钉图标可将专辑固定到仪表盘",
+    "pinHintActive": "已固定的专辑将显示在仪表盘"
   },
   "albumNew": {
     "heading": "新建专辑",
+    "basicInfo": "基本信息",
     "albumTitle": "专辑标题 *",
     "albumTitlePlaceholder": "专辑标题",
     "coverColor": "封面颜色",
+    "coverImageHint": "点击上传封面图",
     "description": "描述",
     "descriptionPlaceholder": "专辑描述（可选）",
+    "teamSection": "团队（可选）",
+    "deadlinesSection": "截止日期（可选）",
     "createButton": "创建专辑",
     "creating": "创建中…",
     "titleRequired": "请输入专辑标题"
   },
   "albumSettings": {
     "tabs": {
+      "info": "专辑信息",
       "team": "团队成员",
       "deadlines": "截止日期",
       "checklist": "Checklist 模板",
       "order": "曲目排序",
       "webhook": "Webhook"
+    },
+    "info": {
+      "coverHint": "点击更换封面图",
+      "saveCover": "保存封面",
+      "coverSaved": "封面已更新",
+      "uploading": "上传中…",
+      "coverColor": "封面颜色"
     },
     "team": {
       "producer": "制作人",

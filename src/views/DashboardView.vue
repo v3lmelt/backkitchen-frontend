@@ -4,10 +4,12 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi } from '@/api'
 import { useAppStore } from '@/stores/app'
+import { useDashboardPins } from '@/composables/useDashboardPins'
 import type { Album, AlbumStats, Track, TrackStatus, WorkflowEvent } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatRelativeTime } from '@/utils/time'
 import { TRACK_STATUS_COLORS } from '@/utils/status'
+import albumPlaceholder from '@/assets/album-placeholder.svg'
 
 const router = useRouter()
 const { t, te, locale } = useI18n()
@@ -18,6 +20,8 @@ const albumStatsMap = ref<Record<number, AlbumStats>>({})
 const loading = ref(true)
 const filterStatus = ref<TrackStatus | ''>('')
 const exportingAlbum = ref<number | null>(null)
+
+const { hasAnyPins, isPinned } = useDashboardPins(appStore.currentUser?.id)
 
 function statusColor(status: string): string {
   return TRACK_STATUS_COLORS[status as TrackStatus] ?? '#6b7280'
@@ -55,19 +59,55 @@ onMounted(async () => {
   }
 })
 
+// Albums to show: all if nothing pinned, else only pinned
+const dashboardAlbums = computed(() =>
+  hasAnyPins.value ? albums.value.filter(a => isPinned(a.id)) : albums.value
+)
+
+const pinnedAlbumIds = computed(() => new Set(dashboardAlbums.value.map(a => a.id)))
+
+// Tracks scoped to dashboard albums
+const dashboardTracks = computed(() =>
+  hasAnyPins.value ? tracks.value.filter(t => pinnedAlbumIds.value.has(t.album_id)) : tracks.value
+)
+
 const filteredTracks = computed(() => {
-  if (!filterStatus.value) return tracks.value
-  return tracks.value.filter(track => track.status === filterStatus.value)
+  if (!filterStatus.value) return dashboardTracks.value
+  return dashboardTracks.value.filter(track => track.status === filterStatus.value)
 })
 
 const trackStats = computed(() => ({
-  total: tracks.value.length,
-  submitted: tracks.value.filter(track => track.status === 'submitted').length,
-  peer_review: tracks.value.filter(track => ['peer_review', 'peer_revision'].includes(track.status)).length,
-  mastering: tracks.value.filter(track => ['mastering', 'mastering_revision', 'final_review'].includes(track.status)).length,
-  completed: tracks.value.filter(track => track.status === 'completed').length,
-  rejected: tracks.value.filter(track => track.status === 'rejected').length,
+  total: dashboardTracks.value.length,
+  submitted: dashboardTracks.value.filter(t => t.status === 'submitted').length,
+  peer_review: dashboardTracks.value.filter(t => ['peer_review', 'peer_revision'].includes(t.status)).length,
+  mastering: dashboardTracks.value.filter(t => ['mastering', 'mastering_revision', 'final_review'].includes(t.status)).length,
+  completed: dashboardTracks.value.filter(t => t.status === 'completed').length,
+  rejected: dashboardTracks.value.filter(t => t.status === 'rejected').length,
 }))
+
+// Group tracks by album, preserving order of first appearance
+const albumMap = computed(() => new Map(albums.value.map(a => [a.id, a])))
+
+const groupedTracks = computed(() => {
+  const groups = new Map<number, Track[]>()
+  for (const track of filteredTracks.value) {
+    if (!groups.has(track.album_id)) groups.set(track.album_id, [])
+    groups.get(track.album_id)!.push(track)
+  }
+  const result: { albumId: number; albumTitle: string; tracks: Track[] }[] = []
+  const seen = new Set<number>()
+  for (const track of filteredTracks.value) {
+    if (!seen.has(track.album_id)) {
+      seen.add(track.album_id)
+      result.push({
+        albumId: track.album_id,
+        albumTitle: albumMap.value.get(track.album_id)?.title ?? `Album #${track.album_id}`,
+        tracks: groups.get(track.album_id)!,
+      })
+    }
+  }
+  return result
+})
 
 function formatDuration(seconds: number | null): string {
   if (!seconds) return '--:--'
@@ -137,11 +177,12 @@ async function handleExport(albumId: number) {
       <div class="space-y-3">
         <div v-for="inv in appStore.pendingInvitations" :key="inv.id" class="flex items-center justify-between gap-4 p-3 bg-card rounded-lg border border-border">
           <div class="flex items-center gap-3">
-            <div
-              class="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm"
-              :style="{ backgroundColor: inv.album?.cover_color || '#8b5cf6' }"
-            >
-              {{ inv.album?.title?.charAt(0) || '?' }}
+            <div class="w-10 h-10 overflow-hidden rounded-none border border-border flex-shrink-0">
+              <img
+                :src="inv.album?.cover_image ? `/uploads/${inv.album.cover_image}` : albumPlaceholder"
+                :alt="inv.album?.title || ''"
+                class="w-full h-full object-cover"
+              />
             </div>
             <div>
               <div class="text-sm font-medium text-foreground">{{ inv.album?.title }}</div>
@@ -190,17 +231,24 @@ async function handleExport(albumId: number) {
     </div>
 
     <!-- 专辑进度看板 -->
-    <div v-if="albums.length > 0">
-      <h2 class="text-lg font-sans font-semibold text-foreground mb-3">{{ t('dashboard.albums') }}</h2>
+    <div v-if="dashboardAlbums.length > 0">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-sans font-semibold text-foreground">{{ t('dashboard.albums') }}</h2>
+        <span v-if="hasAnyPins" class="text-xs text-muted-foreground">
+          {{ t('dashboard.pinnedOnly') }}
+          <RouterLink to="/albums" class="text-primary hover:underline ml-1">{{ t('dashboard.manageAlbums') }}</RouterLink>
+        </span>
+      </div>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div v-for="album in albums" :key="album.id" class="rounded-none border border-border bg-card overflow-hidden">
-          <!-- Cover: image if available, else color bar -->
-          <template v-if="album.cover_image">
-            <img :src="`/uploads/${album.cover_image}`" class="w-full h-28 object-cover" :alt="album.title" />
-          </template>
-          <template v-else>
-            <div class="h-1" :style="{ backgroundColor: album.cover_color || '#FF8400' }"></div>
-          </template>
+        <div v-for="album in dashboardAlbums" :key="album.id" class="rounded-none border border-border bg-card overflow-hidden">
+          <!-- Cover image or placeholder — no color bar -->
+          <div class="w-full h-28 overflow-hidden">
+            <img
+              :src="album.cover_image ? `/uploads/${album.cover_image}` : albumPlaceholder"
+              :alt="album.title"
+              class="w-full h-full object-cover"
+            />
+          </div>
           <div class="p-5">
             <div class="flex items-start justify-between mb-3">
               <div class="min-w-0 flex-1 mr-3">
@@ -271,6 +319,7 @@ async function handleExport(albumId: number) {
       </div>
     </div>
 
+    <!-- 曲目列表（按专辑分组） -->
     <div>
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-sans font-semibold text-foreground">
@@ -289,39 +338,48 @@ async function handleExport(albumId: number) {
       <div v-else-if="filteredTracks.length === 0" class="text-center text-muted-foreground py-12">
         {{ t('dashboard.noTracks') }}
       </div>
-      <div v-else class="bg-card border border-border rounded-none overflow-hidden">
-        <table class="w-full">
-          <thead>
-            <tr class="border-b border-border text-left text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wider">
-              <th class="px-4 py-3">{{ t('dashboard.colNumber') }}</th>
-              <th class="px-4 py-3">{{ t('dashboard.colTitle') }}</th>
-              <th class="px-4 py-3">{{ t('dashboard.colArtist') }}</th>
-              <th class="px-4 py-3">{{ t('dashboard.colDuration') }}</th>
-              <th class="px-4 py-3">{{ t('dashboard.colStatus') }}</th>
-              <th class="px-4 py-3">{{ t('dashboard.colOpenIssues') }}</th>
-              <th class="px-4 py-3">{{ t('dashboard.colVersion') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="track in filteredTracks"
-              :key="track.id"
-              @click="router.push(`/tracks/${track.id}`)"
-              class="border-b border-border last:border-0 hover:bg-white/5 cursor-pointer transition-colors"
-            >
-              <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ track.track_number || '—' }}</td>
-              <td class="px-4 py-3 text-sm font-medium text-foreground">{{ track.title }}</td>
-              <td class="px-4 py-3 text-sm text-muted-foreground">{{ track.artist }}</td>
-              <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ formatDuration(track.duration) }}</td>
-              <td class="px-4 py-3"><StatusBadge :status="track.status" type="track" /></td>
-              <td class="px-4 py-3 text-sm text-muted-foreground">
-                <span v-if="track.open_issue_count" class="text-error">{{ t('dashboard.openCount', { count: track.open_issue_count }) }}</span>
-                <span v-else>--</span>
-              </td>
-              <td class="px-4 py-3 text-sm text-muted-foreground">v{{ track.version }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div v-else class="space-y-5">
+        <div v-for="group in groupedTracks" :key="group.albumId">
+          <!-- Album section header -->
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider flex-shrink-0">{{ group.albumTitle }}</span>
+            <div class="flex-1 h-px bg-border"></div>
+          </div>
+          <div class="bg-card border border-border rounded-none overflow-hidden">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-border text-left text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wider">
+                  <th class="px-4 py-3">{{ t('dashboard.colNumber') }}</th>
+                  <th class="px-4 py-3">{{ t('dashboard.colTitle') }}</th>
+                  <th class="px-4 py-3">{{ t('dashboard.colArtist') }}</th>
+                  <th class="px-4 py-3">{{ t('dashboard.colDuration') }}</th>
+                  <th class="px-4 py-3">{{ t('dashboard.colStatus') }}</th>
+                  <th class="px-4 py-3">{{ t('dashboard.colOpenIssues') }}</th>
+                  <th class="px-4 py-3">{{ t('dashboard.colVersion') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="track in group.tracks"
+                  :key="track.id"
+                  @click="router.push(`/tracks/${track.id}`)"
+                  class="border-b border-border last:border-0 hover:bg-white/5 cursor-pointer transition-colors"
+                >
+                  <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ track.track_number || '—' }}</td>
+                  <td class="px-4 py-3 text-sm font-medium text-foreground">{{ track.title }}</td>
+                  <td class="px-4 py-3 text-sm text-muted-foreground">{{ track.artist }}</td>
+                  <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ formatDuration(track.duration) }}</td>
+                  <td class="px-4 py-3"><StatusBadge :status="track.status" type="track" /></td>
+                  <td class="px-4 py-3 text-sm text-muted-foreground">
+                    <span v-if="track.open_issue_count" class="text-error">{{ t('dashboard.openCount', { count: track.open_issue_count }) }}</span>
+                    <span v-else>--</span>
+                  </td>
+                  <td class="px-4 py-3 text-sm text-muted-foreground">v{{ track.version }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </div>
