@@ -358,7 +358,14 @@
     "masteringDeadline": "母带制作截止",
     "finalReviewDeadline": "终审截止",
     "saveDeadlines": "保存截止日期",
-    "deadlinesSaved": "截止日期已保存"
+    "deadlinesSaved": "截止日期已保存",
+    "webhookTitle": "Webhook 通知",
+    "webhookUrl": "Webhook URL",
+    "webhookEnabled": "启用 Webhook",
+    "webhookEvents": "触发事件",
+    "webhookSave": "保存 Webhook",
+    "webhookTest": "测试",
+    "webhookSaved": "Webhook 配置已保存"
   },
   "profile": {
     "tabs": {

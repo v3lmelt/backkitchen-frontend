@@ -354,7 +354,14 @@
     "masteringDeadline": "Mastering Deadline",
     "finalReviewDeadline": "Final Review Deadline",
     "saveDeadlines": "Save Deadlines",
-    "deadlinesSaved": "Deadlines saved"
+    "deadlinesSaved": "Deadlines saved",
+    "webhookTitle": "Webhook",
+    "webhookUrl": "Webhook URL",
+    "webhookEnabled": "Enable Webhook",
+    "webhookEvents": "Trigger Events",
+    "webhookSave": "Save Webhook",
+    "webhookTest": "Test",
+    "webhookSaved": "Webhook config saved"
   },
   "invitations": {
     "title": "Album Invitations",

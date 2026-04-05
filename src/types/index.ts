@@ -241,6 +241,12 @@ export interface Discussion {
   images?: DiscussionImage[]
 }
 
+export interface WebhookConfig {
+  url: string
+  enabled: boolean
+  events: string[]
+}
+
 export interface AlbumStats {
   total_tracks: number
   by_status: Partial<Record<TrackStatus, number>>

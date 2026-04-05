@@ -8,6 +8,7 @@ import type {
   Comment,
   Discussion,
   Invitation,
+  WebhookConfig,
   Issue,
   IssueStatus,
   Notification,
@@ -66,6 +67,15 @@ export const albumApi = {
   stats: (id: number) => request<AlbumStats>(`/albums/${id}/stats`),
   updateDeadlines: (id: number, data: { deadline?: string | null; phase_deadlines?: Record<string, string> | null }) =>
     request<Album>(`/albums/${id}/deadlines`, { method: 'PATCH', body: JSON.stringify(data) }),
+  getWebhook: (id: number) =>
+    request<WebhookConfig>(`/albums/${id}/webhook`),
+  updateWebhook: (id: number, data: WebhookConfig) =>
+    request<WebhookConfig>(`/albums/${id}/webhook`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  testWebhook: (id: number) =>
+    request<{ success: boolean }>(`/albums/${id}/webhook/test`, { method: 'POST' }),
   reorderTracks: (albumId: number, trackIds: number[]) =>
     request<Track[]>(`/albums/${albumId}/track-order`, {
       method: 'PATCH',

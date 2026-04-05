@@ -36,6 +36,16 @@ const orderSaveMessage = ref<Record<number, { type: 'success' | 'error'; text: s
 const albumDeadlines = reactive<Record<number, { deadline: string; peer_review: string; mastering: string; final_review: string }>>({})
 const savingDeadlineAlbumId = ref<number | null>(null)
 
+// Webhook state
+const albumWebhooks = reactive<Record<number, { url: string; enabled: boolean; events: string[] }>>({})
+const savingWebhookAlbumId = ref<number | null>(null)
+const testingWebhookAlbumId = ref<number | null>(null)
+const webhookTestResult = ref<Record<number, boolean | null>>({})
+
+const WEBHOOK_EVENT_TYPES = [
+  'track_status_changed', 'new_issue', 'issue_status_changed', 'new_comment', 'new_discussion',
+]
+
 const newAlbum = ref({ title: '', description: '', cover_color: '#A855F7' })
 const teamState = reactive<Record<number, { mastering_engineer_id: number | null; member_ids: number[] }>>({})
 
@@ -61,6 +71,13 @@ onMounted(async () => {
         }).catch(() => {})
       ),
       loadAlbumTracks(),
+      ...producerAlbums.map(album =>
+        albumApi.getWebhook(album.id).then(config => {
+          albumWebhooks[album.id] = { ...config }
+        }).catch(() => {
+          albumWebhooks[album.id] = { url: '', enabled: false, events: [] }
+        })
+      ),
     ])
   } finally {
     loading.value = false
@@ -247,6 +264,40 @@ function syncDeadlineState(albumList: Album[]) {
       mastering: toDateInput(album.phase_deadlines?.mastering),
       final_review: toDateInput(album.phase_deadlines?.final_review),
     }
+  }
+}
+
+function toggleWebhookEvent(albumId: number, event: string) {
+  const wh = albumWebhooks[albumId]
+  if (!wh) return
+  const idx = wh.events.indexOf(event)
+  if (idx >= 0) wh.events.splice(idx, 1)
+  else wh.events.push(event)
+}
+
+async function saveWebhook(albumId: number) {
+  const wh = albumWebhooks[albumId]
+  if (!wh) return
+  savingWebhookAlbumId.value = albumId
+  try {
+    const result = await albumApi.updateWebhook(albumId, wh)
+    albumWebhooks[albumId] = { ...result }
+    toastSuccess(t('settings.webhookSaved'))
+  } finally {
+    savingWebhookAlbumId.value = null
+  }
+}
+
+async function testWebhook(albumId: number) {
+  testingWebhookAlbumId.value = albumId
+  webhookTestResult.value[albumId] = null
+  try {
+    const result = await albumApi.testWebhook(albumId)
+    webhookTestResult.value[albumId] = result.success
+  } catch {
+    webhookTestResult.value[albumId] = false
+  } finally {
+    testingWebhookAlbumId.value = null
   }
 }
 
@@ -552,6 +603,60 @@ async function saveDeadlines(albumId: number) {
           >
             {{ savingDeadlineAlbumId === album.id ? t('settings.saving') : t('settings.saveDeadlines') }}
           </button>
+        </div>
+      </div>
+    </section>
+    <!-- Webhook -->
+    <section v-if="albums.some(a => appStore.currentUser?.id === a.producer_id)">
+      <h2 class="text-lg font-sans font-semibold text-foreground mb-4">{{ t('settings.webhookTitle') }}</h2>
+      <div class="space-y-4">
+        <div
+          v-for="album in albums.filter(a => appStore.currentUser?.id === a.producer_id)"
+          :key="'webhook-' + album.id"
+          class="bg-card border border-border rounded-none p-6 space-y-4"
+        >
+          <h3 class="text-sm font-mono font-semibold text-foreground">{{ album.title }}</h3>
+          <div v-if="albumWebhooks[album.id]" class="space-y-4">
+            <div>
+              <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.webhookUrl') }}</label>
+              <input v-model="albumWebhooks[album.id].url" class="input-field w-full text-sm" placeholder="https://..." />
+            </div>
+            <label class="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+              <input type="checkbox" v-model="albumWebhooks[album.id].enabled" />
+              <span>{{ t('settings.webhookEnabled') }}</span>
+            </label>
+            <div>
+              <div class="text-xs text-muted-foreground mb-2">{{ t('settings.webhookEvents') }}</div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label v-for="evt in WEBHOOK_EVENT_TYPES" :key="evt" class="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    :checked="albumWebhooks[album.id].events.includes(evt)"
+                    @change="toggleWebhookEvent(album.id, evt)"
+                  />
+                  <span class="font-mono text-xs">{{ evt }}</span>
+                </label>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                @click="saveWebhook(album.id)"
+                :disabled="savingWebhookAlbumId === album.id"
+                class="btn-primary text-sm"
+              >
+                {{ savingWebhookAlbumId === album.id ? t('settings.saving') : t('settings.webhookSave') }}
+              </button>
+              <button
+                @click="testWebhook(album.id)"
+                :disabled="testingWebhookAlbumId === album.id || !albumWebhooks[album.id].url"
+                class="btn-secondary text-sm"
+              >
+                {{ testingWebhookAlbumId === album.id ? t('common.loading') : t('settings.webhookTest') }}
+              </button>
+              <span v-if="webhookTestResult[album.id] === true" class="text-xs text-success">✓</span>
+              <span v-if="webhookTestResult[album.id] === false" class="text-xs text-error">✗</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
