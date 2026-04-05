@@ -10,7 +10,7 @@ import type { User, UserRole } from '@/types'
 const { t } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
-const { showToast } = useToast()
+const toast = useToast()
 
 const users = ref<User[]>([])
 const loading = ref(true)
@@ -32,9 +32,9 @@ async function onRoleChange(user: User, newRole: UserRole) {
   try {
     const updated = await adminApi.updateUser(user.id, { role: newRole })
     Object.assign(user, updated)
-    showToast(t('admin.updateSuccess'), 'success')
+    toast.success(t('admin.updateSuccess'))
   } catch (e: any) {
-    showToast(e.message, 'error')
+    toast.error(e.message)
   }
 }
 
@@ -42,9 +42,9 @@ async function onAdminToggle(user: User) {
   try {
     const updated = await adminApi.updateUser(user.id, { is_admin: !user.is_admin })
     Object.assign(user, updated)
-    showToast(t('admin.updateSuccess'), 'success')
+    toast.success(t('admin.updateSuccess'))
   } catch (e: any) {
-    showToast(e.message, 'error')
+    toast.error(e.message)
   }
 }
 
@@ -52,9 +52,9 @@ async function onVerifiedToggle(user: User) {
   try {
     const updated = await adminApi.updateUser(user.id, { email_verified: !user.email_verified })
     Object.assign(user, updated)
-    showToast(t('admin.updateSuccess'), 'success')
+    toast.success(t('admin.updateSuccess'))
   } catch (e: any) {
-    showToast(e.message, 'error')
+    toast.error(e.message)
   }
 }
 
@@ -64,9 +64,9 @@ async function onDelete(user: User) {
   try {
     await adminApi.deleteUser(user.id)
     users.value = users.value.filter(u => u.id !== user.id)
-    showToast(t('admin.deleteSuccess'), 'success')
+    toast.success(t('admin.deleteSuccess'))
   } catch (e: any) {
-    showToast(e.message, 'error')
+    toast.error(e.message)
   } finally {
     deletingId.value = null
   }
