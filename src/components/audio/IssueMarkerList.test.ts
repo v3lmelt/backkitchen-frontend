@@ -78,6 +78,15 @@ describe('IssueMarkerList', () => {
     expect(wrapper.text()).toContain('3')
   })
 
+  it('shows source version badge when available', () => {
+    const wrapper = mountWithPlugins(IssueMarkerList, {
+      props: {
+        issues: [makeIssue({ source_version_number: 2 })],
+      },
+    })
+    expect(wrapper.text()).toContain('v2')
+  })
+
   it('shows hashed author id for peer phase issues', () => {
     const wrapper = mountWithPlugins(IssueMarkerList, {
       props: {

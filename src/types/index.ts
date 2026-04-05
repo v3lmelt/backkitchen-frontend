@@ -102,6 +102,7 @@ export interface Issue {
   phase: IssuePhase
   workflow_cycle: number
   source_version_id: number | null
+  source_version_number?: number | null
   master_delivery_id: number | null
   title: string
   description: string

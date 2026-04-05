@@ -60,6 +60,12 @@ function authorLabel(issue: Issue): string {
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2 mb-1">
             <span class="text-xs font-mono text-muted-foreground flex-shrink-0">#{{ index + 1 }}</span>
+            <span
+              v-if="issue.source_version_number != null"
+              class="inline-flex items-center rounded-full bg-border px-2 py-0.5 text-[11px] font-mono text-foreground flex-shrink-0"
+            >
+              v{{ issue.source_version_number }}
+            </span>
             <StatusBadge :status="issue.phase" type="phase" />
             <StatusBadge :status="issue.severity" type="severity" />
             <StatusBadge :status="issue.status" type="issue" />
