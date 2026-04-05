@@ -7,7 +7,7 @@ import { useAppStore } from '@/stores/app'
 import type { Issue, IssueStatus } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
-import { formatTimestamp, formatLocaleDate } from '@/utils/time'
+import { formatTimestamp, formatLocaleDate, formatDuration } from '@/utils/time'
 
 const route = useRoute()
 const router = useRouter()
@@ -39,6 +39,10 @@ function onWaveformReady() {
 const selectedImages = ref<File[]>([])
 const imagePreviewUrls = ref<string[]>([])
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const AUDIO_ACCEPT = 'audio/mpeg,audio/wav,audio/flac,audio/aac,audio/ogg,.mp3,.wav,.flac,.aac,.ogg'
+const MAX_AUDIOS = 3
+const selectedAudios = ref<File[]>([])
+const audioInputRef = ref<HTMLInputElement | null>(null)
 const pendingStatus = ref<Exclude<IssueStatus, 'open'> | null>(null)
 const statusNote = ref('')
 
@@ -112,11 +116,26 @@ function removeSelectedImage(index: number) {
   imagePreviewUrls.value.splice(index, 1)
 }
 
+function onAudioSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files) return
+  for (const file of Array.from(input.files)) {
+    if (selectedAudios.value.length >= MAX_AUDIOS) break
+    selectedAudios.value.push(file)
+  }
+  input.value = ''
+}
+
+function removeSelectedAudio(index: number) {
+  selectedAudios.value.splice(index, 1)
+}
+
 async function addComment() {
-  if ((!newComment.value.trim() && !selectedImages.value.length) || !appStore.currentUser || !issue.value) return
+  if ((!newComment.value.trim() && !selectedImages.value.length && !selectedAudios.value.length) || !appStore.currentUser || !issue.value) return
   const comment = await issueApi.addComment(issueId.value, {
     content: newComment.value,
     images: selectedImages.value.length ? selectedImages.value : undefined,
+    audios: selectedAudios.value.length ? selectedAudios.value : undefined,
   })
   if (!issue.value.comments) issue.value.comments = []
   issue.value.comments.push(comment)
@@ -124,6 +143,7 @@ async function addComment() {
   imagePreviewUrls.value.forEach(url => URL.revokeObjectURL(url))
   selectedImages.value = []
   imagePreviewUrls.value = []
+  selectedAudios.value = []
 }
 
 function selectStatus(status: Exclude<IssueStatus, 'open'>) {
@@ -308,6 +328,22 @@ function cancelStatusChange() {
               />
             </a>
           </div>
+          <div v-if="comment.audios && comment.audios.length" class="flex flex-col gap-2 mt-3">
+            <div
+              v-for="audio in comment.audios"
+              :key="audio.id"
+              class="bg-background border border-border rounded-2xl px-4 py-3 space-y-2"
+            >
+              <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+                <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
+                <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
+              </div>
+              <audio :src="audio.audio_url" controls class="w-full h-8" style="accent-color: #FF8400;" />
+            </div>
+          </div>
         </div>
       </template>
 
@@ -337,6 +373,21 @@ function cancelStatusChange() {
           </div>
         </div>
 
+        <!-- Audio previews -->
+        <div v-if="selectedAudios.length" class="flex flex-wrap gap-2">
+          <div
+            v-for="(file, i) in selectedAudios"
+            :key="i"
+            class="flex items-center gap-1.5 bg-background border border-border rounded-full px-3 py-1"
+          >
+            <svg class="w-3.5 h-3.5 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+            </svg>
+            <span class="text-xs font-mono text-foreground max-w-[120px] truncate">{{ file.name }}</span>
+            <button @click="removeSelectedAudio(i)" class="text-muted-foreground hover:text-error transition-colors leading-none">×</button>
+          </div>
+        </div>
+
         <div class="flex items-center gap-2">
           <input
             ref="fileInputRef"
@@ -345,6 +396,14 @@ function cancelStatusChange() {
             multiple
             class="hidden"
             @change="onFileSelect"
+          />
+          <input
+            ref="audioInputRef"
+            type="file"
+            :accept="AUDIO_ACCEPT"
+            multiple
+            class="hidden"
+            @change="onAudioSelect"
           />
           <button
             @click="fileInputRef?.click()"
@@ -355,7 +414,18 @@ function cancelStatusChange() {
             </svg>
             {{ t('issueDetail.image') }}
           </button>
-          <button @click="addComment" :disabled="!newComment.trim() && !selectedImages.length" class="btn-primary text-sm">
+          <button
+            @click="selectedAudios.length < MAX_AUDIOS && audioInputRef?.click()"
+            :disabled="selectedAudios.length >= MAX_AUDIOS"
+            :title="selectedAudios.length >= MAX_AUDIOS ? t('issueDetail.audioMaxReached', { max: MAX_AUDIOS }) : undefined"
+            class="btn-secondary text-sm inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+            </svg>
+            {{ t('issueDetail.audio') }}
+          </button>
+          <button @click="addComment" :disabled="!newComment.trim() && !selectedImages.length && !selectedAudios.length" class="btn-primary text-sm">
             {{ t('issueDetail.addComment') }}
           </button>
         </div>

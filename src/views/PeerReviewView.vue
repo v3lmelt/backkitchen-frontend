@@ -3,7 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { checklistApi, trackApi } from '@/api'
-import type { ChecklistItem, Issue, Track } from '@/types'
+import type { ChecklistItem, ChecklistTemplateItem, Issue, Track } from '@/types'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
@@ -23,9 +23,8 @@ const loading = ref(true)
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 const error = ref('')
 
-// English labels are used as API keys; translated for display via translateChecklistLabel()
-const checklistLabels = ['Arrangement', 'Balance', 'Low-End', 'Stereo Image', 'Technical Cleanliness']
-const checklistLabelKeyMap: Record<string, string> = {
+// Default labels used as fallback; translated for display via translateChecklistLabel()
+const defaultChecklistLabelKeyMap: Record<string, string> = {
   'Arrangement': 'arrangement',
   'Balance': 'balance',
   'Low-End': 'lowEnd',
@@ -33,12 +32,14 @@ const checklistLabelKeyMap: Record<string, string> = {
   'Technical Cleanliness': 'technicalCleanliness',
 }
 
+const templateItems = ref<ChecklistTemplateItem[]>([])
+
 function translateChecklistLabel(label: string): string {
-  const key = checklistLabelKeyMap[label]
+  const key = defaultChecklistLabelKeyMap[label]
   return key ? t(`checklistLabels.${key}`) : label
 }
 
-const checklist = ref(checklistLabels.map(label => ({ label, passed: false, note: '' })))
+const checklist = ref<{ label: string; passed: boolean; note: string }[]>([])
 
 const checklistSaved = computed(() => existingChecklist.value.length > 0)
 
@@ -51,11 +52,34 @@ async function loadPage() {
     track.value = detail.track
     issues.value = detail.issues.filter(issue => issue.phase === 'peer' && issue.workflow_cycle === detail.track.workflow_cycle)
     existingChecklist.value = detail.checklist_items
+
+    // Load checklist template from album
+    try {
+      const template = await checklistApi.getTemplate(detail.track.album_id)
+      templateItems.value = template.items
+    } catch {
+      // Fallback to defaults if template fetch fails
+      templateItems.value = [
+        { label: 'Arrangement', required: true, sort_order: 0 },
+        { label: 'Balance', required: true, sort_order: 1 },
+        { label: 'Low-End', required: true, sort_order: 2 },
+        { label: 'Stereo Image', required: true, sort_order: 3 },
+        { label: 'Technical Cleanliness', required: true, sort_order: 4 },
+      ]
+    }
+
+    const labels = templateItems.value
+      .slice()
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(item => item.label)
+
     if (existingChecklist.value.length) {
-      checklist.value = checklistLabels.map(label => {
+      checklist.value = labels.map(label => {
         const item = existingChecklist.value.find(entry => entry.label === label)
         return { label, passed: item?.passed ?? false, note: item?.note ?? '' }
       })
+    } else {
+      checklist.value = labels.map(label => ({ label, passed: false, note: '' }))
     }
   } finally {
     loading.value = false

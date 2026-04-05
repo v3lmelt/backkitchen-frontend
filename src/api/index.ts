@@ -3,7 +3,10 @@ import type {
   AlbumStats,
   AuthResponse,
   ChecklistItem,
+  ChecklistTemplateItem,
+  ChecklistTemplateRead,
   Comment,
+  Discussion,
   Invitation,
   Issue,
   IssueStatus,
@@ -61,6 +64,24 @@ export const albumApi = {
     request<Album>(`/albums/${id}/team`, { method: 'PATCH', body: JSON.stringify(data) }),
   tracks: (id: number) => request<Track[]>(`/albums/${id}/tracks`),
   stats: (id: number) => request<AlbumStats>(`/albums/${id}/stats`),
+  updateDeadlines: (id: number, data: { deadline?: string | null; phase_deadlines?: Record<string, string> | null }) =>
+    request<Album>(`/albums/${id}/deadlines`, { method: 'PATCH', body: JSON.stringify(data) }),
+  reorderTracks: (albumId: number, trackIds: number[]) =>
+    request<Track[]>(`/albums/${albumId}/track-order`, {
+      method: 'PATCH',
+      body: JSON.stringify({ track_ids: trackIds }),
+    }),
+  export: async (id: number): Promise<Blob> => {
+    const token = localStorage.getItem(TOKEN_KEY)
+    const res = await fetch(`${BASE}/albums/${id}/export`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(parseErrorDetail(body.detail) || `Export failed: ${res.status}`)
+    }
+    return res.blob()
+  },
 }
 
 export const trackApi = {
@@ -107,11 +128,14 @@ export const issueApi = {
     request<Issue>(`/issues/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   batchUpdate: (trackId: number, data: { issue_ids: number[]; status: IssueStatus; status_note?: string }) =>
     request<Issue[]>(`/tracks/${trackId}/issues/batch`, { method: 'PATCH', body: JSON.stringify(data) }),
-  addComment: (id: number, data: { content: string; images?: File[] }) => {
+  addComment: (id: number, data: { content: string; images?: File[]; audios?: File[] }) => {
     const form = new FormData()
     form.append('content', data.content)
     if (data.images) {
       for (const img of data.images) form.append('images', img)
+    }
+    if (data.audios) {
+      for (const audio of data.audios) form.append('audios', audio)
     }
     return request<Comment>(`/issues/${id}/comments`, { method: 'POST', body: form })
   },
@@ -127,6 +151,29 @@ export const checklistApi = {
   get: (trackId: number) => request<ChecklistItem[]>(`/tracks/${trackId}/checklist`),
   submit: (trackId: number, items: { label: string; passed: boolean; note?: string }[]) =>
     request<ChecklistItem[]>(`/tracks/${trackId}/checklist`, { method: 'POST', body: JSON.stringify({ items }) }),
+  getTemplate: (albumId: number) =>
+    request<ChecklistTemplateRead>(`/albums/${albumId}/checklist-template`),
+  updateTemplate: (albumId: number, items: ChecklistTemplateItem[]) =>
+    request<ChecklistTemplateRead>(`/albums/${albumId}/checklist-template`, {
+      method: 'PUT',
+      body: JSON.stringify({ items }),
+    }),
+  resetTemplate: (albumId: number) =>
+    request<void>(`/albums/${albumId}/checklist-template`, {
+      method: 'DELETE',
+    }),
+}
+
+export const discussionApi = {
+  list: (trackId: number) => request<Discussion[]>(`/tracks/${trackId}/discussions`),
+  create: (trackId: number, data: { content: string; images?: File[] }) => {
+    const form = new FormData()
+    form.append('content', data.content)
+    if (data.images) {
+      for (const img of data.images) form.append('images', img)
+    }
+    return request<Discussion>(`/tracks/${trackId}/discussions`, { method: 'POST', body: form })
+  },
 }
 
 export const userApi = {

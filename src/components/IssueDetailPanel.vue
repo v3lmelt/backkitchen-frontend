@@ -5,7 +5,7 @@ import { issueApi } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Issue, IssueStatus } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
-import { formatTimestamp } from '@/utils/time'
+import { formatTimestamp, formatDuration } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 
 const props = defineProps<{ issue: Issue | null }>()
@@ -26,6 +26,10 @@ const statusNote = ref('')
 const selectedImages = ref<File[]>([])
 const imagePreviewUrls = ref<string[]>([])
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const AUDIO_ACCEPT = 'audio/mpeg,audio/wav,audio/flac,audio/aac,audio/ogg,.mp3,.wav,.flac,.aac,.ogg'
+const MAX_AUDIOS = 3
+const selectedAudios = ref<File[]>([])
+const audioInputRef = ref<HTMLInputElement | null>(null)
 
 watch(() => props.issue, async (issue) => {
   pendingStatus.value = null
@@ -34,6 +38,7 @@ watch(() => props.issue, async (issue) => {
   imagePreviewUrls.value.forEach(url => URL.revokeObjectURL(url))
   selectedImages.value = []
   imagePreviewUrls.value = []
+  selectedAudios.value = []
   if (!issue) { fullIssue.value = null; return }
   loading.value = true
   try {
@@ -72,12 +77,27 @@ async function confirmStatusChange() {
   statusNote.value = ''
 }
 
+function onAudioSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files) return
+  for (const file of Array.from(input.files)) {
+    if (selectedAudios.value.length >= MAX_AUDIOS) break
+    selectedAudios.value.push(file)
+  }
+  input.value = ''
+}
+
+function removeAudio(i: number) {
+  selectedAudios.value.splice(i, 1)
+}
+
 async function addComment() {
-  if (!newComment.value.trim() && !selectedImages.value.length) return
+  if (!newComment.value.trim() && !selectedImages.value.length && !selectedAudios.value.length) return
   if (!fullIssue.value || !appStore.currentUser) return
   const comment = await issueApi.addComment(fullIssue.value.id, {
     content: newComment.value,
     images: selectedImages.value.length ? selectedImages.value : undefined,
+    audios: selectedAudios.value.length ? selectedAudios.value : undefined,
   })
   if (!fullIssue.value.comments) fullIssue.value.comments = []
   fullIssue.value.comments.push(comment)
@@ -85,6 +105,7 @@ async function addComment() {
   imagePreviewUrls.value.forEach(url => URL.revokeObjectURL(url))
   selectedImages.value = []
   imagePreviewUrls.value = []
+  selectedAudios.value = []
 }
 
 function onFileSelect(event: Event) {
@@ -238,6 +259,21 @@ function removeImage(i: number) {
                     <img :src="img.image_url" class="h-16 w-16 object-cover rounded border border-border hover:opacity-80 transition-opacity" alt="attachment" />
                   </a>
                 </div>
+                <div v-if="comment.audios?.length" class="flex flex-col gap-2 mt-2">
+                  <div
+                    v-for="audio in comment.audios" :key="audio.id"
+                    class="bg-background border border-border rounded-2xl px-3 py-2 space-y-1.5"
+                  >
+                    <div class="flex items-center gap-2">
+                      <svg class="w-3.5 h-3.5 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                      </svg>
+                      <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
+                      <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
+                    </div>
+                    <audio :src="audio.audio_url" controls class="w-full h-8" style="accent-color: #FF8400;" />
+                  </div>
+                </div>
               </div>
             </template>
           </div>
@@ -261,8 +297,21 @@ function removeImage(i: number) {
                 >×</button>
               </div>
             </div>
+            <div v-if="selectedAudios.length" class="flex flex-wrap gap-2">
+              <div
+                v-for="(file, i) in selectedAudios" :key="i"
+                class="flex items-center gap-1.5 bg-background border border-border rounded-full px-2.5 py-1"
+              >
+                <svg class="w-3 h-3 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+                <span class="text-xs font-mono text-foreground max-w-[100px] truncate">{{ file.name }}</span>
+                <button @click="removeAudio(i)" class="text-muted-foreground hover:text-error transition-colors leading-none text-xs">×</button>
+              </div>
+            </div>
             <div class="flex items-center gap-2">
               <input ref="fileInputRef" type="file" accept="image/*" multiple class="hidden" @change="onFileSelect" />
+              <input ref="audioInputRef" type="file" :accept="AUDIO_ACCEPT" multiple class="hidden" @change="onAudioSelect" />
               <button @click="fileInputRef?.click()" class="btn-secondary text-xs inline-flex items-center gap-1">
                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -270,8 +319,19 @@ function removeImage(i: number) {
                 {{ t('issueDetail.image') }}
               </button>
               <button
+                @click="selectedAudios.length < MAX_AUDIOS && audioInputRef?.click()"
+                :disabled="selectedAudios.length >= MAX_AUDIOS"
+                :title="selectedAudios.length >= MAX_AUDIOS ? t('issueDetail.audioMaxReached', { max: MAX_AUDIOS }) : undefined"
+                class="btn-secondary text-xs inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+                {{ t('issueDetail.audio') }}
+              </button>
+              <button
                 @click="addComment"
-                :disabled="!newComment.trim() && !selectedImages.length"
+                :disabled="!newComment.trim() && !selectedImages.length && !selectedAudios.length"
                 class="btn-primary text-xs"
               >{{ t('issueDetail.addComment') }}</button>
             </div>

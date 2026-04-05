@@ -17,6 +17,7 @@ const albums = ref<Album[]>([])
 const albumStatsMap = ref<Record<number, AlbumStats>>({})
 const loading = ref(true)
 const filterStatus = ref<TrackStatus | ''>('')
+const exportingAlbum = ref<number | null>(null)
 
 function statusColor(status: string): string {
   return TRACK_STATUS_COLORS[status as TrackStatus] ?? '#6b7280'
@@ -92,6 +93,41 @@ async function handleAccept(invitationId: number) {
 async function handleDecline(invitationId: number) {
   await appStore.declineInvitation(invitationId)
 }
+
+function completedCount(albumId: number): number {
+  return albumStatsMap.value[albumId]?.by_status?.completed ?? 0
+}
+
+function deadlineInfo(albumId: number): { text: string; overdue: boolean } | null {
+  const stats = albumStatsMap.value[albumId]
+  if (!stats?.deadline) return null
+  const dl = new Date(stats.deadline)
+  const now = new Date()
+  const diffMs = dl.getTime() - now.getTime()
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+  if (diffDays < 0) return { text: t('dashboard.deadlineOverdue', { days: Math.abs(diffDays) }), overdue: true }
+  if (diffDays === 0) return { text: t('dashboard.deadlineToday'), overdue: true }
+  return { text: t('dashboard.deadlineDaysLeft', { days: diffDays }), overdue: false }
+}
+
+async function handleExport(albumId: number) {
+  exportingAlbum.value = albumId
+  try {
+    const blob = await albumApi.export(albumId)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${albums.value.find(al => al.id === albumId)?.title ?? 'album'}.zip`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch {
+    // error is shown by the request layer
+  } finally {
+    exportingAlbum.value = null
+  }
+}
 </script>
 
 <template>
@@ -162,9 +198,17 @@ async function handleDecline(invitationId: number) {
           <div class="p-5">
             <div class="flex items-center justify-between mb-4">
               <h3 class="font-mono font-bold text-base text-foreground">{{ album.title }}</h3>
-              <span v-if="albumStatsMap[album.id]?.open_issues > 0" class="text-xs bg-error-bg text-error px-2 py-0.5 rounded-full">
-                {{ t('dashboard.openIssues', { count: albumStatsMap[album.id].open_issues }) }}
-              </span>
+              <div class="flex items-center gap-2">
+                <span v-if="deadlineInfo(album.id)" class="text-xs px-2 py-0.5 rounded-full" :class="deadlineInfo(album.id)!.overdue ? 'bg-error-bg text-error' : 'bg-warning-bg text-warning'">
+                  {{ deadlineInfo(album.id)!.text }}
+                </span>
+                <span v-if="albumStatsMap[album.id]?.overdue_track_count" class="text-xs bg-error-bg text-error px-2 py-0.5 rounded-full">
+                  {{ t('dashboard.overdueCount', { count: albumStatsMap[album.id].overdue_track_count }) }}
+                </span>
+                <span v-if="albumStatsMap[album.id]?.open_issues > 0" class="text-xs bg-error-bg text-error px-2 py-0.5 rounded-full">
+                  {{ t('dashboard.openIssues', { count: albumStatsMap[album.id].open_issues }) }}
+                </span>
+              </div>
             </div>
 
             <template v-if="albumStatsMap[album.id]">
@@ -182,7 +226,18 @@ async function handleDecline(invitationId: number) {
                   {{ t(`status.${statusKey}`, statusKey) }} ({{ count }})
                 </span>
               </div>
-              <p class="text-xs text-muted-foreground mb-4">{{ albumStatsMap[album.id].total_tracks }} {{ t('dashboard.tracks') }}</p>
+              <div class="flex items-center justify-between mb-4">
+                <p class="text-xs text-muted-foreground">{{ albumStatsMap[album.id].total_tracks }} {{ t('dashboard.tracks') }}</p>
+                <button
+                  v-if="album.producer_id === appStore.currentUser?.id && completedCount(album.id) > 0"
+                  @click.stop="handleExport(album.id)"
+                  :disabled="exportingAlbum === album.id"
+                  class="btn-secondary text-xs px-3 py-1"
+                >
+                  <template v-if="exportingAlbum === album.id">{{ t('common.loading') }}</template>
+                  <template v-else>{{ t('dashboard.exportAlbum') }} ({{ completedCount(album.id) }}/{{ albumStatsMap[album.id].total_tracks }})</template>
+                </button>
+              </div>
               <div v-if="albumStatsMap[album.id].recent_events.length > 0" class="space-y-1">
                 <p class="text-xs font-mono font-medium text-muted-foreground mb-2">{{ t('dashboard.recentActivity') }}</p>
                 <div v-for="event in albumStatsMap[album.id].recent_events.slice(0, 3)" :key="event.id"
@@ -223,6 +278,7 @@ async function handleDecline(invitationId: number) {
         <table class="w-full">
           <thead>
             <tr class="border-b border-border text-left text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wider">
+              <th class="px-4 py-3">{{ t('dashboard.colNumber') }}</th>
               <th class="px-4 py-3">{{ t('dashboard.colTitle') }}</th>
               <th class="px-4 py-3">{{ t('dashboard.colArtist') }}</th>
               <th class="px-4 py-3">{{ t('dashboard.colDuration') }}</th>
@@ -238,6 +294,7 @@ async function handleDecline(invitationId: number) {
               @click="router.push(`/tracks/${track.id}`)"
               class="border-b border-border last:border-0 hover:bg-white/5 cursor-pointer transition-colors"
             >
+              <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ track.track_number || '—' }}</td>
               <td class="px-4 py-3 text-sm font-medium text-foreground">{{ track.title }}</td>
               <td class="px-4 py-3 text-sm text-muted-foreground">{{ track.artist }}</td>
               <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ formatDuration(track.duration) }}</td>

@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { reactive, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { albumApi, invitationApi, userApi } from '@/api'
+import draggable from 'vuedraggable'
+import { albumApi, checklistApi, invitationApi, userApi } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Album, Invitation, User } from '@/types'
+import { useToast } from '@/composables/useToast'
+import type { Album, ChecklistTemplateItem, Invitation, Track, User } from '@/types'
+import StatusBadge from '@/components/workflow/StatusBadge.vue'
 
 const { t } = useI18n()
+const { success: toastSuccess } = useToast()
 const appStore = useAppStore()
 const users = ref<User[]>([])
 const albums = ref<Album[]>([])
@@ -17,6 +21,21 @@ const inviteUserId = ref<Record<number, string>>({})
 const inviteError = ref<Record<number, string>>({})
 const inviteSuccess = ref<Record<number, string>>({})
 
+// Checklist template state
+const albumTemplates = ref<Record<number, ChecklistTemplateItem[]>>({})
+const albumTemplateIsDefault = ref<Record<number, boolean>>({})
+const savingTemplateAlbumId = ref<number | null>(null)
+const templateError = ref<Record<number, string>>({})
+
+// Track ordering state
+const albumTracks = ref<Record<number, Track[]>>({})
+const savingOrderAlbumId = ref<number | null>(null)
+const orderSaveMessage = ref<Record<number, { type: 'success' | 'error'; text: string }>>({})
+
+// Deadline state
+const albumDeadlines = reactive<Record<number, { deadline: string; peer_review: string; mastering: string; final_review: string }>>({})
+const savingDeadlineAlbumId = ref<number | null>(null)
+
 const newAlbum = ref({ title: '', description: '', cover_color: '#A855F7' })
 const teamState = reactive<Record<number, { mastering_engineer_id: number | null; member_ids: number[] }>>({})
 
@@ -27,15 +46,22 @@ onMounted(async () => {
     users.value = loadedUsers
     albums.value = loadedAlbums
     syncTeamState()
-    await Promise.all(
-      loadedAlbums
-        .filter(album => appStore.currentUser?.id === album.producer_id)
-        .map(album =>
-          invitationApi.listForAlbum(album.id).then(invs => {
-            albumInvitations.value[album.id] = invs
-          })
-        )
-    )
+    syncDeadlineState(loadedAlbums)
+    const producerAlbums = loadedAlbums.filter(album => appStore.currentUser?.id === album.producer_id)
+    await Promise.all([
+      ...producerAlbums.map(album =>
+        invitationApi.listForAlbum(album.id).then(invs => {
+          albumInvitations.value[album.id] = invs
+        })
+      ),
+      ...producerAlbums.map(album =>
+        checklistApi.getTemplate(album.id).then(template => {
+          albumTemplates.value[album.id] = template.items.map(item => ({ ...item }))
+          albumTemplateIsDefault.value[album.id] = template.is_default
+        }).catch(() => {})
+      ),
+      loadAlbumTracks(),
+    ])
   } finally {
     loading.value = false
   }
@@ -118,6 +144,131 @@ async function cancelInvitation(albumId: number, invitationId: number) {
 function getUserDisplayName(userId: number): string {
   const user = users.value.find(u => u.id === userId)
   return user?.display_name || `User #${userId}`
+}
+
+// Checklist template functions
+function addTemplateItem(albumId: number) {
+  if (!albumTemplates.value[albumId]) albumTemplates.value[albumId] = []
+  const items = albumTemplates.value[albumId]
+  items.push({
+    label: '',
+    description: null,
+    required: true,
+    sort_order: items.length,
+  })
+}
+
+function removeTemplateItem(albumId: number, index: number) {
+  const items = albumTemplates.value[albumId]
+  if (!items) return
+  items.splice(index, 1)
+  items.forEach((item, i) => item.sort_order = i)
+}
+
+async function saveTemplate(albumId: number) {
+  const items = albumTemplates.value[albumId]
+  if (!items || items.length === 0) return
+  const hasEmpty = items.some(item => !item.label.trim())
+  if (hasEmpty) {
+    templateError.value[albumId] = t('settings.templateItemLabelRequired', 'Label cannot be empty')
+    return
+  }
+  savingTemplateAlbumId.value = albumId
+  templateError.value[albumId] = ''
+  try {
+    const result = await checklistApi.updateTemplate(albumId, items.map((item, i) => ({
+      ...item,
+      sort_order: i,
+    })))
+    albumTemplates.value[albumId] = result.items.map(item => ({ ...item }))
+    albumTemplateIsDefault.value[albumId] = false
+    toastSuccess(t('settings.templateSaved'))
+  } catch (err: any) {
+    templateError.value[albumId] = err.message || t('settings.templateSaveFailed')
+  } finally {
+    savingTemplateAlbumId.value = null
+  }
+}
+
+async function resetTemplate(albumId: number) {
+  savingTemplateAlbumId.value = albumId
+  templateError.value[albumId] = ''
+  try {
+    await checklistApi.resetTemplate(albumId)
+    const template = await checklistApi.getTemplate(albumId)
+    albumTemplates.value[albumId] = template.items.map(item => ({ ...item }))
+    albumTemplateIsDefault.value[albumId] = true
+    toastSuccess(t('settings.templateReset'))
+  } catch (err: any) {
+    templateError.value[albumId] = err.message || t('settings.templateSaveFailed')
+  } finally {
+    savingTemplateAlbumId.value = null
+  }
+}
+
+async function loadAlbumTracks() {
+  const producerAlbums = albums.value.filter(a => appStore.currentUser?.id === a.producer_id)
+  await Promise.all(
+    producerAlbums.map(album =>
+      albumApi.tracks(album.id).then(tracks => {
+        albumTracks.value[album.id] = tracks
+      })
+    )
+  )
+}
+
+async function saveTrackOrder(albumId: number) {
+  const tracks = albumTracks.value[albumId]
+  if (!tracks) return
+  savingOrderAlbumId.value = albumId
+  orderSaveMessage.value[albumId] = undefined as any
+  try {
+    const trackIds = tracks.map(t => t.id)
+    const updated = await albumApi.reorderTracks(albumId, trackIds)
+    albumTracks.value[albumId] = updated
+    orderSaveMessage.value[albumId] = { type: 'success', text: t('settings.orderSaved') }
+  } catch {
+    orderSaveMessage.value[albumId] = { type: 'error', text: t('settings.orderSaveFailed') }
+  } finally {
+    savingOrderAlbumId.value = null
+  }
+}
+
+function toDateInput(iso: string | null | undefined): string {
+  if (!iso) return ''
+  return iso.slice(0, 10)
+}
+
+function syncDeadlineState(albumList: Album[]) {
+  for (const album of albumList) {
+    albumDeadlines[album.id] = {
+      deadline: toDateInput(album.deadline),
+      peer_review: toDateInput(album.phase_deadlines?.peer_review),
+      mastering: toDateInput(album.phase_deadlines?.mastering),
+      final_review: toDateInput(album.phase_deadlines?.final_review),
+    }
+  }
+}
+
+async function saveDeadlines(albumId: number) {
+  const state = albumDeadlines[albumId]
+  if (!state) return
+  savingDeadlineAlbumId.value = albumId
+  try {
+    const phaseDeadlines: Record<string, string> = {}
+    if (state.peer_review) phaseDeadlines.peer_review = new Date(state.peer_review).toISOString()
+    if (state.mastering) phaseDeadlines.mastering = new Date(state.mastering).toISOString()
+    if (state.final_review) phaseDeadlines.final_review = new Date(state.final_review).toISOString()
+    await albumApi.updateDeadlines(albumId, {
+      deadline: state.deadline ? new Date(state.deadline).toISOString() : null,
+      phase_deadlines: Object.keys(phaseDeadlines).length ? phaseDeadlines : null,
+    })
+    toastSuccess(t('settings.deadlinesSaved'))
+  } catch {
+    // error handled by request layer
+  } finally {
+    savingDeadlineAlbumId.value = null
+  }
 }
 </script>
 
@@ -245,7 +396,162 @@ function getUserDisplayName(userId: number): string {
                 </div>
               </div>
             </div>
+
+            <!-- Checklist Template Editor -->
+            <div v-if="albumTemplates[album.id]" class="border-t border-border pt-4 mt-4">
+              <h4 class="text-sm font-mono font-semibold text-foreground mb-3">{{ t('settings.checklistTemplate') }}</h4>
+              <div v-if="albumTemplateIsDefault[album.id]" class="text-xs text-muted-foreground mb-3">
+                {{ t('settings.usingDefaultTemplate', 'Using default template') }}
+              </div>
+              <div class="space-y-3">
+                <div
+                  v-for="(item, index) in albumTemplates[album.id]"
+                  :key="index"
+                  class="flex items-start gap-3 p-3 border border-border rounded-none bg-background"
+                >
+                  <div class="flex-1 space-y-2">
+                    <input
+                      v-model="item.label"
+                      class="input-field w-full text-sm"
+                      :placeholder="t('settings.itemLabel')"
+                    />
+                    <input
+                      v-model="item.description"
+                      class="input-field w-full text-xs"
+                      :placeholder="t('settings.itemDescription')"
+                    />
+                  </div>
+                  <div class="flex items-center gap-2 pt-1.5">
+                    <label class="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
+                      <input
+                        type="checkbox"
+                        v-model="item.required"
+                        class="rounded border-border bg-card text-primary focus:ring-primary"
+                      />
+                      <span>{{ item.required ? t('settings.required') : t('settings.optional') }}</span>
+                    </label>
+                    <button
+                      @click="removeTemplateItem(album.id, index)"
+                      class="text-xs text-error hover:underline ml-2"
+                      :disabled="albumTemplates[album.id].length <= 1"
+                    >
+                      {{ t('settings.removeItem') }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div v-if="templateError[album.id]" class="text-xs text-error mt-2">{{ templateError[album.id] }}</div>
+              <div class="flex items-center gap-2 mt-3">
+                <button @click="addTemplateItem(album.id)" class="btn-secondary text-xs px-3 py-1.5">
+                  {{ t('settings.addItem') }}
+                </button>
+                <button
+                  @click="saveTemplate(album.id)"
+                  :disabled="savingTemplateAlbumId === album.id"
+                  class="btn-primary text-xs px-3 py-1.5"
+                >
+                  {{ savingTemplateAlbumId === album.id ? t('settings.saving') : t('settings.saveTemplate') }}
+                </button>
+                <button
+                  @click="resetTemplate(album.id)"
+                  :disabled="savingTemplateAlbumId === album.id || albumTemplateIsDefault[album.id]"
+                  class="btn-secondary text-xs px-3 py-1.5"
+                  :class="{ 'opacity-40 cursor-not-allowed': albumTemplateIsDefault[album.id] }"
+                >
+                  {{ t('settings.resetToDefault') }}
+                </button>
+              </div>
+            </div>
           </template>
+        </div>
+      </div>
+    </section>
+    <!-- Track Order -->
+    <section v-if="albums.some(a => appStore.currentUser?.id === a.producer_id)">
+      <h2 class="text-lg font-sans font-semibold text-foreground mb-4">{{ t('settings.trackOrder') }}</h2>
+      <div class="space-y-4">
+        <div
+          v-for="album in albums.filter(a => appStore.currentUser?.id === a.producer_id)"
+          :key="'order-' + album.id"
+          class="bg-card border border-border rounded-none p-6 space-y-4"
+        >
+          <h3 class="text-sm font-mono font-semibold text-foreground">{{ album.title }}</h3>
+          <p class="text-xs text-muted-foreground">{{ t('settings.dragToReorder') }}</p>
+
+          <draggable
+            v-if="albumTracks[album.id]?.length"
+            v-model="albumTracks[album.id]"
+            item-key="id"
+            handle=".drag-handle"
+            ghost-class="opacity-30"
+            class="space-y-1"
+          >
+            <template #item="{ element, index }">
+              <div class="flex items-center gap-3 px-3 py-2 border border-border bg-background hover:bg-white/5 transition-colors cursor-move drag-handle">
+                <span class="text-xs text-muted-foreground font-mono w-6 text-right flex-shrink-0">{{ index + 1 }}</span>
+                <span class="text-sm font-medium text-foreground flex-1 truncate">{{ element.title }}</span>
+                <span class="text-xs text-muted-foreground truncate max-w-[120px]">{{ element.artist }}</span>
+                <StatusBadge :status="element.status" type="track" />
+              </div>
+            </template>
+          </draggable>
+          <div v-else class="text-sm text-muted-foreground py-4 text-center">{{ t('dashboard.noTracks') }}</div>
+
+          <div class="flex items-center gap-3">
+            <button
+              @click="saveTrackOrder(album.id)"
+              :disabled="savingOrderAlbumId === album.id || !albumTracks[album.id]?.length"
+              class="btn-primary text-sm"
+            >
+              {{ savingOrderAlbumId === album.id ? t('settings.saving') : t('settings.saveOrder') }}
+            </button>
+            <span
+              v-if="orderSaveMessage[album.id]"
+              class="text-xs"
+              :class="orderSaveMessage[album.id].type === 'success' ? 'text-success' : 'text-error'"
+            >
+              {{ orderSaveMessage[album.id].text }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Deadlines -->
+    <section v-if="albums.some(a => appStore.currentUser?.id === a.producer_id)">
+      <h2 class="text-lg font-sans font-semibold text-foreground mb-4">{{ t('settings.deadlines') }}</h2>
+      <div class="space-y-4">
+        <div
+          v-for="album in albums.filter(a => appStore.currentUser?.id === a.producer_id)"
+          :key="'deadline-' + album.id"
+          class="bg-card border border-border rounded-none p-6 space-y-4"
+        >
+          <h3 class="text-sm font-mono font-semibold text-foreground">{{ album.title }}</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.albumDeadline') }}</label>
+              <input v-model="albumDeadlines[album.id].deadline" type="date" class="input-field w-full" />
+            </div>
+            <div>
+              <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.peerReviewDeadline') }}</label>
+              <input v-model="albumDeadlines[album.id].peer_review" type="date" class="input-field w-full" />
+            </div>
+            <div>
+              <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.masteringDeadline') }}</label>
+              <input v-model="albumDeadlines[album.id].mastering" type="date" class="input-field w-full" />
+            </div>
+            <div>
+              <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.finalReviewDeadline') }}</label>
+              <input v-model="albumDeadlines[album.id].final_review" type="date" class="input-field w-full" />
+            </div>
+          </div>
+          <button
+            @click="saveDeadlines(album.id)"
+            :disabled="savingDeadlineAlbumId === album.id"
+            class="btn-primary text-sm"
+          >
+            {{ savingDeadlineAlbumId === album.id ? t('settings.saving') : t('settings.saveDeadlines') }}
+          </button>
         </div>
       </div>
     </section>

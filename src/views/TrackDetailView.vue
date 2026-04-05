@@ -2,8 +2,8 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi } from '@/api'
-import type { Track, Issue, WorkflowEvent, TrackSourceVersion } from '@/types'
+import { trackApi, discussionApi } from '@/api'
+import type { Track, Issue, Discussion, WorkflowEvent, TrackSourceVersion } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
@@ -80,9 +80,12 @@ const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
+const discussions = ref<Discussion[]>([])
 const events = ref<WorkflowEvent[]>([])
 const sourceVersions = ref<TrackSourceVersion[]>([])
 const loading = ref(true)
+const newDiscussionContent = ref('')
+const postingDiscussion = ref(false)
 const showVersionCompare = ref(false)
 const selectedCompareVersionId = ref<number | null>(null)
 
@@ -141,7 +144,10 @@ const olderVersions = computed(() =>
             {{ t('trackDetail.rejectionMode', { mode: track.rejection_mode }) }}
           </span>
         </div>
-        <h1 class="text-2xl font-sans font-bold text-foreground">{{ track.title }}</h1>
+        <h1 class="text-2xl font-sans font-bold text-foreground">
+          <span v-if="track.track_number" class="text-muted-foreground font-mono">#{{ track.track_number }}</span>
+          {{ track.title }}
+        </h1>
         <p class="text-muted-foreground">
           {{ track.artist }} · source v{{ track.version }} · cycle {{ track.workflow_cycle }}
         </p>

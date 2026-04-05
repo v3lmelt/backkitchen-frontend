@@ -58,6 +58,8 @@ export interface Album {
   cover_color: string
   producer_id: number | null
   mastering_engineer_id: number | null
+  deadline?: string | null
+  phase_deadlines?: Record<string, string> | null
   producer?: User | null
   mastering_engineer?: User | null
   members: AlbumMember[]
@@ -116,6 +118,15 @@ export interface CommentImage {
   created_at: string
 }
 
+export interface CommentAudio {
+  id: number
+  comment_id: number
+  audio_url: string
+  original_filename: string
+  duration: number | null
+  created_at: string
+}
+
 export interface Comment {
   id: number
   issue_id: number
@@ -125,6 +136,7 @@ export interface Comment {
   is_status_note: boolean
   created_at: string
   images?: CommentImage[]
+  audios?: CommentAudio[]
 }
 
 export interface ChecklistItem {
@@ -158,6 +170,7 @@ export interface Track {
   file_path: string | null
   duration: number | null
   bpm: number | null
+  track_number?: number | null
   status: TrackStatus
   rejection_mode: RejectionMode | null
   version: number
@@ -184,6 +197,7 @@ export interface TrackDetailResponse {
   checklist_items: ChecklistItem[]
   events: WorkflowEvent[]
   source_versions?: TrackSourceVersion[]
+  discussions?: Discussion[]
 }
 
 export interface Notification {
@@ -198,9 +212,40 @@ export interface Notification {
   created_at: string
 }
 
+export interface ChecklistTemplateItem {
+  label: string
+  description?: string | null
+  required: boolean
+  sort_order: number
+}
+
+export interface ChecklistTemplateRead {
+  items: ChecklistTemplateItem[]
+  is_default: boolean
+}
+
+export interface DiscussionImage {
+  id: number
+  discussion_id: number
+  image_url: string
+  created_at: string
+}
+
+export interface Discussion {
+  id: number
+  track_id: number
+  author_id: number
+  content: string
+  created_at: string
+  author?: User | null
+  images?: DiscussionImage[]
+}
+
 export interface AlbumStats {
   total_tracks: number
   by_status: Partial<Record<TrackStatus, number>>
   open_issues: number
   recent_events: WorkflowEvent[]
+  deadline?: string | null
+  overdue_track_count?: number
 }
