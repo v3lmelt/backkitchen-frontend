@@ -3,6 +3,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, discussionApi, API_ORIGIN } from '@/api'
+import { useAppStore } from '@/stores/app'
 import type { Track, Issue, Discussion, WorkflowEvent, TrackSourceVersion } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
 import { hashId } from '@/utils/hash'
@@ -13,8 +14,17 @@ import StatusBadge from '@/components/workflow/StatusBadge.vue'
 
 const route = useRoute()
 const router = useRouter()
+const appStore = useAppStore()
 const { t, te, locale } = useI18n()
 const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
+
+// Anonymize peer reviewer only for the submitter during active peer review phases
+const shouldAnonymizePeer = computed(() => {
+  if (!track.value || !appStore.currentUser) return false
+  const isSubmitter = appStore.currentUser.id === track.value.submitter_id
+  const peerPhases = ['peer_review', 'peer_revision']
+  return isSubmitter && peerPhases.includes(track.value.status)
+})
 
 // Single pass over issues — builds both number and peer-phase lookup
 const issueMetadata = computed(() => {
@@ -39,7 +49,7 @@ function formatTimelineEvent(event: WorkflowEvent): string {
   const rawName = event.actor?.display_name
   const name = !rawName
     ? t('trackDetail.system')
-    : isPeer && event.actor
+    : isPeer && shouldAnonymizePeer.value && event.actor
       ? `#${hashId(event.actor.id)}`
       : rawName
 
@@ -170,23 +180,23 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
 <template>
   <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
   <div v-else-if="track" class="space-y-6">
-    <div class="flex items-start justify-between gap-4">
-      <div>
-        <div class="flex items-center gap-2 mb-2">
+    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2 mb-2 flex-wrap">
           <StatusBadge :status="track.status" type="track" />
           <span v-if="track.rejection_mode" class="text-xs text-muted-foreground">
             {{ t('trackDetail.rejectionMode', { mode: track.rejection_mode }) }}
           </span>
         </div>
-        <h1 class="text-2xl font-sans font-bold text-foreground">
+        <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">
           <span v-if="track.track_number" class="text-muted-foreground font-mono">#{{ track.track_number }}</span>
           {{ track.title }}
         </h1>
-        <p class="text-muted-foreground">
+        <p class="text-sm sm:text-base text-muted-foreground">
           {{ track.artist }} · source v{{ track.version }} · cycle {{ track.workflow_cycle }}
         </p>
       </div>
-      <div class="flex items-center gap-2 flex-wrap justify-end">
+      <div class="flex items-center gap-2 flex-wrap">
         <button
           v-for="action in track.allowed_actions"
           :key="action"
@@ -203,8 +213,8 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
       <WorkflowProgress :status="track.status" />
     </div>
 
-    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-      <div class="xl:col-span-2 space-y-6">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2 space-y-6">
         <div v-if="audioUrl">
           <div class="flex items-center justify-between mb-2">
             <h3 class="text-sm font-medium text-muted-foreground">{{ t('trackDetail.currentSourceAudio') }}</h3>
@@ -309,7 +319,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
           </div>
           <div class="flex justify-between">
             <span class="text-muted-foreground">{{ t('trackDetail.peerReviewer') }}</span>
-            <span class="text-foreground font-mono">{{ track.peer_reviewer ? `#${hashId(track.peer_reviewer.id)}` : '--' }}</span>
+            <span class="text-foreground" :class="{ 'font-mono': shouldAnonymizePeer }">{{ track.peer_reviewer ? (shouldAnonymizePeer ? `#${hashId(track.peer_reviewer.id)}` : track.peer_reviewer.display_name) : '--' }}</span>
           </div>
           <div class="flex justify-between">
             <span class="text-muted-foreground">{{ t('trackDetail.openIssues') }}</span>
