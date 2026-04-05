@@ -45,23 +45,46 @@ const lastSelectionAt = ref(0)
 const activePointGroupKey = ref<string | null>(null)
 const abMode = ref<'A' | 'B'>('A')
 const isCompareMode = computed(() => !!props.compareVersionId)
+const isCompareLoading = ref(false)
+const isCompareReady = ref(false)
 const compareDuration = ref(0)
 const compareCurrentTime = ref(0)
 const activeDuration = computed(() => abMode.value === 'B' && compareDuration.value > 0 ? compareDuration.value : duration.value)
 const activeCurrentTime = computed(() => abMode.value === 'B' && compareDuration.value > 0 ? compareCurrentTime.value : currentTime.value)
 const selectionVisualColor = 'rgba(34, 211, 238, 0.28)'
-const SEVERITY_COLORS: Record<string, string> = {
-  critical: '#ef4444',
-  major: '#f97316',
-  minor: '#eab308',
-  suggestion: '#3b82f6',
-}
 
 const SEVERITY_REGION_COLORS: Record<string, string> = {
   critical: 'rgba(239,68,68,0.22)',
   major: 'rgba(249,115,22,0.22)',
   minor: 'rgba(234,179,8,0.22)',
   suggestion: 'rgba(59,130,246,0.22)',
+}
+
+const RANGE_TONES: Record<string, { edge: string; fill: string; soft: string; glow: string }> = {
+  critical: {
+    edge: '#FF5C33',
+    fill: 'rgba(255, 92, 51, 0.78)',
+    soft: 'rgba(255, 92, 51, 0.30)',
+    glow: 'rgba(255, 92, 51, 0.22)',
+  },
+  major: {
+    edge: '#FF8400',
+    fill: 'rgba(255, 132, 0, 0.78)',
+    soft: 'rgba(255, 132, 0, 0.28)',
+    glow: 'rgba(255, 132, 0, 0.22)',
+  },
+  minor: {
+    edge: '#B2B2FF',
+    fill: 'rgba(178, 178, 255, 0.70)',
+    soft: 'rgba(178, 178, 255, 0.24)',
+    glow: 'rgba(178, 178, 255, 0.20)',
+  },
+  suggestion: {
+    edge: '#B8B9B6',
+    fill: 'rgba(184, 185, 182, 0.62)',
+    soft: 'rgba(184, 185, 182, 0.22)',
+    glow: 'rgba(184, 185, 182, 0.18)',
+  },
 }
 
 type MarkerStatus = 'unresolved' | 'resolved'
@@ -75,6 +98,11 @@ interface PointMarkerGroup {
   status: MarkerStatus
   markerAlign: 'left' | 'center' | 'right'
   popoverAlign: 'left' | 'center' | 'right'
+}
+
+interface RangeLaneItem {
+  issue: Issue & { time_end: number }
+  lane: number
 }
 
 
@@ -165,6 +193,28 @@ const rangeIssues = computed(() =>
   ),
 )
 
+const rangeLaneItems = computed<RangeLaneItem[]>(() => {
+  const laneEnds: number[] = []
+
+  return [...rangeIssues.value]
+    .sort((a, b) => a.time_start - b.time_start || a.time_end - b.time_end)
+    .map((issue) => {
+      let lane = laneEnds.findIndex(end => issue.time_start >= end)
+      if (lane === -1) {
+        lane = laneEnds.length
+        laneEnds.push(issue.time_end)
+      } else {
+        laneEnds[lane] = issue.time_end
+      }
+
+      return { issue, lane }
+    })
+})
+
+const rangeLaneCount = computed(() =>
+  rangeLaneItems.value.reduce((max, item) => Math.max(max, item.lane + 1), 0),
+)
+
 const overlayHeight = computed(() => props.height || 128)
 const pointLineHeight = computed(() => `${Math.max((props.height || 128) - 28, 0)}px`)
 
@@ -194,12 +244,90 @@ function lineClassForStatus(status: MarkerStatus) {
   return status === 'resolved' ? 'bg-success/90' : 'bg-error/90'
 }
 
-function severityColor(severity: string): string {
-  return SEVERITY_COLORS[severity] ?? '#6366f1'
-}
-
 function severityRegionColor(severity: string): string {
   return SEVERITY_REGION_COLORS[severity] ?? 'rgba(99,102,241,0.22)'
+}
+
+function rangeTone(severity: string) {
+  return RANGE_TONES[severity] ?? RANGE_TONES.major
+}
+
+function rangeTrackStyle(issue: Issue) {
+  const tone = rangeTone(issue.severity)
+  const isActive = activeRangeIssueId.value === issue.id
+  const isResolved = issue.status === 'resolved'
+
+  return {
+    background: isActive
+      ? `linear-gradient(90deg, ${tone.soft} 0%, ${tone.fill} 18%, ${tone.fill} 82%, ${tone.soft} 100%)`
+      : tone.soft,
+    borderColor: tone.edge,
+    boxShadow: isActive
+      ? `0 0 0 1px ${tone.edge}, inset 0 1px 0 rgba(255,255,255,0.16)`
+      : `0 0 0 1px ${tone.edge}, inset 0 1px 0 rgba(255,255,255,0.08)`,
+    opacity: isResolved && !isActive ? '0.72' : '1',
+  }
+}
+
+function rangeCapStyle(issue: Issue) {
+  const tone = rangeTone(issue.severity)
+  return {
+    backgroundColor: tone.edge,
+    boxShadow: `0 0 10px ${tone.glow}`,
+  }
+}
+
+function rangeTooltipStyle(issue: Issue) {
+  const tone = rangeTone(issue.severity)
+  return {
+    borderColor: tone.edge,
+    boxShadow: '0 6px 18px rgba(0,0,0,0.28)',
+  }
+}
+
+function rangeLaneOffset(lane: number): string {
+  return `${lane * 8}px`
+}
+
+function applyCompareMode(mode: 'A' | 'B') {
+  if (!wavesurfer.value) return
+
+  if (!compareWaveSurfer.value || !isCompareReady.value) {
+    wavesurfer.value.setVolume(1)
+    wavesurfer.value.setOptions({ waveColor: '#4A4A5A', progressColor: '#22D3EE', cursorWidth: 2 })
+    return
+  }
+
+  if (mode === 'A') {
+    wavesurfer.value.setVolume(1)
+    compareWaveSurfer.value.setVolume(0)
+    wavesurfer.value.setOptions({ waveColor: '#4A4A5A', progressColor: '#22D3EE', cursorWidth: 2 })
+    compareWaveSurfer.value.setOptions({ waveColor: 'rgba(249,115,22,0.15)', progressColor: 'rgba(249,115,22,0.2)', cursorWidth: 0 })
+    return
+  }
+
+  syncCompareToPrimaryTime()
+  wavesurfer.value.setVolume(0)
+  compareWaveSurfer.value.setVolume(1)
+  wavesurfer.value.setOptions({ waveColor: 'rgba(74,74,90,0.15)', progressColor: 'rgba(34,211,238,0.2)', cursorWidth: 0 })
+  compareWaveSurfer.value.setOptions({ waveColor: '#F97316', progressColor: '#FB923C', cursorWidth: 2 })
+}
+
+function syncCompareToPrimaryTime(time = wavesurfer.value?.getCurrentTime() ?? 0) {
+  if (!compareWaveSurfer.value) return
+
+  const compDur = compareWaveSurfer.value.getDuration()
+  if (compDur <= 0) return
+
+  const targetTime = Math.min(Math.max(time, 0), compDur)
+  compareWaveSurfer.value.seekTo(targetTime / compDur)
+}
+
+function syncPrimaryToCompareTime(time: number) {
+  if (!wavesurfer.value || duration.value <= 0) return
+
+  const targetTime = Math.min(Math.max(time, 0), duration.value)
+  wavesurfer.value.seekTo(targetTime / duration.value)
 }
 
 function _removeRegionById(id: string) {
@@ -379,15 +507,15 @@ onMounted(async () => {
       emit('timeupdate', time)
       lastTimeUpdateMs = now
     }
-    // Drift correction: only in A mode, and only outside the post-interaction window.
-    // In B mode the two tracks intentionally play from different absolute positions
-    // (the user sought B to a visual fraction), so correcting against A's time is wrong.
-    if (compareWaveSurfer.value && isCompareMode.value && abMode.value === 'A' && now - lastInteractionMs > 300) {
+    // A track remains the transport master for compare mode, so keep B aligned to
+    // the same absolute timestamp after seeks and while playback is running.
+    if (compareWaveSurfer.value && isCompareMode.value && now - lastInteractionMs > 300) {
       const compDur = compareWaveSurfer.value.getDuration()
       if (compDur > 0) {
         const compareTime = compareWaveSurfer.value.getCurrentTime()
-        if (Math.abs(compareTime - time) > 0.5) {
-          compareWaveSurfer.value.seekTo(time / compDur)
+        const targetTime = Math.min(time, compDur)
+        if (Math.abs(compareTime - targetTime) > 0.15) {
+          syncCompareToPrimaryTime(time)
         }
       }
     }
@@ -404,15 +532,18 @@ onMounted(async () => {
   ws.on('interaction', (newTime: number) => {
     if (compareWaveSurfer.value && isCompareMode.value) {
       lastInteractionMs = Date.now()
-      const primaryDur = ws.getDuration()
-      const compDur = compareWaveSurfer.value.getDuration()
-      if (primaryDur > 0 && compDur > 0) {
-        if (abMode.value === 'A') {
-          compareWaveSurfer.value.seekTo(newTime / compDur)
-        } else {
-          compareWaveSurfer.value.seekTo(newTime / primaryDur)
+      if (abMode.value === 'B') {
+        const primaryDur = ws.getDuration()
+        const compDur = compareWaveSurfer.value.getDuration()
+        if (primaryDur > 0 && compDur > 0) {
+          const clickedRatio = Math.min(Math.max(newTime / primaryDur, 0), 1)
+          const compareTime = clickedRatio * compDur
+          syncPrimaryToCompareTime(compareTime)
+          syncCompareToPrimaryTime(compareTime)
+          return
         }
       }
+      syncCompareToPrimaryTime(newTime)
     }
   })
 
@@ -504,15 +635,21 @@ watch(() => props.compareVersionId, async (newId) => {
     compareDuration.value = 0
     compareCurrentTime.value = 0
   }
+  isCompareLoading.value = false
+  isCompareReady.value = false
   if (!newId || !props.trackId) {
     abMode.value = 'A'
-    wavesurfer.value?.setVolume(1)
+    applyCompareMode('A')
     return
   }
 
+  isCompareLoading.value = true
   await nextTick()
   const compareContainer = compareContainerRef.value
-  if (!compareContainer) return
+  if (!compareContainer) {
+    isCompareLoading.value = false
+    return
+  }
 
   const ws = WaveSurfer.create({
     container: compareContainer,
@@ -528,6 +665,15 @@ watch(() => props.compareVersionId, async (newId) => {
 
   ws.on('ready', () => {
     compareDuration.value = ws.getDuration()
+    isCompareLoading.value = false
+    isCompareReady.value = true
+    syncCompareToPrimaryTime()
+    applyCompareMode(abMode.value)
+
+    if (wavesurfer.value?.isPlaying()) {
+      syncCompareToPrimaryTime()
+      ws.play()
+    }
   })
   let lastCompareUpdateMs = 0
   ws.on('timeupdate', (t: number) => {
@@ -539,6 +685,9 @@ watch(() => props.compareVersionId, async (newId) => {
   })
 
   const compareUrl = `/api/tracks/${props.trackId}/source-versions/${newId}/audio`
+  compareWaveSurfer.value = ws
+  applyCompareMode(abMode.value)
+
   try {
     const token = localStorage.getItem(TOKEN_KEY)
     const res = await fetch(compareUrl, {
@@ -547,50 +696,37 @@ watch(() => props.compareVersionId, async (newId) => {
     if (res.ok) {
       const blob = await res.blob()
       await ws.loadBlob(blob)
+    } else {
+      isCompareLoading.value = false
     }
-  } catch {}
-
-  compareWaveSurfer.value = ws
-  if (abMode.value === 'A') {
-    ws.setVolume(0)
-  } else {
-    wavesurfer.value?.setVolume(0)
-    ws.setVolume(1)
-  }
-  // If main player is already playing, start compare in sync
-  if (wavesurfer.value?.isPlaying()) {
-    const mainTime = wavesurfer.value.getCurrentTime()
-    const compDuration = ws.getDuration()
-    if (compDuration > 0) {
-      ws.seekTo(mainTime / compDuration)
-    }
-    ws.play()
+  } catch {
+    isCompareLoading.value = false
   }
 })
 
 watch(abMode, (mode) => {
-  if (!wavesurfer.value || !compareWaveSurfer.value) return
-  if (mode === 'A') {
-    wavesurfer.value.setVolume(1)
-    compareWaveSurfer.value.setVolume(0)
-    wavesurfer.value.setOptions({ waveColor: '#4A4A5A', progressColor: '#22D3EE', cursorWidth: 2 })
-    compareWaveSurfer.value.setOptions({ waveColor: 'rgba(249,115,22,0.15)', progressColor: 'rgba(249,115,22,0.2)', cursorWidth: 0 })
-  } else {
-    wavesurfer.value.setVolume(0)
-    compareWaveSurfer.value.setVolume(1)
-    wavesurfer.value.setOptions({ waveColor: 'rgba(74,74,90,0.15)', progressColor: 'rgba(34,211,238,0.2)', cursorWidth: 0 })
-    compareWaveSurfer.value.setOptions({ waveColor: '#F97316', progressColor: '#FB923C', cursorWidth: 2 })
-  }
+  applyCompareMode(mode)
 })
 
 function togglePlay() {
   wavesurfer.value?.playPause()
   if (compareWaveSurfer.value && isCompareMode.value) {
     if (wavesurfer.value?.isPlaying()) {
+      syncCompareToPrimaryTime()
       compareWaveSurfer.value.play()
     } else {
       compareWaveSurfer.value.pause()
     }
+  }
+}
+
+async function play() {
+  if (!wavesurfer.value) return
+  await wavesurfer.value.play()
+
+  if (compareWaveSurfer.value && isCompareMode.value) {
+    syncCompareToPrimaryTime()
+    await compareWaveSurfer.value.play()
   }
 }
 
@@ -606,12 +742,17 @@ function seekTo(time: number) {
   }
 }
 
+async function playFrom(time: number) {
+  seekTo(time)
+  await play()
+}
+
 onBeforeUnmount(() => {
   wavesurfer.value?.destroy()
   compareWaveSurfer.value?.destroy()
 })
 
-defineExpose({ seekTo, togglePlay, highlightIssue })
+defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom })
 </script>
 
 <template>
@@ -682,6 +823,40 @@ defineExpose({ seekTo, togglePlay, highlightIssue })
           :style="{ height: `${props.height || 128}px` }"
         />
         <div
+          v-if="rangeLaneItems.length > 0 && duration > 0"
+          class="pointer-events-none absolute inset-x-2 bottom-2 z-10 overflow-visible"
+          :style="{ height: `${Math.max(rangeLaneCount, 1) * 8}px` }"
+        >
+          <button
+            v-for="item in rangeLaneItems"
+            :key="item.issue.id"
+            type="button"
+            class="group pointer-events-auto absolute h-1.5 min-w-[6px] rounded-full border transition-all duration-150"
+            :class="activeRangeIssueId === item.issue.id ? 'z-10' : 'z-[1]'"
+            :style="{
+              left: getMarkerPosition(item.issue.time_start),
+              width: getRangeWidth(item.issue.time_start, item.issue.time_end),
+              bottom: rangeLaneOffset(item.lane),
+              ...rangeTrackStyle(item.issue),
+            }"
+            @click.stop="handleTimelineClick(item.issue)"
+          >
+            <span
+              class="pointer-events-none absolute left-0 top-1/2 h-2.5 w-px -translate-y-1/2"
+              :style="rangeCapStyle(item.issue)"
+            />
+            <span
+              class="pointer-events-none absolute right-0 top-1/2 h-2.5 w-px -translate-y-1/2"
+              :style="rangeCapStyle(item.issue)"
+            />
+            <span
+              class="pointer-events-none absolute left-1/2 bottom-full z-20 mb-2 min-w-max -translate-x-1/2 whitespace-nowrap rounded-full bg-card px-2 py-0.5 text-[11px] font-mono text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+              :class="activeRangeIssueId === item.issue.id ? 'opacity-100' : ''"
+              :style="rangeTooltipStyle(item.issue)"
+            >{{ formatTime(item.issue.time_start) }} - {{ formatTime(item.issue.time_end) }}</span>
+          </button>
+        </div>
+        <div
           v-if="isCompareMode"
           ref="compareContainerRef"
           class="absolute inset-0 pointer-events-none transition-[z-index]"
@@ -695,36 +870,18 @@ defineExpose({ seekTo, togglePlay, highlightIssue })
           </button>
           <button
             @click="abMode = 'B'"
-            :class="['px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'B' ? 'bg-primary text-background' : 'text-muted-foreground hover:text-white']">
+            :class="[
+              'px-2 py-0.5 rounded text-xs font-bold transition-colors',
+              abMode === 'B' ? 'bg-primary text-background' : 'text-muted-foreground hover:text-white',
+              isCompareLoading ? 'cursor-wait' : '',
+            ]">
             B
           </button>
-          <span class="text-xs text-muted-foreground px-1">{{ abMode === 'A' ? $t('compare.currentVersion') : $t('compare.previousVersion') }}</span>
+          <span class="text-xs text-muted-foreground px-1">
+            {{ isCompareLoading ? 'Loading B...' : (abMode === 'A' ? $t('compare.currentVersion') : $t('compare.previousVersion')) }}
+          </span>
         </div>
       </div>
-    </div>
-
-    <!-- Range issue timeline -->
-    <div
-      v-if="rangeIssues.length > 0 && duration > 0"
-      class="relative mx-0.5 h-2 rounded-full bg-white/5"
-    >
-      <button
-        v-for="issue in rangeIssues"
-        :key="issue.id"
-        type="button"
-        class="group absolute top-0 h-full min-w-[3px] rounded-sm transition-opacity"
-        :class="activeRangeIssueId === issue.id ? 'opacity-100 ring-1 ring-white/40 z-10' : 'opacity-60 hover:opacity-100'"
-        :style="{
-          left: getMarkerPosition(issue.time_start),
-          width: getRangeWidth(issue.time_start, issue.time_end),
-          backgroundColor: severityColor(issue.severity),
-        }"
-        @click.stop="handleTimelineClick(issue)"
-      >
-        <span
-          class="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-card/95 px-1.5 py-0.5 text-[11px] text-foreground shadow border border-border opacity-0 group-hover:opacity-100 transition-opacity z-20"
-        >{{ issue.title }}</span>
-      </button>
     </div>
 
     <div class="flex items-center gap-4">

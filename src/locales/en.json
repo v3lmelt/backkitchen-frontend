@@ -286,7 +286,13 @@
     "onlyUnresolved": "Only show unresolved",
     "noVisibleIssues": "No issues match the current filter",
     "currentIssue": "Current",
-    "unresolvedTitle": "Unresolved Issues"
+    "unresolvedTitle": "Unresolved Issues",
+    "outdatedVersionTitle": "This issue was raised on source v{issueVersion}; the track is now on v{currentVersion}",
+    "outdatedVersionBody": "This detail view has switched to the source audio version where the issue was raised, and the marker is shown in that original context. You can still open version compare to inspect it against the current version.",
+    "outdatedVersionUnavailable": "The original source-version audio is unavailable, so this page cannot restore the marker in its original context. You can still return to the track page for the current-version view.",
+    "openVersionCompare": "Open Version Compare",
+    "outdatedWaveformHint": "The waveform is now playing the source-version audio where this issue was originally raised, with the marker restored.",
+    "outdatedWaveformUnavailable": "The source-version audio for this issue is unavailable, so the marker is hidden here."
   },
   "upload": {
     "heading": "Submit Track",
@@ -406,6 +412,19 @@
     "currentVersion": "Current",
     "previousVersion": "Previous",
     "clear": "Clear"
+  },
+  "timestamp": {
+    "syntaxTitle": "Timestamp Syntax",
+    "syntaxDescription": "Enter timestamps or ranges to create highlighted playback links after posting. Comments default to attachment audio, while issue descriptions default to track audio.",
+    "detectedTitle": "Detected time references",
+    "trackAudio": "Track audio",
+    "attachmentAudio": "Attachment audio",
+    "examples": {
+      "point": "Single timestamp",
+      "range": "Time range, plays from the start",
+      "track": "Explicitly target track audio",
+      "attachment": "Explicitly target attachment audio"
+    }
   },
   "issue": {
     "selected": "issues selected",

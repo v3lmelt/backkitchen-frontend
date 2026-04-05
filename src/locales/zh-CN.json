@@ -290,7 +290,13 @@
     "onlyUnresolved": "只显示未解决项",
     "noVisibleIssues": "当前筛选下没有可显示的问题",
     "currentIssue": "当前问题",
-    "unresolvedTitle": "待解决问题"
+    "unresolvedTitle": "待解决问题",
+    "outdatedVersionTitle": "该问题创建于 source v{issueVersion}，当前曲目已更新到 v{currentVersion}",
+    "outdatedVersionBody": "当前详情页已切换到该问题所属的旧版本音频，并会显示对应标记。你也可以打开版本对比查看新旧版本。",
+    "outdatedVersionUnavailable": "当前缺少该旧版本音频文件，因此无法在本页还原原始标记位置。你仍然可以打开曲目页查看当前版本上下文。",
+    "openVersionCompare": "打开版本对比",
+    "outdatedWaveformHint": "当前波形已切换到问题所属的旧版本音频，并显示该问题标记。",
+    "outdatedWaveformUnavailable": "无法加载该问题所属的旧版本音频，因此这里不显示问题标记。"
   },
   "upload": {
     "heading": "提交曲目",
@@ -444,6 +450,19 @@
     "currentVersion": "当前版本",
     "previousVersion": "旧版本",
     "clear": "取消对比"
+  },
+  "timestamp": {
+    "syntaxTitle": "时间点语法",
+    "syntaxDescription": "输入时间点或时间段后，发布后会高亮并可点击跳转播放。评论默认指向附件音频，问题描述默认指向曲目音频。",
+    "detectedTitle": "已识别的时间信息",
+    "trackAudio": "曲目音频",
+    "attachmentAudio": "附件音频",
+    "examples": {
+      "point": "单个时间点",
+      "range": "时间段，点击后从起点播放",
+      "track": "显式指定曲目音频",
+      "attachment": "显式指定附件音频"
+    }
   },
   "issue": {
     "selected": "个问题已选",

@@ -87,6 +87,11 @@ async function loadPage() {
 }
 
 const audioUrl = computed(() => track.value?.file_path ? `/api/tracks/${trackId.value}/audio` : '')
+const waveformIssues = computed(() => {
+  const currentVersion = track.value?.version
+  if (currentVersion == null) return issues.value
+  return issues.value.filter(issue => issue.source_version_number == null || issue.source_version_number === currentVersion)
+})
 
 async function submitChecklist() {
   error.value = ''
@@ -149,7 +154,7 @@ const handleDownload = () => downloadTrackAudio(audioUrl, track)
       </div>
       <WaveformPlayer
         :audio-url="audioUrl"
-        :issues="issues"
+        :issues="waveformIssues"
         :selectable="true"
         :selected-range="issueFormRef?.selectedRange ?? null"
         @click="(t: number) => issueFormRef?.handleClick(t)"
@@ -171,7 +176,7 @@ const handleDownload = () => downloadTrackAudio(audioUrl, track)
           </template>
         </IssueCreatePanel>
 
-        <IssueMarkerList :issues="issues" @select="onIssueSelect" />
+        <IssueMarkerList :issues="issues" :current-source-version-number="track.version" @select="onIssueSelect" />
       </div>
 
       <div class="card space-y-4">

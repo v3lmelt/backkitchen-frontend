@@ -87,6 +87,18 @@ describe('IssueMarkerList', () => {
     expect(wrapper.text()).toContain('v2')
   })
 
+  it('visually fades issues from non-current source versions', () => {
+    const wrapper = mountWithPlugins(IssueMarkerList, {
+      props: {
+        issues: [makeIssue({ source_version_number: 1 })],
+        currentSourceVersionNumber: 2,
+      },
+    })
+
+    expect(wrapper.find('.card').classes()).toContain('opacity-60')
+    expect(wrapper.find('h4').classes()).toContain('text-muted-foreground')
+  })
+
   it('shows hashed author id for peer phase issues', () => {
     const wrapper = mountWithPlugins(IssueMarkerList, {
       props: {

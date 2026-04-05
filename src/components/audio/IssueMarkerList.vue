@@ -9,9 +9,11 @@ const props = withDefaults(defineProps<{
   issues: Issue[]
   selectable?: boolean
   selectedIds?: number[]
+  currentSourceVersionNumber?: number | null
 }>(), {
   selectable: false,
   selectedIds: () => [],
+  currentSourceVersionNumber: null,
 })
 
 const emit = defineEmits<{
@@ -39,6 +41,11 @@ function authorLabel(issue: Issue): string {
   if (issue.phase === 'peer') return `#${hashId(issue.author_id)}`
   return issue.author?.display_name ?? `#${issue.author_id}`
 }
+
+function isOutdatedIssue(issue: Issue): boolean {
+  if (issue.source_version_number == null || props.currentSourceVersionNumber == null) return false
+  return issue.source_version_number !== props.currentSourceVersionNumber
+}
 </script>
 
 <template>
@@ -47,7 +54,8 @@ function authorLabel(issue: Issue): string {
       v-for="(issue, index) in issues"
       :key="issue.id"
       @click="emit('select', issue)"
-      class="card cursor-pointer hover:border-primary/50 transition-colors"
+      class="card cursor-pointer transition-colors"
+      :class="isOutdatedIssue(issue) ? 'opacity-60 hover:border-border' : 'hover:border-primary/50'"
     >
       <div class="flex items-start gap-2">
         <input
@@ -70,8 +78,8 @@ function authorLabel(issue: Issue): string {
             <StatusBadge :status="issue.severity" type="severity" />
             <StatusBadge :status="issue.status" type="issue" />
           </div>
-          <h4 class="text-sm font-medium text-foreground truncate">{{ issue.title }}</h4>
-          <p class="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
+          <h4 class="truncate text-sm font-medium" :class="isOutdatedIssue(issue) ? 'text-muted-foreground' : 'text-foreground'">{{ issue.title }}</h4>
+          <p class="mt-0.5 flex items-center gap-1.5 text-xs" :class="isOutdatedIssue(issue) ? 'text-muted-foreground/80' : 'text-muted-foreground'">
             <span>{{ formatTime(issue.time_start) }}<span v-if="issue.time_end"> - {{ formatTime(issue.time_end) }}</span></span>
             <span class="text-border">·</span>
             <span :class="issue.phase === 'peer' ? 'font-mono' : ''">{{ authorLabel(issue) }}</span>

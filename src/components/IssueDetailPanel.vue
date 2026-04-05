@@ -3,10 +3,13 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { issueApi } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Issue, IssueStatus } from '@/types'
+import type { Comment, Issue, IssueStatus } from '@/types'
+import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
+import TimestampText from '@/components/common/TimestampText.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatTimestamp, formatDuration } from '@/utils/time'
 import { hashId } from '@/utils/hash'
+import type { TimeReference, TimestampTarget } from '@/utils/timestamps'
 
 const props = defineProps<{ issue: Issue | null }>()
 
@@ -30,6 +33,8 @@ const AUDIO_ACCEPT = 'audio/mpeg,audio/wav,audio/flac,audio/aac,audio/ogg,.mp3,.
 const MAX_AUDIOS = 3
 const selectedAudios = ref<File[]>([])
 const audioInputRef = ref<HTMLInputElement | null>(null)
+const commentInputFocused = ref(false)
+const commentAudioRefs = new Map<number, HTMLAudioElement[]>()
 
 watch(() => props.issue, async (issue) => {
   pendingStatus.value = null
@@ -49,6 +54,31 @@ watch(() => props.issue, async (issue) => {
 })
 
 function formatTime(s: number) { return formatTimestamp(s) }
+
+function setCommentAudioRef(commentId: number, index: number, element: unknown) {
+  const refs = commentAudioRefs.get(commentId) ?? []
+  if (element instanceof HTMLAudioElement) {
+    refs[index] = element
+    commentAudioRefs.set(commentId, refs)
+    return
+  }
+
+  refs.splice(index, 1)
+  if (refs.length) commentAudioRefs.set(commentId, refs)
+  else commentAudioRefs.delete(commentId)
+}
+
+async function playAttachmentReference(commentId: number, reference: TimeReference) {
+  const audio = commentAudioRefs.get(commentId)?.[0]
+  if (!audio) return
+  audio.currentTime = reference.startSeconds
+  await audio.play().catch(() => undefined)
+}
+
+async function handleCommentReference(comment: Comment, reference: TimeReference, target: TimestampTarget) {
+  if (target !== 'attachment' || !comment.audios?.length) return
+  await playAttachmentReference(comment.id, reference)
+}
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', {
@@ -106,6 +136,8 @@ async function addComment() {
   selectedImages.value = []
   imagePreviewUrls.value = []
   selectedAudios.value = []
+  commentInputFocused.value = false
+  commentAudioRefs.clear()
 }
 
 function onFileSelect(event: Event) {
@@ -186,9 +218,12 @@ function removeImage(i: number) {
         <div v-else-if="fullIssue" class="flex-1 overflow-y-auto p-5 space-y-5">
 
           <!-- Description -->
-          <p v-if="fullIssue.description" class="text-sm text-foreground whitespace-pre-wrap">
-            {{ fullIssue.description }}
-          </p>
+          <TimestampText
+            v-if="fullIssue.description"
+            :text="fullIssue.description"
+            class="text-sm text-foreground"
+            :interactive="false"
+          />
           <p v-else class="text-sm text-muted-foreground italic">{{ t('issueDetail.noDescription') }}</p>
 
           <!-- Status actions -->
@@ -239,7 +274,12 @@ function removeImage(i: number) {
                 class="rounded-lg bg-warning-bg border border-warning/20 px-3 py-2"
               >
                 <span class="text-xs font-semibold text-warning block mb-1">{{ t('issue.revisionNote') }}</span>
-                <p class="text-sm text-foreground">{{ comment.content }}</p>
+                <TimestampText
+                  :text="comment.content"
+                  class="text-sm text-foreground"
+                  :default-target="comment.audios?.length ? 'attachment' : 'track'"
+                  @activate="(reference, target) => handleCommentReference(comment, reference, target)"
+                />
                 <p class="text-xs text-muted-foreground mt-1">
                   {{ comment.author?.display_name ?? t('issueDetail.unknown') }} · {{ formatDate(comment.created_at) }}
                 </p>
@@ -256,7 +296,12 @@ function removeImage(i: number) {
                   </span>
                   <span class="text-xs text-muted-foreground">{{ formatDate(comment.created_at) }}</span>
                 </div>
-                <p class="text-sm text-foreground whitespace-pre-wrap">{{ comment.content }}</p>
+                <TimestampText
+                  :text="comment.content"
+                  class="text-sm text-foreground"
+                  :default-target="comment.audios?.length ? 'attachment' : 'track'"
+                  @activate="(reference, target) => handleCommentReference(comment, reference, target)"
+                />
                 <div v-if="comment.images?.length" class="flex flex-wrap gap-2 mt-2">
                   <a
                     v-for="img in comment.images" :key="img.id"
@@ -267,7 +312,7 @@ function removeImage(i: number) {
                 </div>
                 <div v-if="comment.audios?.length" class="flex flex-col gap-2 mt-2">
                   <div
-                    v-for="audio in comment.audios" :key="audio.id"
+                    v-for="(audio, index) in comment.audios" :key="audio.id"
                     class="bg-background border border-border rounded-2xl px-3 py-2 space-y-1.5"
                   >
                     <div class="flex items-center gap-2">
@@ -277,7 +322,13 @@ function removeImage(i: number) {
                       <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
                       <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
                     </div>
-                    <audio :src="audio.audio_url" controls class="w-full h-8" style="accent-color: #FF8400;" />
+                    <audio
+                      :ref="(element) => setCommentAudioRef(comment.id, index, element)"
+                      :src="audio.audio_url"
+                      controls
+                      class="w-full h-8"
+                      style="accent-color: #FF8400;"
+                    />
                   </div>
                 </div>
               </div>
@@ -286,14 +337,23 @@ function removeImage(i: number) {
 
           <!-- Add comment -->
           <div class="space-y-2 border-t border-border pt-4">
-            <textarea
-              v-model="newComment"
-              class="textarea-field w-full text-sm"
-              :placeholder="t('issueDetail.addCommentPlaceholder')"
-              rows="3"
-              @keydown.meta.enter="addComment"
-              @keydown.ctrl.enter="addComment"
-            />
+            <div class="relative">
+              <textarea
+                v-model="newComment"
+                class="textarea-field w-full text-sm"
+                :placeholder="t('issueDetail.addCommentPlaceholder')"
+                rows="3"
+                @focus="commentInputFocused = true"
+                @blur="commentInputFocused = false"
+                @keydown.meta.enter="addComment"
+                @keydown.ctrl.enter="addComment"
+              />
+              <TimestampSyntaxPopover
+                :visible="commentInputFocused"
+                :text="newComment"
+                default-target="attachment"
+              />
+            </div>
             <div v-if="imagePreviewUrls.length" class="flex flex-wrap gap-2">
               <div v-for="(url, i) in imagePreviewUrls" :key="i" class="relative">
                 <img :src="url" class="h-14 w-14 object-cover rounded border border-border" alt="preview" />

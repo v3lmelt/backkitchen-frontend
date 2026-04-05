@@ -55,6 +55,11 @@ const uploadButtonLabel = computed(() =>
     : t('revision.submitBackToPeer')
 )
 const audioUrl = computed(() => track.value?.file_path ? `/api/tracks/${trackId.value}/audio` : '')
+const waveformIssues = computed(() => {
+  const currentVersion = track.value?.version
+  if (currentVersion == null) return issues.value
+  return issues.value.filter(issue => issue.source_version_number == null || issue.source_version_number === currentVersion)
+})
 
 const { downloading, downloadTrackAudio } = useAudioDownload()
 const handleDownload = () => downloadTrackAudio(audioUrl, track)
@@ -178,7 +183,7 @@ function onIssueSelectToggle(issueId: number) {
       </div>
       <WaveformPlayer
         :audio-url="audioUrl"
-        :issues="issues"
+        :issues="waveformIssues"
         :track-id="trackId"
         :compare-version-id="selectedCompareVersionId"
       />

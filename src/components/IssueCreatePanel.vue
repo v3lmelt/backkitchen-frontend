@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { issueApi } from '@/api'
 import type { Issue } from '@/types'
+import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
 import { formatTimestamp, roundToMilliseconds } from '@/utils/time'
 
 const props = defineProps<{
@@ -19,6 +20,7 @@ const { t } = useI18n()
 
 const showForm = ref(false)
 const newIssue = ref(makeBlank())
+const descriptionInputFocused = ref(false)
 
 function makeBlank() {
   return {
@@ -89,7 +91,20 @@ defineExpose({ handleClick, handleRangeSelect, selectedRange, showForm })
         {{ t('common.newIssueAt', { time: formatTime(newIssue.time_start) }) }}
       </h4>
       <input v-model="newIssue.title" class="input-field w-full" :placeholder="t('common.issueTitlePlaceholder')" />
-      <textarea v-model="newIssue.description" class="textarea-field w-full h-20" :placeholder="t('common.descriptionPlaceholder')" />
+      <div class="relative">
+        <textarea
+          v-model="newIssue.description"
+          class="textarea-field w-full h-20"
+          :placeholder="t('common.descriptionPlaceholder')"
+          @focus="descriptionInputFocused = true"
+          @blur="descriptionInputFocused = false"
+        />
+        <TimestampSyntaxPopover
+          :visible="descriptionInputFocused"
+          :text="newIssue.description"
+          default-target="track"
+        />
+      </div>
       <div class="grid grid-cols-2 gap-3">
         <select v-model="newIssue.severity" class="select-field">
           <option value="critical">{{ t('severity.critical') }}</option>

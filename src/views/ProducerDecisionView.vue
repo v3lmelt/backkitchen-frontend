@@ -49,6 +49,11 @@ const handleDownload = () => downloadTrackAudio(audioUrl, track)
 const producerIssues = computed(() =>
   allCycleIssues.value.filter(i => i.phase === 'producer'),
 )
+const waveformIssues = computed(() => {
+  const currentVersion = track.value?.version
+  if (currentVersion == null) return producerIssues.value
+  return producerIssues.value.filter(issue => issue.source_version_number == null || issue.source_version_number === currentVersion)
+})
 const peerIssues = computed(() =>
   allCycleIssues.value.filter(i => i.phase !== 'producer'),
 )
@@ -126,7 +131,7 @@ async function handleGate(decision: 'send_to_mastering' | 'request_peer_revision
         </div>
         <WaveformPlayer
           :audio-url="audioUrl"
-          :issues="producerIssues"
+          :issues="waveformIssues"
           :selectable="true"
           :selected-range="issueFormRef?.selectedRange ?? null"
           @click="(t: number) => issueFormRef?.handleClick(t)"
@@ -149,7 +154,7 @@ async function handleGate(decision: 'send_to_mastering' | 'request_peer_revision
         </template>
       </IssueCreatePanel>
 
-      <IssueMarkerList :issues="producerIssues" @select="onIssueSelect" />
+      <IssueMarkerList :issues="producerIssues" :current-source-version-number="track.version" @select="onIssueSelect" />
 
       <!-- Checklist -->
       <div v-if="checklist.length > 0" class="card">

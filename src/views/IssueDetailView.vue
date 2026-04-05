@@ -2,12 +2,15 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { issueApi } from '@/api'
+import { issueApi, trackApi } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Issue, IssueStatus } from '@/types'
+import type { Comment, Issue, IssueStatus } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
+import TimestampText from '@/components/common/TimestampText.vue'
+import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
 import { formatTimestamp, formatLocaleDate, formatDuration } from '@/utils/time'
+import type { TimeReference, TimestampTarget } from '@/utils/timestamps'
 
 const route = useRoute()
 const router = useRouter()
@@ -19,15 +22,42 @@ const issue = ref<Issue | null>(null)
 const allTrackIssues = ref<Issue[]>([])
 const loading = ref(true)
 const showUnresolvedOnly = ref(false)
+const currentSourceVersionNumber = ref<number | null>(null)
+
+const issueIsOutdated = computed(() => {
+  if (!issue.value || issue.value.source_version_number == null || currentSourceVersionNumber.value == null) return false
+  return issue.value.source_version_number !== currentSourceVersionNumber.value
+})
+
+const canOpenIssueSourceAudio = computed(() =>
+  issueIsOutdated.value && issue.value?.source_version_id != null,
+)
+
+const displayedAudioVersionNumber = computed(() => {
+  if (issueIsOutdated.value) return issue.value?.source_version_number ?? currentSourceVersionNumber.value
+  return currentSourceVersionNumber.value ?? issue.value?.source_version_number ?? null
+})
+
+const waveformIssues = computed(() => {
+  if (!issue.value) return []
+  if (issueIsOutdated.value && !canOpenIssueSourceAudio.value) return []
+  return [issue.value]
+})
 
 let loadCount = 0
 let cachedTrackId: number | null = null
 const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
 const newComment = ref('')
+const commentInputFocused = ref(false)
+const commentAudioRefs = new Map<string, HTMLAudioElement>()
 
-const audioUrl = computed(() =>
-  issue.value ? `/api/tracks/${issue.value.track_id}/audio` : ''
-)
+const audioUrl = computed(() => {
+  if (!issue.value) return ''
+  if (canOpenIssueSourceAudio.value) {
+    return `/api/tracks/${issue.value.track_id}/source-versions/${issue.value.source_version_id}/audio`
+  }
+  return `/api/tracks/${issue.value.track_id}/audio`
+})
 
 function onWaveformReady() {
   if (!issue.value || !waveformRef.value) return
@@ -55,8 +85,10 @@ async function loadIssue(id: number) {
     issue.value = fetched
     if (fetched.track_id !== cachedTrackId) {
       const all = await issueApi.listForTrack(fetched.track_id)
+      const detail = await trackApi.get(fetched.track_id)
       if (token !== loadCount) return
       allTrackIssues.value = all
+      currentSourceVersionNumber.value = detail.track.version
       cachedTrackId = fetched.track_id
     }
   } finally {
@@ -102,6 +134,11 @@ const nextIssue = computed(() =>
 
 const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
 
+function isOutdatedIssue(item: Issue): boolean {
+  if (item.source_version_number == null || currentSourceVersionNumber.value == null) return false
+  return item.source_version_number !== currentSourceVersionNumber.value
+}
+
 function onFileSelect(event: Event) {
   const input = event.target as HTMLInputElement
   if (!input.files) return
@@ -130,6 +167,41 @@ function onAudioSelect(event: Event) {
 
 function removeSelectedAudio(index: number) {
   selectedAudios.value.splice(index, 1)
+}
+
+function setCommentAudioRef(commentId: number, index: number, element: unknown) {
+  const key = `${commentId}:${index}`
+  if (!(element instanceof HTMLAudioElement)) {
+    commentAudioRefs.delete(key)
+    return
+  }
+
+  commentAudioRefs.set(key, element)
+}
+
+async function playTrackReference(reference: TimeReference) {
+  if (!waveformRef.value) return
+  await waveformRef.value.playFrom(reference.startSeconds)
+}
+
+async function playCommentAttachmentReference(comment: Comment, reference: TimeReference) {
+  const audio = comment.audios?.length ? commentAudioRefs.get(`${comment.id}:0`) : null
+  if (!audio) {
+    await playTrackReference(reference)
+    return
+  }
+
+  audio.currentTime = reference.startSeconds
+  await audio.play().catch(() => undefined)
+}
+
+async function handleCommentReference(comment: Comment, reference: TimeReference, target: TimestampTarget) {
+  if (target === 'attachment') {
+    await playCommentAttachmentReference(comment, reference)
+    return
+  }
+
+  await playTrackReference(reference)
 }
 
 async function addComment() {
@@ -174,11 +246,36 @@ function goBackToTrack() {
   if (!issue.value) return
   router.push(`/tracks/${issue.value.track_id}`)
 }
+
+function openVersionCompare() {
+  if (!issue.value?.track_id || !issue.value.source_version_id) return
+  router.push({
+    path: `/tracks/${issue.value.track_id}`,
+    query: { compareVersion: String(issue.value.source_version_id) },
+  })
+}
 </script>
 
 <template>
   <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
-  <div v-else-if="issue" class="max-w-7xl mx-auto space-y-6">
+    <div v-else-if="issue" class="max-w-7xl mx-auto space-y-6">
+    <div
+      v-if="issueIsOutdated"
+      class="flex flex-col gap-3 border border-warning/30 bg-warning-bg px-4 py-4 text-sm text-warning lg:flex-row lg:items-center lg:justify-between"
+    >
+      <div class="min-w-0">
+        <p class="font-medium text-foreground">
+          {{ t('issueDetail.outdatedVersionTitle', { issueVersion: issue.source_version_number, currentVersion: currentSourceVersionNumber }) }}
+        </p>
+        <p class="mt-1 text-warning">
+          {{ t(canOpenIssueSourceAudio ? 'issueDetail.outdatedVersionBody' : 'issueDetail.outdatedVersionUnavailable') }}
+        </p>
+      </div>
+      <button v-if="canOpenIssueSourceAudio" @click="openVersionCompare" class="btn-secondary text-sm whitespace-nowrap">
+        {{ t('issueDetail.openVersionCompare') }}
+      </button>
+    </div>
+
     <!-- Header -->
     <div>
       <div class="flex items-center justify-between mb-2">
@@ -239,7 +336,15 @@ function goBackToTrack() {
           <!-- Waveform -->
           <div class="card overflow-hidden !p-0">
             <div class="px-4 pt-3 pb-2 border-b border-border flex items-center justify-between">
-              <span class="text-xs font-mono font-medium text-muted-foreground">{{ t('issueDetail.audioContext') }}</span>
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-mono font-medium text-muted-foreground">{{ t('issueDetail.audioContext') }}</span>
+                <span
+                  v-if="displayedAudioVersionNumber != null"
+                  class="inline-flex items-center rounded-full bg-border px-2 py-0.5 text-[11px] font-mono text-foreground"
+                >
+                  v{{ displayedAudioVersionNumber }}
+                </span>
+              </div>
               <span class="text-xs text-muted-foreground font-mono">
                 {{ formatTimestamp(issue.time_start) }}<span v-if="issue.time_end"> – {{ formatTimestamp(issue.time_end) }}</span>
               </span>
@@ -247,15 +352,22 @@ function goBackToTrack() {
             <WaveformPlayer
               ref="waveformRef"
               :audio-url="audioUrl"
-              :issues="[issue]"
+              :issues="waveformIssues"
               :height="80"
               @ready="onWaveformReady"
             />
+            <div v-if="issueIsOutdated" class="border-t border-border px-4 py-3 text-xs text-muted-foreground">
+              {{ t(canOpenIssueSourceAudio ? 'issueDetail.outdatedWaveformHint' : 'issueDetail.outdatedWaveformUnavailable') }}
+            </div>
           </div>
 
           <!-- Description -->
           <div class="card">
-            <p class="text-sm text-foreground whitespace-pre-wrap">{{ issue.description }}</p>
+            <TimestampText
+              :text="issue.description"
+              class="text-sm text-foreground"
+              @activate="(reference) => playTrackReference(reference)"
+            />
             <div class="text-xs text-muted-foreground mt-3">
               {{ t('issueDetail.created', { date: fmtDate(issue.created_at) }) }}
             </div>
@@ -311,7 +423,12 @@ function goBackToTrack() {
             <template v-for="comment in issue.comments" :key="comment.id">
               <div v-if="comment.is_status_note" class="rounded-lg bg-warning-bg border border-warning/20 px-3 py-2">
                 <span class="text-xs font-semibold text-warning block mb-1">{{ t('issue.revisionNote') }}</span>
-                <p class="text-sm text-foreground">{{ comment.content }}</p>
+                <TimestampText
+                  :text="comment.content"
+                  class="text-sm text-foreground"
+                  :default-target="comment.audios?.length ? 'attachment' : 'track'"
+                  @activate="(reference, target) => handleCommentReference(comment, reference, target)"
+                />
                 <p class="text-xs text-muted-foreground mt-1">{{ comment.author?.display_name || t('issueDetail.unknown') }} · {{ fmtDate(comment.created_at) }}</p>
               </div>
               <div v-else class="card">
@@ -328,7 +445,12 @@ function goBackToTrack() {
                   </span>
                   <span class="text-xs text-muted-foreground">{{ fmtDate(comment.created_at) }}</span>
                 </div>
-                <p class="text-sm text-foreground whitespace-pre-wrap">{{ comment.content }}</p>
+                <TimestampText
+                  :text="comment.content"
+                  class="text-sm text-foreground"
+                  :default-target="comment.audios?.length ? 'attachment' : 'track'"
+                  @activate="(reference, target) => handleCommentReference(comment, reference, target)"
+                />
                 <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-3">
                   <a
                     v-for="img in comment.images"
@@ -346,7 +468,7 @@ function goBackToTrack() {
                 </div>
                 <div v-if="comment.audios && comment.audios.length" class="flex flex-col gap-2 mt-3">
                   <div
-                    v-for="audio in comment.audios"
+                    v-for="(audio, index) in comment.audios"
                     :key="audio.id"
                     class="bg-background border border-border rounded-2xl px-4 py-3 space-y-2"
                   >
@@ -357,7 +479,13 @@ function goBackToTrack() {
                       <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
                       <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
                     </div>
-                    <audio :src="audio.audio_url" controls class="w-full h-8" style="accent-color: #FF8400;" />
+                    <audio
+                      :ref="(element) => setCommentAudioRef(comment.id, index, element)"
+                      :src="audio.audio_url"
+                      controls
+                      class="w-full h-8"
+                      style="accent-color: #FF8400;"
+                    />
                   </div>
                 </div>
               </div>
@@ -365,13 +493,22 @@ function goBackToTrack() {
 
             <!-- New Comment -->
             <div class="space-y-2">
-              <textarea
-                v-model="newComment"
-                class="textarea-field w-full h-20"
-                :placeholder="t('issueDetail.addCommentPlaceholder')"
-                @keydown.meta.enter="addComment"
-                @keydown.ctrl.enter="addComment"
-              />
+              <div class="relative">
+                <textarea
+                  v-model="newComment"
+                  class="textarea-field w-full h-20"
+                  :placeholder="t('issueDetail.addCommentPlaceholder')"
+                  @focus="commentInputFocused = true"
+                  @blur="commentInputFocused = false"
+                  @keydown.meta.enter="addComment"
+                  @keydown.ctrl.enter="addComment"
+                />
+                <TimestampSyntaxPopover
+                  :visible="commentInputFocused"
+                  :text="newComment"
+                  default-target="attachment"
+                />
+              </div>
 
               <!-- Image previews -->
               <div v-if="imagePreviewUrls.length" class="flex flex-wrap gap-2">
@@ -482,17 +619,26 @@ function goBackToTrack() {
               type="button"
               @click="item.id !== issueId && router.push(`/issues/${item.id}`)"
               class="w-full border border-border p-3 text-left transition-colors"
-              :class="item.id === issueId ? 'bg-warning-bg border-primary/40' : 'bg-background hover:bg-card'"
+              :class="[
+                item.id === issueId ? 'bg-warning-bg border-primary/40' : 'bg-background hover:bg-card',
+                isOutdatedIssue(item) ? 'opacity-60' : '',
+              ]"
             >
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0 space-y-2">
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="text-xs font-mono text-muted-foreground">#{{ index + 1 }}</span>
+                    <span
+                      v-if="item.source_version_number != null"
+                      class="inline-flex items-center rounded-full bg-border px-2 py-0.5 text-[11px] font-mono text-foreground"
+                    >
+                      v{{ item.source_version_number }}
+                    </span>
                     <span v-if="item.id === issueId" class="inline-flex items-center rounded-full bg-warning-bg px-2 py-0.5 text-[11px] font-mono text-warning border border-warning/20">
                       {{ t('issueDetail.currentIssue') }}
                     </span>
                   </div>
-                  <p class="text-sm font-medium text-foreground leading-snug">{{ item.title }}</p>
+                  <p class="text-sm font-medium leading-snug" :class="isOutdatedIssue(item) ? 'text-muted-foreground' : 'text-foreground'">{{ item.title }}</p>
                   <div class="flex items-center gap-2 flex-wrap">
                     <StatusBadge :status="item.severity" type="severity" />
                     <StatusBadge :status="item.status" type="issue" />

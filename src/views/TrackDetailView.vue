@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, discussionApi } from '@/api'
@@ -107,6 +107,11 @@ async function loadTrack() {
 
 const audioUrl = computed(() => track.value?.file_path ? `/api/tracks/${trackId.value}/audio` : '')
 const currentCycleIssues = computed(() => issues.value.filter(issue => issue.workflow_cycle === track.value?.workflow_cycle))
+const currentWaveformIssues = computed(() => {
+  const currentVersion = track.value?.version
+  if (currentVersion == null) return currentCycleIssues.value
+  return currentCycleIssues.value.filter(issue => issue.source_version_number == null || issue.source_version_number === currentVersion)
+})
 
 const actionLabel = (action: string) => {
   const key = `trackDetail.actions.${action}`
@@ -148,6 +153,18 @@ const olderVersions = computed(() =>
     .filter(v => v.id !== currentVersionId.value)
     .sort((a, b) => b.version_number - a.version_number)
 )
+
+watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, versions, compareVersion]) => {
+  if (!currentTrack) return
+  const rawValue = Array.isArray(compareVersion) ? compareVersion[0] : compareVersion
+  if (!rawValue) return
+  const parsed = Number(rawValue)
+  if (!Number.isFinite(parsed)) return
+  if (versions.some(version => version.id === parsed)) {
+    showVersionCompare.value = true
+    selectedCompareVersionId.value = parsed
+  }
+}, { immediate: true })
 </script>
 
 <template>
@@ -213,7 +230,7 @@ const olderVersions = computed(() =>
           </div>
           <WaveformPlayer
             :audio-url="audioUrl"
-            :issues="currentCycleIssues"
+            :issues="currentWaveformIssues"
             :track-id="trackId"
             :compare-version-id="selectedCompareVersionId"
             @regionClick="onIssueSelect"
@@ -227,7 +244,7 @@ const olderVersions = computed(() =>
           <h3 class="text-sm font-sans font-semibold text-foreground mb-3">
             {{ t('trackDetail.issuesHeading', { count: currentCycleIssues.length }) }}
           </h3>
-          <IssueMarkerList :issues="currentCycleIssues" @select="onIssueSelect" />
+          <IssueMarkerList :issues="currentCycleIssues" :current-source-version-number="track.version" @select="onIssueSelect" />
         </div>
 
         <!-- Discussions -->
