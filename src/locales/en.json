@@ -135,6 +135,8 @@
     "recentActivity": "Recent Activity",
     "pinnedOnly": "Pinned only",
     "manageAlbums": "Manage albums",
+    "noPinnedAlbums": "No albums pinned to the dashboard yet",
+    "goPin": "Pin an album",
     "openIssues": "{count} open issues",
     "events": {
       "track_submitted": "{name} submitted a track",

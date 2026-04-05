@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import draggable from 'vuedraggable'
@@ -19,7 +19,13 @@ const albumId = computed(() => Number(route.params.albumId))
 const album = ref<Album | null>(null)
 const users = ref<User[]>([])
 const loading = ref(true)
-const activeTab = ref('team')
+const activeTab = ref('info')
+
+// Cover image state
+const coverInputRef = ref<HTMLInputElement | null>(null)
+const coverImageFile = ref<File | null>(null)
+const coverPreviewUrl = ref<string | null>(null)
+const uploadingCover = ref(false)
 
 // Team state
 const teamState = reactive<{ mastering_engineer_id: number | null; member_ids: number[] }>({
@@ -76,6 +82,7 @@ const roleBadgeClass = computed(() => {
 
 const availableTabs = computed(() => {
   const tabs = [
+    { key: 'info', label: t('albumSettings.tabs.info') },
     { key: 'team', label: t('albumSettings.tabs.team') },
     { key: 'deadlines', label: t('albumSettings.tabs.deadlines') },
   ]
@@ -131,6 +138,7 @@ onMounted(async () => {
 
     syncTeamState()
     syncDeadlineState()
+    activeTab.value = 'info'
 
     const loadTasks: Promise<any>[] = []
 
@@ -169,6 +177,34 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
+onUnmounted(() => {
+  if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value)
+})
+
+// Cover image actions
+function handleCoverSelect(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  coverImageFile.value = file
+  if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value)
+  coverPreviewUrl.value = URL.createObjectURL(file)
+}
+
+async function saveCover() {
+  if (!album.value || !coverImageFile.value) return
+  uploadingCover.value = true
+  try {
+    const updated = await albumApi.uploadCover(album.value.id, coverImageFile.value)
+    album.value = updated
+    if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value)
+    coverPreviewUrl.value = null
+    coverImageFile.value = null
+    toastSuccess(t('albumSettings.info.coverSaved'))
+  } finally {
+    uploadingCover.value = false
+  }
+}
 
 // Team actions
 function toggleMember(userId: number) {
@@ -349,7 +385,10 @@ async function testWebhook() {
   <div v-else-if="album" class="max-w-4xl mx-auto space-y-6">
     <!-- Album header -->
     <div class="flex items-center gap-4">
-      <div class="w-1 h-10 flex-shrink-0" :style="{ backgroundColor: album.cover_color }"></div>
+      <div class="w-10 h-10 flex-shrink-0 overflow-hidden border border-border">
+        <img v-if="album.cover_image" :src="album.cover_image" class="w-full h-full object-cover" />
+        <div v-else class="w-full h-full" :style="{ backgroundColor: album.cover_color }"></div>
+      </div>
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-3 flex-wrap">
           <h1 class="text-xl font-mono font-bold text-foreground">{{ album.title }}</h1>
@@ -378,6 +417,66 @@ async function testWebhook() {
 
     <!-- Tab content -->
     <div>
+
+      <!-- Info tab -->
+      <div v-if="activeTab === 'info'" class="card space-y-5">
+        <div class="flex items-start gap-5">
+          <!-- Cover image -->
+          <div class="flex-shrink-0 space-y-2">
+            <div
+              class="relative w-32 h-32 overflow-hidden border border-border"
+              :class="isProducerOfAlbum ? 'cursor-pointer group' : ''"
+              @click="isProducerOfAlbum && coverInputRef?.click()"
+            >
+              <div class="absolute inset-0" :style="{ backgroundColor: album.cover_color }"></div>
+              <img
+                v-if="coverPreviewUrl || album.cover_image"
+                :src="coverPreviewUrl || album.cover_image!"
+                class="absolute inset-0 w-full h-full object-cover"
+              />
+              <div
+                v-if="isProducerOfAlbum"
+                class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M16 12l-4-4-4 4M12 8v8" />
+                </svg>
+              </div>
+            </div>
+            <input ref="coverInputRef" type="file" accept="image/*" class="hidden" @change="handleCoverSelect" />
+            <button
+              v-if="isProducerOfAlbum && coverImageFile"
+              @click="saveCover"
+              :disabled="uploadingCover"
+              class="btn-primary text-xs px-3 py-1.5 w-32"
+            >
+              {{ uploadingCover ? t('albumSettings.info.uploading') : t('albumSettings.info.saveCover') }}
+            </button>
+            <p v-else-if="isProducerOfAlbum" class="text-xs text-muted-foreground text-center w-32">
+              {{ t('albumSettings.info.coverHint') }}
+            </p>
+          </div>
+
+          <!-- Album metadata -->
+          <div class="flex-1 min-w-0 space-y-4">
+            <div>
+              <div class="text-xs text-muted-foreground mb-1">{{ t('albumNew.albumTitle') }}</div>
+              <div class="text-base font-mono font-semibold text-foreground">{{ album.title }}</div>
+            </div>
+            <div v-if="album.description">
+              <div class="text-xs text-muted-foreground mb-1">{{ t('albumNew.description') }}</div>
+              <div class="text-sm text-foreground">{{ album.description }}</div>
+            </div>
+            <div>
+              <div class="text-xs text-muted-foreground mb-1">{{ t('albumSettings.info.coverColor') }}</div>
+              <div class="flex items-center gap-2">
+                <div class="w-5 h-5 border border-border flex-shrink-0" :style="{ backgroundColor: album.cover_color }"></div>
+                <span class="text-xs font-mono text-muted-foreground">{{ album.cover_color }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Team tab -->
       <div v-if="activeTab === 'team'" class="space-y-4">

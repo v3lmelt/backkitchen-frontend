@@ -21,7 +21,7 @@ const loading = ref(true)
 const filterStatus = ref<TrackStatus | ''>('')
 const exportingAlbum = ref<number | null>(null)
 
-const { hasAnyPins, isPinned } = useDashboardPins(appStore.currentUser?.id)
+const { isPinned } = useDashboardPins(appStore.currentUser?.id)
 
 function statusColor(status: string): string {
   return TRACK_STATUS_COLORS[status as TrackStatus] ?? '#6b7280'
@@ -59,16 +59,16 @@ onMounted(async () => {
   }
 })
 
-// Albums to show: all if nothing pinned, else only pinned
+// Only pinned albums appear on the dashboard; nothing shown if nothing is pinned
 const dashboardAlbums = computed(() =>
-  hasAnyPins.value ? albums.value.filter(a => isPinned(a.id)) : albums.value
+  albums.value.filter(a => isPinned(a.id))
 )
 
 const pinnedAlbumIds = computed(() => new Set(dashboardAlbums.value.map(a => a.id)))
 
-// Tracks scoped to dashboard albums
+// Tracks scoped to pinned albums only
 const dashboardTracks = computed(() =>
-  hasAnyPins.value ? tracks.value.filter(t => pinnedAlbumIds.value.has(t.album_id)) : tracks.value
+  tracks.value.filter(t => pinnedAlbumIds.value.has(t.album_id))
 )
 
 const filteredTracks = computed(() => {
@@ -231,15 +231,21 @@ async function handleExport(albumId: number) {
     </div>
 
     <!-- 专辑进度看板 -->
-    <div v-if="dashboardAlbums.length > 0">
+    <div v-if="albums.length > 0">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-sans font-semibold text-foreground">{{ t('dashboard.albums') }}</h2>
-        <span v-if="hasAnyPins" class="text-xs text-muted-foreground">
-          {{ t('dashboard.pinnedOnly') }}
-          <RouterLink to="/albums" class="text-primary hover:underline ml-1">{{ t('dashboard.manageAlbums') }}</RouterLink>
-        </span>
+        <RouterLink to="/albums" class="text-xs text-muted-foreground hover:text-primary transition-colors">
+          {{ t('dashboard.manageAlbums') }}
+        </RouterLink>
       </div>
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+      <!-- Empty state: albums exist but none are pinned -->
+      <div v-if="dashboardAlbums.length === 0" class="flex items-center justify-between p-4 bg-card border border-border rounded-none">
+        <p class="text-sm text-muted-foreground">{{ t('dashboard.noPinnedAlbums') }}</p>
+        <RouterLink to="/albums" class="text-sm text-primary hover:underline font-mono">{{ t('dashboard.goPin') }}</RouterLink>
+      </div>
+
+      <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div v-for="album in dashboardAlbums" :key="album.id" class="rounded-none border border-border bg-card overflow-hidden">
           <!-- Cover image or placeholder — no color bar -->
           <div class="w-full h-28 overflow-hidden">

@@ -139,6 +139,8 @@
     "recentActivity": "近期动态",
     "pinnedOnly": "仅显示已固定",
     "manageAlbums": "管理专辑",
+    "noPinnedAlbums": "尚未固定任何专辑到仪表盘",
+    "goPin": "前往固定",
     "openIssues": "{count} 个未解决问题",
     "events": {
       "track_submitted": "{name} 提交了曲目",
