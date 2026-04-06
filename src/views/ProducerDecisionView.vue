@@ -79,12 +79,12 @@ async function handleGate(decision: 'send_to_mastering' | 'request_peer_revision
 <template>
   <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
   <div v-else-if="track" class="max-w-4xl mx-auto space-y-6">
-    <div class="flex items-start justify-between">
-      <div>
-        <h1 class="text-2xl font-sans font-bold text-foreground">{{ t('producer.heading', { title: track.title }) }}</h1>
-        <p class="text-muted-foreground">{{ t('producer.subheading') }}</p>
+    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+      <div class="min-w-0">
+        <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('producer.heading', { title: track.title }) }}</h1>
+        <p class="text-sm sm:text-base text-muted-foreground">{{ t('producer.subheading') }}</p>
       </div>
-      <button @click="router.push(`/tracks/${trackId}`)" class="btn-secondary text-sm">
+      <button @click="router.push(`/tracks/${trackId}`)" class="btn-secondary text-sm flex-shrink-0 self-start">
         {{ t('common.backToTrack') }}
       </button>
     </div>
@@ -113,7 +113,7 @@ async function handleGate(decision: 'send_to_mastering' | 'request_peer_revision
     <div v-if="isSubmittedState" class="card space-y-4 border-primary/50">
       <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('producer.intakeHeading') }}</h3>
       <p class="text-sm text-muted-foreground">{{ t('producer.intakeDesc') }}</p>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <button @click="handleIntake('accept')" class="btn-primary text-sm">{{ t('producer.acceptAndAssign') }}</button>
         <button @click="handleIntake('reject_final')" class="btn-secondary text-sm">{{ t('producer.rejectFinal') }}</button>
         <button @click="handleIntake('reject_resubmittable')" class="btn-secondary text-sm">{{ t('producer.rejectResubmittable') }}</button>
@@ -174,11 +174,11 @@ async function handleGate(decision: 'send_to_mastering' | 'request_peer_revision
       <div class="card">
         <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('producer.peerIssueSummaryHeading') }}</h3>
         <div class="space-y-2">
-          <div v-for="issue in peerIssues" :key="issue.id" class="flex items-center justify-between py-1">
-            <div class="flex items-center gap-2">
+          <div v-for="issue in peerIssues" :key="issue.id" class="flex items-center justify-between gap-2 flex-wrap py-1">
+            <div class="flex items-center gap-2 min-w-0 flex-wrap">
               <StatusBadge :status="issue.phase" type="phase" />
               <StatusBadge :status="issue.severity" type="severity" />
-              <span class="text-sm text-foreground">{{ issue.title }}</span>
+              <span class="text-sm text-foreground truncate">{{ issue.title }}</span>
             </div>
             <StatusBadge :status="issue.status" type="issue" />
           </div>

@@ -1,12 +1,12 @@
 <template>
   <div class="max-w-5xl mx-auto space-y-6">
     <!-- header -->
-    <div class="flex items-center justify-between mb-8">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8">
       <div>
         <h1 class="text-2xl font-semibold font-mono text-foreground">{{ t('circles.heading') }}</h1>
         <p class="text-sm text-muted-foreground mt-1">{{ t('circles.subheading') }}</p>
       </div>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 shrink-0">
         <button class="btn-secondary flex items-center gap-2" @click="showJoinModal = true">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
           {{ t('circles.joinCircle') }}

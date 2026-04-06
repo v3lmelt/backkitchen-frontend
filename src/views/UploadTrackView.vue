@@ -124,7 +124,7 @@ function formatFileSize(bytes: number): string {
         <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.artist') }}</label>
         <input v-model="form.artist" class="input-field w-full" :placeholder="t('upload.artistPlaceholder')" />
       </div>
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.album') }}</label>
           <select v-model="form.album_id" class="select-field w-full">

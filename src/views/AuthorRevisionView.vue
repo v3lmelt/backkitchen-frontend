@@ -135,17 +135,17 @@ function onIssueSelectToggle(issueId: number) {
 <template>
   <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
   <div v-else-if="track" class="max-w-4xl mx-auto space-y-6">
-    <div class="flex items-start justify-between">
-      <div>
-        <h1 class="text-2xl font-sans font-bold text-foreground">{{ revisionLabel }}: {{ track.title }}</h1>
-        <p class="text-muted-foreground">{{ t('revision.subheading') }}</p>
+    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+      <div class="min-w-0">
+        <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ revisionLabel }}: {{ track.title }}</h1>
+        <p class="text-sm sm:text-base text-muted-foreground">{{ t('revision.subheading') }}</p>
       </div>
-      <button @click="router.push(`/tracks/${trackId}`)" class="btn-secondary text-sm">
+      <button @click="router.push(`/tracks/${trackId}`)" class="btn-secondary text-sm flex-shrink-0 self-start">
         {{ t('common.backToTrack') }}
       </button>
     </div>
 
-    <div class="grid grid-cols-3 gap-4">
+    <div class="grid grid-cols-3 gap-2 sm:gap-4">
       <div class="card text-center">
         <div class="text-2xl font-bold text-error">{{ pendingIssues.length }}</div>
         <div class="text-xs text-muted-foreground">{{ t('revision.openCount') }}</div>
@@ -199,7 +199,7 @@ function onIssueSelectToggle(issueId: number) {
       <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('revision.openIssuesHeading') }}</h3>
       <div class="space-y-3">
         <div v-for="issue in pendingIssues" :key="issue.id" class="card">
-          <div class="flex items-start gap-3">
+          <div class="flex items-start gap-3 flex-wrap sm:flex-nowrap">
             <input
               type="checkbox"
               :checked="selectedIssueIds.includes(issue.id)"
@@ -207,14 +207,14 @@ function onIssueSelectToggle(issueId: number) {
               class="mt-1 rounded border-border bg-card text-primary focus:ring-primary flex-shrink-0"
             />
             <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2 mb-1">
+              <div class="flex items-center gap-2 mb-1 flex-wrap">
                 <StatusBadge :status="issue.severity" type="severity" />
                 <span class="text-xs text-muted-foreground">{{ formatTimestamp(issue.time_start) }}</span>
               </div>
               <h4 class="text-sm font-medium text-foreground">{{ issue.title }}</h4>
               <p class="text-xs text-muted-foreground mt-1">{{ issue.description }}</p>
             </div>
-            <div class="flex gap-2 flex-shrink-0">
+            <div class="flex gap-2 flex-shrink-0 ml-auto sm:ml-0">
               <button @click="respondToIssue(issue, 'will_fix')" class="btn-primary text-xs">{{ t('revision.willFix') }}</button>
               <button @click="respondToIssue(issue, 'disagreed')" class="btn-secondary text-xs">{{ t('revision.disagree') }}</button>
             </div>
@@ -227,12 +227,12 @@ function onIssueSelectToggle(issueId: number) {
       <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('revision.respondedIssuesHeading') }}</h3>
       <div class="space-y-2">
         <div v-for="issue in respondedIssues" :key="issue.id" class="card opacity-80">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="flex items-center gap-2 min-w-0">
               <StatusBadge :status="issue.status" type="issue" />
-              <span class="text-sm text-foreground">{{ issue.title }}</span>
+              <span class="text-sm text-foreground truncate">{{ issue.title }}</span>
             </div>
-            <span class="text-xs text-muted-foreground">{{ formatTimestamp(issue.time_start) }}</span>
+            <span class="text-xs text-muted-foreground flex-shrink-0">{{ formatTimestamp(issue.time_start) }}</span>
           </div>
         </div>
       </div>
@@ -262,7 +262,7 @@ function onIssueSelectToggle(issueId: number) {
 
     <Transition name="slide-up">
       <div v-if="selectedIssueIds.length > 0"
-        class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-card border border-border rounded-2xl shadow-2xl px-5 py-3 flex items-center gap-3 z-50">
+        class="fixed bottom-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 bg-card border border-border rounded-2xl shadow-2xl px-4 sm:px-5 py-3 flex items-center gap-2 sm:gap-3 flex-wrap justify-center z-50">
         <span class="text-sm text-muted-foreground">{{ selectedIssueIds.length }} {{ t('issue.selected') }}</span>
         <div class="h-4 w-px bg-border"></div>
         <button @click="openBatchAction('will_fix')" class="px-3 py-1.5 rounded-full text-sm bg-warning-bg text-warning border border-warning/30 hover:bg-warning/20 transition-colors">

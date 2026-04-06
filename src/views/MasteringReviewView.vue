@@ -79,12 +79,12 @@ async function uploadMasterDelivery() {
 <template>
   <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
   <div v-else-if="track" class="space-y-6">
-    <div class="flex items-start justify-between">
-      <div>
-        <h1 class="text-2xl font-sans font-bold text-foreground">{{ t('mastering.heading', { title: track.title }) }}</h1>
-        <p class="text-muted-foreground">{{ t('mastering.subheading') }}</p>
+    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+      <div class="min-w-0">
+        <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('mastering.heading', { title: track.title }) }}</h1>
+        <p class="text-sm sm:text-base text-muted-foreground">{{ t('mastering.subheading') }}</p>
       </div>
-      <button @click="router.push(`/tracks/${trackId}`)" class="btn-secondary text-sm">
+      <button @click="router.push(`/tracks/${trackId}`)" class="btn-secondary text-sm flex-shrink-0 self-start">
         {{ t('common.backToTrack') }}
       </button>
     </div>

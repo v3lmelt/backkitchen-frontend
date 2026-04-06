@@ -105,7 +105,7 @@ defineExpose({ handleClick, handleRangeSelect, selectedRange, showForm })
           default-target="track"
         />
       </div>
-      <div class="grid grid-cols-2 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <select v-model="newIssue.severity" class="select-field">
           <option value="critical">{{ t('severity.critical') }}</option>
           <option value="major">{{ t('severity.major') }}</option>
