@@ -3,6 +3,7 @@ import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { albumApi, userApi } from '@/api'
+import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
 import type { User } from '@/types'
 
@@ -14,7 +15,7 @@ const loading = ref(true)
 const creating = ref(false)
 const users = ref<User[]>([])
 
-const form = ref({ title: '', description: '', cover_color: '#A855F7' })
+const form = ref({ title: '', description: '' })
 const titleError = ref('')
 
 const coverInputRef = ref<HTMLInputElement | null>(null)
@@ -128,10 +129,8 @@ async function create() {
               class="relative w-24 h-24 overflow-hidden border border-border cursor-pointer group"
               @click="coverInputRef?.click()"
             >
-              <div class="absolute inset-0" :style="{ backgroundColor: form.cover_color }"></div>
               <img
-                v-if="coverPreviewUrl"
-                :src="coverPreviewUrl"
+                :src="coverPreviewUrl || albumPlaceholder"
                 class="absolute inset-0 w-full h-full object-cover"
               />
               <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -155,10 +154,6 @@ async function create() {
                 @keyup.enter="create"
               />
               <p v-if="titleError" class="text-xs text-error mt-1">{{ titleError }}</p>
-            </div>
-            <div>
-              <label class="block text-xs text-muted-foreground mb-1">{{ t('albumNew.coverColor') }}</label>
-              <input v-model="form.cover_color" type="color" class="input-field w-full h-10 cursor-pointer" />
             </div>
           </div>
         </div>

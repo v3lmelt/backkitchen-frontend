@@ -3,7 +3,8 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import draggable from 'vuedraggable'
-import { albumApi, checklistApi, invitationApi, userApi } from '@/api'
+import { albumApi, checklistApi, invitationApi, userApi, API_ORIGIN } from '@/api'
+import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
 import type { Album, ChecklistTemplateItem, Invitation, Track, User } from '@/types'
@@ -386,8 +387,7 @@ async function testWebhook() {
     <!-- Album header -->
     <div class="flex items-center gap-4">
       <div class="w-10 h-10 flex-shrink-0 overflow-hidden border border-border">
-        <img v-if="album.cover_image" :src="album.cover_image" class="w-full h-full object-cover" />
-        <div v-else class="w-full h-full" :style="{ backgroundColor: album.cover_color }"></div>
+        <img :src="album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : albumPlaceholder" class="w-full h-full object-cover" />
       </div>
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-3 flex-wrap">
@@ -428,10 +428,8 @@ async function testWebhook() {
               :class="isProducerOfAlbum ? 'cursor-pointer group' : ''"
               @click="isProducerOfAlbum && coverInputRef?.click()"
             >
-              <div class="absolute inset-0" :style="{ backgroundColor: album.cover_color }"></div>
               <img
-                v-if="coverPreviewUrl || album.cover_image"
-                :src="coverPreviewUrl || album.cover_image!"
+                :src="coverPreviewUrl || (album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : albumPlaceholder)"
                 class="absolute inset-0 w-full h-full object-cover"
               />
               <div
@@ -466,13 +464,6 @@ async function testWebhook() {
             <div v-if="album.description">
               <div class="text-xs text-muted-foreground mb-1">{{ t('albumNew.description') }}</div>
               <div class="text-sm text-foreground">{{ album.description }}</div>
-            </div>
-            <div>
-              <div class="text-xs text-muted-foreground mb-1">{{ t('albumSettings.info.coverColor') }}</div>
-              <div class="flex items-center gap-2">
-                <div class="w-5 h-5 border border-border flex-shrink-0" :style="{ backgroundColor: album.cover_color }"></div>
-                <span class="text-xs font-mono text-muted-foreground">{{ album.cover_color }}</span>
-              </div>
             </div>
           </div>
         </div>
