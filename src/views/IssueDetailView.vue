@@ -9,8 +9,9 @@ import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import TimestampText from '@/components/common/TimestampText.vue'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
-import { formatTimestamp, formatLocaleDate, formatDuration } from '@/utils/time'
+import { formatTimestamp, formatTimestampShort, formatLocaleDate, formatDuration } from '@/utils/time'
 import type { TimeReference, TimestampTarget } from '@/utils/timestamps'
+import { ChevronLeft, ChevronRight, Music, ImageIcon } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -23,6 +24,7 @@ const allTrackIssues = ref<Issue[]>([])
 const loading = ref(true)
 const showUnresolvedOnly = ref(false)
 const currentSourceVersionNumber = ref<number | null>(null)
+const cachedTrack = ref<import('@/types').Track | null>(null)
 
 const issueIsOutdated = computed(() => {
   if (!issue.value || issue.value.source_version_number == null || currentSourceVersionNumber.value == null) return false
@@ -91,8 +93,24 @@ const AUDIO_ACCEPT = 'audio/mpeg,audio/wav,audio/flac,audio/aac,audio/ogg,.mp3,.
 const MAX_AUDIOS = 3
 const selectedAudios = ref<File[]>([])
 const audioInputRef = ref<HTMLInputElement | null>(null)
-const pendingStatus = ref<Exclude<IssueStatus, 'open'> | null>(null)
+const pendingStatus = ref<IssueStatus | null>(null)
 const statusNote = ref('')
+
+const isSubmitter = computed(() => appStore.currentUser?.id === cachedTrack.value?.submitter_id)
+
+const isReviewer = computed(() => {
+  const uid = appStore.currentUser?.id
+  const trk = cachedTrack.value
+  const iss = issue.value
+  if (!uid || !trk || !iss) return false
+  switch (iss.phase) {
+    case 'peer': return uid === trk.peer_reviewer_id
+    case 'producer': case 'final_review': return uid === trk.producer_id
+    case 'mastering': return uid === trk.mastering_engineer_id
+    default: return false
+  }
+})
+
 
 async function loadIssue(id: number) {
   const token = ++loadCount
@@ -107,6 +125,7 @@ async function loadIssue(id: number) {
       if (token !== loadCount) return
       allTrackIssues.value = all
       currentSourceVersionNumber.value = detail.track.version
+      cachedTrack.value = detail.track
       cachedTrackId = fetched.track_id
     }
   } finally {
@@ -135,7 +154,7 @@ const siblingIssues = computed(() => {
 
 const visibleSiblingIssues = computed(() => {
   if (!showUnresolvedOnly.value) return siblingIssues.value
-  return siblingIssues.value.filter(i => i.status === 'open' || i.status === 'will_fix')
+  return siblingIssues.value.filter(i => i.status === 'open')
 })
 
 const currentSiblingIndex = computed(() =>
@@ -248,7 +267,7 @@ async function addComment() {
   }
 }
 
-function selectStatus(status: Exclude<IssueStatus, 'open'>) {
+function selectStatus(status: IssueStatus) {
   pendingStatus.value = status
   statusNote.value = ''
 }
@@ -308,9 +327,7 @@ function openVersionCompare() {
     <div>
       <div class="flex items-center justify-between mb-2">
         <button @click="goBackToTrack" class="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
+          <ChevronLeft class="w-4 h-4" :stroke-width="2" />
           {{ t('issueDetail.back') }}
         </button>
         <div v-if="siblingIssues.length > 1" class="flex items-center gap-1 text-sm text-muted-foreground">
@@ -320,9 +337,7 @@ function openVersionCompare() {
             class="p-1 rounded hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             :title="prevIssue?.title"
           >
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
+            <ChevronLeft class="w-4 h-4" :stroke-width="2" />
           </button>
           <span class="font-mono text-xs">{{ currentSiblingIndex + 1 }} / {{ siblingIssues.length }}</span>
           <button
@@ -331,9 +346,7 @@ function openVersionCompare() {
             class="p-1 rounded hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             :title="nextIssue?.title"
           >
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
+            <ChevronRight class="w-4 h-4" :stroke-width="2" />
           </button>
         </div>
       </div>
@@ -374,7 +387,7 @@ function openVersionCompare() {
                 </span>
               </div>
               <span class="text-xs text-muted-foreground font-mono">
-                {{ formatTimestamp(issue.time_start) }}<span v-if="issue.time_end"> – {{ formatTimestamp(issue.time_end) }}</span>
+                {{ formatTimestampShort(issue.time_start) }}<span v-if="issue.time_end"> – {{ formatTimestampShort(issue.time_end) }}</span>
               </span>
             </div>
             <WaveformPlayer
@@ -402,7 +415,8 @@ function openVersionCompare() {
 
         <!-- Status Actions -->
         <div class="space-y-3">
-          <div v-if="issue.status === 'open' || issue.status === 'will_fix'" class="flex gap-2">
+          <!-- Submitter: resolved + disagreed when open -->
+          <div v-if="isSubmitter && issue.status === 'open'" class="flex gap-2">
             <button
               @click="selectStatus('resolved')"
               class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
@@ -413,7 +427,6 @@ function openVersionCompare() {
               {{ t('issueDetail.markFixed') }}
             </button>
             <button
-              v-if="issue.status === 'open'"
               @click="selectStatus('disagreed')"
               class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
               :class="pendingStatus === 'disagreed'
@@ -421,6 +434,30 @@ function openVersionCompare() {
                 : 'bg-card border border-border text-foreground hover:bg-border'"
             >
               {{ t('issueDetail.disagree') }}
+            </button>
+          </div>
+          <!-- Reviewer: resolved when open -->
+          <div v-else-if="isReviewer && issue.status === 'open'" class="flex gap-2">
+            <button
+              @click="selectStatus('resolved')"
+              class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
+              :class="pendingStatus === 'resolved'
+                ? 'bg-primary text-black'
+                : 'bg-card border border-border text-foreground hover:bg-border'"
+            >
+              {{ t('issueDetail.markFixed') }}
+            </button>
+          </div>
+          <!-- Reviewer: reopen when resolved or disagreed -->
+          <div v-else-if="isReviewer && (issue.status === 'resolved' || issue.status === 'disagreed')" class="flex gap-2">
+            <button
+              @click="selectStatus('open')"
+              class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
+              :class="pendingStatus === 'open'
+                ? 'bg-warning-bg text-warning border border-warning/30'
+                : 'bg-card border border-border text-foreground hover:bg-border'"
+            >
+              {{ t('issueDetail.reopen') }}
             </button>
           </div>
           <div v-if="pendingStatus" class="space-y-2">
@@ -500,9 +537,7 @@ function openVersionCompare() {
                   class="bg-background border border-border rounded-2xl px-4 py-3 space-y-2"
                 >
                   <div class="flex items-center gap-2">
-                    <svg class="w-4 h-4 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                    </svg>
+                    <Music class="w-4 h-4 text-primary flex-shrink-0" :stroke-width="2" />
                     <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
                     <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
                   </div>
@@ -561,9 +596,7 @@ function openVersionCompare() {
                 :key="i"
                 class="flex items-center gap-1.5 bg-background border border-border rounded-full px-3 py-1"
               >
-                <svg class="w-3.5 h-3.5 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                </svg>
+                <Music class="w-3.5 h-3.5 text-primary flex-shrink-0" :stroke-width="2" />
                 <span class="text-xs font-mono text-foreground max-w-[120px] truncate">{{ file.name }}</span>
                 <button @click="removeSelectedAudio(i)" class="text-muted-foreground hover:text-error transition-colors leading-none">×</button>
               </div>
@@ -590,9 +623,7 @@ function openVersionCompare() {
                 @click="fileInputRef?.click()"
                 class="btn-secondary text-sm inline-flex items-center gap-1"
               >
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
+                <ImageIcon class="w-4 h-4" :stroke-width="2" />
                 {{ t('issueDetail.image') }}
               </button>
               <button
@@ -601,9 +632,7 @@ function openVersionCompare() {
                 :title="selectedAudios.length >= MAX_AUDIOS ? t('issueDetail.audioMaxReached', { max: MAX_AUDIOS }) : undefined"
                 class="btn-secondary text-sm inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                </svg>
+                <Music class="w-4 h-4" :stroke-width="2" />
                 {{ t('issueDetail.audio') }}
               </button>
               <button @click="addComment" :disabled="submittingComment || (!newComment.trim() && !selectedImages.length && !selectedAudios.length)" class="btn-primary text-sm">

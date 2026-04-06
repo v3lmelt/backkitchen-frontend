@@ -3,22 +3,28 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import draggable from 'vuedraggable'
-import { albumApi, checklistApi, invitationApi, userApi, API_ORIGIN } from '@/api'
+import { albumApi, checklistApi, invitationApi, userApi, circleApi, API_ORIGIN } from '@/api'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
 import type { Album, ChecklistTemplateItem, Invitation, Track, User } from '@/types'
+import { Upload } from 'lucide-vue-next'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
+import CustomSelect from '@/components/common/CustomSelect.vue'
+import type { SelectOption } from '@/components/common/CustomSelect.vue'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
-const { success: toastSuccess } = useToast()
+const { success: toastSuccess, error: toastError } = useToast()
 
 const albumId = computed(() => Number(route.params.albumId))
 const album = ref<Album | null>(null)
 const users = ref<User[]>([])
+const userOptions = computed<SelectOption[]>(() =>
+  users.value.map((u) => ({ value: u.id, label: u.display_name }))
+)
 const loading = ref(true)
 const activeTab = ref('info')
 
@@ -145,18 +151,22 @@ onMounted(async () => {
 
     if (albumData.producer_id === userId) {
       loadTasks.push(
-        userApi.list().then(u => { users.value = u }),
+        (albumData.circle_id
+          ? circleApi.get(albumData.circle_id).then(c => { users.value = c.members.map(m => m.user) })
+          : userApi.list().then(u => { users.value = u })
+        ),
         invitationApi.listForAlbum(albumData.id).then(invs => { invitations.value = invs }),
         checklistApi.getTemplate(albumData.id).then(tpl => {
           templateItems.value = tpl.items.map(item => ({ ...item }))
           templateIsDefault.value = tpl.is_default
-        }).catch(() => {}),
+        }).catch(() => { console.warn('[AlbumSettings] Failed to load checklist template') }),
         albumApi.tracks(albumData.id).then(ts => { tracks.value = ts }),
         albumApi.getWebhook(albumData.id).then(cfg => {
           webhookState.url = cfg.url
           webhookState.enabled = cfg.enabled
           webhookState.events = [...cfg.events]
         }).catch(() => {
+          console.warn('[AlbumSettings] Failed to load webhook config')
           webhookState.url = ''
           webhookState.enabled = false
           webhookState.events = []
@@ -167,12 +177,13 @@ onMounted(async () => {
         checklistApi.getTemplate(albumData.id).then(tpl => {
           templateItems.value = tpl.items.map(item => ({ ...item }))
           templateIsDefault.value = tpl.is_default
-        }).catch(() => {}),
+        }).catch(() => { console.warn('[AlbumSettings] Failed to load checklist template') }),
       )
     }
 
     await Promise.all(loadTasks)
-  } catch {
+  } catch (e: any) {
+    toastError(e.message || t('common.loadFailed'))
     router.replace('/albums')
   } finally {
     loading.value = false
@@ -436,9 +447,7 @@ async function testWebhook() {
                 v-if="isProducerOfAlbum"
                 class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
               >
-                <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M16 12l-4-4-4 4M12 8v8" />
-                </svg>
+                <Upload class="w-6 h-6 text-white" :stroke-width="2" />
               </div>
             </div>
             <input ref="coverInputRef" type="file" accept="image/*" class="hidden" @change="handleCoverSelect" />
@@ -475,16 +484,13 @@ async function testWebhook() {
           <div class="card space-y-5">
             <div>
               <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.masteringEngineerSelect') }}</label>
-              <select v-model="teamState.mastering_engineer_id" class="select-field w-full">
-                <option :value="null">{{ t('settings.noneOption') }}</option>
-                <option v-for="user in users" :key="user.id" :value="user.id">{{ user.display_name }}</option>
-              </select>
+              <CustomSelect v-model="teamState.mastering_engineer_id" :options="userOptions" :placeholder="t('settings.noneOption')" />
             </div>
             <div>
               <div class="text-xs text-muted-foreground mb-2">{{ t('settings.participants') }}</div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <label v-for="user in users" :key="user.id" class="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-                  <input type="checkbox" :checked="teamState.member_ids.includes(user.id)" @change="toggleMember(user.id)" />
+                  <input type="checkbox" class="checkbox" :checked="teamState.member_ids.includes(user.id)" @change="toggleMember(user.id)" />
                   <span>{{ user.display_name }}</span>
                 </label>
               </div>
@@ -631,7 +637,7 @@ async function testWebhook() {
               </div>
               <div class="flex items-center gap-2 pt-1.5">
                 <label class="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
-                  <input type="checkbox" v-model="item.required" />
+                  <input type="checkbox" class="checkbox" v-model="item.required" />
                   <span>{{ item.required ? t('settings.required') : t('settings.optional') }}</span>
                 </label>
                 <button
@@ -735,7 +741,7 @@ async function testWebhook() {
           <input v-model="webhookState.url" class="input-field w-full text-sm" placeholder="https://..." />
         </div>
         <label class="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-          <input type="checkbox" v-model="webhookState.enabled" />
+          <input type="checkbox" class="checkbox" v-model="webhookState.enabled" />
           <span>{{ t('settings.webhookEnabled') }}</span>
         </label>
         <div>
@@ -744,6 +750,7 @@ async function testWebhook() {
             <label v-for="evt in WEBHOOK_EVENT_TYPES" :key="evt" class="flex items-center gap-2 text-sm text-foreground cursor-pointer">
               <input
                 type="checkbox"
+                class="checkbox"
                 :checked="webhookState.events.includes(evt)"
                 @change="toggleWebhookEvent(evt)"
               />

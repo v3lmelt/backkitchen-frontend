@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import draggable from 'vuedraggable'
 import { albumApi, checklistApi, invitationApi, userApi, API_ORIGIN } from '@/api'
@@ -7,11 +7,16 @@ import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
 import type { Album, ChecklistTemplateItem, Invitation, Track, User } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
+import CustomSelect from '@/components/common/CustomSelect.vue'
+import type { SelectOption } from '@/components/common/CustomSelect.vue'
 
 const { t } = useI18n()
 const { success: toastSuccess } = useToast()
 const appStore = useAppStore()
 const users = ref<User[]>([])
+const userOptions = computed<SelectOption[]>(() =>
+  users.value.map((u) => ({ value: u.id, label: u.display_name }))
+)
 const albums = ref<Album[]>([])
 const loading = ref(true)
 const savingAlbumId = ref<number | null>(null)
@@ -83,13 +88,14 @@ onMounted(async () => {
         checklistApi.getTemplate(album.id).then(template => {
           albumTemplates.value[album.id] = template.items.map(item => ({ ...item }))
           albumTemplateIsDefault.value[album.id] = template.is_default
-        }).catch(() => {})
+        }).catch(() => { console.warn('[Settings] Failed to load checklist template') })
       ),
       loadAlbumTracks(),
       ...producerAlbums.map(album =>
         albumApi.getWebhook(album.id).then(config => {
           albumWebhooks[album.id] = { ...config }
         }).catch(() => {
+          console.warn('[Settings] Failed to load webhook config')
           albumWebhooks[album.id] = { url: '', enabled: false, events: [] }
         })
       ),
@@ -505,12 +511,7 @@ async function saveDeadlines(albumId: number) {
           <template v-if="appStore.currentUser?.id === album.producer_id">
             <div>
               <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.masteringEngineerSelect') }}</label>
-              <select v-model="teamState[album.id].mastering_engineer_id" class="select-field w-full">
-                <option :value="null">{{ t('settings.noneOption') }}</option>
-                <option v-for="user in users" :key="user.id" :value="user.id">
-                  {{ user.display_name }}
-                </option>
-              </select>
+              <CustomSelect v-model="teamState[album.id].mastering_engineer_id" :options="userOptions" :placeholder="t('settings.noneOption')" />
             </div>
 
             <div>
@@ -519,6 +520,7 @@ async function saveDeadlines(albumId: number) {
                 <label v-for="user in users" :key="user.id" class="flex items-center gap-2 text-sm text-foreground">
                   <input
                     type="checkbox"
+                    class="checkbox"
                     :checked="teamState[album.id].member_ids.includes(user.id)"
                     @change="toggleMember(album.id, user.id)"
                   />
@@ -617,7 +619,7 @@ async function saveDeadlines(albumId: number) {
                       <input
                         type="checkbox"
                         v-model="item.required"
-                        class="rounded border-border bg-card text-primary focus:ring-primary"
+                        class="checkbox"
                       />
                       <span>{{ item.required ? t('settings.required') : t('settings.optional') }}</span>
                     </label>
@@ -835,7 +837,7 @@ async function saveDeadlines(albumId: number) {
               <input v-model="albumWebhooks[album.id].url" class="input-field w-full text-sm" placeholder="https://..." />
             </div>
             <label class="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-              <input type="checkbox" v-model="albumWebhooks[album.id].enabled" />
+              <input type="checkbox" class="checkbox" v-model="albumWebhooks[album.id].enabled" />
               <span>{{ t('settings.webhookEnabled') }}</span>
             </label>
             <div>
@@ -844,6 +846,7 @@ async function saveDeadlines(albumId: number) {
                 <label v-for="evt in WEBHOOK_EVENT_TYPES" :key="evt" class="flex items-center gap-2 text-sm text-foreground cursor-pointer">
                   <input
                     type="checkbox"
+                    class="checkbox"
                     :checked="albumWebhooks[album.id].events.includes(evt)"
                     @change="toggleWebhookEvent(album.id, evt)"
                   />

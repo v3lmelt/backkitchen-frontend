@@ -35,13 +35,13 @@ describe('AuthorRevisionView', () => {
       track: { id: 8, title: 'Track 8', status: 'mastering_revision', workflow_cycle: 3 },
       issues: [
         { id: 1, phase: 'mastering', workflow_cycle: 3, status: 'open', title: 'Issue A', description: 'A', time_start: 1 },
-        { id: 2, phase: 'mastering', workflow_cycle: 3, status: 'will_fix', title: 'Issue B', description: 'B', time_start: 2 },
+        { id: 2, phase: 'mastering', workflow_cycle: 3, status: 'disagreed', title: 'Issue B', description: 'B', time_start: 2 },
         { id: 3, phase: 'peer', workflow_cycle: 3, status: 'open', title: 'Ignore', description: 'X', time_start: 3 },
       ],
       checklist_items: [],
       events: [],
     })
-    mocks.issueUpdateMock.mockResolvedValue({ id: 1, phase: 'mastering', workflow_cycle: 3, status: 'will_fix', title: 'Issue A', description: 'A', time_start: 1 })
+    mocks.issueUpdateMock.mockResolvedValue({ id: 1, phase: 'mastering', workflow_cycle: 3, status: 'disagreed', title: 'Issue A', description: 'A', time_start: 1 })
     mocks.uploadSourceVersionMock.mockResolvedValue({})
   })
 
@@ -51,8 +51,8 @@ describe('AuthorRevisionView', () => {
     await Promise.resolve()
 
     expect(wrapper.text()).toContain('1')
-    await wrapper.find('button.btn-primary.text-xs').trigger('click')
-    expect(mocks.issueUpdateMock).toHaveBeenCalledWith(1, { status: 'will_fix' })
+    await wrapper.find('button.btn-secondary.text-xs').trigger('click')
+    expect(mocks.issueUpdateMock).toHaveBeenCalledWith(1, { status: 'disagreed' })
   })
 
   it('uploads a selected revision file and routes back', async () => {

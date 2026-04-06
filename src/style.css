@@ -67,6 +67,45 @@
     @apply bg-card border border-border rounded-none p-4 shadow-[0_1px_1.75px_rgba(0,0,0,0.05)];
   }
 
+  /* Custom checkbox */
+  .checkbox {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    min-height: 16px;
+    border: 1px solid #2E2E2E;
+    background: #111111;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.15s, background-color 0.15s;
+    flex-shrink: 0;
+  }
+  .checkbox:hover {
+    border-color: rgba(255, 132, 0, 0.5);
+  }
+  .checkbox:checked {
+    background: #FF8400;
+    border-color: #FF8400;
+  }
+  .checkbox:checked::after {
+    content: '';
+    position: absolute;
+    left: 4.5px;
+    top: 1px;
+    width: 5px;
+    height: 9px;
+    border: solid #111111;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  .checkbox:focus-visible {
+    outline: none;
+    border-color: #FF8400;
+    box-shadow: 0 0 0 1px #FF8400;
+  }
+
   input[type='date'] {
     font-family: theme('fontFamily.sans');
   }

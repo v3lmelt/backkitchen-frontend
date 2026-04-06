@@ -8,11 +8,11 @@
       </div>
       <div class="flex items-center gap-3 shrink-0">
         <button class="btn-secondary flex items-center gap-2" @click="showJoinModal = true">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+          <UserPlus class="w-4 h-4" :stroke-width="2" />
           {{ t('circles.joinCircle') }}
         </button>
         <RouterLink v-if="isProducer" to="/circles/new" class="btn-primary flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <Plus class="w-4 h-4" :stroke-width="2" />
           {{ t('circles.newCircle') }}
         </RouterLink>
       </div>
@@ -25,7 +25,7 @@
 
     <!-- empty -->
     <div v-else-if="circles.length === 0" class="flex flex-col items-center justify-center py-24 gap-4">
-      <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+      <Smile class="w-10 h-10 text-muted-foreground" :stroke-width="1.5" />
       <p class="text-muted-foreground font-mono text-sm">{{ t('circles.noCircles') }}</p>
       <p class="text-muted-foreground text-xs">{{ t('circles.noCirclesHint') }}</p>
     </div>
@@ -41,7 +41,7 @@
         <!-- logo -->
         <div class="shrink-0 w-12 h-12 rounded-full overflow-hidden bg-border flex items-center justify-center">
           <img v-if="circle.logo_url" :src="`${API_ORIGIN}${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
-          <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          <Smile v-else class="w-5 h-5 text-muted-foreground" :stroke-width="1.5" />
         </div>
         <div class="flex-1 min-w-0">
           <p class="font-mono font-semibold text-foreground truncate">{{ circle.name }}</p>
@@ -54,8 +54,8 @@
     </div>
 
     <!-- join modal -->
-    <div v-if="showJoinModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" @click.self="showJoinModal = false">
-      <div class="bg-card border border-border rounded-none w-full max-w-sm p-6 flex flex-col gap-5">
+    <BaseModal v-if="showJoinModal" max-width="max-w-sm" @close="showJoinModal = false">
+      <div class="flex flex-col gap-5">
         <h2 class="font-mono font-semibold text-foreground">{{ t('circles.joinCircle') }}</h2>
         <div>
           <label class="block text-xs text-muted-foreground mb-2 font-mono">{{ t('circles.inviteCode') }}</label>
@@ -63,7 +63,7 @@
             v-model="joinCode"
             type="text"
             :placeholder="t('circles.inviteCodePlaceholder')"
-            class="w-full bg-transparent border border-border rounded-full px-4 py-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+            class="input-field w-full"
             @keydown.enter="joinCircle"
           />
           <p v-if="joinError" class="text-error text-xs mt-2">{{ joinError }}</p>
@@ -75,7 +75,7 @@
           </button>
         </div>
       </div>
-    </div>
+    </BaseModal>
   </div>
 </template>
 
@@ -87,6 +87,8 @@ import { useAppStore } from '@/stores/app'
 import { circleApi, API_ORIGIN } from '@/api'
 import type { CircleSummary } from '@/types'
 import { useToast } from '@/composables/useToast'
+import { UserPlus, Plus, Smile } from 'lucide-vue-next'
+import BaseModal from '@/components/common/BaseModal.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()

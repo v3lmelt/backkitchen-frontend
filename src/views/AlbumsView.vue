@@ -6,6 +6,7 @@ import { albumApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Album } from '@/types'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
+import { Music } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -63,9 +64,7 @@ function roleBadgeClass(album: Album): string {
 
     <div v-else-if="myAlbums.length === 0" class="flex flex-col items-center justify-center py-20 text-center">
       <div class="w-16 h-16 bg-card border border-border flex items-center justify-center mb-4">
-        <svg class="w-8 h-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-        </svg>
+        <Music class="w-8 h-8 text-muted-foreground" :stroke-width="1.5" />
       </div>
       <p class="text-base font-mono font-semibold text-foreground">{{ t('albums.noAlbums') }}</p>
       <p class="text-sm text-muted-foreground mt-1">{{ t('albums.noAlbumsHint') }}</p>

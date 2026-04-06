@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import type { Notification } from '@/types'
 import { formatRelativeTime } from '@/utils/time'
+import { Menu, Bell } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -84,7 +85,6 @@ const breadcrumbs = computed(() => {
 
 const roleLabel = computed(() => {
   const role = appStore.currentUser?.role
-  if (role === 'mastering_engineer') return t('roles.masteringEngineer')
   if (role === 'producer') return t('roles.producer')
   return t('roles.member')
 })
@@ -108,9 +108,7 @@ function handleMenuToggle() {
         @click="handleMenuToggle"
         class="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
       >
-        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-        </svg>
+        <Menu class="w-5 h-5" :stroke-width="2" />
       </button>
       <nav class="flex items-center gap-2 text-sm min-w-0 overflow-hidden">
         <template v-for="(crumb, i) in breadcrumbs" :key="crumb.path">
@@ -137,9 +135,7 @@ function handleMenuToggle() {
       <!-- 通知铃铛 -->
       <div v-if="appStore.currentUser" class="relative" data-notification-panel>
         <button @click.stop="showNotifications = !showNotifications" class="relative p-2 rounded-lg hover:bg-white/10 transition-colors text-muted-foreground hover:text-foreground">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-          </svg>
+          <Bell class="h-5 w-5" :stroke-width="2" />
           <span v-if="appStore.unreadCount > 0"
             class="absolute -top-1 -right-1 bg-error text-white text-xs rounded-full h-4 w-4 flex items-center justify-center font-mono font-bold">
             {{ appStore.unreadCount > 9 ? '9+' : appStore.unreadCount }}
@@ -148,7 +144,7 @@ function handleMenuToggle() {
 
         <!-- 通知下拉面板 -->
         <div v-if="showNotifications"
-          class="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] sm:w-80 bg-card border border-border rounded-none shadow-[0_1px_1.75px_rgba(0,0,0,0.05)] z-50 overflow-hidden">
+          class="fixed left-4 right-4 top-14 mt-1 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-card border border-border rounded-none shadow-[0_1px_1.75px_rgba(0,0,0,0.05)] z-50 overflow-hidden">
           <div class="flex items-center justify-between px-4 py-3 border-b border-border">
             <span class="font-mono font-semibold text-sm text-foreground">{{ t('notifications.title') }}</span>
             <button v-if="appStore.unreadCount > 0"

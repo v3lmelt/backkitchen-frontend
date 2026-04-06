@@ -42,7 +42,7 @@ describe('app store', () => {
 
   it('bootstraps current user from auth api', async () => {
     localStorage.setItem('backkitchen_token', 'token-1')
-    mocks.meMock.mockResolvedValue({ id: 2, username: 'echo', display_name: 'Echo', role: 'mastering_engineer', avatar_color: '#222222', created_at: '2024-01-01' })
+    mocks.meMock.mockResolvedValue({ id: 2, username: 'echo', display_name: 'Echo', role: 'member', avatar_color: '#222222', created_at: '2024-01-01' })
     const store = useAppStore()
 
     await store.bootstrap()

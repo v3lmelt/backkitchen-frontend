@@ -1,24 +1,26 @@
 <script setup lang="ts">
-import { computed, h, defineComponent } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
+import { LayoutGrid, Upload, Archive, Smile, Lock, X } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const { t } = useI18n()
 
+const iconMap = { grid: LayoutGrid, upload: Upload, albums: Archive, circles: Smile, admin: Lock } as const
+
 const navItems = computed(() => [
-  { label: t('nav.dashboard'), icon: 'grid', path: '/' },
-  { label: t('nav.submit'), icon: 'upload', path: '/upload' },
-  { label: t('nav.albums'), icon: 'albums', path: '/albums' },
-  { label: t('nav.circles'), icon: 'circles', path: '/circles' },
+  { label: t('nav.dashboard'), icon: 'grid' as const, path: '/' },
+  { label: t('nav.submit'), icon: 'upload' as const, path: '/upload' },
+  { label: t('nav.albums'), icon: 'albums' as const, path: '/albums' },
+  { label: t('nav.circles'), icon: 'circles' as const, path: '/circles' },
 ])
 
 const roleLabel = computed(() => {
   const role = appStore.currentUser?.role
-  if (role === 'mastering_engineer') return t('roles.masteringEngineer')
   if (role === 'producer') return t('roles.producer')
   return t('roles.member')
 })
@@ -36,46 +38,6 @@ function handleNav(path: string) {
   router.push(path)
   if (isMobileDrawer.value) appStore.closeMobileSidebar()
 }
-
-// Shared icon component — eliminates SVG duplication between desktop and mobile
-const iconPaths: Record<string, () => ReturnType<typeof h>[]> = {
-  grid: () => [
-    h('rect', { x: 3, y: 3, width: 7, height: 7, rx: 1 }),
-    h('rect', { x: 14, y: 3, width: 7, height: 7, rx: 1 }),
-    h('rect', { x: 3, y: 14, width: 7, height: 7, rx: 1 }),
-    h('rect', { x: 14, y: 14, width: 7, height: 7, rx: 1 }),
-  ],
-  upload: () => [
-    h('path', { d: 'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4' }),
-    h('polyline', { points: '17 8 12 3 7 8' }),
-    h('line', { x1: 12, y1: 3, x2: 12, y2: 15 }),
-  ],
-  albums: () => [
-    h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', d: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' }),
-  ],
-  circles: () => [
-    h('circle', { cx: 12, cy: 12, r: 10 }),
-    h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', d: 'M8 14s1.5 2 4 2 4-2 4-2' }),
-    h('line', { x1: 9, y1: 9, x2: 9.01, y2: 9 }),
-    h('line', { x1: 15, y1: 9, x2: 15.01, y2: 9 }),
-  ],
-  admin: () => [
-    h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', d: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' }),
-  ],
-}
-
-const NavIcon = defineComponent({
-  props: { icon: { type: String, required: true } },
-  setup(props) {
-    return () => h('svg', {
-      class: 'w-5 h-5 flex-shrink-0',
-      fill: 'none',
-      viewBox: '0 0 24 24',
-      stroke: 'currentColor',
-      'stroke-width': 2,
-    }, iconPaths[props.icon]?.() ?? [])
-  },
-})
 
 const navItemClass = (path: string) => [
   'flex items-center gap-3 px-3 rounded-full text-sm transition-colors',
@@ -117,7 +79,7 @@ const navItemClass = (path: string) => [
         :to="item.path"
         :class="[...navItemClass(item.path), 'py-2']"
       >
-        <NavIcon :icon="item.icon" />
+        <component :is="iconMap[item.icon]" class="w-5 h-5 flex-shrink-0" :stroke-width="2" />
         <span v-if="showLabel" class="whitespace-nowrap">{{ item.label }}</span>
       </RouterLink>
       <RouterLink
@@ -125,7 +87,7 @@ const navItemClass = (path: string) => [
         to="/admin"
         :class="[...navItemClass('/admin'), 'py-2']"
       >
-        <NavIcon icon="admin" />
+        <Lock class="w-5 h-5 flex-shrink-0" :stroke-width="2" />
         <span v-if="showLabel" class="whitespace-nowrap">{{ t('nav.admin') }}</span>
       </RouterLink>
     </nav>
@@ -160,9 +122,7 @@ const navItemClass = (path: string) => [
           <span class="font-mono font-semibold text-foreground whitespace-nowrap">BACK KITCHEN</span>
         </div>
         <button @click="appStore.closeMobileSidebar()" class="text-muted-foreground hover:text-foreground p-1">
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
+          <X class="w-5 h-5" :stroke-width="2" />
         </button>
       </div>
 
@@ -173,7 +133,7 @@ const navItemClass = (path: string) => [
           @click="handleNav(item.path)"
           :class="['w-full', ...navItemClass(item.path), 'py-2.5']"
         >
-          <NavIcon :icon="item.icon" />
+          <component :is="iconMap[item.icon]" class="w-5 h-5 flex-shrink-0" :stroke-width="2" />
           <span class="whitespace-nowrap">{{ item.label }}</span>
         </button>
         <button
@@ -181,7 +141,7 @@ const navItemClass = (path: string) => [
           @click="handleNav('/admin')"
           :class="['w-full', ...navItemClass('/admin'), 'py-2.5']"
         >
-          <NavIcon icon="admin" />
+          <Lock class="w-5 h-5 flex-shrink-0" :stroke-width="2" />
           <span class="whitespace-nowrap">{{ t('nav.admin') }}</span>
         </button>
       </nav>

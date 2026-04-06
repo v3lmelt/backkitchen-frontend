@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminApi } from '@/api'
 import { useToast } from '@/composables/useToast'
+import { Check } from 'lucide-vue-next'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { User, UserRole } from '@/types'
 
 const { t } = useI18n()
@@ -15,6 +18,7 @@ const toast = useToast()
 const users = ref<User[]>([])
 const loading = ref(true)
 const deletingId = ref<number | null>(null)
+const confirmDeleteUser = ref<User | null>(null)
 
 onMounted(async () => {
   if (!appStore.currentUser?.is_admin) {
@@ -58,8 +62,14 @@ async function onVerifiedToggle(user: User) {
   }
 }
 
-async function onDelete(user: User) {
-  if (!confirm(t('admin.confirmDelete', { name: user.display_name }))) return
+function onDelete(user: User) {
+  confirmDeleteUser.value = user
+}
+
+async function doDelete() {
+  const user = confirmDeleteUser.value
+  if (!user) return
+  confirmDeleteUser.value = null
   deletingId.value = user.id
   try {
     await adminApi.deleteUser(user.id)
@@ -77,8 +87,11 @@ const isSelf = (user: User) => user.id === appStore.currentUser?.id
 const roleOptions: { value: UserRole; labelKey: string }[] = [
   { value: 'member', labelKey: 'roles.member' },
   { value: 'producer', labelKey: 'roles.producer' },
-  { value: 'mastering_engineer', labelKey: 'roles.masteringEngineer' },
 ]
+
+const roleSelectOptions = computed(() =>
+  roleOptions.map((o) => ({ value: o.value, label: t(o.labelKey) }))
+)
 </script>
 
 <template>
@@ -124,15 +137,12 @@ const roleOptions: { value: UserRole; labelKey: string }[] = [
               <td class="py-3 pr-4 text-muted-foreground">{{ user.username }}</td>
               <td class="py-3 pr-4 text-muted-foreground">{{ user.email || '—' }}</td>
               <td class="py-3 pr-4">
-                <select
-                  class="select-field-sm"
-                  :value="user.role"
-                  @change="onRoleChange(user, ($event.target as HTMLSelectElement).value as UserRole)"
-                >
-                  <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">
-                    {{ t(opt.labelKey) }}
-                  </option>
-                </select>
+                <CustomSelect
+                  :model-value="user.role"
+                  :options="roleSelectOptions"
+                  size="sm"
+                  @update:model-value="(v: any) => onRoleChange(user, v as UserRole)"
+                />
               </td>
               <td class="py-3 pr-4 text-center">
                 <button
@@ -142,9 +152,7 @@ const roleOptions: { value: UserRole; labelKey: string }[] = [
                   :title="isSelf(user) ? '' : t('admin.adminFlag')"
                   @click="!isSelf(user) && onAdminToggle(user)"
                 >
-                  <svg v-if="user.is_admin" class="w-3 h-3 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
+                  <Check v-if="user.is_admin" class="w-3 h-3 text-black" :stroke-width="3" />
                 </button>
               </td>
               <td class="py-3 pr-4 text-center">
@@ -153,9 +161,7 @@ const roleOptions: { value: UserRole; labelKey: string }[] = [
                   :class="user.email_verified ? 'bg-primary border-primary' : 'bg-background'"
                   @click="onVerifiedToggle(user)"
                 >
-                  <svg v-if="user.email_verified" class="w-3 h-3 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
+                  <Check v-if="user.email_verified" class="w-3 h-3 text-black" :stroke-width="3" />
                 </button>
               </td>
               <td class="py-3">
@@ -194,15 +200,12 @@ const roleOptions: { value: UserRole; labelKey: string }[] = [
           </div>
           <div class="text-xs text-muted-foreground truncate">{{ user.email || '—' }}</div>
           <div class="flex items-center gap-3 flex-wrap">
-            <select
-              class="select-field-sm"
-              :value="user.role"
-              @change="onRoleChange(user, ($event.target as HTMLSelectElement).value as UserRole)"
-            >
-              <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">
-                {{ t(opt.labelKey) }}
-              </option>
-            </select>
+            <CustomSelect
+              :model-value="user.role"
+              :options="roleSelectOptions"
+              size="sm"
+              @update:model-value="(v: any) => onRoleChange(user, v as UserRole)"
+            />
             <label class="flex items-center gap-1.5 text-xs text-muted-foreground">
               <button
                 class="w-4 h-4 rounded border border-border inline-flex items-center justify-center transition-colors"
@@ -210,9 +213,7 @@ const roleOptions: { value: UserRole; labelKey: string }[] = [
                 :disabled="isSelf(user)"
                 @click="!isSelf(user) && onAdminToggle(user)"
               >
-                <svg v-if="user.is_admin" class="w-3 h-3 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                <Check v-if="user.is_admin" class="w-3 h-3 text-black" :stroke-width="3" />
               </button>
               {{ t('admin.adminFlag') }}
             </label>
@@ -222,9 +223,7 @@ const roleOptions: { value: UserRole; labelKey: string }[] = [
                 :class="user.email_verified ? 'bg-primary border-primary' : 'bg-background'"
                 @click="onVerifiedToggle(user)"
               >
-                <svg v-if="user.email_verified" class="w-3 h-3 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                <Check v-if="user.email_verified" class="w-3 h-3 text-black" :stroke-width="3" />
               </button>
               {{ t('admin.verified') }}
             </label>
@@ -240,5 +239,14 @@ const roleOptions: { value: UserRole; labelKey: string }[] = [
         </div>
       </div>
     </div>
+
+    <ConfirmModal
+      v-if="confirmDeleteUser"
+      :title="t('admin.confirmDelete', { name: confirmDeleteUser.display_name })"
+      :destructive="true"
+      :confirm-text="t('admin.delete')"
+      @confirm="doDelete"
+      @cancel="confirmDeleteUser = null"
+    />
   </div>
 </template>

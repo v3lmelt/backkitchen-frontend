@@ -293,8 +293,8 @@ export const userApi = {
 export const authApi = {
   login: (email: string, password: string) =>
     request<AuthResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  register: (data: { username: string; display_name: string; email: string; password: string }) =>
-    request<{ email: string; message: string }>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+  register: (data: { username: string; email: string; password: string }) =>
+    request<{ email: string; message: string }>('/auth/register', { method: 'POST', body: JSON.stringify({ ...data, display_name: data.username }) }),
   verifyEmail: (token: string) =>
     request<AuthResponse>(`/auth/verify-email?token=${encodeURIComponent(token)}`, { method: 'POST' }),
   resendVerification: (email: string) =>

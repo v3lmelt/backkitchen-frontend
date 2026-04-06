@@ -45,7 +45,6 @@ const avatarInitial = computed(() => {
 
 const roleLabel = computed(() => {
   const role = appStore.currentUser?.role
-  if (role === 'mastering_engineer') return t('roles.masteringEngineer')
   if (role === 'producer') return t('roles.producer')
   return t('roles.member')
 })

@@ -1,4 +1,65 @@
 {
+  "auth": {
+    "login": {
+      "title": "欢迎回来",
+      "subtitle": "登录你的账户以继续",
+      "email": "邮箱地址",
+      "emailPlaceholder": "you{'@'}example.com",
+      "password": "密码",
+      "passwordPlaceholder": "••••••••",
+      "rememberMe": "记住我",
+      "forgotPassword": "忘记密码？",
+      "signIn": "登录",
+      "signingIn": "登录中…",
+      "or": "或",
+      "noAccount": "还没有账户？",
+      "register": "立即注册",
+      "showPassword": "显示密码",
+      "hidePassword": "隐藏密码",
+      "errorRequired": "请输入邮箱和密码。",
+      "errorNotVerified": "邮箱尚未验证。请检查你的收件箱获取验证链接。",
+      "errorInvalid": "邮箱或密码错误。"
+    },
+    "register": {
+      "title": "创建账户",
+      "subtitle": "填写以下信息以开始使用",
+      "username": "用户名",
+      "usernamePlaceholder": "取一个用户名",
+      "email": "邮箱地址",
+      "emailPlaceholder": "you{'@'}example.com",
+      "password": "密码",
+      "passwordPlaceholder": "••••••••",
+      "confirmPassword": "确认密码",
+      "confirmPasswordPlaceholder": "••••••••",
+      "terms": "我同意",
+      "termsOfService": "服务条款",
+      "and": "和",
+      "privacyPolicy": "隐私政策",
+      "create": "创建账户",
+      "creating": "创建中…",
+      "hasAccount": "已有账户？",
+      "signIn": "登录",
+      "showPassword": "显示密码",
+      "hidePassword": "隐藏密码",
+      "passwordMinLength": "至少 8 个字符",
+      "usernameExists": "该用户名已被使用。",
+      "errorRequired": "请填写所有必填项。",
+      "errorPasswordMismatch": "两次输入的密码不一致。",
+      "errorTerms": "你必须同意条款才能继续。",
+      "errorExists": "该邮箱已注册。",
+      "errorGeneric": "注册失败，请重试。"
+    },
+    "checkEmail": {
+      "title": "请查收邮箱",
+      "sentTo": "我们已向以下邮箱发送验证链接",
+      "hint": "点击邮件中的链接来激活你的账户。链接将在 30 分钟后过期。",
+      "resend": "重新发送验证邮件",
+      "resending": "发送中…",
+      "resent": "验证邮件已重新发送。",
+      "backToSignIn": "返回登录"
+    },
+    "langToggle": "EN"
+  },
   "common": {
     "loading": "加载中…",
     "backToTrack": "返回曲目",
@@ -19,7 +80,8 @@
     "rangeEnd": "终点（秒）",
     "requestFailed": "请求失败",
     "downloadAudio": "下载音频",
-    "downloadFailed": "下载失败"
+    "downloadFailed": "下载失败",
+    "loadFailed": "加载失败，请稍后重试"
   },
   "severity": {
     "critical": "严重",
@@ -79,7 +141,6 @@
     "completed": "已完成",
     "rejected": "已拒绝",
     "open": "待处理",
-    "will_fix": "待修复",
     "disagreed": "有异议",
     "resolved": "已解决",
     "critical": "严重",
@@ -170,7 +231,7 @@
       "issueCommented": "{name} 回应了问题 #{num}",
       "issueUpdated": "{name} 更新了问题 #{num}",
       "issueResolved": "{name} 关闭了问题 #{num}",
-      "issueWillFix": "{name} 确认修复问题 #{num}",
+      "issueReopened": "{name} 重新打开了问题 #{num}",
       "issueDisagreed": "{name} 对问题 #{num} 提出异议"
     }
   },
@@ -215,25 +276,26 @@
     "saveChecklist": "保存清单",
     "requestRevision": "请求修订",
     "passToProducer": "提交至制作人",
-    "checklistSubmitted": "清单已提交。"
+    "checklistSubmitted": "清单已提交。",
+    "actionHint": "完成清单后，选择下一步操作"
   },
   "revision": {
     "peerRevision": "同行修订",
     "masteringRevision": "母带修订",
     "subheading": "响应未解决问题并上传新的源音频版本。",
     "openCount": "待处理",
-    "willFixCount": "待修复",
+    "disagreedCount": "有异议",
     "respondedCount": "已响应",
     "openIssuesHeading": "未解决问题",
     "respondedIssuesHeading": "已响应问题",
-    "willFix": "待修复",
     "disagree": "有异议",
     "uploadHeading": "上传修订后的源音频",
     "uploadHint": "响应上述问题后，上传下一个源版本。",
     "uploading": "上传中…",
     "submitBackToPeer": "提交回同行评审",
     "submitBackToMastering": "提交回母带",
-    "staleIssuesHeading": "旧版本问题（仅供参考）"
+    "staleIssuesHeading": "旧版本问题（仅供参考）",
+    "actionHint": "上传修订后的源文件以回到审核流程"
   },
   "mastering": {
     "heading": "母带审核：{title}",
@@ -244,7 +306,8 @@
     "requestRevision": "请求源版本修订",
     "uploadReady": "准备好后上传母带交付物。",
     "uploading": "上传中…",
-    "uploadMaster": "上传母带交付物"
+    "uploadMaster": "上传母带交付物",
+    "actionHint": "完成审查后上传母带，或请求作者修改源文件"
   },
   "producer": {
     "heading": "制作人工作台：{title}",
@@ -265,7 +328,9 @@
     "producerIssuesHeading": "制作人标注 ({count})",
     "peerIssueSummaryHeading": "同行评审问题摘要",
     "sendToMastering": "发送至母带",
-    "requestRevision": "再次请求源版本修订"
+    "requestRevision": "再次请求源版本修订",
+    "intakeHint": "审查投稿，决定是否接受进入工作流",
+    "gateHint": "审查同行评审结果，决定曲目下一步走向"
   },
   "finalReview": {
     "heading": "终审：{title}",
@@ -276,13 +341,15 @@
     "producer": "制作人",
     "submitter": "提交者",
     "approveMaster": "批准当前母带",
-    "returnToMastering": "退回母带制作"
+    "returnToMastering": "退回母带制作",
+    "actionHint": "制作人和提交者都需要批准才能完成终审"
   },
   "issueDetail": {
     "back": "返回",
     "created": "创建于 {date}",
-    "markFixed": "已修复",
+    "markFixed": "已解决",
     "disagree": "有异议",
+    "reopen": "重新打开",
     "markResolved": "标记为已解决",
     "commentsHeading": "评论 ({count})",
     "unknown": "未知",
@@ -477,7 +544,6 @@
     "revisionNote": "修改说明",
     "batchStatusNote": "批量修改说明（可选）",
     "status": {
-      "will_fix": "待修复",
       "resolved": "已解决",
       "disagreed": "有异议"
     }

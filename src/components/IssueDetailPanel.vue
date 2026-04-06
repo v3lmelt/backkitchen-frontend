@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { issueApi } from '@/api'
 import { useAppStore } from '@/stores/app'
@@ -10,8 +10,9 @@ import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatTimestamp, formatDuration, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import type { TimeReference, TimestampTarget } from '@/utils/timestamps'
+import { X, Music, ImageIcon } from 'lucide-vue-next'
 
-const props = defineProps<{ issue: Issue | null }>()
+const props = defineProps<{ issue: Issue | null; track?: import('@/types').Track | null }>()
 
 const emit = defineEmits<{
   close: []
@@ -25,7 +26,22 @@ const fullIssue = ref<Issue | null>(null)
 const loading = ref(false)
 const newComment = ref('')
 const commentCursorPos = ref(0)
-const pendingStatus = ref<Exclude<IssueStatus, 'open'> | null>(null)
+const pendingStatus = ref<IssueStatus | null>(null)
+
+const isSubmitter = computed(() => appStore.currentUser?.id === props.track?.submitter_id)
+
+const isReviewer = computed(() => {
+  const uid = appStore.currentUser?.id
+  const trk = props.track
+  const iss = fullIssue.value
+  if (!uid || !trk || !iss) return false
+  switch (iss.phase) {
+    case 'peer': return uid === trk.peer_reviewer_id
+    case 'producer': case 'final_review': return uid === trk.producer_id
+    case 'mastering': return uid === trk.mastering_engineer_id
+    default: return false
+  }
+})
 const statusNote = ref('')
 const selectedImages = ref<File[]>([])
 const imagePreviewUrls = ref<string[]>([])
@@ -92,7 +108,7 @@ function authorLabel(issue: Issue): string {
   return issue.author?.display_name ?? `#${issue.author_id}`
 }
 
-function selectStatus(status: Exclude<IssueStatus, 'open'>) {
+function selectStatus(status: IssueStatus) {
   pendingStatus.value = pendingStatus.value === status ? null : status
   statusNote.value = ''
 }
@@ -216,9 +232,7 @@ function removeImage(i: number) {
             class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors mt-0.5"
             aria-label="Close"
           >
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X class="w-5 h-5" :stroke-width="2" />
           </button>
         </div>
 
@@ -239,11 +253,12 @@ function removeImage(i: number) {
 
           <!-- Status actions -->
           <div
-            v-if="fullIssue.status === 'open' || fullIssue.status === 'will_fix'"
+            v-if="(isSubmitter && fullIssue.status === 'open') || (isReviewer && (fullIssue.status === 'open' || fullIssue.status === 'resolved' || fullIssue.status === 'disagreed'))"
             class="space-y-3"
           >
             <div class="flex gap-2 flex-wrap">
               <button
+                v-if="fullIssue.status === 'open'"
                 @click="selectStatus('resolved')"
                 class="rounded-full px-3 py-1.5 text-xs font-medium transition-colors"
                 :class="pendingStatus === 'resolved'
@@ -251,13 +266,21 @@ function removeImage(i: number) {
                   : 'bg-card border border-border text-foreground hover:bg-border'"
               >{{ t('issueDetail.markFixed') }}</button>
               <button
-                v-if="fullIssue.status === 'open'"
+                v-if="isSubmitter && fullIssue.status === 'open'"
                 @click="selectStatus('disagreed')"
                 class="rounded-full px-3 py-1.5 text-xs font-medium transition-colors"
                 :class="pendingStatus === 'disagreed'
                   ? 'bg-error-bg text-error border border-error/30'
                   : 'bg-card border border-border text-foreground hover:bg-border'"
               >{{ t('issueDetail.disagree') }}</button>
+              <button
+                v-if="isReviewer && (fullIssue.status === 'resolved' || fullIssue.status === 'disagreed')"
+                @click="selectStatus('open')"
+                class="rounded-full px-3 py-1.5 text-xs font-medium transition-colors"
+                :class="pendingStatus === 'open'
+                  ? 'bg-warning-bg text-warning border border-warning/30'
+                  : 'bg-card border border-border text-foreground hover:bg-border'"
+              >{{ t('issueDetail.reopen') }}</button>
             </div>
             <div v-if="pendingStatus" class="space-y-2">
               <textarea
@@ -327,9 +350,7 @@ function removeImage(i: number) {
                     class="bg-background border border-border rounded-2xl px-3 py-2 space-y-1.5"
                   >
                     <div class="flex items-center gap-2">
-                      <svg class="w-3.5 h-3.5 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                      </svg>
+                      <Music class="w-3.5 h-3.5 text-primary flex-shrink-0" :stroke-width="2" />
                       <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
                       <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
                     </div>
@@ -380,9 +401,7 @@ function removeImage(i: number) {
                 v-for="(file, i) in selectedAudios" :key="i"
                 class="flex items-center gap-1.5 bg-background border border-border rounded-full px-2.5 py-1"
               >
-                <svg class="w-3 h-3 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                </svg>
+                <Music class="w-3 h-3 text-primary flex-shrink-0" :stroke-width="2" />
                 <span class="text-xs font-mono text-foreground max-w-[100px] truncate">{{ file.name }}</span>
                 <button @click="removeAudio(i)" class="text-muted-foreground hover:text-error transition-colors leading-none text-xs">×</button>
               </div>
@@ -391,9 +410,7 @@ function removeImage(i: number) {
               <input ref="fileInputRef" type="file" accept="image/*" multiple class="hidden" @change="onFileSelect" />
               <input ref="audioInputRef" type="file" :accept="AUDIO_ACCEPT" multiple class="hidden" @change="onAudioSelect" />
               <button @click="fileInputRef?.click()" class="btn-secondary text-xs inline-flex items-center gap-1">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
+                <ImageIcon class="w-3.5 h-3.5" :stroke-width="2" />
                 {{ t('issueDetail.image') }}
               </button>
               <button
@@ -402,9 +419,7 @@ function removeImage(i: number) {
                 :title="selectedAudios.length >= MAX_AUDIOS ? t('issueDetail.audioMaxReached', { max: MAX_AUDIOS }) : undefined"
                 class="btn-secondary text-xs inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                </svg>
+                <Music class="w-3.5 h-3.5" :stroke-width="2" />
                 {{ t('issueDetail.audio') }}
               </button>
               <button

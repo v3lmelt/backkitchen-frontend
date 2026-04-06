@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { albumApi, uploadWithProgress } from '@/api'
 import type { Album, Track } from '@/types'
 import { useToast } from '@/composables/useToast'
+import { Upload } from 'lucide-vue-next'
+import CustomSelect from '@/components/common/CustomSelect.vue'
+import type { SelectOption } from '@/components/common/CustomSelect.vue'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -17,15 +20,19 @@ const dragOver = ref(false)
 const form = ref({
   title: '',
   artist: '',
-  album_id: '',
+  album_id: null as number | null,
   bpm: '',
 })
 const selectedFile = ref<File | null>(null)
 
+const albumOptions = computed<SelectOption[]>(() =>
+  albums.value.map((a) => ({ value: a.id, label: a.title }))
+)
+
 onMounted(async () => {
   albums.value = await albumApi.list()
   if (albums.value.length > 0) {
-    form.value.album_id = String(albums.value[0].id)
+    form.value.album_id = albums.value[0].id
   }
 })
 
@@ -100,11 +107,7 @@ function formatFileSize(bytes: number): string {
       @click="($refs.fileInput as HTMLInputElement).click()"
     >
       <input ref="fileInput" type="file" accept="audio/*" class="hidden" @change="onFileSelect" />
-      <svg class="w-12 h-12 mx-auto text-muted-foreground mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-        <polyline points="17 8 12 3 7 8" />
-        <line x1="12" y1="3" x2="12" y2="15" />
-      </svg>
+      <Upload class="w-12 h-12 mx-auto text-muted-foreground mb-3" :stroke-width="1.5" />
       <p v-if="!selectedFile" class="text-muted-foreground">
         {{ t('upload.dropHint') }} <span class="text-primary">{{ t('upload.browse') }}</span>
       </p>
@@ -127,12 +130,7 @@ function formatFileSize(bytes: number): string {
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.album') }}</label>
-          <select v-model="form.album_id" class="select-field w-full">
-            <option value="">{{ t('upload.noAlbum') }}</option>
-            <option v-for="album in albums" :key="album.id" :value="album.id">
-              {{ album.title }}
-            </option>
-          </select>
+          <CustomSelect v-model="form.album_id" :options="albumOptions" :placeholder="t('upload.noAlbum')" />
         </div>
         <div>
           <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.bpm') }}</label>
