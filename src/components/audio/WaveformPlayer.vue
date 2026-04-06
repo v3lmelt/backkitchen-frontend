@@ -5,6 +5,7 @@ import WaveSurfer from 'wavesurfer.js'
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
 import { CircleAlert, CircleCheckBig, Play, Pause } from 'lucide-vue-next'
 import type { Issue } from '@/types'
+import { resolveAssetUrl } from '@/api'
 import { formatTimestamp, formatTimestampShort, roundToMilliseconds } from '@/utils/time'
 import { withAuthToken } from '@/utils/url'
 
@@ -36,6 +37,8 @@ const regionsPlugin = ref<RegionsPlugin | null>(null)
 const isPlaying = ref(false)
 const currentTime = ref(0)
 const duration = ref(0)
+const isPrimaryLoading = ref(false)
+const primaryLoadProgress = ref(0)
 const isRenderingRegions = ref(false)
 const selectionRegionId = ref<string | null>(null)
 const highlightRegionId = ref<string | null>(null)
@@ -45,6 +48,7 @@ const activePointGroupKey = ref<string | null>(null)
 const abMode = ref<'A' | 'B'>('A')
 const isCompareMode = computed(() => !!props.compareVersionId)
 const isCompareLoading = ref(false)
+const compareLoadProgress = ref(0)
 const isCompareReady = ref(false)
 const compareDuration = ref(0)
 const compareCurrentTime = ref(0)
@@ -472,6 +476,16 @@ function formatTimeShort(seconds: number): string {
   return formatTimestampShort(seconds)
 }
 
+function updatePrimaryLoading(percent: number) {
+  isPrimaryLoading.value = percent < 100
+  primaryLoadProgress.value = Math.min(100, Math.max(0, Math.round(percent)))
+}
+
+function updateCompareLoading(percent: number) {
+  isCompareLoading.value = percent < 100
+  compareLoadProgress.value = Math.min(100, Math.max(0, Math.round(percent)))
+}
+
 onMounted(async () => {
   if (!container.value) return
 
@@ -492,9 +506,13 @@ onMounted(async () => {
   })
 
   ws.on('ready', () => {
+    updatePrimaryLoading(100)
     duration.value = ws.getDuration()
     emit('ready', duration.value)
     renderIssueRegions()
+  })
+  ws.on('loading', (percent: number) => {
+    updatePrimaryLoading(percent)
   })
 
   let lastTimeUpdateMs = 0
@@ -524,6 +542,7 @@ onMounted(async () => {
 
   ws.on('play', () => { isPlaying.value = true })
   ws.on('pause', () => { isPlaying.value = false })
+  ws.on('error', () => { isPrimaryLoading.value = false })
 
   ws.on('click', () => {
     if (Date.now() - lastSelectionAt.value < 250) return
@@ -574,6 +593,8 @@ onMounted(async () => {
   }
 
   loadedAudioUrl = props.audioUrl
+  isPrimaryLoading.value = true
+  primaryLoadProgress.value = 0
   ws.load(withAuthToken(props.audioUrl))
 
   wavesurfer.value = ws
@@ -586,6 +607,8 @@ watch(() => props.audioUrl, (newUrl) => {
   if (!newUrl || !wavesurfer.value) return
   if (newUrl === loadedAudioUrl) return
   loadedAudioUrl = newUrl
+  isPrimaryLoading.value = true
+  primaryLoadProgress.value = 0
   wavesurfer.value.load(withAuthToken(newUrl))
 })
 
@@ -643,6 +666,7 @@ watch(() => props.compareVersionId, async (newId) => {
   }
 
   isCompareLoading.value = true
+  compareLoadProgress.value = 0
   await nextTick()
   const compareContainer = compareContainerRef.value
   if (!compareContainer) {
@@ -663,8 +687,8 @@ watch(() => props.compareVersionId, async (newId) => {
   })
 
   ws.on('ready', () => {
+    updateCompareLoading(100)
     compareDuration.value = ws.getDuration()
-    isCompareLoading.value = false
     isCompareReady.value = true
     syncCompareToPrimaryTime()
     applyCompareMode(abMode.value)
@@ -674,7 +698,12 @@ watch(() => props.compareVersionId, async (newId) => {
       ws.play()
     }
   })
-  ws.on('error', () => { isCompareLoading.value = false })
+  ws.on('loading', (percent: number) => {
+    updateCompareLoading(percent)
+  })
+  ws.on('error', () => {
+    isCompareLoading.value = false
+  })
   let lastCompareUpdateMs = 0
   ws.on('timeupdate', (t: number) => {
     const now = Date.now()
@@ -684,7 +713,7 @@ watch(() => props.compareVersionId, async (newId) => {
     }
   })
 
-  const compareUrl = `/api/tracks/${props.trackId}/source-versions/${newId}/audio`
+  const compareUrl = resolveAssetUrl(`/api/tracks/${props.trackId}/source-versions/${newId}/audio`)
   compareWaveSurfer.value = ws
   applyCompareMode(abMode.value)
 
@@ -838,6 +867,14 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom })
           :style="{ height: `${props.height || 128}px` }"
         />
         <div
+          v-if="isPrimaryLoading"
+          class="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-background/72"
+        >
+          <div class="rounded-full border border-border bg-card/95 px-3 py-1.5 text-xs font-mono text-foreground shadow-lg">
+            {{ t('common.loading') }} {{ primaryLoadProgress }}%
+          </div>
+        </div>
+        <div
           v-if="isCompareMode"
           ref="compareContainerRef"
           class="absolute inset-0 pointer-events-none transition-[z-index]"
@@ -859,7 +896,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom })
             B
           </button>
           <span class="text-xs text-muted-foreground px-1">
-            {{ isCompareLoading ? 'Loading B...' : (abMode === 'A' ? $t('compare.currentVersion') : $t('compare.previousVersion')) }}
+            {{ isCompareLoading ? `Loading B ${compareLoadProgress}%` : (abMode === 'A' ? $t('compare.currentVersion') : $t('compare.previousVersion')) }}
           </span>
         </div>
       </div>

@@ -28,6 +28,12 @@ const TOKEN_KEY = 'backkitchen_token'
 
 export { API_ORIGIN }
 
+export function resolveAssetUrl(url: string | null | undefined): string {
+  if (!url) return ''
+  if (/^https?:\/\//i.test(url)) return url
+  return `${API_ORIGIN}${url.startsWith('/') ? url : `/${url}`}`
+}
+
 function parseErrorDetail(detail: unknown): string {
   if (typeof detail === 'string') return detail
   if (Array.isArray(detail)) {

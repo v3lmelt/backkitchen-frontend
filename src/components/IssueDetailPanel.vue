@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { issueApi } from '@/api'
+import { issueApi, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Comment, Issue, IssueStatus } from '@/types'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
@@ -125,6 +125,7 @@ async function confirmStatusChange() {
 }
 
 function onAudioSelect(event: Event) {
+  if (submittingComment.value) return
   const input = event.target as HTMLInputElement
   if (!input.files) return
   for (const file of Array.from(input.files)) {
@@ -135,11 +136,15 @@ function onAudioSelect(event: Event) {
 }
 
 function removeAudio(i: number) {
+  if (submittingComment.value) return
   selectedAudios.value.splice(i, 1)
 }
 
 const submittingComment = ref(false)
 const commentUploadProgress = ref(0)
+const canSubmitComment = computed(
+  () => !submittingComment.value && (!!newComment.value.trim() || !!selectedImages.value.length || !!selectedAudios.value.length),
+)
 
 async function addComment() {
   if (!newComment.value.trim() && !selectedImages.value.length && !selectedAudios.value.length) return
@@ -168,6 +173,7 @@ async function addComment() {
 }
 
 function onFileSelect(event: Event) {
+  if (submittingComment.value) return
   const input = event.target as HTMLInputElement
   if (!input.files) return
   for (const file of Array.from(input.files)) {
@@ -178,6 +184,7 @@ function onFileSelect(event: Event) {
 }
 
 function removeImage(i: number) {
+  if (submittingComment.value) return
   URL.revokeObjectURL(imagePreviewUrls.value[i])
   selectedImages.value.splice(i, 1)
   imagePreviewUrls.value.splice(i, 1)
@@ -339,9 +346,9 @@ function removeImage(i: number) {
                 <div v-if="comment.images?.length" class="flex flex-wrap gap-2 mt-2">
                   <a
                     v-for="img in comment.images" :key="img.id"
-                    :href="img.image_url" target="_blank" rel="noopener noreferrer"
+                    :href="resolveAssetUrl(img.image_url)" target="_blank" rel="noopener noreferrer"
                   >
-                    <img :src="img.image_url" class="h-16 w-16 object-cover rounded border border-border hover:opacity-80 transition-opacity" alt="attachment" />
+                    <img :src="resolveAssetUrl(img.image_url)" class="h-16 w-16 object-cover rounded border border-border hover:opacity-80 transition-opacity" alt="attachment" />
                   </a>
                 </div>
                 <div v-if="comment.audios?.length" class="flex flex-col gap-2 mt-2">
@@ -356,7 +363,7 @@ function removeImage(i: number) {
                     </div>
                     <audio
                       :ref="(element) => setCommentAudioRef(comment.id, index, element)"
-                      :src="audio.audio_url"
+                      :src="resolveAssetUrl(audio.audio_url)"
                       controls
                       class="w-full h-8"
                       style="accent-color: #FF8400;"
@@ -392,6 +399,7 @@ function removeImage(i: number) {
                 <img :src="url" class="h-14 w-14 object-cover rounded border border-border" alt="preview" />
                 <button
                   @click="removeImage(i)"
+                  :disabled="submittingComment"
                   class="absolute -top-1 -right-1 w-4 h-4 bg-error text-white rounded-full text-xs flex items-center justify-center leading-none"
                 >×</button>
               </div>
@@ -403,30 +411,30 @@ function removeImage(i: number) {
               >
                 <Music class="w-3 h-3 text-primary flex-shrink-0" :stroke-width="2" />
                 <span class="text-xs font-mono text-foreground max-w-[100px] truncate">{{ file.name }}</span>
-                <button @click="removeAudio(i)" class="text-muted-foreground hover:text-error transition-colors leading-none text-xs">×</button>
+                <button @click="removeAudio(i)" :disabled="submittingComment" class="text-muted-foreground hover:text-error transition-colors leading-none text-xs disabled:opacity-50 disabled:cursor-not-allowed">×</button>
               </div>
             </div>
             <div class="flex items-center gap-2">
               <input ref="fileInputRef" type="file" accept="image/*" multiple class="hidden" @change="onFileSelect" />
               <input ref="audioInputRef" type="file" :accept="AUDIO_ACCEPT" multiple class="hidden" @change="onAudioSelect" />
-              <button @click="fileInputRef?.click()" class="btn-secondary text-xs inline-flex items-center gap-1">
+              <button @click="!submittingComment && fileInputRef?.click()" :disabled="submittingComment" class="btn-secondary text-xs inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
                 <ImageIcon class="w-3.5 h-3.5" :stroke-width="2" />
                 {{ t('issueDetail.image') }}
               </button>
               <button
-                @click="selectedAudios.length < MAX_AUDIOS && audioInputRef?.click()"
-                :disabled="selectedAudios.length >= MAX_AUDIOS"
+                @click="!submittingComment && selectedAudios.length < MAX_AUDIOS && audioInputRef?.click()"
+                :disabled="submittingComment || selectedAudios.length >= MAX_AUDIOS"
                 :title="selectedAudios.length >= MAX_AUDIOS ? t('issueDetail.audioMaxReached', { max: MAX_AUDIOS }) : undefined"
                 class="btn-secondary text-xs inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Music class="w-3.5 h-3.5" :stroke-width="2" />
                 {{ t('issueDetail.audio') }}
               </button>
-              <button
-                @click="addComment"
-                :disabled="submittingComment || (!newComment.trim() && !selectedImages.length && !selectedAudios.length)"
-                class="btn-primary text-xs"
-              >{{ submittingComment ? t('common.loading') : t('issueDetail.addComment') }}</button>
+                <button
+                  @click="addComment"
+                  :disabled="!canSubmitComment"
+                  class="btn-primary text-xs"
+                >{{ submittingComment ? t('common.loading') : t('issueDetail.addComment') }}</button>
             </div>
             <div v-if="submittingComment && (selectedAudios.length || selectedImages.length)" class="space-y-1">
               <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">

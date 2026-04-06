@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { issueApi, trackApi, API_ORIGIN } from '@/api'
+import { issueApi, trackApi, API_ORIGIN, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Comment, Issue, IssueStatus } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
@@ -177,6 +177,7 @@ function isOutdatedIssue(item: Issue): boolean {
 }
 
 function onFileSelect(event: Event) {
+  if (submittingComment.value) return
   const input = event.target as HTMLInputElement
   if (!input.files) return
   for (const file of Array.from(input.files)) {
@@ -187,12 +188,14 @@ function onFileSelect(event: Event) {
 }
 
 function removeSelectedImage(index: number) {
+  if (submittingComment.value) return
   URL.revokeObjectURL(imagePreviewUrls.value[index])
   selectedImages.value.splice(index, 1)
   imagePreviewUrls.value.splice(index, 1)
 }
 
 function onAudioSelect(event: Event) {
+  if (submittingComment.value) return
   const input = event.target as HTMLInputElement
   if (!input.files) return
   for (const file of Array.from(input.files)) {
@@ -203,6 +206,7 @@ function onAudioSelect(event: Event) {
 }
 
 function removeSelectedAudio(index: number) {
+  if (submittingComment.value) return
   selectedAudios.value.splice(index, 1)
 }
 
@@ -519,12 +523,12 @@ function openVersionCompare() {
                 <a
                   v-for="img in comment.images"
                   :key="img.id"
-                  :href="img.image_url"
+                  :href="resolveAssetUrl(img.image_url)"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   <img
-                    :src="img.image_url"
+                    :src="resolveAssetUrl(img.image_url)"
                     class="h-20 w-20 object-cover rounded border border-border cursor-pointer hover:opacity-80 transition-opacity"
                     alt="attachment"
                   />
@@ -543,7 +547,7 @@ function openVersionCompare() {
                   </div>
                   <audio
                     :ref="(element) => setCommentAudioRef(comment.id, index, element)"
-                    :src="audio.audio_url"
+                    :src="resolveAssetUrl(audio.audio_url)"
                     controls
                     class="w-full h-8"
                     style="accent-color: #FF8400;"
@@ -583,6 +587,7 @@ function openVersionCompare() {
                 <img :src="url" class="h-16 w-16 object-cover rounded border border-border" alt="preview" />
                 <button
                   @click="removeSelectedImage(i)"
+                  :disabled="submittingComment"
                   class="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground rounded-full text-xs flex items-center justify-center leading-none"
                   title="Remove"
                 >×</button>
@@ -598,7 +603,7 @@ function openVersionCompare() {
               >
                 <Music class="w-3.5 h-3.5 text-primary flex-shrink-0" :stroke-width="2" />
                 <span class="text-xs font-mono text-foreground max-w-[120px] truncate">{{ file.name }}</span>
-                <button @click="removeSelectedAudio(i)" class="text-muted-foreground hover:text-error transition-colors leading-none">×</button>
+                <button @click="removeSelectedAudio(i)" :disabled="submittingComment" class="text-muted-foreground hover:text-error transition-colors leading-none disabled:opacity-50 disabled:cursor-not-allowed">×</button>
               </div>
             </div>
 
@@ -620,22 +625,23 @@ function openVersionCompare() {
                 @change="onAudioSelect"
               />
               <button
-                @click="fileInputRef?.click()"
-                class="btn-secondary text-sm inline-flex items-center gap-1"
+                @click="!submittingComment && fileInputRef?.click()"
+                :disabled="submittingComment"
+                class="btn-secondary text-sm inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ImageIcon class="w-4 h-4" :stroke-width="2" />
                 {{ t('issueDetail.image') }}
               </button>
               <button
-                @click="selectedAudios.length < MAX_AUDIOS && audioInputRef?.click()"
-                :disabled="selectedAudios.length >= MAX_AUDIOS"
+                @click="!submittingComment && selectedAudios.length < MAX_AUDIOS && audioInputRef?.click()"
+                :disabled="submittingComment || selectedAudios.length >= MAX_AUDIOS"
                 :title="selectedAudios.length >= MAX_AUDIOS ? t('issueDetail.audioMaxReached', { max: MAX_AUDIOS }) : undefined"
                 class="btn-secondary text-sm inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Music class="w-4 h-4" :stroke-width="2" />
                 {{ t('issueDetail.audio') }}
               </button>
-              <button @click="addComment" :disabled="submittingComment || (!newComment.trim() && !selectedImages.length && !selectedAudios.length)" class="btn-primary text-sm">
+              <button @click="addComment" :disabled="submittingComment || (!newComment.trim() && !selectedImages.length && !selectedAudios.length)" class="btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed">
                 {{ submittingComment ? t('common.loading') : t('issueDetail.addComment') }}
               </button>
             </div>
