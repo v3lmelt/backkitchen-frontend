@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 
 import { mountWithPlugins } from '@/tests/utils'
 
@@ -15,12 +16,21 @@ vi.mock('vue-router', () => ({
 }))
 
 vi.mock('@/api', () => ({
-  trackApi: { get: mocks.trackGetMock, uploadSourceVersion: mocks.uploadSourceVersionMock },
+  API_ORIGIN: '',
+  trackApi: { get: mocks.trackGetMock },
   issueApi: { update: mocks.issueUpdateMock },
+  uploadWithProgress: mocks.uploadSourceVersionMock,
 }))
 
 vi.mock('@/components/workflow/StatusBadge.vue', () => ({
   default: { template: '<div class="status-badge" />' },
+}))
+
+vi.mock('@/components/workflow/WorkflowActionBar.vue', () => ({
+  default: {
+    props: ['actions'],
+    template: '<div class="workflow-actions"><button v-for="action in actions" :key="action.label" class="workflow-action" :disabled="action.disabled" @click="action.handler()">{{ action.label }}</button></div>',
+  },
 }))
 
 import AuthorRevisionView from './AuthorRevisionView.vue'
@@ -47,8 +57,7 @@ describe('AuthorRevisionView', () => {
 
   it('filters issues by current revision phase and updates issue responses', async () => {
     const wrapper = mountWithPlugins(AuthorRevisionView)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
     expect(wrapper.text()).toContain('1')
     await wrapper.find('button.btn-secondary.text-xs').trigger('click')
@@ -57,16 +66,16 @@ describe('AuthorRevisionView', () => {
 
   it('uploads a selected revision file and routes back', async () => {
     const wrapper = mountWithPlugins(AuthorRevisionView)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
     const input = wrapper.find('input[type="file"]')
     const file = new File(['audio'], 'revision.wav', { type: 'audio/wav' })
     Object.defineProperty(input.element, 'files', { value: [file] })
     await input.trigger('change')
-    await wrapper.findAll('button').at(-1)!.trigger('click')
+    await wrapper.find('button.workflow-action').trigger('click')
+    await flushPromises()
 
-    expect(mocks.uploadSourceVersionMock).toHaveBeenCalledWith(8, file)
+    expect(mocks.uploadSourceVersionMock).toHaveBeenCalledWith('/tracks/8/source-versions', expect.any(FormData), expect.any(Function))
     expect(mocks.pushMock).toHaveBeenCalledWith('/tracks/8')
   })
 })

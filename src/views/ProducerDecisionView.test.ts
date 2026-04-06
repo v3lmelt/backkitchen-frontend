@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 import { mountWithPlugins } from '@/tests/utils'
 
 const mocks = vi.hoisted(() => ({
@@ -14,12 +15,12 @@ vi.mock('vue-router', () => ({
 }))
 
 vi.mock('@/api', () => ({
+  API_ORIGIN: '',
   trackApi: {
     get: mocks.trackGetMock,
     intakeDecision: mocks.intakeDecisionMock,
     producerGate: mocks.producerGateMock,
   },
-  issueApi: { create: vi.fn() },
 }))
 
 vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
@@ -47,6 +48,13 @@ vi.mock('@/components/workflow/StatusBadge.vue', () => ({
 
 vi.mock('@/components/workflow/WorkflowProgress.vue', () => ({
   default: { template: '<div class="progress" />' },
+}))
+
+vi.mock('@/components/workflow/WorkflowActionBar.vue', () => ({
+  default: {
+    props: ['actions'],
+    template: '<div class="workflow-actions"><button v-for="action in actions" :key="action.label" class="workflow-action" @click="action.handler()">{{ action.label }}</button></div>',
+  },
 }))
 
 vi.mock('@/composables/useAudioDownload', () => ({
@@ -77,12 +85,9 @@ describe('ProducerDecisionView', () => {
     })
 
     const wrapper = mountWithPlugins(ProducerDecisionView)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
-    // Should show accept button
-    const buttons = wrapper.findAll('button')
-    const acceptBtn = buttons.find(b => b.classes().includes('btn-primary') && b.text().length > 0)
+    const acceptBtn = wrapper.findAll('button.workflow-action').find(button => button.text() === 'Accept and Assign Review')
     expect(acceptBtn).toBeTruthy()
   })
 
@@ -95,13 +100,12 @@ describe('ProducerDecisionView', () => {
     })
 
     const wrapper = mountWithPlugins(ProducerDecisionView)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
-    const acceptBtn = wrapper.findAll('button').find(b => b.classes().includes('btn-primary') && !b.classes().includes('text-xs'))
+    const acceptBtn = wrapper.findAll('button.workflow-action').find(button => button.text() === 'Accept and Assign Review')
     expect(acceptBtn).toBeTruthy()
     await acceptBtn!.trigger('click')
-    await Promise.resolve()
+    await flushPromises()
     expect(mocks.intakeDecisionMock).toHaveBeenCalledWith(5, 'accept')
     expect(mocks.pushMock).toHaveBeenCalledWith('/tracks/5')
   })
@@ -117,12 +121,9 @@ describe('ProducerDecisionView', () => {
     })
 
     const wrapper = mountWithPlugins(ProducerDecisionView)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
-    // Should show send to mastering and request revision buttons
-    const buttons = wrapper.findAll('button')
-    const hasMasteringBtn = buttons.some(b => b.classes().includes('btn-primary'))
+    const hasMasteringBtn = wrapper.findAll('button.workflow-action').some(button => button.text() === 'Send to Mastering')
     expect(hasMasteringBtn).toBe(true)
   })
 
@@ -135,15 +136,12 @@ describe('ProducerDecisionView', () => {
     })
 
     const wrapper = mountWithPlugins(ProducerDecisionView)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
-    // Find send to mastering button (btn-primary in grid)
-    const primaryBtns = wrapper.findAll('button.btn-primary')
-    const sendBtn = primaryBtns.find(b => b.text().length > 0 && !b.classes().includes('text-xs'))
+    const sendBtn = wrapper.findAll('button.workflow-action').find(button => button.text() === 'Send to Mastering')
     expect(sendBtn).toBeTruthy()
     await sendBtn!.trigger('click')
-    await Promise.resolve()
+    await flushPromises()
     expect(mocks.producerGateMock).toHaveBeenCalledWith(5, 'send_to_mastering')
   })
 
@@ -159,8 +157,7 @@ describe('ProducerDecisionView', () => {
     })
 
     const wrapper = mountWithPlugins(ProducerDecisionView)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
     // Total issues = 2, open = 1, resolved = 1
     expect(wrapper.text()).toContain('2')

@@ -1,53 +1,55 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 import { mountWithPlugins } from '@/tests/utils'
 
 const mocks = vi.hoisted(() => ({
-  pushMock: vi.fn(),
   registerMock: vi.fn(),
-  setAuthMock: vi.fn(),
+  resendVerificationMock: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: mocks.pushMock }),
   RouterLink: { template: '<a><slot /></a>' },
 }))
 
 vi.mock('@/api', () => ({
-  authApi: { register: mocks.registerMock },
+  authApi: { register: mocks.registerMock, resendVerification: mocks.resendVerificationMock },
 }))
 
-vi.mock('@/stores/app', () => ({
-  useAppStore: () => ({
-    setAuth: mocks.setAuthMock,
-  }),
+vi.mock('lucide-vue-next', () => ({
+  Music: { template: '<svg />' },
+  AlertCircle: { template: '<svg />' },
+  Eye: { template: '<svg />' },
+  EyeOff: { template: '<svg />' },
+  Mail: { template: '<svg />' },
+  CheckCircle2: { template: '<svg />' },
+  Check: { template: '<svg />' },
+  Circle: { template: '<svg />' },
 }))
 
 import RegisterView from './RegisterView.vue'
 
-async function fillForm(wrapper: ReturnType<typeof mountWithPlugins>, overrides: Record<string, string> = {}) {
+async function fillForm(wrapper: ReturnType<typeof mountWithPlugins>, overrides: Record<string, string | boolean> = {}) {
   const defaults: Record<string, string> = {
-    firstName: 'Ada',
+    username: 'ada',
     email: 'ada@test.com',
     password: 'password123',
     confirmPassword: 'password123',
     ...overrides,
-  }
+  } as Record<string, string>
   const inputs = wrapper.findAll('input')
-  // Order: firstName, lastName, email, password, confirmPassword, terms checkbox
-  await inputs[0].setValue(defaults.firstName)
-  if (defaults.lastName) await inputs[1].setValue(defaults.lastName)
-  await inputs[2].setValue(defaults.email)
-  await inputs[3].setValue(defaults.password)
-  await inputs[4].setValue(defaults.confirmPassword)
-  // Check terms
-  await inputs[5].setValue(true)
+  await inputs[0].setValue(defaults.username)
+  await inputs[1].setValue(defaults.email)
+  await inputs[2].setValue(defaults.password)
+  await inputs[3].setValue(defaults.confirmPassword)
+  if (overrides.termsAccepted !== false) {
+    await inputs[4].setValue(true)
+  }
 }
 
 describe('RegisterView', () => {
   beforeEach(() => {
-    mocks.pushMock.mockReset()
     mocks.registerMock.mockReset()
-    mocks.setAuthMock.mockReset()
+    mocks.resendVerificationMock.mockReset()
   })
 
   it('shows error when required fields are empty', async () => {
@@ -66,35 +68,27 @@ describe('RegisterView', () => {
 
   it('shows error when terms not accepted', async () => {
     const wrapper = mountWithPlugins(RegisterView)
-    const inputs = wrapper.findAll('input')
-    await inputs[0].setValue('Ada')
-    await inputs[2].setValue('ada@test.com')
-    await inputs[3].setValue('password123')
-    await inputs[4].setValue('password123')
-    // Don't check terms
+    await fillForm(wrapper, { termsAccepted: false })
     await wrapper.find('form').trigger('submit')
     expect(wrapper.text()).toContain('You must accept the terms to continue.')
   })
 
-  it('calls register API and redirects on success', async () => {
+  it('calls register API with the submitted credentials', async () => {
     mocks.registerMock.mockResolvedValue({
-      access_token: 'tok-new',
-      user: { id: 2, username: 'ada@test.com', display_name: 'Ada' },
+      email: 'ada@test.com',
     })
 
     const wrapper = mountWithPlugins(RegisterView)
     await fillForm(wrapper)
     await wrapper.find('form').trigger('submit')
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
+    await flushPromises()
 
     expect(mocks.registerMock).toHaveBeenCalledWith(expect.objectContaining({
+      username: 'ada',
       email: 'ada@test.com',
       password: 'password123',
-      display_name: 'Ada',
     }))
-    expect(mocks.setAuthMock).toHaveBeenCalled()
-    expect(mocks.pushMock).toHaveBeenCalledWith('/')
   })
 
   it('shows duplicate account error', async () => {
@@ -103,8 +97,7 @@ describe('RegisterView', () => {
     const wrapper = mountWithPlugins(RegisterView)
     await fillForm(wrapper)
     await wrapper.find('form').trigger('submit')
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
     expect(wrapper.text()).toContain('An account with this email already exists.')
   })

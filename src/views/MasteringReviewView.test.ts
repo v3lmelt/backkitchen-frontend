@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 import { mountWithPlugins } from '@/tests/utils'
 
 const mocks = vi.hoisted(() => ({
   pushMock: vi.fn(),
   trackGetMock: vi.fn(),
   requestMasteringRevisionMock: vi.fn(),
-  uploadMasterDeliveryMock: vi.fn(),
+  uploadWithProgressMock: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -14,12 +15,12 @@ vi.mock('vue-router', () => ({
 }))
 
 vi.mock('@/api', () => ({
+  API_ORIGIN: '',
   trackApi: {
     get: mocks.trackGetMock,
     requestMasteringRevision: mocks.requestMasteringRevisionMock,
-    uploadMasterDelivery: mocks.uploadMasterDeliveryMock,
   },
-  issueApi: { create: vi.fn() },
+  uploadWithProgress: mocks.uploadWithProgressMock,
 }))
 
 vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
@@ -48,6 +49,13 @@ vi.mock('@/composables/useAudioDownload', () => ({
   }),
 }))
 
+vi.mock('@/components/workflow/WorkflowActionBar.vue', () => ({
+  default: {
+    props: ['actions'],
+    template: '<div class="workflow-actions"><button v-for="action in actions" :key="action.label" class="workflow-action" :disabled="action.disabled" @click="action.handler()">{{ action.label }}</button></div>',
+  },
+}))
+
 import MasteringReviewView from './MasteringReviewView.vue'
 
 describe('MasteringReviewView', () => {
@@ -55,9 +63,9 @@ describe('MasteringReviewView', () => {
     mocks.pushMock.mockReset()
     mocks.trackGetMock.mockReset()
     mocks.requestMasteringRevisionMock.mockReset()
-    mocks.uploadMasterDeliveryMock.mockReset()
+    mocks.uploadWithProgressMock.mockReset()
     mocks.requestMasteringRevisionMock.mockResolvedValue({})
-    mocks.uploadMasterDeliveryMock.mockResolvedValue({})
+    mocks.uploadWithProgressMock.mockResolvedValue({})
   })
 
   it('loads and filters issues for current mastering cycle', async () => {
@@ -73,8 +81,7 @@ describe('MasteringReviewView', () => {
     })
 
     const wrapper = mountWithPlugins(MasteringReviewView)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
     // Should only show 1 mastering issue from cycle 2
     expect(wrapper.find('.issue-list').text()).toBe('1')
@@ -89,15 +96,12 @@ describe('MasteringReviewView', () => {
     })
 
     const wrapper = mountWithPlugins(MasteringReviewView)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
-    // The "Request Revision" button is btn-secondary text-sm w-full
-    const revisionBtn = wrapper.findAll('button.btn-secondary').find(b => b.classes().includes('w-full'))
+    const revisionBtn = wrapper.findAll('button.workflow-action').find(button => button.text() === 'Request Source Revision')
     expect(revisionBtn).toBeTruthy()
     await revisionBtn!.trigger('click')
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
     expect(mocks.requestMasteringRevisionMock).toHaveBeenCalledWith(6)
     expect(mocks.pushMock).toHaveBeenCalledWith('/tracks/6')
   })
@@ -111,8 +115,7 @@ describe('MasteringReviewView', () => {
     })
 
     const wrapper = mountWithPlugins(MasteringReviewView)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
     // Select master file
     const fileInput = wrapper.find('input[type="file"]')
@@ -120,15 +123,12 @@ describe('MasteringReviewView', () => {
     Object.defineProperty(fileInput.element, 'files', { value: [file] })
     await fileInput.trigger('change')
 
-    // Find upload button — it's the last button
-    const buttons = wrapper.findAll('button')
-    const uploadBtn = buttons[buttons.length - 1]
-    expect(uploadBtn.exists()).toBe(true)
+    const uploadBtn = wrapper.findAll('button.workflow-action').find(button => button.text() === 'Upload Master Delivery')
+    expect(uploadBtn).toBeTruthy()
     await uploadBtn.trigger('click')
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
-    expect(mocks.uploadMasterDeliveryMock).toHaveBeenCalledWith(6, file)
+    expect(mocks.uploadWithProgressMock).toHaveBeenCalledWith('/tracks/6/master-deliveries', expect.any(FormData), expect.any(Function))
     expect(mocks.pushMock).toHaveBeenCalledWith('/tracks/6')
   })
 
@@ -141,8 +141,7 @@ describe('MasteringReviewView', () => {
     })
 
     const wrapper = mountWithPlugins(MasteringReviewView)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
     expect(wrapper.text()).toContain('My Song')
   })
