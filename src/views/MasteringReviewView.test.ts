@@ -125,6 +125,7 @@ describe('MasteringReviewView', () => {
 
     const uploadBtn = wrapper.findAll('button.workflow-action').find(button => button.text() === 'Upload Master Delivery')
     expect(uploadBtn).toBeTruthy()
+    if (!uploadBtn) throw new Error('Upload action button not found')
     await uploadBtn.trigger('click')
     await flushPromises()
 
