@@ -90,7 +90,8 @@ const roleOptions: { value: UserRole; labelKey: string }[] = [
     <div v-else class="card">
       <h2 class="text-sm font-mono font-semibold text-foreground mb-4">{{ t('admin.userManagement') }}</h2>
 
-      <div class="overflow-x-auto">
+      <!-- Desktop table -->
+      <div class="hidden md:block overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-border text-left text-xs text-muted-foreground">
@@ -109,7 +110,6 @@ const roleOptions: { value: UserRole; labelKey: string }[] = [
               :key="user.id"
               class="border-b border-border last:border-0"
             >
-              <!-- Display name + avatar -->
               <td class="py-3 pr-4">
                 <div class="flex items-center gap-2">
                   <div
@@ -121,14 +121,8 @@ const roleOptions: { value: UserRole; labelKey: string }[] = [
                   <span class="text-foreground">{{ user.display_name }}</span>
                 </div>
               </td>
-
-              <!-- Username -->
               <td class="py-3 pr-4 text-muted-foreground">{{ user.username }}</td>
-
-              <!-- Email -->
               <td class="py-3 pr-4 text-muted-foreground">{{ user.email || '—' }}</td>
-
-              <!-- Role -->
               <td class="py-3 pr-4">
                 <select
                   class="select-field-sm"
@@ -140,8 +134,6 @@ const roleOptions: { value: UserRole; labelKey: string }[] = [
                   </option>
                 </select>
               </td>
-
-              <!-- Admin toggle -->
               <td class="py-3 pr-4 text-center">
                 <button
                   class="w-4 h-4 rounded border border-border inline-flex items-center justify-center transition-colors"
@@ -155,8 +147,6 @@ const roleOptions: { value: UserRole; labelKey: string }[] = [
                   </svg>
                 </button>
               </td>
-
-              <!-- Email verified toggle -->
               <td class="py-3 pr-4 text-center">
                 <button
                   class="w-4 h-4 rounded border border-border inline-flex items-center justify-center transition-colors"
@@ -168,8 +158,6 @@ const roleOptions: { value: UserRole; labelKey: string }[] = [
                   </svg>
                 </button>
               </td>
-
-              <!-- Actions -->
               <td class="py-3">
                 <button
                   v-if="!isSelf(user)"
@@ -183,6 +171,73 @@ const roleOptions: { value: UserRole; labelKey: string }[] = [
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Mobile card list -->
+      <div class="md:hidden space-y-3">
+        <div
+          v-for="user in users"
+          :key="'m-' + user.id"
+          class="border border-border bg-background p-4 space-y-3"
+        >
+          <div class="flex items-center gap-3">
+            <div
+              class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
+              :style="{ backgroundColor: user.avatar_color }"
+            >
+              {{ user.display_name.charAt(0) }}
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-foreground truncate">{{ user.display_name }}</p>
+              <p class="text-xs text-muted-foreground truncate">@{{ user.username }}</p>
+            </div>
+          </div>
+          <div class="text-xs text-muted-foreground truncate">{{ user.email || '—' }}</div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <select
+              class="select-field-sm"
+              :value="user.role"
+              @change="onRoleChange(user, ($event.target as HTMLSelectElement).value as UserRole)"
+            >
+              <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">
+                {{ t(opt.labelKey) }}
+              </option>
+            </select>
+            <label class="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <button
+                class="w-4 h-4 rounded border border-border inline-flex items-center justify-center transition-colors"
+                :class="user.is_admin ? 'bg-primary border-primary' : 'bg-background'"
+                :disabled="isSelf(user)"
+                @click="!isSelf(user) && onAdminToggle(user)"
+              >
+                <svg v-if="user.is_admin" class="w-3 h-3 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </button>
+              {{ t('admin.adminFlag') }}
+            </label>
+            <label class="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <button
+                class="w-4 h-4 rounded border border-border inline-flex items-center justify-center transition-colors"
+                :class="user.email_verified ? 'bg-primary border-primary' : 'bg-background'"
+                @click="onVerifiedToggle(user)"
+              >
+                <svg v-if="user.email_verified" class="w-3 h-3 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </button>
+              {{ t('admin.verified') }}
+            </label>
+          </div>
+          <button
+            v-if="!isSelf(user)"
+            class="text-xs text-error hover:text-error/80 transition-colors font-mono"
+            :disabled="deletingId === user.id"
+            @click="onDelete(user)"
+          >
+            {{ t('admin.delete') }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
