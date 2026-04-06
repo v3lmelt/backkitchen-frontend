@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { MessageSquare } from 'lucide-vue-next'
 import type { Issue } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
-import { formatTimestamp } from '@/utils/time'
+import { formatTimestampShort } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 
 const props = withDefaults(defineProps<{
@@ -24,7 +25,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 function formatTime(seconds: number): string {
-  return formatTimestamp(seconds)
+  return formatTimestampShort(seconds)
 }
 
 function toggleSelect(issueId: number) {
@@ -63,7 +64,7 @@ function isOutdatedIssue(issue: Issue): boolean {
           type="checkbox"
           :checked="selectedIds?.includes(issue.id)"
           @click.stop="toggleSelect(issue.id)"
-          class="mt-1 rounded border-border bg-card text-primary focus:ring-primary flex-shrink-0"
+          class="checkbox mt-1"
         />
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2 mb-1">
@@ -86,9 +87,7 @@ function isOutdatedIssue(issue: Issue): boolean {
           </p>
         </div>
         <span v-if="issue.comment_count" class="text-xs text-muted-foreground flex items-center gap-1">
-          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-          </svg>
+          <MessageSquare class="w-3 h-3" :stroke-width="2" />
           {{ issue.comment_count }}
         </span>
       </div>

@@ -10,7 +10,11 @@ import { hashId } from '@/utils/hash'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
+import type { WorkflowProgressAction } from '@/components/workflow/WorkflowProgress.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
+import { ChevronRight } from 'lucide-vue-next'
+import CustomSelect from '@/components/common/CustomSelect.vue'
+import type { SelectOption } from '@/components/common/CustomSelect.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -69,8 +73,8 @@ function formatTimelineEvent(event: WorkflowEvent): string {
       if (s === 'resolved') return num != null
         ? t('dashboard.timeline.issueResolved', { name, num })
         : t('dashboard.events.issue_updated', { name })
-      if (s === 'will_fix') return num != null
-        ? t('dashboard.timeline.issueWillFix', { name, num })
+      if (s === 'open') return num != null
+        ? t('dashboard.timeline.issueReopened', { name, num })
         : t('dashboard.events.issue_updated', { name })
       if (s === 'disagreed') return num != null
         ? t('dashboard.timeline.issueDisagreed', { name, num })
@@ -164,6 +168,21 @@ const olderVersions = computed(() =>
     .sort((a, b) => b.version_number - a.version_number)
 )
 
+const versionOptions = computed<SelectOption[]>(() =>
+  olderVersions.value.map((v) => ({
+    value: v.id,
+    label: `V${v.version_number} · ${fmtDate(v.created_at)}`,
+  }))
+)
+
+const progressActions = computed<WorkflowProgressAction[]>(() => {
+  if (!track.value?.allowed_actions?.length) return []
+  return track.value.allowed_actions.map(action => ({
+    label: actionLabel(action),
+    handler: () => openPrimaryAction(action),
+  }))
+})
+
 watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, versions, compareVersion]) => {
   if (!currentTrack) return
   const rawValue = Array.isArray(compareVersion) ? compareVersion[0] : compareVersion
@@ -196,21 +215,11 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
           {{ track.artist }} · source v{{ track.version }} · cycle {{ track.workflow_cycle }}
         </p>
       </div>
-      <div class="flex items-center gap-2 flex-wrap">
-        <button
-          v-for="action in track.allowed_actions"
-          :key="action"
-          @click="openPrimaryAction(action)"
-          class="btn-primary text-sm"
-        >
-          {{ actionLabel(action) }}
-        </button>
-      </div>
     </div>
 
     <div class="card">
       <h3 class="text-sm font-medium text-muted-foreground mb-3">{{ t('trackDetail.workflowStatus') }}</h3>
-      <WorkflowProgress :status="track.status" />
+      <WorkflowProgress :status="track.status" :actions="progressActions" />
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -228,12 +237,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
           <!-- 版本选择器 -->
           <div v-if="showVersionCompare && olderVersions.length > 0" class="flex items-center gap-2 mb-3">
             <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
-            <select v-model="selectedCompareVersionId" class="select-field-sm">
-              <option :value="null">-- {{ t('compare.selectVersion') }} --</option>
-              <option v-for="v in olderVersions" :key="v.id" :value="v.id">
-                V{{ v.version_number }} · {{ fmtDate(v.created_at) }}
-              </option>
-            </select>
+            <CustomSelect v-model="selectedCompareVersionId" :options="versionOptions" :placeholder="`-- ${t('compare.selectVersion')} --`" size="sm" />
             <button v-if="selectedCompareVersionId" @click="selectedCompareVersionId = null" class="text-xs text-muted-foreground hover:text-foreground">
               {{ t('compare.clear') }}
             </button>
@@ -311,6 +315,21 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
       </div>
 
       <div class="space-y-4">
+        <!-- Workflow action CTA -->
+        <div v-if="track.allowed_actions?.length" class="hidden lg:block border border-primary/40 bg-card rounded-none p-4 space-y-3">
+          <button
+            v-for="action in track.allowed_actions"
+            :key="action"
+            @click="openPrimaryAction(action)"
+            class="workflow-cta-btn group w-full flex items-center justify-between gap-2 rounded-full font-mono font-semibold px-5 h-11 text-sm transition-all
+                   bg-primary hover:bg-primary-hover text-black
+                   shadow-[0_0_16px_rgba(255,132,0,0.25)] hover:shadow-[0_0_24px_rgba(255,132,0,0.45)]"
+          >
+            {{ actionLabel(action) }}
+            <ChevronRight class="w-5 h-5 transition-transform group-hover:translate-x-0.5" :stroke-width="2.5" />
+          </button>
+        </div>
+
         <div class="card space-y-2 text-sm">
           <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('trackDetail.trackSummary') }}</h3>
           <div class="flex justify-between">
@@ -361,5 +380,33 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
         </div>
       </div>
     </div>
+
+    <!-- Mobile sticky CTA -->
+    <div
+      v-if="track.allowed_actions?.length"
+      class="lg:hidden sticky -bottom-6 z-30 -mx-4 md:-mx-6 -mb-6 border-t border-border bg-[#111111] px-4 md:px-6 py-3 flex items-center justify-end"
+    >
+      <button
+        v-for="action in track.allowed_actions"
+        :key="'m-' + action"
+        @click="openPrimaryAction(action)"
+        class="workflow-cta-btn group flex items-center gap-2 rounded-full font-mono font-semibold px-5 h-10 text-sm leading-none transition-all
+               bg-primary hover:bg-primary-hover text-black
+               shadow-[0_0_16px_rgba(255,132,0,0.25)] hover:shadow-[0_0_24px_rgba(255,132,0,0.45)]"
+      >
+        {{ actionLabel(action) }}
+        <ChevronRight class="w-4 h-4 transition-transform group-hover:translate-x-0.5" :stroke-width="2.5" />
+      </button>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.workflow-cta-btn {
+  animation: cta-glow 3s ease-in-out infinite;
+}
+@keyframes cta-glow {
+  0%, 100% { box-shadow: 0 0 16px rgba(255, 132, 0, 0.2); }
+  50% { box-shadow: 0 0 28px rgba(255, 132, 0, 0.4); }
+}
+</style>

@@ -6,8 +6,13 @@ import { issueApi, trackApi, uploadWithProgress, API_ORIGIN } from '@/api'
 import type { Issue, IssueStatus, Track, TrackSourceVersion } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
+import WorkflowActionBar from '@/components/workflow/WorkflowActionBar.vue'
+import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
+import BaseModal from '@/components/common/BaseModal.vue'
 import { formatTimestamp, formatLocaleDate } from '@/utils/time'
+import CustomSelect from '@/components/common/CustomSelect.vue'
+import type { SelectOption } from '@/components/common/CustomSelect.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,7 +30,7 @@ const selectedIssueIds = ref<number[]>([])
 const showVersionCompare = ref(false)
 const selectedCompareVersionId = ref<number | null>(null)
 const showBatchModal = ref(false)
-const batchTargetStatus = ref<IssueStatus>('will_fix')
+const batchTargetStatus = ref<IssueStatus>('disagreed')
 const batchStatusNote = ref('')
 
 onMounted(loadPage)
@@ -62,7 +67,7 @@ const waveformIssues = computed(() => {
   return issues.value.filter(issue => issue.source_version_number == null || issue.source_version_number === currentVersion)
 })
 
-const { downloading, downloadTrackAudio } = useAudioDownload()
+const { downloading, downloadProgress, downloadTrackAudio } = useAudioDownload()
 const handleDownload = () => downloadTrackAudio(audioUrl, track)
 
 const currentVersionId = computed(() => track.value?.current_source_version?.id ?? null)
@@ -70,6 +75,13 @@ const olderVersions = computed(() =>
   sourceVersions.value
     .filter(v => v.id !== currentVersionId.value)
     .sort((a, b) => b.version_number - a.version_number)
+)
+
+const versionOptions = computed<SelectOption[]>(() =>
+  olderVersions.value.map((v) => ({
+    value: v.id,
+    label: `V${v.version_number} · ${formatDate(v.created_at)}`,
+  }))
 )
 
 function onFileSelect(event: Event) {
@@ -130,143 +142,140 @@ function onIssueSelectToggle(issueId: number) {
     selectedIssueIds.value.splice(idx, 1)
   }
 }
+
+const workflowActions = computed<WorkflowAction[]>(() => [
+  {
+    label: uploading.value ? t('revision.uploading') : uploadButtonLabel.value,
+    type: 'advance',
+    disabled: !selectedFile.value || uploading.value,
+    handler: submitRevision,
+  },
+])
 </script>
 
 <template>
   <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
-  <div v-else-if="track" class="max-w-4xl mx-auto space-y-6">
-    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-      <div class="min-w-0">
-        <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ revisionLabel }}: {{ track.title }}</h1>
-        <p class="text-sm sm:text-base text-muted-foreground">{{ t('revision.subheading') }}</p>
-      </div>
-      <button @click="router.push(`/tracks/${trackId}`)" class="btn-secondary text-sm flex-shrink-0 self-start">
-        {{ t('common.backToTrack') }}
-      </button>
-    </div>
-
-    <div class="grid grid-cols-3 gap-2 sm:gap-4">
-      <div class="card text-center">
-        <div class="text-2xl font-bold text-error">{{ pendingIssues.length }}</div>
-        <div class="text-xs text-muted-foreground">{{ t('revision.openCount') }}</div>
-      </div>
-      <div class="card text-center">
-        <div class="text-2xl font-bold text-warning">{{ issues.filter(issue => issue.status === 'will_fix').length }}</div>
-        <div class="text-xs text-muted-foreground">{{ t('revision.willFixCount') }}</div>
-      </div>
-      <div class="card text-center">
-        <div class="text-2xl font-bold text-success">{{ respondedIssues.length }}</div>
-        <div class="text-xs text-muted-foreground">{{ t('revision.respondedCount') }}</div>
-      </div>
-    </div>
-
-    <div v-if="audioUrl">
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-xs text-muted-foreground">{{ t('peerReview.waveformHint') }}</span>
-        <div class="flex items-center gap-2">
-          <button
-            v-if="sourceVersions.length > 1"
-            @click="showVersionCompare = !showVersionCompare"
-            class="text-xs btn-secondary px-3 py-1">
-            {{ t('compare.title') }}
-          </button>
-          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
-            {{ downloading ? '…' : t('common.downloadAudio') }}
-          </button>
+  <div v-else-if="track" class="max-w-4xl mx-auto min-h-full flex flex-col">
+    <div class="space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ revisionLabel }}: {{ track.title }}</h1>
+          <p class="text-sm sm:text-base text-muted-foreground">{{ t('revision.subheading') }}</p>
         </div>
-      </div>
-      <div v-if="showVersionCompare && olderVersions.length > 0" class="flex items-center gap-2 mb-3">
-        <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
-        <select v-model="selectedCompareVersionId" class="select-field-sm">
-          <option :value="null">-- {{ t('compare.selectVersion') }} --</option>
-          <option v-for="v in olderVersions" :key="v.id" :value="v.id">
-            V{{ v.version_number }} · {{ formatDate(v.created_at) }}
-          </option>
-        </select>
-        <button v-if="selectedCompareVersionId" @click="selectedCompareVersionId = null" class="text-xs text-muted-foreground hover:text-foreground">
-          {{ t('compare.clear') }}
+        <button @click="router.push(`/tracks/${trackId}`)" class="btn-secondary text-sm flex-shrink-0 self-start">
+          {{ t('common.backToTrack') }}
         </button>
       </div>
-      <WaveformPlayer
-        :audio-url="audioUrl"
-        :issues="waveformIssues"
-        :track-id="trackId"
-        :compare-version-id="selectedCompareVersionId"
-      />
-    </div>
 
-    <div v-if="pendingIssues.length > 0">
-      <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('revision.openIssuesHeading') }}</h3>
-      <div class="space-y-3">
-        <div v-for="issue in pendingIssues" :key="issue.id" class="card">
-          <div class="flex items-start gap-3 flex-wrap sm:flex-nowrap">
-            <input
-              type="checkbox"
-              :checked="selectedIssueIds.includes(issue.id)"
-              @change="onIssueSelectToggle(issue.id)"
-              class="mt-1 rounded border-border bg-card text-primary focus:ring-primary flex-shrink-0"
-            />
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2 mb-1 flex-wrap">
-                <StatusBadge :status="issue.severity" type="severity" />
-                <span class="text-xs text-muted-foreground">{{ formatTimestamp(issue.time_start) }}</span>
+      <div class="grid grid-cols-3 gap-2 sm:gap-4">
+        <div class="card text-center">
+          <div class="text-2xl font-bold text-error">{{ pendingIssues.length }}</div>
+          <div class="text-xs text-muted-foreground">{{ t('revision.openCount') }}</div>
+        </div>
+        <div class="card text-center">
+          <div class="text-2xl font-bold text-warning">{{ issues.filter(issue => issue.status === 'disagreed').length }}</div>
+          <div class="text-xs text-muted-foreground">{{ t('revision.disagreedCount') }}</div>
+        </div>
+        <div class="card text-center">
+          <div class="text-2xl font-bold text-success">{{ respondedIssues.length }}</div>
+          <div class="text-xs text-muted-foreground">{{ t('revision.respondedCount') }}</div>
+        </div>
+      </div>
+
+      <div v-if="audioUrl">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs text-muted-foreground">{{ t('peerReview.waveformHint') }}</span>
+          <div class="flex items-center gap-2">
+            <button
+              v-if="sourceVersions.length > 1"
+              @click="showVersionCompare = !showVersionCompare"
+              class="text-xs btn-secondary px-3 py-1">
+              {{ t('compare.title') }}
+            </button>
+            <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="showVersionCompare && olderVersions.length > 0" class="flex items-center gap-2 mb-3">
+          <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+          <CustomSelect v-model="selectedCompareVersionId" :options="versionOptions" :placeholder="`-- ${t('compare.selectVersion')} --`" size="sm" />
+          <button v-if="selectedCompareVersionId" @click="selectedCompareVersionId = null" class="text-xs text-muted-foreground hover:text-foreground">
+            {{ t('compare.clear') }}
+          </button>
+        </div>
+        <WaveformPlayer
+          :audio-url="audioUrl"
+          :issues="waveformIssues"
+          :track-id="trackId"
+          :compare-version-id="selectedCompareVersionId"
+        />
+      </div>
+
+      <div v-if="pendingIssues.length > 0">
+        <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('revision.openIssuesHeading') }}</h3>
+        <div class="space-y-3">
+          <div v-for="issue in pendingIssues" :key="issue.id" class="card">
+            <div class="flex items-start gap-3 flex-wrap sm:flex-nowrap">
+              <input
+                type="checkbox"
+                :checked="selectedIssueIds.includes(issue.id)"
+                @change="onIssueSelectToggle(issue.id)"
+                class="checkbox mt-1"
+              />
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                  <StatusBadge :status="issue.severity" type="severity" />
+                  <span class="text-xs text-muted-foreground">{{ formatTimestamp(issue.time_start) }}</span>
+                </div>
+                <h4 class="text-sm font-medium text-foreground">{{ issue.title }}</h4>
+                <p class="text-xs text-muted-foreground mt-1">{{ issue.description }}</p>
               </div>
-              <h4 class="text-sm font-medium text-foreground">{{ issue.title }}</h4>
-              <p class="text-xs text-muted-foreground mt-1">{{ issue.description }}</p>
-            </div>
-            <div class="flex gap-2 flex-shrink-0 ml-auto sm:ml-0">
-              <button @click="respondToIssue(issue, 'will_fix')" class="btn-primary text-xs">{{ t('revision.willFix') }}</button>
-              <button @click="respondToIssue(issue, 'disagreed')" class="btn-secondary text-xs">{{ t('revision.disagree') }}</button>
+              <div class="flex gap-2 flex-shrink-0 ml-auto sm:ml-0">
+                <button @click="respondToIssue(issue, 'disagreed')" class="btn-secondary text-xs">{{ t('revision.disagree') }}</button>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div v-if="respondedIssues.length > 0">
-      <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('revision.respondedIssuesHeading') }}</h3>
-      <div class="space-y-2">
-        <div v-for="issue in respondedIssues" :key="issue.id" class="card opacity-80">
-          <div class="flex items-center justify-between gap-2 flex-wrap">
-            <div class="flex items-center gap-2 min-w-0">
-              <StatusBadge :status="issue.status" type="issue" />
-              <span class="text-sm text-foreground truncate">{{ issue.title }}</span>
+      <div v-if="respondedIssues.length > 0">
+        <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('revision.respondedIssuesHeading') }}</h3>
+        <div class="space-y-2">
+          <div v-for="issue in respondedIssues" :key="issue.id" class="card opacity-80">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <div class="flex items-center gap-2 min-w-0">
+                <StatusBadge :status="issue.status" type="issue" />
+                <span class="text-sm text-foreground truncate">{{ issue.title }}</span>
+              </div>
+              <span class="text-xs text-muted-foreground flex-shrink-0">{{ formatTimestamp(issue.time_start) }}</span>
             </div>
-            <span class="text-xs text-muted-foreground flex-shrink-0">{{ formatTimestamp(issue.time_start) }}</span>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="card border-primary/50 space-y-3">
-      <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('revision.uploadHeading') }}</h3>
-      <p class="text-xs text-muted-foreground">{{ t('revision.uploadHint') }}</p>
-      <input type="file" accept="audio/*" @change="onFileSelect" class="input-field w-full" />
-      <button
-        @click="submitRevision"
-        :disabled="!selectedFile || uploading"
-        :class="[
-          'text-sm font-medium px-4 py-2 rounded-full transition-colors',
-          !selectedFile || uploading ? 'bg-border text-muted-foreground cursor-not-allowed' : 'btn-primary'
-        ]"
-      >
-        {{ uploading ? t('revision.uploading') : uploadButtonLabel }}
-      </button>
-      <div v-if="uploading" class="space-y-1">
-        <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
-          <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
+      <div class="card border-primary/50 space-y-3">
+        <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('revision.uploadHeading') }}</h3>
+        <p class="text-xs text-muted-foreground">{{ t('revision.uploadHint') }}</p>
+        <input type="file" accept="audio/*" @change="onFileSelect" class="input-field w-full" />
+        <div v-if="uploading" class="space-y-1">
+          <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
+            <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
+          </div>
+          <p class="text-xs text-muted-foreground text-right">{{ uploadProgress }}%</p>
         </div>
-        <p class="text-xs text-muted-foreground text-right">{{ uploadProgress }}%</p>
       </div>
     </div>
+
+    <WorkflowActionBar :actions="workflowActions" :hint="t('revision.actionHint')" />
 
     <Transition name="slide-up">
       <div v-if="selectedIssueIds.length > 0"
         class="fixed bottom-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 bg-card border border-border rounded-2xl shadow-2xl px-4 sm:px-5 py-3 flex items-center gap-2 sm:gap-3 flex-wrap justify-center z-50">
         <span class="text-sm text-muted-foreground">{{ selectedIssueIds.length }} {{ t('issue.selected') }}</span>
         <div class="h-4 w-px bg-border"></div>
-        <button @click="openBatchAction('will_fix')" class="px-3 py-1.5 rounded-full text-sm bg-warning-bg text-warning border border-warning/30 hover:bg-warning/20 transition-colors">
-          {{ t('issue.status.will_fix') }}
+        <button @click="openBatchAction('disagreed')" class="px-3 py-1.5 rounded-full text-sm bg-info-bg text-info border border-info/30 hover:bg-info/20 transition-colors">
+          {{ t('issueDetail.disagree') }}
         </button>
         <button @click="openBatchAction('resolved')" class="px-3 py-1.5 rounded-full text-sm bg-success-bg text-success border border-success/30 hover:bg-success/20 transition-colors">
           {{ t('issue.status.resolved') }}
@@ -277,9 +286,9 @@ function onIssueSelectToggle(issueId: number) {
       </div>
     </Transition>
 
-    <div v-if="showBatchModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div class="bg-card border border-border rounded-2xl p-6 w-full max-w-md space-y-4">
-        <h3 class="font-semibold text-foreground">{{ t('issue.batchStatusNote') }}</h3>
+    <BaseModal v-if="showBatchModal" @close="showBatchModal = false">
+      <div class="space-y-4">
+        <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('issue.batchStatusNote') }}</h3>
         <textarea
           v-model="batchStatusNote"
           :placeholder="t('issue.batchStatusNote')"
@@ -295,7 +304,7 @@ function onIssueSelectToggle(issueId: number) {
           </button>
         </div>
       </div>
-    </div>
+    </BaseModal>
   </div>
 </template>
 

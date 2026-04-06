@@ -54,3 +54,12 @@ export function formatTimestamp(seconds: number): string {
 
   return `${minutes}:${wholeSeconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`
 }
+
+/** Compact timestamp for display labels: m:ss.s (1 decimal place) */
+export function formatTimestampShort(seconds: number): string {
+  const safeSeconds = Math.max(0, seconds)
+  const minutes = Math.floor(safeSeconds / 60)
+  const wholeSeconds = Math.floor(safeSeconds % 60)
+  const tenths = Math.floor((safeSeconds - Math.floor(safeSeconds)) * 10)
+  return `${minutes}:${wholeSeconds.toString().padStart(2, '0')}.${tenths}`
+}

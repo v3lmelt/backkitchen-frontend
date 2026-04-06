@@ -8,6 +8,8 @@ import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import { useToast } from '@/composables/useToast'
+import WorkflowActionBar from '@/components/workflow/WorkflowActionBar.vue'
+import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 
 const route = useRoute()
@@ -124,100 +126,101 @@ function onIssueSelect(issue: Issue) {
   router.push(`/issues/${issue.id}`)
 }
 
-const { downloading, downloadTrackAudio } = useAudioDownload()
+const { downloading, downloadProgress, downloadTrackAudio } = useAudioDownload()
 const handleDownload = () => downloadTrackAudio(audioUrl, track)
+
+const workflowActions = computed<WorkflowAction[]>(() => [
+  {
+    label: t('peerReview.requestRevision'),
+    type: 'return',
+    disabled: !checklistSaved.value,
+    handler: () => finish('needs_revision'),
+  },
+  {
+    label: t('peerReview.passToProducer'),
+    type: 'advance',
+    disabled: !checklistSaved.value,
+    handler: () => finish('pass'),
+  },
+])
 </script>
 
 <template>
   <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
-  <div v-else-if="track" class="space-y-6">
-    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-      <div class="min-w-0">
-        <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('peerReview.heading', { title: track.title }) }}</h1>
-        <p class="text-sm sm:text-base text-muted-foreground">{{ t('peerReview.subheading', { version: track.version }) }}</p>
-      </div>
-      <button @click="router.push(`/tracks/${trackId}`)" class="btn-secondary text-sm flex-shrink-0 self-start">
-        {{ t('common.backToTrack') }}
-      </button>
-    </div>
-
-    <div v-if="error" class="rounded-lg border border-red-700/50 bg-red-900/20 px-4 py-3 text-sm text-red-300">
-      {{ error }}
-    </div>
-
-    <div v-if="audioUrl">
-      <div class="flex items-center justify-between mb-2">
-        <p class="text-xs text-muted-foreground">{{ t('peerReview.waveformHint') }}</p>
-        <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
-          {{ downloading ? '…' : t('common.downloadAudio') }}
+  <div v-else-if="track" class="min-h-full flex flex-col">
+    <div class="space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('peerReview.heading', { title: track.title }) }}</h1>
+          <p class="text-sm sm:text-base text-muted-foreground">{{ t('peerReview.subheading', { version: track.version }) }}</p>
+        </div>
+        <button @click="router.push(`/tracks/${trackId}`)" class="btn-secondary text-sm flex-shrink-0 self-start">
+          {{ t('common.backToTrack') }}
         </button>
       </div>
-      <WaveformPlayer
-        :audio-url="audioUrl"
-        :issues="waveformIssues"
-        :selectable="true"
-        :selected-range="issueFormRef?.selectedRange ?? null"
-        @click="(t: number) => issueFormRef?.handleClick(t)"
-        @regionClick="onIssueSelect"
-        @rangeSelect="(s: number, e: number) => issueFormRef?.handleRangeSelect(s, e)"
-      />
-    </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div class="space-y-4">
-        <IssueCreatePanel
-          ref="issueFormRef"
-          :track-id="trackId"
-          phase="peer"
-          @created="(issue: Issue) => issues.push(issue)"
-        >
-          <template #heading>
-            <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('peerReview.issuesHeading', { count: issues.length }) }}</h3>
-          </template>
-        </IssueCreatePanel>
-
-        <IssueMarkerList :issues="issues" :current-source-version-number="track.version" @select="onIssueSelect" />
+      <div v-if="error" class="rounded-lg border border-red-700/50 bg-red-900/20 px-4 py-3 text-sm text-red-300">
+        {{ error }}
       </div>
 
-      <div class="card space-y-4">
-        <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('peerReview.checklistHeading') }}</h3>
-        <div v-for="item in checklist" :key="item.label" class="flex items-start gap-3">
-          <input
-            type="checkbox"
-            v-model="item.passed"
-            class="mt-1 rounded border-border bg-card text-primary focus:ring-primary"
-          />
-          <div class="flex-1">
-            <div class="text-sm text-foreground">{{ translateChecklistLabel(item.label) }}</div>
+      <div v-if="audioUrl">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-muted-foreground">{{ t('peerReview.waveformHint') }}</p>
+          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+          </button>
+        </div>
+        <WaveformPlayer
+          :audio-url="audioUrl"
+          :issues="waveformIssues"
+          :selectable="true"
+          :selected-range="issueFormRef?.selectedRange ?? null"
+          @click="(t: number) => issueFormRef?.handleClick(t)"
+          @regionClick="onIssueSelect"
+          @rangeSelect="(s: number, e: number) => issueFormRef?.handleRangeSelect(s, e)"
+        />
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="space-y-4">
+          <IssueCreatePanel
+            ref="issueFormRef"
+            :track-id="trackId"
+            phase="peer"
+            @created="(issue: Issue) => issues.push(issue)"
+          >
+            <template #heading>
+              <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('peerReview.issuesHeading', { count: issues.length }) }}</h3>
+            </template>
+          </IssueCreatePanel>
+
+          <IssueMarkerList :issues="issues" :current-source-version-number="track.version" @select="onIssueSelect" />
+        </div>
+
+        <div class="card space-y-4">
+          <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('peerReview.checklistHeading') }}</h3>
+          <div v-for="item in checklist" :key="item.label" class="flex items-start gap-3">
             <input
-              v-model="item.note"
-              class="input-field w-full text-xs mt-1"
-              :placeholder="t('common.notesOptionalPlaceholder')"
+              type="checkbox"
+              v-model="item.passed"
+              class="checkbox mt-1"
             />
+            <div class="flex-1">
+              <div class="text-sm text-foreground">{{ translateChecklistLabel(item.label) }}</div>
+              <input
+                v-model="item.note"
+                class="input-field w-full text-xs mt-1"
+                :placeholder="t('common.notesOptionalPlaceholder')"
+              />
+            </div>
           </div>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
           <button @click="submitChecklist" class="btn-secondary text-sm">
-            {{ t('peerReview.saveChecklist') }}
-          </button>
-          <button
-            @click="finish('needs_revision')"
-            class="btn-primary text-sm"
-            :disabled="!checklistSaved"
-            :class="{ 'opacity-40 cursor-not-allowed': !checklistSaved }"
-          >
-            {{ t('peerReview.requestRevision') }}
-          </button>
-          <button
-            @click="finish('pass')"
-            class="btn-primary text-sm"
-            :disabled="!checklistSaved"
-            :class="{ 'opacity-40 cursor-not-allowed': !checklistSaved }"
-          >
-            {{ t('peerReview.passToProducer') }}
-          </button>
+              {{ t('peerReview.saveChecklist') }}
+            </button>
         </div>
       </div>
     </div>
+
+    <WorkflowActionBar :actions="workflowActions" :hint="t('peerReview.actionHint')" />
   </div>
 </template>

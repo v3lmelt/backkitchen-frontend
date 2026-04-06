@@ -3,9 +3,9 @@ import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import WaveSurfer from 'wavesurfer.js'
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
-import { CircleAlert, CircleCheckBig } from 'lucide-vue-next'
+import { CircleAlert, CircleCheckBig, Play, Pause } from 'lucide-vue-next'
 import type { Issue } from '@/types'
-import { formatTimestamp, roundToMilliseconds } from '@/utils/time'
+import { formatTimestamp, formatTimestampShort, roundToMilliseconds } from '@/utils/time'
 import { withAuthToken } from '@/utils/url'
 
 const props = defineProps<{
@@ -290,6 +290,11 @@ function applyCompareMode(mode: 'A' | 'B') {
     compareWaveSurfer.value.setVolume(0)
     wavesurfer.value.setOptions({ waveColor: '#4A4A5A', progressColor: '#22D3EE', cursorWidth: 2 })
     compareWaveSurfer.value.setOptions({ waveColor: 'rgba(249,115,22,0.15)', progressColor: 'rgba(249,115,22,0.2)', cursorWidth: 0 })
+    // Keep compare playing in sync so switching back to B is instant
+    if (wavesurfer.value.isPlaying() && !compareWaveSurfer.value.isPlaying()) {
+      syncCompareToPrimaryTime()
+      compareWaveSurfer.value.play()
+    }
     return
   }
 
@@ -298,6 +303,11 @@ function applyCompareMode(mode: 'A' | 'B') {
   compareWaveSurfer.value.setVolume(1)
   wavesurfer.value.setOptions({ waveColor: 'rgba(74,74,90,0.15)', progressColor: 'rgba(34,211,238,0.2)', cursorWidth: 0 })
   compareWaveSurfer.value.setOptions({ waveColor: '#F97316', progressColor: '#FB923C', cursorWidth: 2 })
+  // Ensure compare is actually playing when primary is playing
+  if (wavesurfer.value.isPlaying() && !compareWaveSurfer.value.isPlaying()) {
+    syncCompareToPrimaryTime()
+    compareWaveSurfer.value.play()
+  }
 }
 
 function syncCompareToPrimaryTime(time = wavesurfer.value?.getCurrentTime() ?? 0) {
@@ -456,6 +466,10 @@ function renderSelectionRegion() {
 
 function formatTime(seconds: number): string {
   return formatTimestamp(seconds)
+}
+
+function formatTimeShort(seconds: number): string {
+  return formatTimestampShort(seconds)
 }
 
 onMounted(async () => {
@@ -811,10 +825,10 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom })
             @click.stop="handleTimelineClick(item.issue)"
           >
             <span
-              class="pointer-events-none absolute left-1/2 bottom-full z-20 mb-1.5 min-w-max -translate-x-1/2 whitespace-nowrap rounded-full border bg-card px-2 py-0.5 text-[11px] font-mono text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+              class="pointer-events-none absolute left-1/2 bottom-full z-20 mb-1.5 min-w-max -translate-x-1/2 whitespace-nowrap rounded-full border bg-card px-2.5 py-1 text-[11px] font-mono text-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100"
               :class="activeRangeIssueId === item.issue.id ? 'opacity-100' : ''"
               :style="rangeRulerTooltipStyle(item.issue)"
-            >{{ formatTime(item.issue.time_start) }} - {{ formatTime(item.issue.time_end) }}</span>
+            >{{ formatTimeShort(item.issue.time_start) }} <span class="opacity-50 mx-0.5">→</span> {{ formatTimeShort(item.issue.time_end) }}</span>
           </button>
         </div>
         <div
@@ -853,12 +867,8 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom })
 
     <div class="flex items-center gap-4">
       <button @click="togglePlay" class="text-cyan hover:text-cyan-dark transition-colors">
-        <svg v-if="!isPlaying" class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-          <polygon points="5 3 19 12 5 21 5 3" />
-        </svg>
-        <svg v-else class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-          <rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" />
-        </svg>
+        <Play v-if="!isPlaying" class="w-8 h-8" fill="currentColor" :stroke-width="0" />
+        <Pause v-else class="w-8 h-8" fill="currentColor" :stroke-width="0" />
       </button>
       <span class="text-sm text-muted-foreground font-mono">
         {{ formatTime(activeCurrentTime) }} / {{ formatTime(activeDuration) }}

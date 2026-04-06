@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { issueApi } from '@/api'
 import type { Issue } from '@/types'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
+import CustomSelect from '@/components/common/CustomSelect.vue'
 import { formatTimestamp, roundToMilliseconds } from '@/utils/time'
 
 const props = defineProps<{
@@ -33,6 +34,18 @@ function makeBlank() {
     phase: props.phase,
   }
 }
+
+const severityOptions = computed(() => [
+  { value: 'critical', label: t('severity.critical') },
+  { value: 'major', label: t('severity.major') },
+  { value: 'minor', label: t('severity.minor') },
+  { value: 'suggestion', label: t('severity.suggestion') },
+])
+
+const issueTypeOptions = computed(() => [
+  { value: 'point', label: t('issueType.point') },
+  { value: 'range', label: t('issueType.range') },
+])
 
 const selectedRange = computed(() => {
   if (newIssue.value.issue_type === 'range' && showForm.value && newIssue.value.time_end !== null) {
@@ -106,16 +119,8 @@ defineExpose({ handleClick, handleRangeSelect, selectedRange, showForm })
         />
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <select v-model="newIssue.severity" class="select-field">
-          <option value="critical">{{ t('severity.critical') }}</option>
-          <option value="major">{{ t('severity.major') }}</option>
-          <option value="minor">{{ t('severity.minor') }}</option>
-          <option value="suggestion">{{ t('severity.suggestion') }}</option>
-        </select>
-        <select v-model="newIssue.issue_type" class="select-field">
-          <option value="point">{{ t('issueType.point') }}</option>
-          <option value="range">{{ t('issueType.range') }}</option>
-        </select>
+        <CustomSelect v-model="newIssue.severity" :options="severityOptions" />
+        <CustomSelect v-model="newIssue.issue_type" :options="issueTypeOptions" />
       </div>
       <div v-if="newIssue.issue_type === 'range'" class="grid grid-cols-2 gap-3">
         <div>
