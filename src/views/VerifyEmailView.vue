@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authApi } from '@/api'
 import { useAppStore } from '@/stores/app'
+import { CheckCircle2, XCircle } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -46,9 +47,7 @@ onMounted(async () => {
       <!-- Success -->
       <template v-else-if="status === 'success'">
         <div class="w-14 h-14 rounded-full bg-[#222924] flex items-center justify-center mx-auto mb-6">
-          <svg class="w-7 h-7 text-[#B6FFCE]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>
-          </svg>
+          <CheckCircle2 class="w-7 h-7 text-[#B6FFCE]" :stroke-width="2" />
         </div>
         <h1 class="font-mono text-xl font-bold text-white mb-2">Email verified!</h1>
         <p class="text-[#B8B9B6] text-sm font-sans">Redirecting you to the dashboard…</p>
@@ -57,9 +56,7 @@ onMounted(async () => {
       <!-- Error -->
       <template v-else>
         <div class="w-14 h-14 rounded-full bg-[#24100B] flex items-center justify-center mx-auto mb-6">
-          <svg class="w-7 h-7 text-[#FF5C33]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>
-          </svg>
+          <XCircle class="w-7 h-7 text-[#FF5C33]" :stroke-width="2" />
         </div>
         <h1 class="font-mono text-xl font-bold text-white mb-2">Verification failed</h1>
         <p class="text-[#B8B9B6] text-sm font-sans mb-8">{{ errorMessage }}</p>

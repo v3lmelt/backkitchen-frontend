@@ -14,9 +14,9 @@
           @click="isOwner && logoInputRef?.click()"
         >
           <img v-if="circle.logo_url" :src="`${API_ORIGIN}${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
-          <svg v-else xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          <Smile v-else class="w-6 h-6 text-muted-foreground" :stroke-width="1.5" />
           <div v-if="isOwner" class="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <Upload class="w-3.5 h-3.5 text-white" :stroke-width="2" />
           </div>
         </div>
         <input v-if="isOwner" ref="logoInputRef" type="file" accept="image/*" class="hidden" @change="uploadLogo" />
@@ -118,13 +118,7 @@
           <div class="flex gap-4 items-end">
             <div class="flex-1">
               <label class="block text-xs text-muted-foreground mb-2 font-mono">{{ t('circleDetail.inviteRole') }}</label>
-              <select
-                v-model="newCodeRole"
-                class="w-full bg-background border border-border rounded-full px-4 py-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-              >
-                <option value="member">{{ t('circleDetail.roles.member') }}</option>
-                <option value="mastering_engineer">{{ t('circleDetail.roles.mastering_engineer') }}</option>
-              </select>
+              <CustomSelect v-model="newCodeRole" :options="roleOptions" />
             </div>
             <div class="flex-1">
               <label class="block text-xs text-muted-foreground mb-2 font-mono">{{ t('circleDetail.expiresDays') }}</label>
@@ -182,6 +176,8 @@ import { circleApi, API_ORIGIN } from '@/api'
 import type { Circle, InviteCode } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { parseUTC } from '@/utils/time'
+import { Smile, Upload } from 'lucide-vue-next'
+import CustomSelect from '@/components/common/CustomSelect.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -197,6 +193,10 @@ const activeTab = ref('info')
 const savingInfo = ref(false)
 const creatingCode = ref(false)
 const newCodeRole = ref('member')
+const roleOptions = computed(() => [
+  { value: 'member', label: t('circleDetail.roles.member') },
+  { value: 'mastering_engineer', label: t('circleDetail.roles.mastering_engineer') },
+])
 const newCodeDays = ref(7)
 
 const editForm = reactive({ name: '', description: '', website: '' })
@@ -225,7 +225,8 @@ onMounted(async () => {
     if (circle.value.created_by === currentUserId.value) {
       inviteCodes.value = await circleApi.listInviteCodes(id)
     }
-  } catch {
+  } catch (e: any) {
+    toast.error(e.message || t('common.loadFailed'))
     router.replace('/circles')
   } finally {
     loading.value = false

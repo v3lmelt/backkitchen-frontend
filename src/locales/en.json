@@ -1,4 +1,65 @@
 {
+  "auth": {
+    "login": {
+      "title": "Welcome back",
+      "subtitle": "Sign in to your account to continue",
+      "email": "Email address",
+      "emailPlaceholder": "you{'@'}example.com",
+      "password": "Password",
+      "passwordPlaceholder": "••••••••",
+      "rememberMe": "Remember me",
+      "forgotPassword": "Forgot password?",
+      "signIn": "Sign In",
+      "signingIn": "Signing in…",
+      "or": "or",
+      "noAccount": "Don't have an account?",
+      "register": "Register now",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
+      "errorRequired": "Please enter your email and password.",
+      "errorNotVerified": "Email not verified. Please check your inbox for the verification link.",
+      "errorInvalid": "Invalid email or password."
+    },
+    "register": {
+      "title": "Create account",
+      "subtitle": "Fill in the details below to get started",
+      "username": "Username",
+      "usernamePlaceholder": "Pick a username",
+      "email": "Email address",
+      "emailPlaceholder": "you{'@'}example.com",
+      "password": "Password",
+      "passwordPlaceholder": "••••••••",
+      "confirmPassword": "Confirm password",
+      "confirmPasswordPlaceholder": "••••••••",
+      "terms": "I agree to the",
+      "termsOfService": "Terms of Service",
+      "and": "and",
+      "privacyPolicy": "Privacy Policy",
+      "create": "Create Account",
+      "creating": "Creating account…",
+      "hasAccount": "Already have an account?",
+      "signIn": "Sign in",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
+      "passwordMinLength": "At least 8 characters",
+      "usernameExists": "This username is already taken.",
+      "errorRequired": "Please fill in all required fields.",
+      "errorPasswordMismatch": "Passwords do not match.",
+      "errorTerms": "You must accept the terms to continue.",
+      "errorExists": "An account with this email already exists.",
+      "errorGeneric": "Registration failed. Please try again."
+    },
+    "checkEmail": {
+      "title": "Check your inbox",
+      "sentTo": "We sent a verification link to",
+      "hint": "Click the link in the email to activate your account. The link expires in 30 minutes.",
+      "resend": "Resend verification email",
+      "resending": "Sending…",
+      "resent": "Verification email resent.",
+      "backToSignIn": "Back to sign in"
+    },
+    "langToggle": "中文"
+  },
   "common": {
     "loading": "Loading...",
     "backToTrack": "Back to Track",
@@ -19,7 +80,8 @@
     "rangeEnd": "End (s)",
     "requestFailed": "Request failed",
     "downloadAudio": "Download Audio",
-    "downloadFailed": "Download failed"
+    "downloadFailed": "Download failed",
+    "loadFailed": "Failed to load, please try again later"
   },
   "severity": {
     "critical": "Critical",
@@ -79,7 +141,6 @@
     "completed": "Completed",
     "rejected": "Rejected",
     "open": "Open",
-    "will_fix": "Will Fix",
     "disagreed": "Disagreed",
     "resolved": "Resolved",
     "peer": "Peer",
@@ -166,7 +227,7 @@
       "issueCommented": "{name} commented on issue #{num}",
       "issueUpdated": "{name} updated issue #{num}",
       "issueResolved": "{name} closed issue #{num}",
-      "issueWillFix": "{name} confirmed fix for issue #{num}",
+      "issueReopened": "{name} reopened issue #{num}",
       "issueDisagreed": "{name} disputed issue #{num}"
     }
   },
@@ -211,25 +272,26 @@
     "saveChecklist": "Save Checklist",
     "requestRevision": "Request Revision",
     "passToProducer": "Pass to Producer",
-    "checklistSubmitted": "Checklist submitted."
+    "checklistSubmitted": "Checklist submitted.",
+    "actionHint": "After completing the checklist, choose the next step"
   },
   "revision": {
     "peerRevision": "Peer Revision",
     "masteringRevision": "Mastering Revision",
     "subheading": "Respond to open issues and upload a new source audio version.",
     "openCount": "Open",
-    "willFixCount": "Will Fix",
+    "disagreedCount": "Disagreed",
     "respondedCount": "Responded",
     "openIssuesHeading": "Open Issues",
     "respondedIssuesHeading": "Responded Issues",
-    "willFix": "Will Fix",
     "disagree": "Disagree",
     "uploadHeading": "Upload Revised Source Audio",
     "uploadHint": "Upload the next source version after responding to the issues above.",
     "uploading": "Uploading...",
     "submitBackToPeer": "Submit Back to Peer Review",
     "submitBackToMastering": "Submit Back to Mastering",
-    "staleIssuesHeading": "Prior Version Issues (reference only)"
+    "staleIssuesHeading": "Prior Version Issues (reference only)",
+    "actionHint": "Upload a revised source file to return to the review workflow"
   },
   "mastering": {
     "heading": "Mastering Review: {title}",
@@ -240,7 +302,8 @@
     "requestRevision": "Request Source Revision",
     "uploadReady": "Upload mastered delivery when ready.",
     "uploading": "Uploading...",
-    "uploadMaster": "Upload Master Delivery"
+    "uploadMaster": "Upload Master Delivery",
+    "actionHint": "Upload the mastered audio, or request the author to revise the source"
   },
   "producer": {
     "heading": "Producer Workspace: {title}",
@@ -261,7 +324,9 @@
     "producerIssuesHeading": "Producer Notes ({count})",
     "peerIssueSummaryHeading": "Peer Review Issue Summary",
     "sendToMastering": "Send to Mastering",
-    "requestRevision": "Request Another Source Revision"
+    "requestRevision": "Request Another Source Revision",
+    "intakeHint": "Review the submission and decide whether to accept it into the workflow",
+    "gateHint": "Review peer feedback and decide the next step for this track"
   },
   "finalReview": {
     "heading": "Final Review: {title}",
@@ -272,13 +337,15 @@
     "producer": "Producer",
     "submitter": "Submitter",
     "approveMaster": "Approve Current Master",
-    "returnToMastering": "Return to Mastering"
+    "returnToMastering": "Return to Mastering",
+    "actionHint": "Both producer and submitter must approve to complete the final review"
   },
   "issueDetail": {
     "back": "Back",
     "created": "Created {date}",
-    "markFixed": "Mark as Fixed",
+    "markFixed": "Resolved",
     "disagree": "Disagree",
+    "reopen": "Reopen",
     "markResolved": "Mark Resolved",
     "commentsHeading": "Comments ({count})",
     "unknown": "Unknown",
@@ -439,7 +506,6 @@
     "revisionNote": "Revision Note",
     "batchStatusNote": "Batch revision note (optional)",
     "status": {
-      "will_fix": "Will Fix",
       "resolved": "Resolved",
       "disagreed": "Disagreed"
     }

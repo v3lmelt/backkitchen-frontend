@@ -3,9 +3,7 @@
     <!-- heading -->
     <div class="flex items-center gap-3">
       <RouterLink to="/circles" class="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
-        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
-        </svg>
+        <ChevronLeft class="w-5 h-5" :stroke-width="2" />
       </RouterLink>
       <h1 class="text-2xl font-mono font-bold text-foreground">{{ t('circleNew.heading') }}</h1>
     </div>
@@ -23,9 +21,9 @@
             @click="logoInputRef?.click()"
           >
             <img v-if="logoPreviewUrl" :src="logoPreviewUrl" alt="" class="w-full h-full object-cover" />
-            <svg v-else xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+            <Smile v-else class="w-6 h-6 text-muted-foreground" :stroke-width="1.5" />
             <div class="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <Upload class="w-4 h-4 text-white" :stroke-width="2" />
             </div>
           </button>
           <p class="text-xs text-muted-foreground">{{ t('circleNew.logoHint') }}</p>
@@ -79,6 +77,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { circleApi } from '@/api'
+import { ChevronLeft, Smile, Upload } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()

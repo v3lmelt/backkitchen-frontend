@@ -153,6 +153,10 @@ async function handleExport(albumId: number) {
     exportingAlbum.value = null
   }
 }
+
+function openAlbumSettings(albumId: number) {
+  router.push(`/albums/${albumId}/settings`)
+}
 </script>
 
 <template>
@@ -225,7 +229,12 @@ async function handleExport(albumId: number) {
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div v-for="album in albums" :key="album.id" class="rounded-none border border-border bg-card overflow-hidden">
+        <div
+          v-for="album in albums"
+          :key="album.id"
+          class="rounded-none border border-border bg-card overflow-hidden cursor-pointer transition-colors hover:border-primary/50"
+          @click="openAlbumSettings(album.id)"
+        >
           <!-- Cover image or placeholder — no color bar -->
           <div class="w-full h-28 overflow-hidden">
             <img

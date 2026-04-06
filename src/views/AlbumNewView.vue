@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { albumApi, userApi } from '@/api'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
 import type { User } from '@/types'
+import { ChevronLeft, Upload } from 'lucide-vue-next'
+import CustomSelect from '@/components/common/CustomSelect.vue'
+import type { SelectOption } from '@/components/common/CustomSelect.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -28,6 +31,10 @@ const teamState = reactive<{ mastering_engineer_id: number | null; member_ids: n
 })
 
 const deadlineState = reactive({ deadline: '', peer_review: '', mastering: '', final_review: '' })
+
+const userOptions = computed<SelectOption[]>(() =>
+  users.value.map((u) => ({ value: u.id, label: u.display_name }))
+)
 
 onMounted(async () => {
   if (appStore.currentUser?.role !== 'producer') {
@@ -108,9 +115,7 @@ async function create() {
   <div class="max-w-2xl mx-auto space-y-6">
     <div class="flex items-center gap-3">
       <RouterLink to="/albums" class="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
-        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
-        </svg>
+        <ChevronLeft class="w-5 h-5" :stroke-width="2" />
       </RouterLink>
       <h1 class="text-2xl font-mono font-bold text-foreground">{{ t('albumNew.heading') }}</h1>
     </div>
@@ -134,9 +139,7 @@ async function create() {
                 class="absolute inset-0 w-full h-full object-cover"
               />
               <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M16 12l-4-4-4 4M12 8v8" />
-                </svg>
+                <Upload class="w-6 h-6 text-white" :stroke-width="2" />
               </div>
             </div>
             <p class="text-xs text-muted-foreground text-center w-24">{{ t('albumNew.coverImageHint') }}</p>
@@ -173,10 +176,7 @@ async function create() {
         <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('albumNew.teamSection') }}</h2>
         <div>
           <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.masteringEngineerSelect') }}</label>
-          <select v-model="teamState.mastering_engineer_id" class="select-field w-full">
-            <option :value="null">{{ t('settings.noneOption') }}</option>
-            <option v-for="user in users" :key="user.id" :value="user.id">{{ user.display_name }}</option>
-          </select>
+          <CustomSelect v-model="teamState.mastering_engineer_id" :options="userOptions" :placeholder="t('settings.noneOption')" />
         </div>
         <div>
           <div class="text-xs text-muted-foreground mb-2">{{ t('settings.participants') }}</div>
@@ -188,6 +188,7 @@ async function create() {
             >
               <input
                 type="checkbox"
+                class="checkbox"
                 :checked="teamState.member_ids.includes(user.id)"
                 @change="toggleMember(user.id)"
               />

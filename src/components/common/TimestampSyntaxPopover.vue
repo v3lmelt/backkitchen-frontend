@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Info } from 'lucide-vue-next'
 import { extractTimeReferences, resolveTimeReferenceTarget, type TimestampTarget } from '@/utils/timestamps'
 
 const props = withDefaults(defineProps<{
@@ -59,9 +60,7 @@ const examples = computed(() => ([
       : 'border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground'"
     :title="t('timestamp.syntaxTitle')"
   >
-    <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
+    <Info class="h-3 w-3" :stroke-width="2.5" />
   </button>
 
   <!-- Popover -->
