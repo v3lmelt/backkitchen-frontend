@@ -13,6 +13,7 @@ export const useAppStore = defineStore('app', () => {
   const currentUser = ref<User | null>(storedUser ? JSON.parse(storedUser) : null)
   const users = ref<User[]>([])
   const sidebarCollapsed = ref(false)
+  const mobileSidebarOpen = ref(false)
   const bootstrapped = ref(false)
   const pendingInvitations = ref<Invitation[]>([])
 
@@ -129,11 +130,20 @@ export const useAppStore = defineStore('app', () => {
     sidebarCollapsed.value = !sidebarCollapsed.value
   }
 
+  function openMobileSidebar() {
+    mobileSidebarOpen.value = true
+  }
+
+  function closeMobileSidebar() {
+    mobileSidebarOpen.value = false
+  }
+
   return {
     token,
     currentUser,
     users,
     sidebarCollapsed,
+    mobileSidebarOpen,
     bootstrapped,
     isAuthenticated,
     pendingInvitations,
@@ -148,6 +158,8 @@ export const useAppStore = defineStore('app', () => {
     declineInvitation,
     logout,
     toggleSidebar,
+    openMobileSidebar,
+    closeMobileSidebar,
     loadNotifications,
     markAllRead,
     markNotificationRead,

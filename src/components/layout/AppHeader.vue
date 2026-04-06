@@ -89,8 +89,10 @@ const roleLabel = computed(() => {
   return t('roles.member')
 })
 
+const isMobile = () => globalThis.matchMedia?.('(max-width: 767.98px)').matches ?? false
+
 function handleMenuToggle() {
-  if (globalThis.innerWidth < 768) {
+  if (isMobile()) {
     appStore.openMobileSidebar()
   } else {
     appStore.toggleSidebar()
