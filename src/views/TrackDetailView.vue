@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, discussionApi, API_ORIGIN } from '@/api'
+import { trackApi, discussionApi, API_ORIGIN, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Track, Issue, Discussion, WorkflowEvent, TrackSourceVersion } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
@@ -102,6 +102,7 @@ const newDiscussionContent = ref('')
 const postingDiscussion = ref(false)
 const showVersionCompare = ref(false)
 const selectedCompareVersionId = ref<number | null>(null)
+const canPostDiscussion = computed(() => !postingDiscussion.value && !!newDiscussionContent.value.trim())
 
 onMounted(loadTrack)
 
@@ -158,7 +159,7 @@ async function postDiscussion() {
 }
 
 function openImage(url: string) {
-  window.open(url, '_blank')
+  window.open(resolveAssetUrl(url), '_blank')
 }
 
 const currentVersionId = computed(() => track.value?.current_source_version?.id ?? null)
@@ -287,7 +288,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
                   <img
                     v-for="img in d.images"
                     :key="img.id"
-                    :src="img.image_url"
+                    :src="resolveAssetUrl(img.image_url)"
                     class="h-20 rounded border border-border object-cover cursor-pointer"
                     @click="openImage(img.image_url)"
                   />
@@ -306,8 +307,8 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
           </div>
           <button
             @click="postDiscussion"
-            :disabled="!newDiscussionContent.trim() || postingDiscussion"
-            class="btn-primary text-sm"
+            :disabled="!canPostDiscussion"
+            class="btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {{ postingDiscussion ? t('common.loading') : t('trackDetail.postDiscussion') }}
           </button>

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 
 import { mountWithPlugins } from '@/tests/utils'
 
@@ -16,6 +17,7 @@ vi.mock('vue-router', () => ({
 }))
 
 vi.mock('@/api', () => ({
+  API_ORIGIN: '',
   trackApi: {
     get: mocks.trackGetMock,
     approveFinalReview: mocks.approveFinalReviewMock,
@@ -38,6 +40,13 @@ vi.mock('@/components/audio/IssueMarkerList.vue', () => ({
   default: {
     props: ['issues'],
     template: '<div class="issue-list">{{ issues.length }}</div>',
+  },
+}))
+
+vi.mock('@/components/workflow/WorkflowActionBar.vue', () => ({
+  default: {
+    props: ['actions'],
+    template: '<div class="workflow-actions"><button v-for="action in actions" :key="action.label" class="workflow-action" :disabled="action.disabled" @click="action.handler()">{{ action.label }}</button></div>',
   },
 }))
 
@@ -72,11 +81,11 @@ describe('FinalReviewView', () => {
 
   it('filters issues to the current master delivery and approves', async () => {
     const wrapper = mountWithPlugins(FinalReviewView)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
     expect(wrapper.find('.issue-list').text()).toBe('1')
-    await wrapper.findAll('button').find(button => button.text() === 'Approve Current Master')!.trigger('click')
+    await wrapper.findAll('button.workflow-action').find(button => button.text() === 'Approve Current Master')!.trigger('click')
+    await flushPromises()
 
     expect(mocks.approveFinalReviewMock).toHaveBeenCalledWith(10)
     expect(mocks.trackGetMock).toHaveBeenCalledTimes(2)
@@ -84,10 +93,10 @@ describe('FinalReviewView', () => {
 
   it('returns to mastering when issues exist', async () => {
     const wrapper = mountWithPlugins(FinalReviewView)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
-    await wrapper.findAll('button').find(button => button.text() === 'Return to Mastering')!.trigger('click')
+    await wrapper.findAll('button.workflow-action').find(button => button.text() === 'Return to Mastering')!.trigger('click')
+    await flushPromises()
 
     expect(mocks.returnToMasteringMock).toHaveBeenCalledWith(10)
     expect(mocks.pushMock).toHaveBeenCalledWith('/tracks/10')

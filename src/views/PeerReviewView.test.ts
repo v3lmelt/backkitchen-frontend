@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 
 import { mountWithPlugins } from '@/tests/utils'
 
@@ -16,6 +17,7 @@ vi.mock('vue-router', () => ({
 }))
 
 vi.mock('@/api', () => ({
+  API_ORIGIN: '',
   trackApi: { get: mocks.trackGetMock, finishPeerReview: mocks.finishPeerReviewMock },
   issueApi: { create: mocks.issueCreateMock },
   checklistApi: { submit: mocks.checklistSubmitMock },
@@ -29,6 +31,13 @@ vi.mock('@/components/audio/IssueMarkerList.vue', () => ({
   default: {
     props: ['issues'],
     template: '<div class="issue-list">{{ issues.length }}</div>',
+  },
+}))
+
+vi.mock('@/components/workflow/WorkflowActionBar.vue', () => ({
+  default: {
+    props: ['actions'],
+    template: '<div class="workflow-actions"><button v-for="action in actions" :key="action.label" class="workflow-action" :disabled="action.disabled" @click="action.handler()">{{ action.label }}</button></div>',
   },
 }))
 
@@ -58,28 +67,27 @@ describe('PeerReviewView', () => {
 
   it('filters issues to current peer review cycle and submits new issue', async () => {
     const wrapper = mountWithPlugins(PeerReviewView)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
     expect(wrapper.find('.issue-list').text()).toBe('1')
 
     await wrapper.find('button.btn-primary').trigger('click')
-    const titleInput = wrapper.find('input')
+    const titleInput = wrapper.find('input.input-field')
     await titleInput.setValue('Clicks')
     await wrapper.find('textarea').setValue('Need cleanup')
     await wrapper.findAll('button').find(button => button.text() === 'Submit Issue')?.trigger('click')
+    await flushPromises()
 
     expect(mocks.issueCreateMock).toHaveBeenCalledWith(7, expect.objectContaining({ title: 'Clicks' }))
   })
 
   it('submits checklist and finishes review', async () => {
     const wrapper = mountWithPlugins(PeerReviewView)
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushPromises()
 
-    const buttons = wrapper.findAll('button')
-    await buttons.find(button => button.text() === 'Save Checklist')!.trigger('click')
-    await buttons.find(button => button.text() === 'Pass to Producer')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Save Checklist')!.trigger('click')
+    await wrapper.findAll('button.workflow-action').find(button => button.text() === 'Pass to Producer')!.trigger('click')
+    await flushPromises()
 
     expect(mocks.checklistSubmitMock).toHaveBeenCalledWith(7, expect.any(Array))
     expect(mocks.finishPeerReviewMock).toHaveBeenCalledWith(7, 'pass')

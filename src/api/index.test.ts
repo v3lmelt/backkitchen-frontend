@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { issueApi, trackApi } from './index'
+import { issueApi, resolveAssetUrl, trackApi } from './index'
 
 const fetchMock = vi.fn()
 
@@ -80,5 +80,9 @@ describe('api client', () => {
     })
 
     await expect(trackApi.delete(9)).resolves.toBeUndefined()
+  })
+
+  it('resolves relative asset urls to api origin', () => {
+    expect(resolveAssetUrl('/uploads/comment_images/abc.png')).toBe('/uploads/comment_images/abc.png')
   })
 })

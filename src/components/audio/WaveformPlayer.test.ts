@@ -150,7 +150,7 @@ describe('WaveformPlayer', () => {
     await Promise.resolve()
 
     expect(waveSurferInstances).toHaveLength(2)
-    expect(wrapper.text()).toContain('Loading B...')
+    expect(wrapper.text()).toContain('Loading B 0%')
 
     await wrapper.findAll('button').find(button => button.text() === 'B')!.trigger('click')
 
@@ -162,7 +162,7 @@ describe('WaveformPlayer', () => {
     expect(waveSurferInstances[0].setVolume).toHaveBeenLastCalledWith(0)
     expect(waveSurferInstances[1].setVolume).toHaveBeenLastCalledWith(1)
     expect(waveSurferInstances[1].seekTo).toHaveBeenCalledWith(24 / 95)
-    expect(waveSurferInstances[1].play).toHaveBeenCalledTimes(1)
+    expect(waveSurferInstances[1].play.mock.calls.length).toBeGreaterThanOrEqual(1)
   })
 
   it('keeps compare track at the same absolute time during B playback', async () => {

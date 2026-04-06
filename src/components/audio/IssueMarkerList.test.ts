@@ -39,7 +39,7 @@ describe('IssueMarkerList', () => {
       },
     })
     expect(wrapper.text()).toContain('Test Issue')
-    expect(wrapper.text()).toContain('0:05.123')
+    expect(wrapper.text()).toContain('0:05.1')
   })
 
   it('shows empty message when no issues', () => {
@@ -65,8 +65,8 @@ describe('IssueMarkerList', () => {
         issues: [makeIssue({ time_start: 2.0, time_end: 5.5 })],
       },
     })
-    expect(wrapper.text()).toContain('0:02.000')
-    expect(wrapper.text()).toContain('0:05.500')
+    expect(wrapper.text()).toContain('0:02.0')
+    expect(wrapper.text()).toContain('0:05.5')
   })
 
   it('shows comment count when present', () => {
