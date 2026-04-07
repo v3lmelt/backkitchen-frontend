@@ -40,7 +40,7 @@
       >
         <!-- logo -->
         <div class="shrink-0 w-12 h-12 rounded-full overflow-hidden bg-border flex items-center justify-center">
-          <img v-if="circle.logo_url" :src="`${API_ORIGIN}${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
+          <img v-if="circle.logo_url" :src="`${API_ORIGIN}/uploads/${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
           <Smile v-else class="w-5 h-5 text-muted-foreground" :stroke-width="1.5" />
         </div>
         <div class="flex-1 min-w-0">
