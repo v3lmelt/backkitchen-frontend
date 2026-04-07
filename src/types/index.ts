@@ -304,3 +304,15 @@ export interface AlbumStats {
   deadline?: string | null
   overdue_track_count?: number
 }
+
+// R2 presigned upload types
+export interface PresignedUploadResponse {
+  upload_url: string
+  object_key: string
+  upload_id: string
+  expires_in: number
+}
+
+export interface AppConfig {
+  r2_enabled: boolean
+}

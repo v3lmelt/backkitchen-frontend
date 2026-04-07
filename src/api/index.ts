@@ -1,6 +1,7 @@
 import type {
   Album,
   AlbumStats,
+  AppConfig,
   AuthResponse,
   ChecklistItem,
   ChecklistTemplateItem,
@@ -11,6 +12,7 @@ import type {
   Discussion,
   Invitation,
   InviteCode,
+  PresignedUploadResponse,
   WebhookConfig,
   Issue,
   IssueStatus,
@@ -240,13 +242,22 @@ export const issueApi = {
     request<Issue>(`/issues/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   batchUpdate: (trackId: number, data: { issue_ids: number[]; status: IssueStatus; status_note?: string }) =>
     request<Issue[]>(`/tracks/${trackId}/issues/batch`, { method: 'PATCH', body: JSON.stringify(data) }),
-  addComment: (id: number, data: { content: string; images?: File[]; audios?: File[] }, onProgress?: (percent: number) => void) => {
+  addComment: (
+    id: number,
+    data: { content: string; images?: File[]; audios?: File[]; audioObjectKeys?: string[]; audioOriginalFilenames?: string[] },
+    onProgress?: (percent: number) => void,
+  ) => {
     const form = new FormData()
     form.append('content', data.content)
     if (data.images) {
       for (const img of data.images) form.append('images', img)
     }
-    if (data.audios) {
+    if (data.audioObjectKeys?.length) {
+      form.append('audio_object_keys', data.audioObjectKeys.join('\n'))
+      if (data.audioOriginalFilenames?.length) {
+        form.append('audio_original_filenames', data.audioOriginalFilenames.join('\n'))
+      }
+    } else if (data.audios) {
       for (const audio of data.audios) form.append('audios', audio)
     }
     if (onProgress) {
@@ -327,4 +338,94 @@ export const invitationApi = {
   accept: (id: number) => request<Invitation>(`/invitations/${id}/accept`, { method: 'POST' }),
   decline: (id: number) => request<void>(`/invitations/${id}/decline`, { method: 'POST' }),
   cancel: (id: number) => request<void>(`/invitations/${id}`, { method: 'DELETE' }),
+}
+
+export const configApi = {
+  get: () => request<AppConfig>('/config'),
+}
+
+/**
+ * Upload a file directly to R2 via a presigned PUT URL with progress tracking.
+ */
+export function uploadToR2(
+  presignedUrl: string,
+  file: File,
+  contentType: string,
+  onProgress?: (percent: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', presignedUrl)
+    xhr.setRequestHeader('Content-Type', contentType)
+
+    if (onProgress) {
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
+      })
+    }
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve()
+      else reject(new Error(`R2 upload failed: ${xhr.status}`))
+    })
+    xhr.addEventListener('error', () => reject(new Error('R2 upload network error')))
+    xhr.addEventListener('abort', () => reject(new Error('R2 upload aborted')))
+    xhr.send(file)
+  })
+}
+
+export const r2Api = {
+  // Track creation
+  requestTrackUpload: (params: {
+    filename: string
+    content_type: string
+    file_size: number
+    album_id: number
+    title: string
+    artist: string
+    bpm?: number | null
+  }) => request<PresignedUploadResponse>('/tracks/request-upload', { method: 'POST', body: JSON.stringify(params) }),
+
+  confirmTrackUpload: (params: {
+    upload_id: string
+    object_key: string
+    duration?: number | null
+    album_id: number
+    title: string
+    artist: string
+    bpm?: number | null
+  }) => request<Track>('/tracks/confirm-upload', { method: 'POST', body: JSON.stringify(params) }),
+
+  // Source version
+  requestSourceVersionUpload: (trackId: number, params: {
+    filename: string
+    content_type: string
+    file_size: number
+  }) => request<PresignedUploadResponse>(`/tracks/${trackId}/source-versions/request-upload`, { method: 'POST', body: JSON.stringify(params) }),
+
+  confirmSourceVersionUpload: (trackId: number, params: {
+    upload_id: string
+    object_key: string
+    duration?: number | null
+  }) => request<Track>(`/tracks/${trackId}/source-versions/confirm-upload`, { method: 'POST', body: JSON.stringify(params) }),
+
+  // Master delivery
+  requestMasterDeliveryUpload: (trackId: number, params: {
+    filename: string
+    content_type: string
+    file_size: number
+  }) => request<PresignedUploadResponse>(`/tracks/${trackId}/master-deliveries/request-upload`, { method: 'POST', body: JSON.stringify(params) }),
+
+  confirmMasterDeliveryUpload: (trackId: number, params: {
+    upload_id: string
+    object_key: string
+    duration?: number | null
+  }) => request<Track>(`/tracks/${trackId}/master-deliveries/confirm-upload`, { method: 'POST', body: JSON.stringify(params) }),
+
+  // Comment audio
+  requestCommentAudioUpload: (issueId: number, files: { filename: string; content_type: string; file_size: number }[]) =>
+    request<{ uploads: PresignedUploadResponse[] }>(`/issues/${issueId}/comments/request-audio-upload`, {
+      method: 'POST',
+      body: JSON.stringify({ files }),
+    }),
 }
