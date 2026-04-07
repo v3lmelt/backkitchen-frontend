@@ -81,7 +81,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   function startNotificationPolling() {
-    if (_notificationTimer) return
+    stopNotificationPolling()
     loadNotifications()
     _notificationTimer = setInterval(() => loadNotifications(), 30000)
   }
