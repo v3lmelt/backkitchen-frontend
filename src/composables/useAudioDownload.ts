@@ -2,8 +2,7 @@ import { ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import type { Track } from '@/types'
-
-const TOKEN_KEY = 'backkitchen_token'
+import { resolveAudioUrl } from '@/utils/url'
 
 export function useAudioDownload() {
   const { t } = useI18n()
@@ -15,10 +14,8 @@ export function useAudioDownload() {
     downloading.value = true
     downloadProgress.value = 0
     try {
-      const token = localStorage.getItem(TOKEN_KEY)
-      const res = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      })
+      const resolved = await resolveAudioUrl(url)
+      const res = await fetch(resolved)
       if (!res.ok) {
         toastError(t('common.downloadFailed'))
         return
