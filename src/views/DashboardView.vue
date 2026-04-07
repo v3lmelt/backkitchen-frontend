@@ -10,6 +10,17 @@ import { formatRelativeTime, parseUTC } from '@/utils/time'
 import { TRACK_STATUS_COLORS } from '@/utils/status'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 
+const ALBUM_STATS_TTL = 5 * 60 * 1000
+const albumStatsCache = new Map<number, { stats: AlbumStats; ts: number }>()
+
+async function fetchAlbumStats(albumId: number): Promise<AlbumStats> {
+  const cached = albumStatsCache.get(albumId)
+  if (cached && Date.now() - cached.ts < ALBUM_STATS_TTL) return cached.stats
+  const stats = await albumApi.stats(albumId)
+  albumStatsCache.set(albumId, { stats, ts: Date.now() })
+  return stats
+}
+
 const router = useRouter()
 const { t, te, locale } = useI18n()
 const appStore = useAppStore()
@@ -44,7 +55,7 @@ onMounted(async () => {
     await appStore.loadPendingInvitations()
 
     const statsResults = await Promise.allSettled(
-      loadedAlbums.map(album => albumApi.stats(album.id).then(stats => ({ id: album.id, stats })))
+      loadedAlbums.map(album => fetchAlbumStats(album.id).then(stats => ({ id: album.id, stats })))
     )
     for (const result of statsResults) {
       if (result.status === 'fulfilled') {
@@ -61,14 +72,18 @@ const filteredTracks = computed(() => {
   return tracks.value.filter(track => track.status === filterStatus.value)
 })
 
-const trackStats = computed(() => ({
-  total: tracks.value.length,
-  submitted: tracks.value.filter(t => t.status === 'submitted').length,
-  peer_review: tracks.value.filter(t => ['peer_review', 'peer_revision'].includes(t.status)).length,
-  mastering: tracks.value.filter(t => ['mastering', 'mastering_revision', 'final_review'].includes(t.status)).length,
-  completed: tracks.value.filter(t => t.status === 'completed').length,
-  rejected: tracks.value.filter(t => t.status === 'rejected').length,
-}))
+const trackStats = computed(() => {
+  let submitted = 0, peer_review = 0, mastering = 0, completed = 0, rejected = 0
+  for (const track of tracks.value) {
+    const s = track.status
+    if (s === 'submitted') submitted++
+    else if (s === 'peer_review' || s === 'peer_revision') peer_review++
+    else if (s === 'mastering' || s === 'mastering_revision' || s === 'final_review') mastering++
+    else if (s === 'completed') completed++
+    else if (s === 'rejected') rejected++
+  }
+  return { total: tracks.value.length, submitted, peer_review, mastering, completed, rejected }
+})
 
 // Group tracks by album, preserving order of first appearance
 const albumMap = computed(() => new Map(albums.value.map(a => [a.id, a])))

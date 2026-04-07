@@ -75,7 +75,7 @@ function seekWaveformToIssue() {
 
 // When switching issues with the same audio, the WaveformPlayer persists (no
 // new "ready" event). Detect this and seek to the new issue's timestamp.
-let prevAudioUrl = ''
+let prevAudioUrl = audioUrl.value
 watch(issueId, () => {
   nextTick(() => {
     const url = audioUrl.value
@@ -85,7 +85,7 @@ watch(issueId, () => {
     prevAudioUrl = url
   })
 })
-watch(audioUrl, (url) => { prevAudioUrl = url }, { immediate: true })
+watch(audioUrl, (url) => { prevAudioUrl = url })
 const selectedImages = ref<File[]>([])
 const imagePreviewUrls = ref<string[]>([])
 const fileInputRef = ref<HTMLInputElement | null>(null)

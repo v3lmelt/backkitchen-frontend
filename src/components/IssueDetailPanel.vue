@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { issueApi, r2Api, uploadToR2, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
@@ -221,6 +221,10 @@ function removeImage(i: number) {
   selectedImages.value.splice(i, 1)
   imagePreviewUrls.value.splice(i, 1)
 }
+
+onBeforeUnmount(() => {
+  imagePreviewUrls.value.forEach(url => URL.revokeObjectURL(url))
+})
 </script>
 
 <template>
