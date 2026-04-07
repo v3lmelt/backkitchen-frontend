@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import WaveSurfer from 'wavesurfer.js'
-import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
 import { CircleAlert, CircleCheckBig, Play, Pause } from 'lucide-vue-next'
 import type { Issue } from '@/types'
 import { resolveAssetUrl } from '@/api'
@@ -160,10 +158,10 @@ function getRangeWidth(start: number, end: number): string {
 const pointGroups = computed<PointMarkerGroup[]>(() => {
   if (!props.issues?.length || duration.value <= 0) return []
 
-  const grouped = new Map<string, Issue[]>()
+  const grouped = new Map<number, Issue[]>()
   for (const issue of props.issues) {
     if (issue.issue_type !== 'point') continue
-    const key = issue.time_start.toFixed(3)
+    const key = Math.round(issue.time_start * 1000)
     const entries = grouped.get(key)
     if (entries) {
       entries.push(issue)
@@ -174,10 +172,10 @@ const pointGroups = computed<PointMarkerGroup[]>(() => {
 
   return Array.from(grouped.entries())
     .map(([key, issues]) => {
-      const time = Number(key)
+      const time = key / 1000
       const percent = getMarkerPercent(time)
       return {
-        key,
+        key: String(key),
         time,
         percent,
         left: `${percent}%`,
@@ -489,6 +487,11 @@ function updateCompareLoading(percent: number) {
 onMounted(async () => {
   if (!container.value) return
 
+  const [{ default: WaveSurfer }, { default: RegionsPlugin }] = await Promise.all([
+    import('wavesurfer.js'),
+    import('wavesurfer.js/dist/plugins/regions.js'),
+  ])
+
   const regions = RegionsPlugin.create()
   regionsPlugin.value = regions
 
@@ -533,7 +536,7 @@ onMounted(async () => {
       if (compDur > 0) {
         const compareTime = compareWaveSurfer.value.getCurrentTime()
         const targetTime = Math.min(time, compDur)
-        if (Math.abs(compareTime - targetTime) > 0.15) {
+        if (Math.abs(compareTime - targetTime) > 0.3) {
           syncCompareToPrimaryTime(time)
         }
       }
@@ -675,6 +678,7 @@ watch(() => props.compareVersionId, async (newId) => {
     return
   }
 
+  const { default: WaveSurfer } = await import('wavesurfer.js')
   const ws = WaveSurfer.create({
     container: compareContainer,
     waveColor: 'rgba(249,115,22,0.5)',
