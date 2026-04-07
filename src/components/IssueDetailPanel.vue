@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { issueApi, resolveAssetUrl } from '@/api'
+import { issueApi, r2Api, uploadToR2, resolveAssetUrl } from '@/api'
+import { extractAudioDuration } from '@/utils/audio'
 import { useAppStore } from '@/stores/app'
 import type { Comment, Issue, IssueStatus } from '@/types'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
@@ -153,11 +154,43 @@ async function addComment() {
   submittingComment.value = true
   commentUploadProgress.value = 0
   try {
-    const comment = await issueApi.addComment(fullIssue.value.id, {
-      content: newComment.value,
-      images: selectedImages.value.length ? selectedImages.value : undefined,
-      audios: selectedAudios.value.length ? selectedAudios.value : undefined,
-    }, (p) => { commentUploadProgress.value = p })
+    let comment: Comment
+
+    if (appStore.r2Enabled && selectedAudios.value.length > 0) {
+      // R2 flow: upload audios to R2 first, then submit comment with object keys
+      const presignedResp = await r2Api.requestCommentAudioUpload(
+        fullIssue.value.id,
+        selectedAudios.value.map(f => ({
+          filename: f.name,
+          content_type: f.type || 'application/octet-stream',
+          file_size: f.size,
+        })),
+      )
+      const totalSize = selectedAudios.value.reduce((s, f) => s + f.size, 0)
+      let uploadedBytes = 0
+      for (let i = 0; i < presignedResp.uploads.length; i++) {
+        const file = selectedAudios.value[i]
+        const prevBytes = uploadedBytes
+        await uploadToR2(presignedResp.uploads[i].upload_url, file, file.type || 'application/octet-stream', (p) => {
+          const currentBytes = prevBytes + (file.size * p / 100)
+          commentUploadProgress.value = Math.round((currentBytes / totalSize) * 100)
+        })
+        uploadedBytes += file.size
+      }
+      comment = await issueApi.addComment(fullIssue.value.id, {
+        content: newComment.value,
+        images: selectedImages.value.length ? selectedImages.value : undefined,
+        audioObjectKeys: presignedResp.uploads.map(u => u.object_key),
+        audioOriginalFilenames: selectedAudios.value.map(f => f.name),
+      })
+    } else {
+      comment = await issueApi.addComment(fullIssue.value.id, {
+        content: newComment.value,
+        images: selectedImages.value.length ? selectedImages.value : undefined,
+        audios: selectedAudios.value.length ? selectedAudios.value : undefined,
+      }, (p) => { commentUploadProgress.value = p })
+    }
+
     if (!fullIssue.value.comments) fullIssue.value.comments = []
     fullIssue.value.comments.push(comment)
     newComment.value = ''

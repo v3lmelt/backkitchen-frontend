@@ -13,7 +13,7 @@
           :class="{ 'cursor-pointer': isOwner }"
           @click="isOwner && logoInputRef?.click()"
         >
-          <img v-if="circle.logo_url" :src="`${API_ORIGIN}${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
+          <img v-if="circle.logo_url" :src="`${API_ORIGIN}/uploads/${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
           <Smile v-else class="w-6 h-6 text-muted-foreground" :stroke-width="1.5" />
           <div v-if="isOwner" class="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <Upload class="w-3.5 h-3.5 text-white" :stroke-width="2" />
