@@ -666,7 +666,8 @@
     "passwordError": "Failed to change password. Check your current password.",
     "preferences": "Preferences",
     "preferencesDesc": "Customize your experience",
-    "preferencesComingSoon": "More preferences coming soon."
+    "preferencesComingSoon": "More preferences coming soon.",
+    "avatarError": "Failed to upload avatar. Please try again."
   },
   "admin": {
     "title": "Admin Panel",

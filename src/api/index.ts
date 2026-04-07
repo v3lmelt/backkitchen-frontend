@@ -321,6 +321,12 @@ export const authApi = {
     request<User>('/auth/me', { method: 'PATCH', body: JSON.stringify(data) }),
   changePassword: (data: { current_password: string; new_password: string }) =>
     request<void>('/auth/me/change-password', { method: 'POST', body: JSON.stringify(data) }),
+  uploadAvatar: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<User>('/auth/me/avatar', { method: 'POST', body: form })
+  },
+  deleteAvatar: () => request<User>('/auth/me/avatar', { method: 'DELETE' }),
 }
 
 export const adminApi = {

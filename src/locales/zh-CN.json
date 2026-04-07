@@ -505,7 +505,8 @@
     "passwordError": "修改失败，请检查当前密码是否正确。",
     "preferences": "偏好设置",
     "preferencesDesc": "个性化你的使用体验",
-    "preferencesComingSoon": "更多偏好设置即将推出。"
+    "preferencesComingSoon": "更多偏好设置即将推出。",
+    "avatarError": "头像上传失败，请重试。"
   },
   "invitations": {
     "title": "专辑邀请",
