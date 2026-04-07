@@ -5,10 +5,11 @@ import { useI18n } from 'vue-i18n'
 import { albumApi, userApi } from '@/api'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
-import type { User } from '@/types'
-import { ChevronLeft, Upload } from 'lucide-vue-next'
+import type { User, WorkflowConfig } from '@/types'
+import { ChevronLeft, Upload, ChevronDown, ChevronRight } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
+import WorkflowBuilder from '@/components/workflow/WorkflowBuilder.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -31,6 +32,9 @@ const teamState = reactive<{ mastering_engineer_id: number | null; member_ids: n
 })
 
 const deadlineState = reactive({ deadline: '', peer_review: '', mastering: '', final_review: '' })
+
+const showWorkflowBuilder = ref(false)
+const workflowConfig = ref<WorkflowConfig | null>(null)
 
 const userOptions = computed<SelectOption[]>(() =>
   users.value.map((u) => ({ value: u.id, label: u.display_name }))
@@ -77,7 +81,11 @@ async function create() {
   }
   creating.value = true
   try {
-    const album = await albumApi.create(form.value)
+    const payload: any = { ...form.value }
+    if (showWorkflowBuilder.value && workflowConfig.value) {
+      payload.workflow_config = workflowConfig.value
+    }
+    const album = await albumApi.create(payload)
 
     const tasks: Promise<any>[] = []
 
@@ -219,6 +227,25 @@ async function create() {
             <input v-model="deadlineState.final_review" type="date" class="input-field w-full" />
           </div>
         </div>
+      </div>
+
+      <!-- Workflow -->
+      <div class="card space-y-4">
+        <button
+          @click="showWorkflowBuilder = !showWorkflowBuilder"
+          class="flex items-center gap-2 w-full text-left"
+        >
+          <component :is="showWorkflowBuilder ? ChevronDown : ChevronRight" class="w-4 h-4 text-muted-foreground" />
+          <h2 class="text-sm font-mono font-semibold text-foreground">Workflow</h2>
+          <span v-if="!showWorkflowBuilder" class="text-xs text-muted-foreground ml-auto">Using default workflow</span>
+        </button>
+        <template v-if="showWorkflowBuilder">
+          <p class="text-xs text-muted-foreground">
+            Customize the track review workflow for this album. Once created, the workflow cannot be changed.
+          </p>
+          <WorkflowBuilder v-model="workflowConfig" />
+          <p v-if="workflowConfig" class="text-xs text-success">Workflow configuration is valid.</p>
+        </template>
       </div>
 
       <button @click="create" :disabled="creating" class="btn-primary text-sm w-full">

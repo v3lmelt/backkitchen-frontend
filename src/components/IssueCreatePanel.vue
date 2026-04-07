@@ -9,7 +9,7 @@ import { formatTimestamp, roundToMilliseconds } from '@/utils/time'
 
 const props = defineProps<{
   trackId: number
-  phase: 'peer' | 'producer' | 'mastering' | 'final_review'
+  phase: string
   masterDeliveryId?: number | null
 }>()
 

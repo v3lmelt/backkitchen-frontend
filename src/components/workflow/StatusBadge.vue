@@ -43,8 +43,10 @@ const config = computed(() => {
     final_review_phase: 'bg-primary/15 text-primary',
   }
 
-  const cls = classMap[statusKey] ?? 'bg-card text-muted-foreground'
-  const label = t(`status.${statusKey}`, String(props.status))
+  // For known statuses, use the class map; for custom step IDs, derive from step type prop
+  const cls = classMap[statusKey] ?? 'bg-info-bg text-info'
+  // Try i18n key first, fall back to the raw status string (formatted)
+  const label = t(`status.${statusKey}`, String(props.status).replace(/_/g, ' '))
   return { label, class: cls }
 })
 </script>

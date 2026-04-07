@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Check, ChevronRight } from 'lucide-vue-next'
-import type { TrackStatus } from '@/types'
+import type { TrackStatus, WorkflowConfig } from '@/types'
 
 export interface WorkflowProgressAction {
   label: string
@@ -11,14 +11,17 @@ export interface WorkflowProgressAction {
 
 const props = defineProps<{
   status: TrackStatus
+  /** Album workflow config — if provided, renders dynamic steps */
+  workflowConfig?: WorkflowConfig | null
   /** Optional actions rendered inline on the connector after the active step */
   actions?: WorkflowProgressAction[]
 }>()
 
 const { t } = useI18n()
 
-const groupedStatus = computed(() => {
-  const map: Record<TrackStatus, string> = {
+// Legacy status → group mapping for albums without custom workflow
+const legacyGroupedStatus = computed(() => {
+  const map: Record<string, string> = {
     submitted: 'submitted',
     peer_review: 'peer',
     peer_revision: 'peer',
@@ -29,12 +32,12 @@ const groupedStatus = computed(() => {
     completed: 'completed',
     rejected: 'rejected',
   }
-  return map[props.status]
+  return map[props.status] ?? props.status
 })
 
-const steps = ['submitted', 'peer', 'gate', 'mastering', 'final', 'completed'] as const
+const legacySteps = ['submitted', 'peer', 'gate', 'mastering', 'final', 'completed'] as const
 
-const stepLabels = computed(() => ({
+const legacyStepLabels = computed(() => ({
   submitted: t('workflow.steps.submitted'),
   peer: t('workflow.steps.peer'),
   gate: t('workflow.steps.gate'),
@@ -43,9 +46,49 @@ const stepLabels = computed(() => ({
   completed: t('workflow.steps.completed'),
 }))
 
-const currentIndex = computed(() => steps.indexOf(groupedStatus.value as (typeof steps)[number]))
+// Dynamic workflow config mode
+const dynamicSteps = computed(() => {
+  if (!props.workflowConfig) return null
+  // Filter out revision steps (they're sub-steps shown as part of their parent)
+  const mainSteps = props.workflowConfig.steps
+    .filter(s => s.type !== 'revision')
+    .sort((a, b) => a.order - b.order)
+  return [...mainSteps.map(s => ({ id: s.id, label: s.label })), { id: 'completed', label: t('workflow.steps.completed') }]
+})
 
-const hasInlineAction = computed(() => !!(props.actions?.length && currentIndex.value < steps.length - 1))
+// Map current status to the display step (revision steps map to their parent)
+const dynamicCurrentId = computed(() => {
+  if (!props.workflowConfig) return props.status
+  // If the current status is a revision step, find its parent (return_to)
+  const step = props.workflowConfig.steps.find(s => s.id === props.status)
+  if (step?.type === 'revision' && step.return_to) {
+    return step.return_to
+  }
+  return props.status
+})
+
+const steps = computed(() => {
+  if (dynamicSteps.value) return dynamicSteps.value.map(s => s.id)
+  return [...legacySteps]
+})
+
+const stepLabels = computed<Record<string, string>>(() => {
+  if (dynamicSteps.value) {
+    const labels: Record<string, string> = {}
+    for (const s of dynamicSteps.value) labels[s.id] = s.label
+    return labels
+  }
+  return legacyStepLabels.value
+})
+
+const currentGroupId = computed(() => {
+  if (dynamicSteps.value) return dynamicCurrentId.value
+  return legacyGroupedStatus.value
+})
+
+const currentIndex = computed(() => steps.value.indexOf(currentGroupId.value))
+
+const hasInlineAction = computed(() => !!(props.actions?.length && currentIndex.value < steps.value.length - 1))
 </script>
 
 <template>
