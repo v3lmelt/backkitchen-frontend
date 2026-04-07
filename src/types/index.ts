@@ -1,4 +1,5 @@
-export type TrackStatus =
+/** Well-known legacy track statuses. Custom workflows may use arbitrary step IDs. */
+export type LegacyTrackStatus =
   | 'submitted'
   | 'peer_review'
   | 'peer_revision'
@@ -9,12 +10,38 @@ export type TrackStatus =
   | 'completed'
   | 'rejected'
 
+/** Track status — can be a legacy status or any custom step ID. */
+export type TrackStatus = LegacyTrackStatus | (string & {})
+
 export type RejectionMode = 'final' | 'resubmittable'
 export type IssueType = 'point' | 'range'
 export type IssueSeverity = 'critical' | 'major' | 'minor' | 'suggestion'
 export type IssueStatus = 'open' | 'disagreed' | 'resolved'
-export type IssuePhase = 'peer' | 'producer' | 'mastering' | 'final_review'
+export type IssuePhase = string
 export type UserRole = 'member' | 'producer'
+
+export type WorkflowStepType = 'gate' | 'review' | 'revision' | 'delivery'
+
+export interface WorkflowStepDef {
+  id: string
+  label: string
+  type: WorkflowStepType
+  assignee_role: string
+  order: number
+  transitions: Record<string, string>
+  return_to?: string | null
+  revision_step?: string | null
+}
+
+export interface WorkflowConfig {
+  version: number
+  steps: WorkflowStepDef[]
+}
+
+export interface WorkflowTransitionOption {
+  decision: string
+  label: string
+}
 
 export interface User {
   id: number
@@ -69,6 +96,7 @@ export interface Album {
   mastering_engineer_id: number | null
   deadline?: string | null
   phase_deadlines?: Record<string, string> | null
+  workflow_config?: WorkflowConfig | null
   producer?: User | null
   mastering_engineer?: User | null
   members: AlbumMember[]
@@ -238,6 +266,8 @@ export interface Track {
   current_source_version?: TrackSourceVersion | null
   current_master_delivery?: MasterDelivery | null
   allowed_actions: string[]
+  workflow_step?: WorkflowStepDef | null
+  workflow_transitions?: WorkflowTransitionOption[] | null
   source_versions?: TrackSourceVersion[]
 }
 
@@ -248,6 +278,7 @@ export interface TrackDetailResponse {
   events: WorkflowEvent[]
   source_versions?: TrackSourceVersion[]
   discussions?: Discussion[]
+  workflow_config?: WorkflowConfig | null
 }
 
 export interface Notification {

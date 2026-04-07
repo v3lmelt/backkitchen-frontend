@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, discussionApi, API_ORIGIN, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Track, Issue, Discussion, WorkflowEvent, TrackSourceVersion } from '@/types'
+import type { Track, Issue, Discussion, WorkflowEvent, TrackSourceVersion, WorkflowConfig } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
@@ -97,6 +97,7 @@ const issues = ref<Issue[]>([])
 const discussions = ref<Discussion[]>([])
 const events = ref<WorkflowEvent[]>([])
 const sourceVersions = ref<TrackSourceVersion[]>([])
+const workflowConfig = ref<WorkflowConfig | null>(null)
 const loading = ref(true)
 const newDiscussionContent = ref('')
 const postingDiscussion = ref(false)
@@ -115,6 +116,7 @@ async function loadTrack() {
     discussions.value = detail.discussions ?? []
     events.value = detail.events
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
+    workflowConfig.value = detail.workflow_config ?? null
   } finally {
     loading.value = false
   }
@@ -138,6 +140,12 @@ function onIssueSelect(issue: Issue) {
 }
 
 function openPrimaryAction(action: string) {
+  // Custom workflow: route to generic step view
+  if (track.value?.workflow_step) {
+    router.push(`/tracks/${trackId.value}/step/${track.value.workflow_step.id}`)
+    return
+  }
+  // Legacy workflow action routing
   if (action === 'peer_review') router.push(`/tracks/${trackId.value}/review`)
   if (action === 'upload_revision' || action === 'resubmit') router.push(`/tracks/${trackId.value}/revision`)
   if (action === 'producer_gate' || action === 'intake') router.push(`/tracks/${trackId.value}/producer`)
@@ -194,7 +202,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
     showVersionCompare.value = true
     selectedCompareVersionId.value = parsed
   }
-}, { immediate: true })
+})
 </script>
 
 <template>
@@ -220,7 +228,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
 
     <div class="card">
       <h3 class="text-sm font-medium text-muted-foreground mb-3">{{ t('trackDetail.workflowStatus') }}</h3>
-      <WorkflowProgress :status="track.status" :actions="progressActions" />
+      <WorkflowProgress :status="track.status" :workflow-config="workflowConfig" :actions="progressActions" />
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">

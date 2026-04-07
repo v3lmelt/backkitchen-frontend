@@ -231,6 +231,11 @@ export const trackApi = {
   returnToMastering: (id: number) =>
     request<Track>(`/tracks/${id}/final-review/return`, { method: 'POST' }),
   delete: (id: number) => request<void>(`/tracks/${id}`, { method: 'DELETE' }),
+  workflowTransition: (id: number, decision: string) =>
+    request<Track>(`/tracks/${id}/workflow/transition`, {
+      method: 'POST',
+      body: JSON.stringify({ decision }),
+    }),
 }
 
 export const issueApi = {

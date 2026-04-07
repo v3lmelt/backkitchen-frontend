@@ -62,6 +62,11 @@ const router = createRouter({
       component: () => import('@/views/FinalReviewView.vue'),
     },
     {
+      path: '/tracks/:id/step/:stepId',
+      name: 'workflow-step',
+      component: () => import('@/views/WorkflowStepView.vue'),
+    },
+    {
       path: '/upload',
       name: 'upload',
       component: () => import('@/views/UploadTrackView.vue'),
