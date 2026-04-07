@@ -94,7 +94,14 @@ const navItemClass = (path: string) => [
 
     <div class="border-t border-[rgba(255,255,255,0.1)] p-3">
       <div v-if="appStore.currentUser" class="flex items-center gap-2 overflow-hidden">
+        <img
+          v-if="appStore.currentUser.avatar_image"
+          :src="`/uploads/${appStore.currentUser.avatar_image}`"
+          alt="avatar"
+          class="w-8 h-8 rounded-full object-cover flex-shrink-0"
+        />
         <div
+          v-else
           class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
           :style="{ backgroundColor: appStore.currentUser.avatar_color }"
         >
@@ -148,7 +155,14 @@ const navItemClass = (path: string) => [
 
       <div class="border-t border-[rgba(255,255,255,0.1)] p-3">
         <div v-if="appStore.currentUser" class="flex items-center gap-2 overflow-hidden">
+          <img
+            v-if="appStore.currentUser.avatar_image"
+            :src="`/uploads/${appStore.currentUser.avatar_image}`"
+            alt="avatar"
+            class="w-8 h-8 rounded-full object-cover flex-shrink-0"
+          />
           <div
+            v-else
             class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
             :style="{ backgroundColor: appStore.currentUser.avatar_color }"
           >

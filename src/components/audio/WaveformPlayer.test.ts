@@ -39,6 +39,15 @@ vi.mock('wavesurfer.js/dist/plugins/regions.js', () => ({
   },
 }))
 
+vi.mock('@/utils/url', () => ({
+  resolveAudioUrl: (url: string) => {
+    const token = localStorage.getItem('backkitchen_token')
+    if (!token) return Promise.resolve(url)
+    const sep = url.includes('?') ? '&' : '?'
+    return Promise.resolve(`${url}${sep}token=${token}`)
+  },
+}))
+
 vi.mock('wavesurfer.js', () => ({
   default: {
     create: () => {
@@ -100,8 +109,8 @@ describe('WaveformPlayer', () => {
       },
     })
 
-    await Promise.resolve()
-    await Promise.resolve()
+    // resolveAudioUrl is async — flush microtasks
+    await new Promise(r => setTimeout(r, 0))
 
     expect(waveSurferInstances[0].load).toHaveBeenCalledWith(
       '/api/tracks/1/audio?token=token-1',

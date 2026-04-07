@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Camera, Trash2 } from 'lucide-vue-next'
 import { authApi } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { parseUTC } from '@/utils/time'
@@ -15,6 +16,49 @@ const profileForm = reactive({
   display_name: appStore.currentUser?.display_name ?? '',
   email: appStore.currentUser?.email ?? '',
 })
+
+const avatarUploading = ref(false)
+const avatarError = ref('')
+const avatarInputRef = ref<HTMLInputElement | null>(null)
+
+const avatarUrl = computed(() => {
+  const img = appStore.currentUser?.avatar_image
+  if (!img) return null
+  return `/uploads/${img}`
+})
+
+function triggerAvatarUpload() {
+  avatarInputRef.value?.click()
+}
+
+async function handleAvatarChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  avatarError.value = ''
+  avatarUploading.value = true
+  try {
+    const updated = await authApi.uploadAvatar(file)
+    appStore.setAuth(updated, appStore.token!)
+  } catch (err: any) {
+    avatarError.value = err.message || t('profile.avatarError')
+  } finally {
+    avatarUploading.value = false
+    if (avatarInputRef.value) avatarInputRef.value.value = ''
+  }
+}
+
+async function removeAvatar() {
+  avatarError.value = ''
+  avatarUploading.value = true
+  try {
+    const updated = await authApi.deleteAvatar()
+    appStore.setAuth(updated, appStore.token!)
+  } catch (err: any) {
+    avatarError.value = err.message || t('profile.avatarError')
+  } finally {
+    avatarUploading.value = false
+  }
+}
 
 watch(
   () => appStore.currentUser,
@@ -102,13 +146,45 @@ async function changePassword() {
   <div class="max-w-4xl mx-auto space-y-6">
     <!-- Profile Hero -->
     <div class="flex items-center gap-6">
-      <div
-        class="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold font-mono text-foreground shrink-0"
-        :style="{ backgroundColor: appStore.currentUser?.avatar_color || '#2E2E2E' }"
-      >
-        {{ avatarInitial }}
+      <div class="relative shrink-0 group">
+        <img
+          v-if="avatarUrl"
+          :src="avatarUrl"
+          alt="avatar"
+          class="w-16 h-16 rounded-full object-cover"
+        />
+        <div
+          v-else
+          class="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold font-mono text-foreground"
+          :style="{ backgroundColor: appStore.currentUser?.avatar_color || '#2E2E2E' }"
+        >
+          {{ avatarInitial }}
+        </div>
+        <button
+          @click="triggerAvatarUpload"
+          :disabled="avatarUploading"
+          class="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+        >
+          <Camera class="w-5 h-5 text-white" :stroke-width="2" />
+        </button>
+        <button
+          v-if="avatarUrl"
+          @click="removeAvatar"
+          :disabled="avatarUploading"
+          class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-error flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+        >
+          <Trash2 class="w-3 h-3 text-white" :stroke-width="2" />
+        </button>
+        <input
+          ref="avatarInputRef"
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          class="hidden"
+          @change="handleAvatarChange"
+        />
       </div>
       <div class="flex-1 min-w-0">
+        <div v-if="avatarError" class="text-xs text-error mt-1">{{ avatarError }}</div>
         <h1 class="text-xl font-mono font-bold text-foreground truncate">
           {{ appStore.currentUser?.display_name }}
         </h1>

@@ -22,6 +22,7 @@ export interface User {
   display_name: string
   role: UserRole
   avatar_color: string
+  avatar_image?: string | null
   email?: string
   email_verified?: boolean
   is_admin: boolean

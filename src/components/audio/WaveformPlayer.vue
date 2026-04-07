@@ -7,7 +7,7 @@ import { CircleAlert, CircleCheckBig, Play, Pause } from 'lucide-vue-next'
 import type { Issue } from '@/types'
 import { resolveAssetUrl } from '@/api'
 import { formatTimestamp, formatTimestampShort, roundToMilliseconds } from '@/utils/time'
-import { withAuthToken } from '@/utils/url'
+import { resolveAudioUrl } from '@/utils/url'
 
 const props = defineProps<{
   audioUrl: string
@@ -595,7 +595,7 @@ onMounted(async () => {
   loadedAudioUrl = props.audioUrl
   isPrimaryLoading.value = true
   primaryLoadProgress.value = 0
-  ws.load(withAuthToken(props.audioUrl))
+  resolveAudioUrl(props.audioUrl).then(resolved => ws.load(resolved))
 
   wavesurfer.value = ws
 })
@@ -603,13 +603,14 @@ onMounted(async () => {
 // When audioUrl changes (different track/version), reload audio into the
 // existing WaveSurfer instance instead of destroying and recreating it.
 let loadedAudioUrl = ''
-watch(() => props.audioUrl, (newUrl) => {
+watch(() => props.audioUrl, async (newUrl) => {
   if (!newUrl || !wavesurfer.value) return
   if (newUrl === loadedAudioUrl) return
   loadedAudioUrl = newUrl
   isPrimaryLoading.value = true
   primaryLoadProgress.value = 0
-  wavesurfer.value.load(withAuthToken(newUrl))
+  const resolved = await resolveAudioUrl(newUrl)
+  wavesurfer.value.load(resolved)
 })
 
 function renderIssueRegions() {
@@ -717,7 +718,7 @@ watch(() => props.compareVersionId, async (newId) => {
   compareWaveSurfer.value = ws
   applyCompareMode(abMode.value)
 
-  ws.load(withAuthToken(compareUrl))
+  resolveAudioUrl(compareUrl).then(url => ws.load(url))
 })
 
 watch(abMode, (mode) => {
