@@ -68,6 +68,10 @@ function onIssueSelect(issue: Issue) {
 }
 
 async function handleIntake(decision: 'accept' | 'reject_final' | 'reject_resubmittable') {
+  if (decision === 'reject_final') {
+    const confirmed = window.confirm(t('producer.rejectFinalConfirm'))
+    if (!confirmed) return
+  }
   await trackApi.intakeDecision(trackId.value, decision)
   router.push(`/tracks/${trackId.value}`)
 }

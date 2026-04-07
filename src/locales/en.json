@@ -316,6 +316,7 @@
     "intakeDesc": "Accept this track and randomly assign a peer reviewer, or reject it now.",
     "acceptAndAssign": "Accept and Assign Review",
     "rejectFinal": "Reject Final",
+    "rejectFinalConfirm": "Are you sure you want to permanently reject this track? The submitter will not be able to resubmit it.",
     "rejectResubmittable": "Reject but Allow Resubmission",
     "checklistHeading": "Peer Review Checklist",
     "issueSummaryHeading": "Issue Summary",

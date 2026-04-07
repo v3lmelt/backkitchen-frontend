@@ -320,6 +320,7 @@
     "intakeDesc": "接受此曲目并随机分配同行评审人，或立即拒绝。",
     "acceptAndAssign": "接受并分配评审人",
     "rejectFinal": "最终拒绝",
+    "rejectFinalConfirm": "确定要最终拒绝吗？最终拒绝后，曲师将无法再投稿此曲。",
     "rejectResubmittable": "拒绝，允许重新提交",
     "checklistHeading": "同行评审清单",
     "issueSummaryHeading": "问题摘要",
