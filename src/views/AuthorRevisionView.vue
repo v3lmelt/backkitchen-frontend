@@ -2,8 +2,10 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { issueApi, trackApi, uploadWithProgress, API_ORIGIN } from '@/api'
+import { issueApi, trackApi, r2Api, uploadToR2, uploadWithProgress, API_ORIGIN } from '@/api'
 import type { Issue, IssueStatus, Track, TrackSourceVersion } from '@/types'
+import { useAppStore } from '@/stores/app'
+import { extractAudioDuration } from '@/utils/audio'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import WorkflowActionBar from '@/components/workflow/WorkflowActionBar.vue'
@@ -17,6 +19,7 @@ import type { SelectOption } from '@/components/common/CustomSelect.vue'
 const route = useRoute()
 const router = useRouter()
 const { t, locale } = useI18n()
+const appStore = useAppStore()
 const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
@@ -100,11 +103,31 @@ async function submitRevision() {
   uploading.value = true
   uploadProgress.value = 0
   try {
-    const form = new FormData()
-    form.append('file', selectedFile.value)
-    await uploadWithProgress(
-      `/tracks/${trackId.value}/source-versions`, form, (p) => { uploadProgress.value = p }
-    )
+    if (appStore.r2Enabled) {
+      const file = selectedFile.value
+      const [presigned, duration] = await Promise.all([
+        r2Api.requestSourceVersionUpload(trackId.value, {
+          filename: file.name,
+          content_type: file.type || 'application/octet-stream',
+          file_size: file.size,
+        }),
+        extractAudioDuration(file).catch(() => null),
+      ])
+      await uploadToR2(presigned.upload_url, file, file.type || 'application/octet-stream', (p) => {
+        uploadProgress.value = p
+      })
+      await r2Api.confirmSourceVersionUpload(trackId.value, {
+        upload_id: presigned.upload_id,
+        object_key: presigned.object_key,
+        duration,
+      })
+    } else {
+      const form = new FormData()
+      form.append('file', selectedFile.value)
+      await uploadWithProgress(
+        `/tracks/${trackId.value}/source-versions`, form, (p) => { uploadProgress.value = p }
+      )
+    }
     router.push(`/tracks/${trackId.value}`)
   } finally {
     uploading.value = false

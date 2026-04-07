@@ -2,15 +2,18 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { albumApi, uploadWithProgress } from '@/api'
+import { albumApi, r2Api, uploadToR2, uploadWithProgress } from '@/api'
 import type { Album, Track } from '@/types'
 import { useToast } from '@/composables/useToast'
+import { useAppStore } from '@/stores/app'
+import { extractAudioDuration } from '@/utils/audio'
 import { Upload } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 
 const router = useRouter()
 const { t } = useI18n()
+const appStore = useAppStore()
 const { error: toastError, success: toastSuccess } = useToast()
 const albums = ref<Album[]>([])
 const uploading = ref(false)
@@ -65,16 +68,46 @@ async function upload() {
   uploading.value = true
   uploadProgress.value = 0
   try {
-    const formData = new FormData()
-    formData.append('file', selectedFile.value)
-    formData.append('title', form.value.title)
-    formData.append('artist', form.value.artist)
-    formData.append('album_id', String(form.value.album_id))
-    if (form.value.bpm) formData.append('bpm', String(form.value.bpm))
-
-    const track = await uploadWithProgress<Track>(
-      '/tracks', formData, (p) => { uploadProgress.value = p }
-    )
+    let track: Track
+    if (appStore.r2Enabled) {
+      // R2 presigned upload flow
+      const file = selectedFile.value
+      const [presigned, duration] = await Promise.all([
+        r2Api.requestTrackUpload({
+          filename: file.name,
+          content_type: file.type || 'application/octet-stream',
+          file_size: file.size,
+          album_id: form.value.album_id,
+          title: form.value.title,
+          artist: form.value.artist,
+          bpm: form.value.bpm ? Number(form.value.bpm) : null,
+        }),
+        extractAudioDuration(file).catch(() => null),
+      ])
+      await uploadToR2(presigned.upload_url, file, file.type || 'application/octet-stream', (p) => {
+        uploadProgress.value = p
+      })
+      track = await r2Api.confirmTrackUpload({
+        upload_id: presigned.upload_id,
+        object_key: presigned.object_key,
+        duration,
+        album_id: form.value.album_id,
+        title: form.value.title,
+        artist: form.value.artist,
+        bpm: form.value.bpm ? Number(form.value.bpm) : null,
+      })
+    } else {
+      // Legacy FormData upload
+      const formData = new FormData()
+      formData.append('file', selectedFile.value)
+      formData.append('title', form.value.title)
+      formData.append('artist', form.value.artist)
+      formData.append('album_id', String(form.value.album_id))
+      if (form.value.bpm) formData.append('bpm', String(form.value.bpm))
+      track = await uploadWithProgress<Track>(
+        '/tracks', formData, (p) => { uploadProgress.value = p }
+      )
+    }
     toastSuccess(t('upload.uploadSuccess'))
     router.push(`/tracks/${track.id}`)
   } catch (err: any) {

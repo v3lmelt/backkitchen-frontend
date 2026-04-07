@@ -2,8 +2,10 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, uploadWithProgress, API_ORIGIN } from '@/api'
+import { trackApi, r2Api, uploadToR2, uploadWithProgress, API_ORIGIN } from '@/api'
 import type { Issue, Track } from '@/types'
+import { useAppStore } from '@/stores/app'
+import { extractAudioDuration } from '@/utils/audio'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
@@ -14,6 +16,7 @@ import { useAudioDownload } from '@/composables/useAudioDownload'
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const appStore = useAppStore()
 const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
@@ -66,11 +69,31 @@ async function uploadMasterDelivery() {
   uploading.value = true
   uploadProgress.value = 0
   try {
-    const form = new FormData()
-    form.append('file', masterFile.value)
-    await uploadWithProgress(
-      `/tracks/${trackId.value}/master-deliveries`, form, (p) => { uploadProgress.value = p }
-    )
+    if (appStore.r2Enabled) {
+      const file = masterFile.value
+      const [presigned, duration] = await Promise.all([
+        r2Api.requestMasterDeliveryUpload(trackId.value, {
+          filename: file.name,
+          content_type: file.type || 'application/octet-stream',
+          file_size: file.size,
+        }),
+        extractAudioDuration(file).catch(() => null),
+      ])
+      await uploadToR2(presigned.upload_url, file, file.type || 'application/octet-stream', (p) => {
+        uploadProgress.value = p
+      })
+      await r2Api.confirmMasterDeliveryUpload(trackId.value, {
+        upload_id: presigned.upload_id,
+        object_key: presigned.object_key,
+        duration,
+      })
+    } else {
+      const form = new FormData()
+      form.append('file', masterFile.value)
+      await uploadWithProgress(
+        `/tracks/${trackId.value}/master-deliveries`, form, (p) => { uploadProgress.value = p }
+      )
+    }
     router.push(`/tracks/${trackId.value}`)
   } finally {
     uploading.value = false
