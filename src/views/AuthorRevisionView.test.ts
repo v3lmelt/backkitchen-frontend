@@ -20,6 +20,12 @@ vi.mock('@/api', () => ({
   trackApi: { get: mocks.trackGetMock },
   issueApi: { update: mocks.issueUpdateMock },
   uploadWithProgress: mocks.uploadSourceVersionMock,
+  r2Api: {},
+  uploadToR2: vi.fn(),
+}))
+
+vi.mock('@/stores/app', () => ({
+  useAppStore: () => ({ r2Enabled: false }),
 }))
 
 vi.mock('@/components/workflow/StatusBadge.vue', () => ({

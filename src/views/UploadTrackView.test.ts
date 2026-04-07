@@ -15,6 +15,12 @@ vi.mock('vue-router', () => ({
 vi.mock('@/api', () => ({
   albumApi: { list: mocks.albumListMock },
   uploadWithProgress: mocks.uploadWithProgressMock,
+  r2Api: {},
+  uploadToR2: vi.fn(),
+}))
+
+vi.mock('@/stores/app', () => ({
+  useAppStore: () => ({ r2Enabled: false }),
 }))
 
 vi.mock('@/composables/useToast', () => ({
