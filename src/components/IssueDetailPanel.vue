@@ -2,7 +2,6 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { issueApi, r2Api, uploadToR2, resolveAssetUrl } from '@/api'
-import { extractAudioDuration } from '@/utils/audio'
 import { useAppStore } from '@/stores/app'
 import type { Comment, Issue, IssueStatus } from '@/types'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'

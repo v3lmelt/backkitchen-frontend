@@ -21,6 +21,12 @@ vi.mock('@/api', () => ({
     requestMasteringRevision: mocks.requestMasteringRevisionMock,
   },
   uploadWithProgress: mocks.uploadWithProgressMock,
+  r2Api: {},
+  uploadToR2: vi.fn(),
+}))
+
+vi.mock('@/stores/app', () => ({
+  useAppStore: () => ({ r2Enabled: false }),
 }))
 
 vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
