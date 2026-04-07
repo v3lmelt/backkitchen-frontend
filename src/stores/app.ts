@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { Invitation, Notification, User } from '@/types'
-import { authApi, invitationApi, notificationApi, userApi } from '@/api'
+import { authApi, configApi, invitationApi, notificationApi, userApi } from '@/api'
 import router from '@/router'
 
 const USER_KEY = 'backkitchen_user'
@@ -15,6 +15,7 @@ export const useAppStore = defineStore('app', () => {
   const sidebarCollapsed = ref(false)
   const mobileSidebarOpen = ref(false)
   const bootstrapped = ref(false)
+  const r2Enabled = ref(false)
   const pendingInvitations = ref<Invitation[]>([])
 
   const notifications = ref<Notification[]>([])
@@ -46,6 +47,10 @@ export const useAppStore = defineStore('app', () => {
     try {
       currentUser.value = await authApi.me()
       localStorage.setItem(USER_KEY, JSON.stringify(currentUser.value))
+      try {
+        const cfg = await configApi.get()
+        r2Enabled.value = cfg.r2_enabled
+      } catch { /* ignore — default false */ }
       startNotificationPolling()
     } catch {
       clearAuth()
@@ -145,6 +150,7 @@ export const useAppStore = defineStore('app', () => {
     sidebarCollapsed,
     mobileSidebarOpen,
     bootstrapped,
+    r2Enabled,
     isAuthenticated,
     pendingInvitations,
     notifications,
