@@ -81,7 +81,8 @@
     "requestFailed": "Request failed",
     "downloadAudio": "Download Audio",
     "downloadFailed": "Download failed",
-    "loadFailed": "Failed to load, please try again later"
+    "loadFailed": "Failed to load, please try again later",
+    "actions": "Actions"
   },
   "severity": {
     "critical": "Critical",

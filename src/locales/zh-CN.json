@@ -81,7 +81,8 @@
     "requestFailed": "请求失败",
     "downloadAudio": "下载音频",
     "downloadFailed": "下载失败",
-    "loadFailed": "加载失败，请稍后重试"
+    "loadFailed": "加载失败，请稍后重试",
+    "actions": "操作"
   },
   "severity": {
     "critical": "严重",
