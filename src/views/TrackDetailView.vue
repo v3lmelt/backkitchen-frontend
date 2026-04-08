@@ -12,9 +12,10 @@ import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import type { WorkflowProgressAction } from '@/components/workflow/WorkflowProgress.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
-import { ChevronRight } from 'lucide-vue-next'
+import { Archive, ChevronRight } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
+import { useAudioDownload } from '@/composables/useAudioDownload'
 
 const route = useRoute()
 const router = useRouter()
@@ -123,6 +124,8 @@ async function loadTrack() {
 }
 
 const audioUrl = computed(() => track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio` : '')
+const { downloading, downloadProgress, downloadTrackAudio } = useAudioDownload()
+const handleDownload = () => downloadTrackAudio(audioUrl, track)
 const currentCycleIssues = computed(() => issues.value.filter(issue => issue.workflow_cycle === track.value?.workflow_cycle))
 const currentWaveformIssues = computed(() => {
   const currentVersion = track.value?.version
@@ -184,6 +187,22 @@ const versionOptions = computed<SelectOption[]>(() =>
   }))
 )
 
+const isProducer = computed(() => track.value?.producer_id === appStore.currentUser?.id)
+const archiving = ref(false)
+const showArchiveConfirm = ref(false)
+
+async function archiveTrack() {
+  if (!track.value) return
+  archiving.value = true
+  try {
+    await trackApi.archive(track.value.id)
+    router.push(`/albums/${track.value.album_id}`)
+  } finally {
+    archiving.value = false
+    showArchiveConfirm.value = false
+  }
+}
+
 const progressActions = computed<WorkflowProgressAction[]>(() => {
   if (!track.value?.allowed_actions?.length) return []
   return track.value.allowed_actions.map(action => ({
@@ -236,12 +255,17 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
         <div v-if="audioUrl">
           <div class="flex items-center justify-between mb-2">
             <h3 class="text-sm font-medium text-muted-foreground">{{ t('trackDetail.currentSourceAudio') }}</h3>
-            <button
-              v-if="sourceVersions.length > 1"
-              @click="showVersionCompare = !showVersionCompare"
-              class="text-xs btn-secondary px-3 py-1">
-              {{ t('compare.title') }}
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                v-if="sourceVersions.length > 1"
+                @click="showVersionCompare = !showVersionCompare"
+                class="text-xs btn-secondary px-3 py-1">
+                {{ t('compare.title') }}
+              </button>
+              <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+                {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+              </button>
+            </div>
           </div>
           <!-- 版本选择器 -->
           <div v-if="showVersionCompare && olderVersions.length > 0" class="flex items-center gap-2 mb-3">
@@ -384,6 +408,29 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             <div v-for="event in events" :key="event.id" class="border-b border-border last:border-0 py-3 first:pt-0">
               <div class="text-sm text-foreground">{{ formatTimelineEvent(event) }}</div>
               <div class="text-xs text-muted-foreground mt-0.5">{{ fmtDate(event.created_at) }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Archive (producer only) -->
+        <div v-if="isProducer && !track.archived_at" class="pt-2">
+          <button
+            v-if="!showArchiveConfirm"
+            @click="showArchiveConfirm = true"
+            class="w-full flex items-center justify-center gap-2 rounded-full border border-border text-muted-foreground hover:text-error hover:border-error/40 transition-colors h-10 text-sm font-mono"
+          >
+            <Archive class="w-4 h-4" />
+            {{ t('trackDetail.archive') }}
+          </button>
+          <div v-else class="card space-y-3">
+            <p class="text-sm text-muted-foreground">{{ t('trackDetail.archiveConfirm') }}</p>
+            <div class="flex gap-2">
+              <button @click="archiveTrack" :disabled="archiving" class="flex-1 rounded-full bg-error hover:bg-error/80 text-white h-9 text-sm font-mono transition-colors disabled:opacity-50">
+                {{ t('common.confirm') }}
+              </button>
+              <button @click="showArchiveConfirm = false" class="flex-1 btn-secondary h-9 text-sm">
+                {{ t('common.cancel') }}
+              </button>
             </div>
           </div>
         </div>

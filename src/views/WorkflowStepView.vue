@@ -65,7 +65,7 @@ async function executeTransition(decision: string) {
     await trackApi.workflowTransition(trackId.value, decision)
     router.push(`/tracks/${trackId.value}`)
   } catch (err: any) {
-    alert(err.message || 'Transition failed')
+    alert(err.message || t('workflowStep.transitionFailed'))
   } finally {
     acting.value = false
   }
@@ -79,7 +79,7 @@ async function handleUpload(kind: 'revision' | 'delivery') {
     await fn(trackId.value, uploadFile.value)
     router.push(`/tracks/${trackId.value}`)
   } catch (err: any) {
-    alert(err.message || 'Upload failed')
+    alert(err.message || t('workflowStep.uploadFailed'))
   } finally {
     uploading.value = false
   }
@@ -131,7 +131,7 @@ function goBack() {
       </div>
 
       <div v-if="issues.length" class="card space-y-3">
-        <h3 class="text-sm font-mono font-semibold">Issues ({{ issues.length }})</h3>
+        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: issues.length }) }}</h3>
         <IssueMarkerList :issues="waveformIssues" @select="(i) => router.push(`/issues/${i.id}`)" />
       </div>
 
@@ -161,7 +161,7 @@ function goBack() {
       </div>
 
       <div class="card space-y-3">
-        <h3 class="text-sm font-mono font-semibold">Issues ({{ stepIssues.length }})</h3>
+        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: stepIssues.length }) }}</h3>
         <IssueMarkerList :issues="waveformIssues" @select="(i) => router.push(`/issues/${i.id}`)" />
       </div>
 
@@ -194,8 +194,8 @@ function goBack() {
     <!-- Revision step: upload new source version -->
     <template v-if="currentStep.type === 'revision'">
       <div class="card space-y-4">
-        <h3 class="text-sm font-mono font-semibold">Upload Revised Source</h3>
-        <p class="text-sm text-muted-foreground">Upload a new version of the source audio file.</p>
+        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.uploadRevisedSource') }}</h3>
+        <p class="text-sm text-muted-foreground">{{ t('workflowStep.uploadRevisedSourceDesc') }}</p>
         <input
           type="file"
           accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"
@@ -208,17 +208,17 @@ function goBack() {
           class="btn-primary"
         >
           <Upload class="w-4 h-4 mr-2" />
-          {{ uploading ? 'Uploading...' : 'Upload Revision' }}
+          {{ uploading ? t('workflowStep.uploading') : t('workflowStep.uploadRevision') }}
         </button>
       </div>
 
       <div v-if="audioUrl" class="card">
-        <h3 class="text-sm font-mono font-semibold mb-3">Current Audio</h3>
+        <h3 class="text-sm font-mono font-semibold mb-3">{{ t('workflowStep.currentAudio') }}</h3>
         <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" />
       </div>
 
       <div v-if="stepIssues.length" class="card space-y-3">
-        <h3 class="text-sm font-mono font-semibold">Issues to Address ({{ stepIssues.length }})</h3>
+        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issuesToAddress', { count: stepIssues.length }) }}</h3>
         <IssueMarkerList :issues="waveformIssues" @select="(i) => router.push(`/issues/${i.id}`)" />
       </div>
     </template>
@@ -226,12 +226,12 @@ function goBack() {
     <!-- Delivery step: upload master + transition buttons -->
     <template v-if="currentStep.type === 'delivery'">
       <div v-if="audioUrl" class="card">
-        <h3 class="text-sm font-mono font-semibold mb-3">Source Audio</h3>
+        <h3 class="text-sm font-mono font-semibold mb-3">{{ t('workflowStep.sourceAudio') }}</h3>
         <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" />
       </div>
 
       <div class="card space-y-4">
-        <h3 class="text-sm font-mono font-semibold">Upload Delivery</h3>
+        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.uploadDelivery') }}</h3>
         <input
           type="file"
           accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"
@@ -244,7 +244,7 @@ function goBack() {
           class="btn-primary"
         >
           <Upload class="w-4 h-4 mr-2" />
-          {{ uploading ? 'Uploading...' : 'Upload & Deliver' }}
+          {{ uploading ? t('workflowStep.uploading') : t('workflowStep.uploadAndDeliver') }}
         </button>
       </div>
 

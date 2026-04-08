@@ -14,6 +14,8 @@ import type {
   InviteCode,
   PresignedUploadResponse,
   WebhookConfig,
+  WorkflowConfig,
+  WorkflowTemplate,
   Issue,
   IssueStatus,
   Notification,
@@ -129,6 +131,7 @@ export const albumApi = {
   updateTeam: (id: number, data: { mastering_engineer_id: number | null; member_ids: number[] }) =>
     request<Album>(`/albums/${id}/team`, { method: 'PATCH', body: JSON.stringify(data) }),
   tracks: (id: number) => request<Track[]>(`/albums/${id}/tracks`),
+  archivedTracks: (id: number) => request<Track[]>(`/albums/${id}/archived-tracks`),
   stats: (id: number) => request<AlbumStats>(`/albums/${id}/stats`),
   updateDeadlines: (id: number, data: { deadline?: string | null; phase_deadlines?: Record<string, string> | null }) =>
     request<Album>(`/albums/${id}/deadlines`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -196,6 +199,16 @@ export const circleApi = {
     }),
   revokeInviteCode: (circleId: number, codeId: number) =>
     request<void>(`/circles/${circleId}/invite-codes/${codeId}`, { method: 'DELETE' }),
+  listWorkflowTemplates: (circleId: number) =>
+    request<WorkflowTemplate[]>(`/circles/${circleId}/workflow-templates`),
+  getWorkflowTemplate: (circleId: number, templateId: number) =>
+    request<WorkflowTemplate>(`/circles/${circleId}/workflow-templates/${templateId}`),
+  createWorkflowTemplate: (circleId: number, data: { name: string; description?: string | null; workflow_config: WorkflowConfig }) =>
+    request<WorkflowTemplate>(`/circles/${circleId}/workflow-templates`, { method: 'POST', body: JSON.stringify(data) }),
+  updateWorkflowTemplate: (circleId: number, templateId: number, data: { name?: string; description?: string | null; workflow_config?: WorkflowConfig }) =>
+    request<WorkflowTemplate>(`/circles/${circleId}/workflow-templates/${templateId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteWorkflowTemplate: (circleId: number, templateId: number) =>
+    request<void>(`/circles/${circleId}/workflow-templates/${templateId}`, { method: 'DELETE' }),
 }
 
 export const trackApi = {
@@ -231,6 +244,8 @@ export const trackApi = {
   returnToMastering: (id: number) =>
     request<Track>(`/tracks/${id}/final-review/return`, { method: 'POST' }),
   delete: (id: number) => request<void>(`/tracks/${id}`, { method: 'DELETE' }),
+  archive: (id: number) => request<Track>(`/tracks/${id}/archive`, { method: 'POST' }),
+  restore: (id: number) => request<Track>(`/tracks/${id}/restore`, { method: 'POST' }),
   workflowTransition: (id: number, decision: string) =>
     request<Track>(`/tracks/${id}/workflow/transition`, {
       method: 'POST',

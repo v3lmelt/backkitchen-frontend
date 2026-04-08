@@ -81,7 +81,8 @@
     "requestFailed": "请求失败",
     "downloadAudio": "下载音频",
     "downloadFailed": "下载失败",
-    "loadFailed": "加载失败，请稍后重试"
+    "loadFailed": "加载失败，请稍后重试",
+    "actions": "操作"
   },
   "severity": {
     "critical": "严重",
@@ -162,6 +163,108 @@
       "final": "终审",
       "completed": "已完成"
     }
+  },
+  "workflowBuilder": {
+    "stepTypes": {
+      "gate": "关卡（决策）",
+      "review": "评审",
+      "revision": "修订（上传）",
+      "delivery": "交付（上传）"
+    },
+    "roles": {
+      "producer": "制作人",
+      "mastering_engineer": "母带工程师",
+      "peer_reviewer": "同行评审人",
+      "submitter": "提交者"
+    },
+    "targets": {
+      "completed": "已完成（终态）",
+      "rejected": "已拒绝（最终）",
+      "rejectedResubmittable": "已拒绝（允许重投）"
+    },
+    "addStep": "添加步骤",
+    "loadDefault": "加载默认工作流",
+    "emptyHint": "尚未定义步骤。点击「添加步骤」或「加载默认工作流」开始配置。",
+    "stepLabelPlaceholder": "步骤名称",
+    "typeLabel": "类型",
+    "assigneeRoleLabel": "负责角色",
+    "returnToLabel": "返回到（上传后）",
+    "pairedRevisionLabel": "关联修订步骤（可选）",
+    "selectPlaceholder": "-- 选择 --",
+    "nonePlaceholder": "-- 无 --",
+    "targetPlaceholder": "-- 目标 --",
+    "transitionsLabel": "转换",
+    "addTransition": "添加",
+    "validation": {
+      "atLeastOneStep": "至少需要一个步骤。",
+      "stepIdRequired": "所有步骤必须有 ID。",
+      "stepIdInvalid": "步骤 ID「{id}」无效（仅允许小写字母、数字和下划线）。",
+      "stepIdDuplicate": "重复的步骤 ID：「{id}」。",
+      "stepLabelRequired": "步骤「{id}」必须有名称。",
+      "transitionDecisionRequired": "步骤「{id}」：转换必须有决策名称。",
+      "transitionTargetRequired": "步骤「{id}」：转换「{decision}」必须有目标。",
+      "revisionReturnToRequired": "修订步骤「{id}」必须设置「返回到」步骤。",
+      "noCompletedPath": "至少有一个步骤必须包含通往「已完成」的转换。"
+    },
+    "guide": {
+      "title": "配置指南",
+      "stepTypesTitle": "步骤类型",
+      "stepTypeGate": "关卡（Gate）— 由指定角色做出决策（如接受 / 拒绝 / 转入下一步），不涉及文件上传。",
+      "stepTypeReview": "评审（Review）— 由指定角色审查音频并标记问题，审查完成后做出决策。",
+      "stepTypeRevision": "修订（Revision）— 由提交者上传新版本的源文件以响应问题，上传后自动返回关联的评审步骤。",
+      "stepTypeDelivery": "交付（Delivery）— 由指定角色上传交付物（如母带音频），可附带决策转换。",
+      "rolesTitle": "角色分配",
+      "rolesDesc": "每个步骤需指定一个负责角色。「制作人」和「母带工程师」分别对应专辑中的固定成员；「同行评审人」在曲目进入评审时由系统随机分配；「提交者」指曲目的原作者。",
+      "transitionsTitle": "转换（Transitions）",
+      "transitionsDesc": "转换定义了从当前步骤到下一步骤的路径。每条转换由一个「决策名称」（如 accept、reject）和一个「目标步骤」组成。目标可以是其他步骤的 ID，也可以是三个特殊终态之一：已完成、已拒绝（最终）、已拒绝（允许重投）。",
+      "revisionTitle": "返回步骤与关联修订步骤",
+      "revisionDesc": "修订步骤必须设置「返回到」，指定提交者上传新版本后自动流转回哪个步骤。评审 / 交付步骤可设置「关联修订步骤」，方便系统在需要修订时自动引导到对应的修订步骤。",
+      "notesTitle": "注意事项",
+      "note1": "工作流在专辑创建后即锁定，无法修改。请在创建前仔细检查。",
+      "note2": "步骤 ID 仅支持小写字母、数字和下划线，且必须唯一。",
+      "note3": "至少需要有一条路径通往「已完成」终态，否则曲目将无法正常结项。"
+    }
+  },
+  "workflowTemplate": {
+    "title": "工作流模板",
+    "noTemplates": "暂无工作流模板",
+    "noTemplatesHint": "制作人可以保存工作流配置为模板，方便后续专辑复用。",
+    "createTemplate": "新建模板",
+    "editTemplate": "编辑模板",
+    "deleteTemplate": "删除模板",
+    "deleteConfirm": "确定要删除模板「{name}」吗？已使用该模板创建的专辑不受影响。",
+    "templateName": "模板名称",
+    "templateNamePlaceholder": "如：标准三审流程",
+    "templateDescription": "描述（可选）",
+    "templateDescriptionPlaceholder": "简要说明该工作流模板的用途",
+    "save": "保存",
+    "saving": "保存中…",
+    "saved": "模板已保存",
+    "deleted": "模板已删除",
+    "albumCount": "{count} 个专辑使用",
+    "albumCountZero": "暂无专辑使用",
+    "editWarning": "该模板已被 {count} 个专辑使用。修改不会影响已有专辑，确认保存？",
+    "loadFromTemplate": "从模板加载",
+    "saveAsTemplate": "保存为模板",
+    "selectTemplate": "选择工作流模板",
+    "noCircleHint": "保存/加载模板需要专辑关联到社团",
+    "basedOnTemplate": "基于模板：{name}",
+    "createdBy": "创建者：{name}",
+    "lastUpdated": "最近更新"
+  },
+  "workflowStep": {
+    "uploadRevisedSource": "上传修订版源文件",
+    "uploadRevisedSourceDesc": "上传新版本的源音频文件。",
+    "uploading": "上传中…",
+    "uploadRevision": "上传修订版",
+    "currentAudio": "当前音频",
+    "issuesToAddress": "待解决问题 ({count})",
+    "sourceAudio": "源音频",
+    "uploadDelivery": "上传交付物",
+    "uploadAndDeliver": "上传并交付",
+    "issues": "问题 ({count})",
+    "transitionFailed": "转换失败",
+    "uploadFailed": "上传失败"
   },
   "issueMarker": {
     "noIssues": "暂无问题"
@@ -253,6 +356,8 @@
     "postDiscussion": "发送",
     "timeline": "时间线",
     "noEvents": "暂无工作流事件。",
+    "archive": "归档曲目",
+    "archiveConfirm": "确认归档此曲目？归档后 14 天内可恢复，超期将被永久删除。",
     "system": "系统",
     "rejectionMode": "拒绝模式：{mode}",
     "actions": {
@@ -572,6 +677,10 @@
     "descriptionPlaceholder": "专辑描述（可选）",
     "teamSection": "团队（可选）",
     "deadlinesSection": "截止日期（可选）",
+    "workflowSection": "工作流",
+    "workflowUsingDefault": "使用默认工作流",
+    "workflowDesc": "自定义该专辑的曲目审核工作流。专辑创建后，工作流将无法修改。",
+    "workflowValid": "工作流配置有效。",
     "createButton": "创建专辑",
     "creating": "创建中…",
     "titleRequired": "请输入专辑标题"
@@ -582,7 +691,9 @@
       "team": "团队成员",
       "deadlines": "截止日期",
       "checklist": "Checklist 模板",
+      "workflow": "工作流",
       "order": "曲目排序",
+      "archive": "归档管理",
       "webhook": "Webhook"
     },
     "info": {
@@ -607,6 +718,22 @@
     "checklist": {
       "readOnlyNotice": "Checklist 模板由制作人设置",
       "noItems": "暂无检查项"
+    },
+    "workflow": {
+      "customWorkflow": "自定义工作流",
+      "locked": "工作流已锁定，无法更改。",
+      "defaultWorkflow": "该专辑使用默认工作流。",
+      "defaultDesc": "已提交 → 同行评审 → 制作人审批 → 母带制作 → 终审 → 已完成",
+      "returnTo": "返回到"
+    },
+    "archive": {
+      "title": "已归档曲目",
+      "description": "归档的曲目将在 14 天后被永久删除。在此期间，制作人可以恢复曲目。",
+      "empty": "没有已归档的曲目",
+      "restore": "恢复",
+      "restored": "曲目已恢复",
+      "restoreFailed": "恢复失败",
+      "remainingDays": "剩余 {days} 天"
     }
   },
   "circles": {
@@ -639,7 +766,8 @@
     "tabs": {
       "info": "社团信息",
       "members": "成员",
-      "invites": "邀请码"
+      "invites": "邀请码",
+      "templates": "工作流模板"
     },
     "name": "社团名称",
     "description": "简介",

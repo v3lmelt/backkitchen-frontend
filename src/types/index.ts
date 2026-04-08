@@ -97,6 +97,8 @@ export interface Album {
   deadline?: string | null
   phase_deadlines?: Record<string, string> | null
   workflow_config?: WorkflowConfig | null
+  workflow_template_id?: number | null
+  workflow_template_name?: string | null
   producer?: User | null
   mastering_engineer?: User | null
   members: AlbumMember[]
@@ -259,6 +261,7 @@ export interface Track {
   mastering_engineer_id: number | null
   created_at: string
   updated_at: string
+  archived_at: string | null
   issue_count?: number
   open_issue_count?: number
   submitter?: User | null
@@ -320,6 +323,19 @@ export interface Discussion {
   created_at: string
   author?: User | null
   images?: DiscussionImage[]
+}
+
+export interface WorkflowTemplate {
+  id: number
+  circle_id: number
+  name: string
+  description: string | null
+  workflow_config: WorkflowConfig
+  created_by: number
+  created_by_user?: User | null
+  album_count: number
+  created_at: string
+  updated_at: string
 }
 
 export interface WebhookConfig {

@@ -3,12 +3,12 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import draggable from 'vuedraggable'
-import { albumApi, checklistApi, invitationApi, userApi, circleApi, API_ORIGIN } from '@/api'
+import { albumApi, trackApi, checklistApi, invitationApi, userApi, circleApi, API_ORIGIN } from '@/api'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
 import type { Album, ChecklistTemplateItem, Invitation, Track, User } from '@/types'
-import { Upload } from 'lucide-vue-next'
+import { Archive, RotateCcw, Upload } from 'lucide-vue-next'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
@@ -61,6 +61,10 @@ const tracks = ref<Track[]>([])
 const savingOrder = ref(false)
 const orderMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 
+// Archived tracks state
+const archivedTracks = ref<Track[]>([])
+const restoringTrackId = ref<number | null>(null)
+
 // Webhook state
 const webhookState = reactive({ url: '', enabled: false, events: [] as string[] })
 const savingWebhook = ref(false)
@@ -97,8 +101,9 @@ const availableTabs = computed(() => {
     tabs.push({ key: 'checklist', label: t('albumSettings.tabs.checklist') })
   }
   if (isProducerOfAlbum.value) {
-    tabs.push({ key: 'workflow', label: 'Workflow' })
+    tabs.push({ key: 'workflow', label: t('albumSettings.tabs.workflow') })
     tabs.push({ key: 'order', label: t('albumSettings.tabs.order') })
+    tabs.push({ key: 'archive', label: t('albumSettings.tabs.archive') })
     tabs.push({ key: 'webhook', label: t('albumSettings.tabs.webhook') })
   }
   return tabs
@@ -162,6 +167,7 @@ onMounted(async () => {
           templateIsDefault.value = tpl.is_default
         }).catch(() => { console.warn('[AlbumSettings] Failed to load checklist template') }),
         albumApi.tracks(albumData.id).then(ts => { tracks.value = ts }),
+        albumApi.archivedTracks(albumData.id).then(ts => { archivedTracks.value = ts }).catch(() => {}),
         albumApi.getWebhook(albumData.id).then(cfg => {
           webhookState.url = cfg.url
           webhookState.enabled = cfg.enabled
@@ -356,6 +362,29 @@ async function saveTrackOrder() {
   }
 }
 
+// Archive actions
+function archiveRemainingDays(archivedAt: string | null): number {
+  if (!archivedAt) return 0
+  const archived = new Date(archivedAt)
+  const expiry = new Date(archived.getTime() + 14 * 24 * 60 * 60 * 1000)
+  const remaining = Math.ceil((expiry.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+  return Math.max(0, remaining)
+}
+
+async function restoreTrack(trackId: number) {
+  restoringTrackId.value = trackId
+  try {
+    const restored = await trackApi.restore(trackId)
+    archivedTracks.value = archivedTracks.value.filter(tr => tr.id !== trackId)
+    tracks.value.push(restored)
+    toastSuccess(t('albumSettings.archive.restored'))
+  } catch (e: any) {
+    toastError(e.message || t('albumSettings.archive.restoreFailed'))
+  } finally {
+    restoringTrackId.value = null
+  }
+}
+
 // Webhook actions
 function toggleWebhookEvent(event: string) {
   const idx = webhookState.events.indexOf(event)
@@ -413,7 +442,7 @@ async function testWebhook() {
     </div>
 
     <!-- Tab bar -->
-    <div class="flex gap-0 border-b border-border overflow-x-auto">
+    <div class="flex gap-0 border-b border-border overflow-x-auto scrollbar-hide">
       <button
         v-for="tab in availableTabs"
         :key="tab.key"
@@ -432,7 +461,7 @@ async function testWebhook() {
 
       <!-- Info tab -->
       <div v-if="activeTab === 'info'" class="card space-y-5">
-        <div class="flex items-start gap-5">
+        <div class="flex flex-col sm:flex-row items-start gap-5">
           <!-- Cover image -->
           <div class="flex-shrink-0 space-y-2">
             <div
@@ -630,13 +659,13 @@ async function testWebhook() {
             <div
               v-for="(item, index) in templateItems"
               :key="index"
-              class="flex items-start gap-3 p-3 border border-border bg-background"
+              class="flex flex-col sm:flex-row sm:items-start gap-3 p-3 border border-border bg-background"
             >
               <div class="flex-1 space-y-2">
                 <input v-model="item.label" class="input-field w-full text-sm" :placeholder="t('settings.itemLabel')" />
                 <input v-model="item.description" class="input-field w-full text-xs" :placeholder="t('settings.itemDescription')" />
               </div>
-              <div class="flex items-center gap-2 pt-1.5">
+              <div class="flex items-center gap-2 sm:pt-1.5">
                 <label class="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
                   <input type="checkbox" class="checkbox" v-model="item.required" />
                   <span>{{ item.required ? t('settings.required') : t('settings.optional') }}</span>
@@ -652,7 +681,7 @@ async function testWebhook() {
             </div>
           </div>
           <p v-if="templateError" class="text-xs text-error">{{ templateError }}</p>
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <button @click="addTemplateItem" class="btn-secondary text-xs px-3 py-1.5">{{ t('settings.addItem') }}</button>
             <button @click="saveTemplate" :disabled="savingTemplate" class="btn-primary text-xs px-3 py-1.5">
               {{ savingTemplate ? t('settings.saving') : t('settings.saveTemplate') }}
@@ -740,31 +769,72 @@ async function testWebhook() {
       <div v-else-if="activeTab === 'workflow'" class="card space-y-5">
         <template v-if="album?.workflow_config">
           <div class="flex items-center gap-2 mb-2">
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-warning-bg text-warning">Custom Workflow</span>
-            <span class="text-xs text-muted-foreground">Workflow is locked and cannot be changed.</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-warning-bg text-warning">{{ t('albumSettings.workflow.customWorkflow') }}</span>
+            <span class="text-xs text-muted-foreground">{{ t('albumSettings.workflow.locked') }}</span>
           </div>
-          <div v-for="step in album.workflow_config.steps" :key="step.id" class="border border-border p-3 space-y-1">
-            <div class="flex items-center gap-2">
+          <p v-if="album.workflow_template_name" class="text-xs text-muted-foreground mb-2">
+            {{ t('workflowTemplate.basedOnTemplate', { name: album.workflow_template_name }) }}
+          </p>
+          <div v-for="step in album.workflow_config.steps" :key="step.id" class="border border-border p-3 space-y-2">
+            <div class="flex flex-wrap items-center gap-2">
               <span class="text-sm font-mono font-semibold text-foreground">{{ step.label }}</span>
-              <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs bg-info-bg text-info">{{ step.type }}</span>
-              <span class="text-xs text-muted-foreground ml-auto">{{ step.assignee_role }}</span>
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs bg-info-bg text-info">{{ t(`workflowBuilder.stepTypes.${step.type}`) }}</span>
+              <span class="text-xs text-muted-foreground sm:ml-auto">{{ t(`workflowBuilder.roles.${step.assignee_role}`) }}</span>
             </div>
-            <div v-if="Object.keys(step.transitions).length" class="text-xs text-muted-foreground">
-              <span v-for="(target, decision) in step.transitions" :key="decision" class="mr-3">
+            <div v-if="Object.keys(step.transitions).length" class="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1">
+              <span v-for="(target, decision) in step.transitions" :key="decision">
                 {{ decision }} &rarr; {{ target }}
               </span>
             </div>
             <div v-if="step.return_to" class="text-xs text-muted-foreground">
-              return_to: {{ step.return_to }}
+              {{ t('albumSettings.workflow.returnTo') }}: {{ step.return_to }}
             </div>
           </div>
         </template>
         <template v-else>
-          <p class="text-sm text-muted-foreground">This album uses the default workflow.</p>
+          <p class="text-sm text-muted-foreground">{{ t('albumSettings.workflow.defaultWorkflow') }}</p>
           <div class="text-xs text-muted-foreground space-y-1">
-            <p>Submitted &rarr; Peer Review &rarr; Producer Gate &rarr; Mastering &rarr; Final Review &rarr; Completed</p>
+            <p>{{ t('albumSettings.workflow.defaultDesc') }}</p>
           </div>
         </template>
+      </div>
+
+      <div v-else-if="activeTab === 'archive'" class="space-y-4">
+        <div class="card space-y-3">
+          <h3 class="text-sm font-mono font-semibold text-foreground flex items-center gap-2">
+            <Archive class="w-4 h-4" />
+            {{ t('albumSettings.archive.title') }}
+          </h3>
+          <p class="text-xs text-muted-foreground">{{ t('albumSettings.archive.description') }}</p>
+        </div>
+
+        <div v-if="archivedTracks.length === 0" class="card">
+          <p class="text-sm text-muted-foreground text-center py-4">{{ t('albumSettings.archive.empty') }}</p>
+        </div>
+
+        <div v-for="aTrack in archivedTracks" :key="aTrack.id" class="card flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <div class="text-sm font-mono text-foreground truncate">
+              <span v-if="aTrack.track_number" class="text-muted-foreground">#{{ aTrack.track_number }}</span>
+              {{ aTrack.title }}
+            </div>
+            <div class="text-xs text-muted-foreground mt-0.5">
+              {{ aTrack.artist }}
+              <span class="mx-1">·</span>
+              <StatusBadge :status="aTrack.status" type="track" />
+              <span class="mx-1">·</span>
+              <span class="text-warning">{{ t('albumSettings.archive.remainingDays', { days: archiveRemainingDays(aTrack.archived_at) }) }}</span>
+            </div>
+          </div>
+          <button
+            @click="restoreTrack(aTrack.id)"
+            :disabled="restoringTrackId === aTrack.id"
+            class="btn-secondary text-xs flex items-center gap-1.5 shrink-0"
+          >
+            <RotateCcw class="w-3.5 h-3.5" />
+            {{ restoringTrackId === aTrack.id ? t('common.loading') : t('albumSettings.archive.restore') }}
+          </button>
+        </div>
       </div>
 
       <div v-else-if="activeTab === 'webhook'" class="card space-y-5">
