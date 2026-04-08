@@ -221,6 +221,33 @@
       "note3": "There must be at least one path leading to \"Completed\", otherwise tracks cannot finish."
     }
   },
+  "workflowTemplate": {
+    "title": "Workflow Templates",
+    "noTemplates": "No workflow templates yet",
+    "noTemplatesHint": "Producers can save workflow configurations as templates for reuse across albums.",
+    "createTemplate": "New Template",
+    "editTemplate": "Edit Template",
+    "deleteTemplate": "Delete Template",
+    "deleteConfirm": "Delete template \"{name}\"? Albums created from this template will not be affected.",
+    "templateName": "Template Name",
+    "templateNamePlaceholder": "e.g. Standard 3-Pass Review",
+    "templateDescription": "Description (optional)",
+    "templateDescriptionPlaceholder": "Briefly describe what this workflow template is for",
+    "save": "Save",
+    "saving": "Saving...",
+    "saved": "Template saved",
+    "deleted": "Template deleted",
+    "albumCount": "{count} albums using",
+    "albumCountZero": "No albums using",
+    "editWarning": "This template is used by {count} albums. Changes will not affect existing albums. Save anyway?",
+    "loadFromTemplate": "Load from Template",
+    "saveAsTemplate": "Save as Template",
+    "selectTemplate": "Select Workflow Template",
+    "noCircleHint": "Saving/loading templates requires the album to be linked to a circle",
+    "basedOnTemplate": "Based on template: {name}",
+    "createdBy": "Created by {name}",
+    "lastUpdated": "Last updated"
+  },
   "workflowStep": {
     "uploadRevisedSource": "Upload Revised Source",
     "uploadRevisedSourceDesc": "Upload a new version of the source audio file.",
@@ -688,7 +715,8 @@
     "tabs": {
       "info": "Info",
       "members": "Members",
-      "invites": "Invite Codes"
+      "invites": "Invite Codes",
+      "templates": "Workflow Templates"
     },
     "name": "Circle Name",
     "description": "Description",

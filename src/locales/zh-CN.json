@@ -225,6 +225,33 @@
       "note3": "至少需要有一条路径通往「已完成」终态，否则曲目将无法正常结项。"
     }
   },
+  "workflowTemplate": {
+    "title": "工作流模板",
+    "noTemplates": "暂无工作流模板",
+    "noTemplatesHint": "制作人可以保存工作流配置为模板，方便后续专辑复用。",
+    "createTemplate": "新建模板",
+    "editTemplate": "编辑模板",
+    "deleteTemplate": "删除模板",
+    "deleteConfirm": "确定要删除模板「{name}」吗？已使用该模板创建的专辑不受影响。",
+    "templateName": "模板名称",
+    "templateNamePlaceholder": "如：标准三审流程",
+    "templateDescription": "描述（可选）",
+    "templateDescriptionPlaceholder": "简要说明该工作流模板的用途",
+    "save": "保存",
+    "saving": "保存中…",
+    "saved": "模板已保存",
+    "deleted": "模板已删除",
+    "albumCount": "{count} 个专辑使用",
+    "albumCountZero": "暂无专辑使用",
+    "editWarning": "该模板已被 {count} 个专辑使用。修改不会影响已有专辑，确认保存？",
+    "loadFromTemplate": "从模板加载",
+    "saveAsTemplate": "保存为模板",
+    "selectTemplate": "选择工作流模板",
+    "noCircleHint": "保存/加载模板需要专辑关联到社团",
+    "basedOnTemplate": "基于模板：{name}",
+    "createdBy": "创建者：{name}",
+    "lastUpdated": "最近更新"
+  },
   "workflowStep": {
     "uploadRevisedSource": "上传修订版源文件",
     "uploadRevisedSourceDesc": "上传新版本的源音频文件。",
@@ -727,7 +754,8 @@
     "tabs": {
       "info": "社团信息",
       "members": "成员",
-      "invites": "邀请码"
+      "invites": "邀请码",
+      "templates": "工作流模板"
     },
     "name": "社团名称",
     "description": "简介",

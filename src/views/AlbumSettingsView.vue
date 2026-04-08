@@ -743,6 +743,9 @@ async function testWebhook() {
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-warning-bg text-warning">{{ t('albumSettings.workflow.customWorkflow') }}</span>
             <span class="text-xs text-muted-foreground">{{ t('albumSettings.workflow.locked') }}</span>
           </div>
+          <p v-if="album.workflow_template_name" class="text-xs text-muted-foreground mb-2">
+            {{ t('workflowTemplate.basedOnTemplate', { name: album.workflow_template_name }) }}
+          </p>
           <div v-for="step in album.workflow_config.steps" :key="step.id" class="border border-border p-3 space-y-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-mono font-semibold text-foreground">{{ step.label }}</span>

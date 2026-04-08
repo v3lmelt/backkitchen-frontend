@@ -163,20 +163,81 @@
         </div>
         <p v-else class="text-muted-foreground text-sm">{{ t('circleDetail.noInvites') }}</p>
       </div>
+      <!-- workflow templates tab -->
+      <div v-if="activeTab === 'templates'" class="flex flex-col gap-6 max-w-xl">
+        <!-- New / edit template form -->
+        <div v-if="showNewTemplate" class="bg-card border border-border rounded-none p-6 space-y-4">
+          <h2 class="text-sm font-mono font-semibold text-foreground">
+            {{ editingTemplate ? t('workflowTemplate.editTemplate') : t('workflowTemplate.createTemplate') }}
+          </h2>
+          <div>
+            <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowTemplate.templateName') }}</label>
+            <input v-model="editTemplateName" class="input-field w-full" :placeholder="t('workflowTemplate.templateNamePlaceholder')" />
+          </div>
+          <div>
+            <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowTemplate.templateDescription') }}</label>
+            <textarea v-model="editTemplateDesc" class="textarea-field w-full h-16" :placeholder="t('workflowTemplate.templateDescriptionPlaceholder')" />
+          </div>
+          <WorkflowBuilder v-model="editTemplateConfig" />
+          <div class="flex gap-2">
+            <button @click="saveTemplate" :disabled="savingTpl || !editTemplateName.trim() || !editTemplateConfig" class="btn-primary text-xs">
+              {{ savingTpl ? t('workflowTemplate.saving') : t('workflowTemplate.save') }}
+            </button>
+            <button @click="showNewTemplate = false" class="btn-secondary text-xs">{{ t('common.cancel') }}</button>
+          </div>
+        </div>
+
+        <!-- Template list -->
+        <template v-if="!showNewTemplate">
+          <div v-if="isProducer" class="flex justify-end">
+            <button @click="startNewTemplate" class="btn-primary text-xs">
+              <Plus class="w-3.5 h-3.5 mr-1" /> {{ t('workflowTemplate.createTemplate') }}
+            </button>
+          </div>
+
+          <div v-if="templates.length === 0" class="text-center py-8">
+            <p class="text-sm text-muted-foreground">{{ t('workflowTemplate.noTemplates') }}</p>
+            <p class="text-xs text-muted-foreground mt-1">{{ t('workflowTemplate.noTemplatesHint') }}</p>
+          </div>
+
+          <div v-for="tpl in templates" :key="tpl.id" class="bg-card border border-border rounded-none p-4 space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-mono font-semibold text-foreground flex-1">{{ tpl.name }}</span>
+              <span class="text-xs text-muted-foreground">
+                {{ tpl.album_count > 0 ? t('workflowTemplate.albumCount', { count: tpl.album_count }) : t('workflowTemplate.albumCountZero') }}
+              </span>
+            </div>
+            <p v-if="tpl.description" class="text-xs text-muted-foreground">{{ tpl.description }}</p>
+            <div class="flex items-center gap-3 text-xs text-muted-foreground">
+              <span>{{ tpl.workflow_config.steps.length }} steps</span>
+              <span v-if="tpl.created_by_user">{{ t('workflowTemplate.createdBy', { name: tpl.created_by_user.display_name }) }}</span>
+            </div>
+            <div v-if="isProducer" class="flex gap-2 pt-1">
+              <button @click="startEditTemplate(tpl)" class="btn-secondary text-xs">
+                <Pencil class="w-3 h-3 mr-1" /> {{ t('workflowTemplate.editTemplate') }}
+              </button>
+              <button @click="deleteTemplate(tpl)" class="text-xs text-error hover:underline">
+                <Trash2 class="w-3 h-3 inline mr-0.5" /> {{ t('workflowTemplate.deleteTemplate') }}
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { circleApi, API_ORIGIN } from '@/api'
-import type { Circle, InviteCode } from '@/types'
+import type { Circle, InviteCode, WorkflowConfig, WorkflowTemplate } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { parseUTC } from '@/utils/time'
-import { Smile, Upload } from 'lucide-vue-next'
+import { Smile, Upload, Plus, Pencil, Trash2 } from 'lucide-vue-next'
+import WorkflowBuilder from '@/components/workflow/WorkflowBuilder.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 
 const { t } = useI18n()
@@ -201,10 +262,20 @@ const newCodeDays = ref(7)
 
 const editForm = reactive({ name: '', description: '', website: '' })
 
+// Template state
+const templates = ref<WorkflowTemplate[]>([])
+const editingTemplate = ref<WorkflowTemplate | null>(null)
+const editTemplateName = ref('')
+const editTemplateDesc = ref('')
+const editTemplateConfig = ref<WorkflowConfig | null>(null)
+const savingTpl = ref(false)
+const showNewTemplate = ref(false)
+
 const currentUserId = computed(() => appStore.currentUser?.id)
 const isOwner = computed(() =>
   circle.value ? circle.value.created_by === currentUserId.value : false
 )
+const isProducer = computed(() => appStore.currentUser?.role === 'producer')
 
 const tabs = computed(() => {
   const base = [
@@ -212,6 +283,7 @@ const tabs = computed(() => {
     { id: 'members', label: t('circleDetail.tabs.members') },
   ]
   if (isOwner.value) base.push({ id: 'invites', label: t('circleDetail.tabs.invites') })
+  base.push({ id: 'templates', label: t('circleDetail.tabs.templates') })
   return base
 })
 
@@ -231,6 +303,10 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+})
+
+watch(activeTab, (tab) => {
+  if (tab === 'templates' && templates.value.length === 0) loadTemplates()
 })
 
 function roleBadgeClass(role: string) {
@@ -308,6 +384,71 @@ async function revokeCode(codeId: number) {
 async function copyCode(code: string) {
   await navigator.clipboard.writeText(code)
   toast.success(t('circleDetail.codeCopied'))
+}
+
+async function loadTemplates() {
+  if (!circle.value) return
+  templates.value = await circleApi.listWorkflowTemplates(circle.value.id)
+}
+
+function startNewTemplate() {
+  editingTemplate.value = null
+  editTemplateName.value = ''
+  editTemplateDesc.value = ''
+  editTemplateConfig.value = null
+  showNewTemplate.value = true
+}
+
+function startEditTemplate(tpl: WorkflowTemplate) {
+  editingTemplate.value = tpl
+  editTemplateName.value = tpl.name
+  editTemplateDesc.value = tpl.description ?? ''
+  editTemplateConfig.value = { ...tpl.workflow_config }
+  showNewTemplate.value = true
+}
+
+async function saveTemplate() {
+  if (!circle.value || !editTemplateName.value.trim() || !editTemplateConfig.value) return
+  savingTpl.value = true
+  try {
+    if (editingTemplate.value) {
+      // Editing existing — check album_count for soft prompt
+      if (editingTemplate.value.album_count > 0) {
+        const confirmed = confirm(t('workflowTemplate.editWarning', { count: editingTemplate.value.album_count }))
+        if (!confirmed) { savingTpl.value = false; return }
+      }
+      await circleApi.updateWorkflowTemplate(circle.value.id, editingTemplate.value.id, {
+        name: editTemplateName.value.trim(),
+        description: editTemplateDesc.value.trim() || null,
+        workflow_config: editTemplateConfig.value,
+      })
+    } else {
+      await circleApi.createWorkflowTemplate(circle.value.id, {
+        name: editTemplateName.value.trim(),
+        description: editTemplateDesc.value.trim() || null,
+        workflow_config: editTemplateConfig.value,
+      })
+    }
+    toast.success(t('workflowTemplate.saved'))
+    showNewTemplate.value = false
+    await loadTemplates()
+  } catch (e: any) {
+    toast.error(e.message)
+  } finally {
+    savingTpl.value = false
+  }
+}
+
+async function deleteTemplate(tpl: WorkflowTemplate) {
+  if (!circle.value) return
+  if (!confirm(t('workflowTemplate.deleteConfirm', { name: tpl.name }))) return
+  try {
+    await circleApi.deleteWorkflowTemplate(circle.value.id, tpl.id)
+    toast.success(t('workflowTemplate.deleted'))
+    await loadTemplates()
+  } catch (e: any) {
+    toast.error(e.message)
+  }
 }
 
 function formatDate(iso: string) {

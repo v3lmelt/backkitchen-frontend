@@ -14,6 +14,8 @@ import type {
   InviteCode,
   PresignedUploadResponse,
   WebhookConfig,
+  WorkflowConfig,
+  WorkflowTemplate,
   Issue,
   IssueStatus,
   Notification,
@@ -196,6 +198,16 @@ export const circleApi = {
     }),
   revokeInviteCode: (circleId: number, codeId: number) =>
     request<void>(`/circles/${circleId}/invite-codes/${codeId}`, { method: 'DELETE' }),
+  listWorkflowTemplates: (circleId: number) =>
+    request<WorkflowTemplate[]>(`/circles/${circleId}/workflow-templates`),
+  getWorkflowTemplate: (circleId: number, templateId: number) =>
+    request<WorkflowTemplate>(`/circles/${circleId}/workflow-templates/${templateId}`),
+  createWorkflowTemplate: (circleId: number, data: { name: string; description?: string | null; workflow_config: WorkflowConfig }) =>
+    request<WorkflowTemplate>(`/circles/${circleId}/workflow-templates`, { method: 'POST', body: JSON.stringify(data) }),
+  updateWorkflowTemplate: (circleId: number, templateId: number, data: { name?: string; description?: string | null; workflow_config?: WorkflowConfig }) =>
+    request<WorkflowTemplate>(`/circles/${circleId}/workflow-templates/${templateId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteWorkflowTemplate: (circleId: number, templateId: number) =>
+    request<void>(`/circles/${circleId}/workflow-templates/${templateId}`, { method: 'DELETE' }),
 }
 
 export const trackApi = {

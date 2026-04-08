@@ -2,11 +2,11 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { albumApi, userApi } from '@/api'
+import { albumApi, circleApi, userApi } from '@/api'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
-import type { User, WorkflowConfig } from '@/types'
-import { ChevronLeft, Upload, ChevronDown, ChevronRight, HelpCircle } from 'lucide-vue-next'
+import type { CircleSummary, User, WorkflowConfig, WorkflowTemplate } from '@/types'
+import { ChevronLeft, Upload, ChevronDown, ChevronRight, HelpCircle, BookTemplate, Save } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import WorkflowBuilder from '@/components/workflow/WorkflowBuilder.vue'
@@ -36,9 +36,24 @@ const deadlineState = reactive({ deadline: '', peer_review: '', mastering: '', f
 const showWorkflowBuilder = ref(false)
 const showWorkflowGuide = ref(false)
 const workflowConfig = ref<WorkflowConfig | null>(null)
+const selectedCircleId = ref<number | null>(null)
+const circles = ref<CircleSummary[]>([])
+
+// Template state
+const templates = ref<WorkflowTemplate[]>([])
+const showTemplateList = ref(false)
+const showSaveTemplate = ref(false)
+const saveTemplateName = ref('')
+const saveTemplateDesc = ref('')
+const savingTemplate = ref(false)
+const selectedTemplateId = ref<number | null>(null)
 
 const userOptions = computed<SelectOption[]>(() =>
   users.value.map((u) => ({ value: u.id, label: u.display_name }))
+)
+
+const circleOptions = computed<SelectOption[]>(() =>
+  circles.value.map((c) => ({ value: c.id, label: c.name }))
 )
 
 onMounted(async () => {
@@ -48,11 +63,46 @@ onMounted(async () => {
   }
   loading.value = true
   try {
-    users.value = await userApi.list()
+    const [userList, circleList] = await Promise.all([userApi.list(), circleApi.list()])
+    users.value = userList
+    circles.value = circleList
   } finally {
     loading.value = false
   }
 })
+
+async function loadTemplates() {
+  if (!selectedCircleId.value) return
+  templates.value = await circleApi.listWorkflowTemplates(selectedCircleId.value)
+}
+
+async function loadFromTemplate(template: WorkflowTemplate) {
+  workflowConfig.value = { ...template.workflow_config }
+  selectedTemplateId.value = template.id
+  showTemplateList.value = false
+}
+
+async function openTemplateList() {
+  await loadTemplates()
+  showTemplateList.value = true
+}
+
+async function saveAsTemplate() {
+  if (!selectedCircleId.value || !workflowConfig.value || !saveTemplateName.value.trim()) return
+  savingTemplate.value = true
+  try {
+    await circleApi.createWorkflowTemplate(selectedCircleId.value, {
+      name: saveTemplateName.value.trim(),
+      description: saveTemplateDesc.value.trim() || null,
+      workflow_config: workflowConfig.value,
+    })
+    showSaveTemplate.value = false
+    saveTemplateName.value = ''
+    saveTemplateDesc.value = ''
+  } finally {
+    savingTemplate.value = false
+  }
+}
 
 onUnmounted(() => {
   if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value)
@@ -83,8 +133,14 @@ async function create() {
   creating.value = true
   try {
     const payload: any = { ...form.value }
+    if (selectedCircleId.value) {
+      payload.circle_id = selectedCircleId.value
+    }
     if (showWorkflowBuilder.value && workflowConfig.value) {
       payload.workflow_config = workflowConfig.value
+      if (selectedTemplateId.value) {
+        payload.workflow_template_id = selectedTemplateId.value
+      }
     }
     const album = await albumApi.create(payload)
 
@@ -178,6 +234,12 @@ async function create() {
             :placeholder="t('albumNew.descriptionPlaceholder')"
           />
         </div>
+      </div>
+
+      <!-- 社团 -->
+      <div v-if="circles.length" class="card space-y-4">
+        <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('settings.circleName') }}</h2>
+        <CustomSelect v-model="selectedCircleId" :options="circleOptions" :placeholder="t('settings.noneOption')" />
       </div>
 
       <!-- 团队 -->
@@ -284,6 +346,69 @@ async function create() {
                   <li>{{ t('workflowBuilder.guide.note2') }}</li>
                   <li>{{ t('workflowBuilder.guide.note3') }}</li>
                 </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Template load/save buttons -->
+          <div class="flex items-center gap-2 flex-wrap">
+            <button
+              v-if="selectedCircleId"
+              @click="openTemplateList"
+              class="btn-secondary text-xs"
+            >
+              <BookTemplate class="w-3.5 h-3.5 mr-1" /> {{ t('workflowTemplate.loadFromTemplate') }}
+            </button>
+            <button
+              v-if="selectedCircleId && workflowConfig"
+              @click="showSaveTemplate = true"
+              class="btn-secondary text-xs"
+            >
+              <Save class="w-3.5 h-3.5 mr-1" /> {{ t('workflowTemplate.saveAsTemplate') }}
+            </button>
+            <span v-if="!selectedCircleId" class="text-xs text-muted-foreground">
+              {{ t('workflowTemplate.noCircleHint') }}
+            </span>
+          </div>
+
+          <!-- Template list modal -->
+          <div v-if="showTemplateList" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="showTemplateList = false">
+            <div class="bg-card border border-border rounded-none p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto space-y-4">
+              <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowTemplate.selectTemplate') }}</h3>
+              <div v-if="templates.length === 0" class="text-sm text-muted-foreground py-4 text-center">
+                {{ t('workflowTemplate.noTemplates') }}
+              </div>
+              <div v-for="tpl in templates" :key="tpl.id" class="border border-border p-3 space-y-1 hover:bg-background/50 cursor-pointer transition-colors" @click="loadFromTemplate(tpl)">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-mono font-semibold text-foreground">{{ tpl.name }}</span>
+                  <span class="text-xs text-muted-foreground">{{ tpl.workflow_config.steps.length }} {{ t('workflowBuilder.addStep').replace(/^.*/, 'steps') }}</span>
+                </div>
+                <p v-if="tpl.description" class="text-xs text-muted-foreground">{{ tpl.description }}</p>
+                <p class="text-xs text-muted-foreground">
+                  {{ tpl.album_count > 0 ? t('workflowTemplate.albumCount', { count: tpl.album_count }) : t('workflowTemplate.albumCountZero') }}
+                </p>
+              </div>
+              <button @click="showTemplateList = false" class="btn-secondary text-xs w-full">{{ t('common.cancel') }}</button>
+            </div>
+          </div>
+
+          <!-- Save template modal -->
+          <div v-if="showSaveTemplate" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="showSaveTemplate = false">
+            <div class="bg-card border border-border rounded-none p-6 w-full max-w-md space-y-4">
+              <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowTemplate.saveAsTemplate') }}</h3>
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowTemplate.templateName') }}</label>
+                <input v-model="saveTemplateName" class="input-field w-full" :placeholder="t('workflowTemplate.templateNamePlaceholder')" />
+              </div>
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowTemplate.templateDescription') }}</label>
+                <textarea v-model="saveTemplateDesc" class="textarea-field w-full h-16" :placeholder="t('workflowTemplate.templateDescriptionPlaceholder')" />
+              </div>
+              <div class="flex gap-2">
+                <button @click="saveAsTemplate" :disabled="savingTemplate || !saveTemplateName.trim()" class="btn-primary text-xs flex-1">
+                  {{ savingTemplate ? t('workflowTemplate.saving') : t('workflowTemplate.save') }}
+                </button>
+                <button @click="showSaveTemplate = false" class="btn-secondary text-xs flex-1">{{ t('common.cancel') }}</button>
               </div>
             </div>
           </div>
