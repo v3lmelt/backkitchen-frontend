@@ -17,19 +17,17 @@ const { t } = useI18n()
 
 const manualOpen = ref(false)
 
-// Extract the word currently under the cursor (split on whitespace/newlines)
-const wordAtCursor = computed(() => {
+// Check whether the cursor is near a timestamp-like pattern.
+// Uses a small window instead of whitespace-delimited words so that CJK text
+// (which has no spaces between words) doesn't keep the popover open forever.
+const typingTimestamp = computed(() => {
   const pos = props.cursorPos ?? props.text.length
-  const before = props.text.slice(0, pos)
-  const after = props.text.slice(pos)
-  const wordStart = before.search(/\S+$/)
-  const wordEnd = after.search(/[\s]/)
-  const left = wordStart === -1 ? '' : before.slice(wordStart)
-  const right = wordEnd === -1 ? after : after.slice(0, wordEnd)
-  return left + right
+  const start = Math.max(0, pos - 10)
+  const end = Math.min(props.text.length, pos + 10)
+  const nearby = props.text.slice(start, end)
+  // Match timestamp patterns: "03:15", "03:", "t:03:15", "a:1:23", etc.
+  return /(?:[ta]:)?\d{1,2}:\d{0,2}/.test(nearby)
 })
-
-const typingTimestamp = computed(() => wordAtCursor.value.includes(':'))
 const matches = computed(() => extractTimeReferences(props.text))
 const isVisible = computed(() => manualOpen.value || typingTimestamp.value)
 
