@@ -159,6 +159,81 @@
       "completed": "Completed"
     }
   },
+  "workflowBuilder": {
+    "stepTypes": {
+      "gate": "Gate (Decision)",
+      "review": "Review",
+      "revision": "Revision (Upload)",
+      "delivery": "Delivery (Upload)"
+    },
+    "roles": {
+      "producer": "Producer",
+      "mastering_engineer": "Mastering Engineer",
+      "peer_reviewer": "Peer Reviewer",
+      "submitter": "Submitter"
+    },
+    "targets": {
+      "completed": "Completed (terminal)",
+      "rejected": "Rejected (final)",
+      "rejectedResubmittable": "Rejected (resubmittable)"
+    },
+    "addStep": "Add Step",
+    "loadDefault": "Load Default Workflow",
+    "emptyHint": "No steps defined. Click \"Add Step\" or \"Load Default Workflow\" to begin.",
+    "stepLabelPlaceholder": "Step Label",
+    "typeLabel": "Type",
+    "assigneeRoleLabel": "Assignee Role",
+    "returnToLabel": "Return To (after upload)",
+    "pairedRevisionLabel": "Paired Revision Step (optional)",
+    "selectPlaceholder": "-- select --",
+    "nonePlaceholder": "-- none --",
+    "targetPlaceholder": "-- target --",
+    "transitionsLabel": "Transitions",
+    "addTransition": "Add",
+    "validation": {
+      "atLeastOneStep": "At least one step is required.",
+      "stepIdRequired": "All steps must have an ID.",
+      "stepIdInvalid": "Step ID \"{id}\" is invalid (lowercase, underscores only).",
+      "stepIdDuplicate": "Duplicate step ID: \"{id}\".",
+      "stepLabelRequired": "Step \"{id}\" must have a label.",
+      "transitionDecisionRequired": "Step \"{id}\": transition must have a decision name.",
+      "transitionTargetRequired": "Step \"{id}\": transition \"{decision}\" must have a target.",
+      "revisionReturnToRequired": "Revision step \"{id}\" must have a \"return to\" step.",
+      "noCompletedPath": "At least one step must have a transition to \"Completed\"."
+    },
+    "guide": {
+      "title": "Configuration Guide",
+      "stepTypesTitle": "Step Types",
+      "stepTypeGate": "Gate — A decision point where the assigned role chooses the next step (e.g. accept / reject / advance). No file upload involved.",
+      "stepTypeReview": "Review — The assigned role reviews the audio, marks issues, and makes a decision when done.",
+      "stepTypeRevision": "Revision — The submitter uploads a new source version in response to issues. After upload, the track automatically returns to the linked review step.",
+      "stepTypeDelivery": "Delivery — The assigned role uploads a deliverable (e.g. mastered audio). May include decision transitions.",
+      "rolesTitle": "Role Assignment",
+      "rolesDesc": "Each step requires an assigned role. \"Producer\" and \"Mastering Engineer\" correspond to fixed album members. \"Peer Reviewer\" is randomly assigned when the track enters review. \"Submitter\" is the original author of the track.",
+      "transitionsTitle": "Transitions",
+      "transitionsDesc": "Transitions define the paths from the current step to the next. Each transition has a \"decision name\" (e.g. accept, reject) and a \"target step\". The target can be another step's ID or one of three special terminal states: Completed, Rejected (final), or Rejected (resubmittable).",
+      "revisionTitle": "Return To & Paired Revision Step",
+      "revisionDesc": "Revision steps must have a \"Return To\" setting, which determines where the track goes after the submitter uploads. Review / Delivery steps can optionally set a \"Paired Revision Step\" so the system can route to the right revision step when needed.",
+      "notesTitle": "Important Notes",
+      "note1": "Workflows are locked once the album is created and cannot be changed afterward. Review carefully before creating.",
+      "note2": "Step IDs must be unique and use only lowercase letters, numbers, and underscores.",
+      "note3": "There must be at least one path leading to \"Completed\", otherwise tracks cannot finish."
+    }
+  },
+  "workflowStep": {
+    "uploadRevisedSource": "Upload Revised Source",
+    "uploadRevisedSourceDesc": "Upload a new version of the source audio file.",
+    "uploading": "Uploading...",
+    "uploadRevision": "Upload Revision",
+    "currentAudio": "Current Audio",
+    "issuesToAddress": "Issues to Address ({count})",
+    "sourceAudio": "Source Audio",
+    "uploadDelivery": "Upload Delivery",
+    "uploadAndDeliver": "Upload & Deliver",
+    "issues": "Issues ({count})",
+    "transitionFailed": "Transition failed",
+    "uploadFailed": "Upload failed"
+  },
   "issueMarker": {
     "noIssues": "No issues found"
   },
@@ -533,6 +608,10 @@
     "descriptionPlaceholder": "Album description (optional)",
     "teamSection": "Team (optional)",
     "deadlinesSection": "Deadlines (optional)",
+    "workflowSection": "Workflow",
+    "workflowUsingDefault": "Using default workflow",
+    "workflowDesc": "Customize the track review workflow for this album. Once created, the workflow cannot be changed.",
+    "workflowValid": "Workflow configuration is valid.",
     "createButton": "Create Album",
     "creating": "Creating...",
     "titleRequired": "Please enter an album title"
@@ -543,6 +622,7 @@
       "team": "Team",
       "deadlines": "Deadlines",
       "checklist": "Checklist Template",
+      "workflow": "Workflow",
       "order": "Track Order",
       "webhook": "Webhook"
     },
@@ -568,6 +648,13 @@
     "checklist": {
       "readOnlyNotice": "Checklist template is set by the producer",
       "noItems": "No checklist items"
+    },
+    "workflow": {
+      "customWorkflow": "Custom Workflow",
+      "locked": "Workflow is locked and cannot be changed.",
+      "defaultWorkflow": "This album uses the default workflow.",
+      "defaultDesc": "Submitted → Peer Review → Producer Gate → Mastering → Final Review → Completed",
+      "returnTo": "return_to"
     }
   },
   "circles": {

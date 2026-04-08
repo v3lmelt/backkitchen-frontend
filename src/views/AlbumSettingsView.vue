@@ -97,7 +97,7 @@ const availableTabs = computed(() => {
     tabs.push({ key: 'checklist', label: t('albumSettings.tabs.checklist') })
   }
   if (isProducerOfAlbum.value) {
-    tabs.push({ key: 'workflow', label: 'Workflow' })
+    tabs.push({ key: 'workflow', label: t('albumSettings.tabs.workflow') })
     tabs.push({ key: 'order', label: t('albumSettings.tabs.order') })
     tabs.push({ key: 'webhook', label: t('albumSettings.tabs.webhook') })
   }
@@ -740,14 +740,14 @@ async function testWebhook() {
       <div v-else-if="activeTab === 'workflow'" class="card space-y-5">
         <template v-if="album?.workflow_config">
           <div class="flex items-center gap-2 mb-2">
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-warning-bg text-warning">Custom Workflow</span>
-            <span class="text-xs text-muted-foreground">Workflow is locked and cannot be changed.</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-warning-bg text-warning">{{ t('albumSettings.workflow.customWorkflow') }}</span>
+            <span class="text-xs text-muted-foreground">{{ t('albumSettings.workflow.locked') }}</span>
           </div>
           <div v-for="step in album.workflow_config.steps" :key="step.id" class="border border-border p-3 space-y-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-mono font-semibold text-foreground">{{ step.label }}</span>
-              <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs bg-info-bg text-info">{{ step.type }}</span>
-              <span class="text-xs text-muted-foreground ml-auto">{{ step.assignee_role }}</span>
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs bg-info-bg text-info">{{ t(`workflowBuilder.stepTypes.${step.type}`) }}</span>
+              <span class="text-xs text-muted-foreground ml-auto">{{ t(`workflowBuilder.roles.${step.assignee_role}`) }}</span>
             </div>
             <div v-if="Object.keys(step.transitions).length" class="text-xs text-muted-foreground">
               <span v-for="(target, decision) in step.transitions" :key="decision" class="mr-3">
@@ -755,14 +755,14 @@ async function testWebhook() {
               </span>
             </div>
             <div v-if="step.return_to" class="text-xs text-muted-foreground">
-              return_to: {{ step.return_to }}
+              {{ t('albumSettings.workflow.returnTo') }}: {{ step.return_to }}
             </div>
           </div>
         </template>
         <template v-else>
-          <p class="text-sm text-muted-foreground">This album uses the default workflow.</p>
+          <p class="text-sm text-muted-foreground">{{ t('albumSettings.workflow.defaultWorkflow') }}</p>
           <div class="text-xs text-muted-foreground space-y-1">
-            <p>Submitted &rarr; Peer Review &rarr; Producer Gate &rarr; Mastering &rarr; Final Review &rarr; Completed</p>
+            <p>{{ t('albumSettings.workflow.defaultDesc') }}</p>
           </div>
         </template>
       </div>

@@ -6,7 +6,7 @@ import { albumApi, userApi } from '@/api'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
 import type { User, WorkflowConfig } from '@/types'
-import { ChevronLeft, Upload, ChevronDown, ChevronRight } from 'lucide-vue-next'
+import { ChevronLeft, Upload, ChevronDown, ChevronRight, HelpCircle } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import WorkflowBuilder from '@/components/workflow/WorkflowBuilder.vue'
@@ -34,6 +34,7 @@ const teamState = reactive<{ mastering_engineer_id: number | null; member_ids: n
 const deadlineState = reactive({ deadline: '', peer_review: '', mastering: '', final_review: '' })
 
 const showWorkflowBuilder = ref(false)
+const showWorkflowGuide = ref(false)
 const workflowConfig = ref<WorkflowConfig | null>(null)
 
 const userOptions = computed<SelectOption[]>(() =>
@@ -236,15 +237,59 @@ async function create() {
           class="flex items-center gap-2 w-full text-left"
         >
           <component :is="showWorkflowBuilder ? ChevronDown : ChevronRight" class="w-4 h-4 text-muted-foreground" />
-          <h2 class="text-sm font-mono font-semibold text-foreground">Workflow</h2>
-          <span v-if="!showWorkflowBuilder" class="text-xs text-muted-foreground ml-auto">Using default workflow</span>
+          <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('albumNew.workflowSection') }}</h2>
+          <span v-if="!showWorkflowBuilder" class="text-xs text-muted-foreground ml-auto">{{ t('albumNew.workflowUsingDefault') }}</span>
         </button>
         <template v-if="showWorkflowBuilder">
           <p class="text-xs text-muted-foreground">
-            Customize the track review workflow for this album. Once created, the workflow cannot be changed.
+            {{ t('albumNew.workflowDesc') }}
           </p>
+
+          <!-- Configuration Guide -->
+          <div class="border border-border bg-background rounded-none">
+            <button
+              @click="showWorkflowGuide = !showWorkflowGuide"
+              class="flex items-center gap-2 w-full text-left px-3 py-2"
+            >
+              <HelpCircle class="w-3.5 h-3.5 text-info" />
+              <span class="text-xs font-mono font-medium text-info">{{ t('workflowBuilder.guide.title') }}</span>
+              <component :is="showWorkflowGuide ? ChevronDown : ChevronRight" class="w-3.5 h-3.5 text-muted-foreground ml-auto" />
+            </button>
+            <div v-if="showWorkflowGuide" class="px-3 pb-3 space-y-3 text-xs text-muted-foreground">
+              <div>
+                <p class="font-mono font-semibold text-foreground mb-1">{{ t('workflowBuilder.guide.stepTypesTitle') }}</p>
+                <ul class="space-y-1 list-disc list-inside">
+                  <li>{{ t('workflowBuilder.guide.stepTypeGate') }}</li>
+                  <li>{{ t('workflowBuilder.guide.stepTypeReview') }}</li>
+                  <li>{{ t('workflowBuilder.guide.stepTypeRevision') }}</li>
+                  <li>{{ t('workflowBuilder.guide.stepTypeDelivery') }}</li>
+                </ul>
+              </div>
+              <div>
+                <p class="font-mono font-semibold text-foreground mb-1">{{ t('workflowBuilder.guide.rolesTitle') }}</p>
+                <p>{{ t('workflowBuilder.guide.rolesDesc') }}</p>
+              </div>
+              <div>
+                <p class="font-mono font-semibold text-foreground mb-1">{{ t('workflowBuilder.guide.transitionsTitle') }}</p>
+                <p>{{ t('workflowBuilder.guide.transitionsDesc') }}</p>
+              </div>
+              <div>
+                <p class="font-mono font-semibold text-foreground mb-1">{{ t('workflowBuilder.guide.revisionTitle') }}</p>
+                <p>{{ t('workflowBuilder.guide.revisionDesc') }}</p>
+              </div>
+              <div>
+                <p class="font-mono font-semibold text-foreground mb-1">{{ t('workflowBuilder.guide.notesTitle') }}</p>
+                <ul class="space-y-1 list-disc list-inside">
+                  <li>{{ t('workflowBuilder.guide.note1') }}</li>
+                  <li>{{ t('workflowBuilder.guide.note2') }}</li>
+                  <li>{{ t('workflowBuilder.guide.note3') }}</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
           <WorkflowBuilder v-model="workflowConfig" />
-          <p v-if="workflowConfig" class="text-xs text-success">Workflow configuration is valid.</p>
+          <p v-if="workflowConfig" class="text-xs text-success">{{ t('albumNew.workflowValid') }}</p>
         </template>
       </div>
 

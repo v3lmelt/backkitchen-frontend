@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { WorkflowStepType, WorkflowConfig } from '@/types'
 import { Plus, Trash2, GripVertical, ChevronUp, ChevronDown } from 'lucide-vue-next'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   modelValue: WorkflowConfig | null
@@ -11,19 +14,8 @@ const emit = defineEmits<{
   'update:modelValue': [value: WorkflowConfig | null]
 }>()
 
-const STEP_TYPES: { value: WorkflowStepType; label: string }[] = [
-  { value: 'gate', label: 'Gate (Decision)' },
-  { value: 'review', label: 'Review' },
-  { value: 'revision', label: 'Revision (Upload)' },
-  { value: 'delivery', label: 'Delivery (Upload)' },
-]
-
-const ROLE_OPTIONS = [
-  { value: 'producer', label: 'Producer' },
-  { value: 'mastering_engineer', label: 'Mastering Engineer' },
-  { value: 'peer_reviewer', label: 'Peer Reviewer' },
-  { value: 'submitter', label: 'Submitter' },
-]
+const STEP_TYPE_VALUES: WorkflowStepType[] = ['gate', 'review', 'revision', 'delivery']
+const ROLE_VALUES = ['producer', 'mastering_engineer', 'peer_reviewer', 'submitter'] as const
 
 interface EditableStep {
   id: string
@@ -67,9 +59,9 @@ const stepIds = computed(() => steps.value.map((s) => s.id))
 
 const targetOptions = computed(() => {
   const opts = steps.value.map((s) => ({ value: s.id, label: s.label || s.id }))
-  opts.push({ value: '__completed', label: 'Completed (terminal)' })
-  opts.push({ value: '__rejected', label: 'Rejected (final)' })
-  opts.push({ value: '__rejected_resubmittable', label: 'Rejected (resubmittable)' })
+  opts.push({ value: '__completed', label: t('workflowBuilder.targets.completed') })
+  opts.push({ value: '__rejected', label: t('workflowBuilder.targets.rejected') })
+  opts.push({ value: '__rejected_resubmittable', label: t('workflowBuilder.targets.rejectedResubmittable') })
   return opts
 })
 
@@ -140,31 +132,31 @@ function validate(): string[] {
   const ids = new Set<string>()
 
   if (steps.value.length === 0) {
-    errs.push('At least one step is required.')
+    errs.push(t('workflowBuilder.validation.atLeastOneStep'))
     return errs
   }
 
   for (const step of steps.value) {
-    if (!step.id) errs.push('All steps must have an ID.')
-    if (!/^[a-z][a-z0-9_]{1,49}$/.test(step.id)) errs.push(`Step ID "${step.id}" is invalid (lowercase, underscores only).`)
-    if (ids.has(step.id)) errs.push(`Duplicate step ID: "${step.id}".`)
+    if (!step.id) errs.push(t('workflowBuilder.validation.stepIdRequired'))
+    if (!/^[a-z][a-z0-9_]{1,49}$/.test(step.id)) errs.push(t('workflowBuilder.validation.stepIdInvalid', { id: step.id }))
+    if (ids.has(step.id)) errs.push(t('workflowBuilder.validation.stepIdDuplicate', { id: step.id }))
     ids.add(step.id)
-    if (!step.label) errs.push(`Step "${step.id}" must have a label.`)
+    if (!step.label) errs.push(t('workflowBuilder.validation.stepLabelRequired', { id: step.id }))
 
     for (const tr of step.transitions) {
-      if (!tr.decision) errs.push(`Step "${step.id}": transition must have a decision name.`)
-      if (!tr.target) errs.push(`Step "${step.id}": transition "${tr.decision}" must have a target.`)
+      if (!tr.decision) errs.push(t('workflowBuilder.validation.transitionDecisionRequired', { id: step.id }))
+      if (!tr.target) errs.push(t('workflowBuilder.validation.transitionTargetRequired', { id: step.id, decision: tr.decision }))
     }
 
     if (step.type === 'revision' && !step.return_to) {
-      errs.push(`Revision step "${step.id}" must have a "return to" step.`)
+      errs.push(t('workflowBuilder.validation.revisionReturnToRequired', { id: step.id }))
     }
   }
 
   const hasCompleted = steps.value.some((s) =>
     s.transitions.some((tr) => tr.target === '__completed'),
   )
-  if (!hasCompleted) errs.push('At least one step must have a transition to "Completed".')
+  if (!hasCompleted) errs.push(t('workflowBuilder.validation.noCompletedPath'))
 
   return errs
 }
@@ -204,16 +196,16 @@ function emitConfig() {
     <!-- Toolbar -->
     <div class="flex items-center gap-3 flex-wrap">
       <button @click="addStep" class="btn-secondary text-xs">
-        <Plus class="w-3.5 h-3.5 mr-1" /> Add Step
+        <Plus class="w-3.5 h-3.5 mr-1" /> {{ t('workflowBuilder.addStep') }}
       </button>
       <button @click="loadDefaultWorkflow" class="btn-secondary text-xs">
-        Load Default Workflow
+        {{ t('workflowBuilder.loadDefault') }}
       </button>
     </div>
 
     <!-- Step list -->
     <div v-if="steps.length === 0" class="text-sm text-muted-foreground py-4">
-      No steps defined. Click "Add Step" or "Load Default Workflow" to begin.
+      {{ t('workflowBuilder.emptyHint') }}
     </div>
 
     <div v-for="(step, idx) in steps" :key="idx" class="border border-border rounded-none p-4 space-y-3 bg-card">
@@ -229,7 +221,7 @@ function emitConfig() {
         <input
           v-model="step.label"
           class="input-field text-xs !h-8 flex-1"
-          placeholder="Step Label"
+          :placeholder="t('workflowBuilder.stepLabelPlaceholder')"
         />
         <div class="flex gap-1">
           <button @click="moveStep(idx, -1)" :disabled="idx === 0" class="p-1 hover:text-foreground text-muted-foreground disabled:opacity-30">
@@ -247,15 +239,15 @@ function emitConfig() {
       <!-- Step config -->
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="block text-xs text-muted-foreground mb-1">Type</label>
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowBuilder.typeLabel') }}</label>
           <select v-model="step.type" class="select-field-sm w-full">
-            <option v-for="st in STEP_TYPES" :key="st.value" :value="st.value">{{ st.label }}</option>
+            <option v-for="st in STEP_TYPE_VALUES" :key="st" :value="st">{{ t(`workflowBuilder.stepTypes.${st}`) }}</option>
           </select>
         </div>
         <div>
-          <label class="block text-xs text-muted-foreground mb-1">Assignee Role</label>
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowBuilder.assigneeRoleLabel') }}</label>
           <select v-model="step.assignee_role" class="select-field-sm w-full">
-            <option v-for="r in ROLE_OPTIONS" :key="r.value" :value="r.value">{{ r.label }}</option>
+            <option v-for="r in ROLE_VALUES" :key="r" :value="r">{{ t(`workflowBuilder.roles.${r}`) }}</option>
           </select>
         </div>
       </div>
@@ -263,9 +255,9 @@ function emitConfig() {
       <!-- Revision: return_to -->
       <div v-if="step.type === 'revision'" class="grid grid-cols-2 gap-3">
         <div>
-          <label class="block text-xs text-muted-foreground mb-1">Return To (after upload)</label>
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowBuilder.returnToLabel') }}</label>
           <select v-model="step.return_to" class="select-field-sm w-full">
-            <option value="">-- select --</option>
+            <option value="">{{ t('workflowBuilder.selectPlaceholder') }}</option>
             <option v-for="s in stepIds" :key="s" :value="s">{{ s }}</option>
           </select>
         </div>
@@ -274,9 +266,9 @@ function emitConfig() {
       <!-- Review/Delivery: revision_step -->
       <div v-if="step.type === 'review' || step.type === 'delivery'" class="grid grid-cols-2 gap-3">
         <div>
-          <label class="block text-xs text-muted-foreground mb-1">Paired Revision Step (optional)</label>
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowBuilder.pairedRevisionLabel') }}</label>
           <select v-model="step.revision_step" class="select-field-sm w-full">
-            <option value="">-- none --</option>
+            <option value="">{{ t('workflowBuilder.nonePlaceholder') }}</option>
             <option v-for="s in stepIds" :key="s" :value="s">{{ s }}</option>
           </select>
         </div>
@@ -285,9 +277,9 @@ function emitConfig() {
       <!-- Transitions (for gate, review, delivery) -->
       <div v-if="step.type !== 'revision'" class="space-y-2">
         <div class="flex items-center gap-2">
-          <label class="text-xs text-muted-foreground">Transitions</label>
+          <label class="text-xs text-muted-foreground">{{ t('workflowBuilder.transitionsLabel') }}</label>
           <button @click="addTransition(idx)" class="text-xs text-primary hover:text-primary-hover">
-            <Plus class="w-3 h-3 inline" /> Add
+            <Plus class="w-3 h-3 inline" /> {{ t('workflowBuilder.addTransition') }}
           </button>
         </div>
         <div v-for="(tr, trIdx) in step.transitions" :key="trIdx" class="flex items-center gap-2">
@@ -298,7 +290,7 @@ function emitConfig() {
           />
           <span class="text-xs text-muted-foreground">&rarr;</span>
           <select v-model="tr.target" class="select-field-sm flex-1">
-            <option value="">-- target --</option>
+            <option value="">{{ t('workflowBuilder.targetPlaceholder') }}</option>
             <option v-for="opt in targetOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
           <button @click="removeTransition(idx, trIdx)" class="p-1 hover:text-error text-muted-foreground">
