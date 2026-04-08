@@ -3,6 +3,8 @@ import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CircleAlert, CircleCheckBig, Play, Pause } from 'lucide-vue-next'
 import type { Issue } from '@/types'
+import type WaveSurfer from 'wavesurfer.js'
+import type RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
 import { resolveAssetUrl } from '@/api'
 import { formatTimestamp, formatTimestampShort, roundToMilliseconds } from '@/utils/time'
 import { resolveAudioUrl } from '@/utils/url'
@@ -304,7 +306,7 @@ function applyCompareMode(mode: 'A' | 'B') {
   wavesurfer.value.setVolume(0)
   compareWaveSurfer.value.setVolume(1)
   wavesurfer.value.setOptions({ waveColor: 'rgba(74,74,90,0.15)', progressColor: 'rgba(34,211,238,0.2)', cursorWidth: 0 })
-  compareWaveSurfer.value.setOptions({ waveColor: '#F97316', progressColor: '#FB923C', cursorWidth: 2 })
+  compareWaveSurfer.value.setOptions({ waveColor: 'rgba(249,115,22,0.28)', progressColor: '#FB923C', cursorWidth: 2 })
   // Ensure compare is actually playing when primary is playing
   if (wavesurfer.value.isPlaying() && !compareWaveSurfer.value.isPlaying()) {
     syncCompareToPrimaryTime()
@@ -519,7 +521,6 @@ onMounted(async () => {
   })
 
   let lastTimeUpdateMs = 0
-  let lastInteractionMs = 0
   ws.on('timeupdate', (time: number) => {
     // Throttle Vue reactive updates to ~20fps to avoid flooding the reactivity
     // system at 60fps and causing main-thread pressure that can stutter audio.
@@ -529,18 +530,8 @@ onMounted(async () => {
       emit('timeupdate', time)
       lastTimeUpdateMs = now
     }
-    // A track remains the transport master for compare mode, so keep B aligned to
-    // the same absolute timestamp after seeks and while playback is running.
-    if (compareWaveSurfer.value && isCompareMode.value && now - lastInteractionMs > 300) {
-      const compDur = compareWaveSurfer.value.getDuration()
-      if (compDur > 0) {
-        const compareTime = compareWaveSurfer.value.getCurrentTime()
-        const targetTime = Math.min(time, compDur)
-        if (Math.abs(compareTime - targetTime) > 0.3) {
-          syncCompareToPrimaryTime(time)
-        }
-      }
-    }
+    // Compare sync is handled at key moments (play, pause, seek, A/B switch)
+    // rather than continuously here, to avoid seekTo() stutter on the B track.
   })
 
   ws.on('play', () => { isPlaying.value = true })
@@ -554,7 +545,6 @@ onMounted(async () => {
 
   ws.on('interaction', (newTime: number) => {
     if (compareWaveSurfer.value && isCompareMode.value) {
-      lastInteractionMs = Date.now()
       if (abMode.value === 'B') {
         const primaryDur = ws.getDuration()
         const compDur = compareWaveSurfer.value.getDuration()
