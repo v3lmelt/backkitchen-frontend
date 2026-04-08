@@ -261,6 +261,7 @@ export interface Track {
   mastering_engineer_id: number | null
   created_at: string
   updated_at: string
+  archived_at: string | null
   issue_count?: number
   open_issue_count?: number
   submitter?: User | null

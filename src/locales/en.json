@@ -352,6 +352,8 @@
     "postDiscussion": "Post",
     "timeline": "Timeline",
     "noEvents": "No workflow events yet.",
+    "archive": "Archive Track",
+    "archiveConfirm": "Archive this track? It can be restored within 14 days. After that, it will be permanently deleted.",
     "system": "System",
     "rejectionMode": "rejection mode: {mode}",
     "actions": {
@@ -652,6 +654,7 @@
       "checklist": "Checklist Template",
       "workflow": "Workflow",
       "order": "Track Order",
+      "archive": "Archive",
       "webhook": "Webhook"
     },
     "info": {
@@ -683,6 +686,15 @@
       "defaultWorkflow": "This album uses the default workflow.",
       "defaultDesc": "Submitted → Peer Review → Producer Gate → Mastering → Final Review → Completed",
       "returnTo": "return_to"
+    },
+    "archive": {
+      "title": "Archived Tracks",
+      "description": "Archived tracks will be permanently deleted after 14 days. The producer can restore them before then.",
+      "empty": "No archived tracks",
+      "restore": "Restore",
+      "restored": "Track restored",
+      "restoreFailed": "Failed to restore",
+      "remainingDays": "{days} days remaining"
     }
   },
   "circles": {

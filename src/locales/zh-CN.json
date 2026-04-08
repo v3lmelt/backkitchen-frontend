@@ -356,6 +356,8 @@
     "postDiscussion": "发送",
     "timeline": "时间线",
     "noEvents": "暂无工作流事件。",
+    "archive": "归档曲目",
+    "archiveConfirm": "确认归档此曲目？归档后 14 天内可恢复，超期将被永久删除。",
     "system": "系统",
     "rejectionMode": "拒绝模式：{mode}",
     "actions": {
@@ -691,6 +693,7 @@
       "checklist": "Checklist 模板",
       "workflow": "工作流",
       "order": "曲目排序",
+      "archive": "归档管理",
       "webhook": "Webhook"
     },
     "info": {
@@ -722,6 +725,15 @@
       "defaultWorkflow": "该专辑使用默认工作流。",
       "defaultDesc": "已提交 → 同行评审 → 制作人审批 → 母带制作 → 终审 → 已完成",
       "returnTo": "返回到"
+    },
+    "archive": {
+      "title": "已归档曲目",
+      "description": "归档的曲目将在 14 天后被永久删除。在此期间，制作人可以恢复曲目。",
+      "empty": "没有已归档的曲目",
+      "restore": "恢复",
+      "restored": "曲目已恢复",
+      "restoreFailed": "恢复失败",
+      "remainingDays": "剩余 {days} 天"
     }
   },
   "circles": {
