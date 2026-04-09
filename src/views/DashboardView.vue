@@ -8,7 +8,9 @@ import type { Album, AlbumStats, Track, TrackStatus, WorkflowEvent } from '@/typ
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatRelativeTime, parseUTC } from '@/utils/time'
 import { TRACK_STATUS_COLORS } from '@/utils/status'
+import { translateStepLabel } from '@/utils/workflow'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
+import { useToast } from '@/composables/useToast'
 
 const ALBUM_STATS_TTL = 5 * 60 * 1000
 const albumStatsCache = new Map<number, { stats: AlbumStats; ts: number }>()
@@ -24,6 +26,7 @@ async function fetchAlbumStats(albumId: number): Promise<AlbumStats> {
 const router = useRouter()
 const { t, te, locale } = useI18n()
 const appStore = useAppStore()
+const { success: toastSuccess, error: toastError } = useToast()
 const tracks = ref<Track[]>([])
 const albums = ref<Album[]>([])
 const albumStatsMap = ref<Record<number, AlbumStats>>({})
@@ -31,12 +34,109 @@ const loading = ref(true)
 const filterStatus = ref<TrackStatus | ''>('')
 const exportingAlbum = ref<number | null>(null)
 
+// ── Batch operations ──────────────────────────────────────────────────────────
+const batchMode = ref(false)
+const selectedTrackIds = ref<Set<number>>(new Set())
+const batchProcessing = ref(false)
+
+const isProducerOfAny = computed(() =>
+  albums.value.some(a => a.producer_id === appStore.currentUser?.id)
+)
+
+function toggleBatchMode() {
+  batchMode.value = !batchMode.value
+  selectedTrackIds.value = new Set()
+}
+
+function toggleBatchSelect(trackId: number) {
+  const next = new Set(selectedTrackIds.value)
+  if (next.has(trackId)) next.delete(trackId)
+  else next.add(trackId)
+  selectedTrackIds.value = next
+}
+
+// Determine the common status of selected tracks (null if mixed)
+const batchCommonStatus = computed<string | null>(() => {
+  if (selectedTrackIds.value.size === 0) return null
+  const selected = tracks.value.filter(tr => selectedTrackIds.value.has(tr.id))
+  const statuses = new Set(selected.map(tr => tr.status))
+  return statuses.size === 1 ? [...statuses][0] : null
+})
+
+// Which batch actions are available for the current selection
+interface BatchAction {
+  label: string
+  run: () => Promise<void>
+}
+
+const batchActions = computed<BatchAction[]>(() => {
+  const status = batchCommonStatus.value
+  if (!status) return []
+  const actions: BatchAction[] = []
+  const selectedTracks = tracks.value.filter(tr => selectedTrackIds.value.has(tr.id))
+  const isAllProducer = selectedTracks.every(tr => tr.producer_id === appStore.currentUser?.id)
+  if (!isAllProducer) return []
+
+  if (status === 'submitted') {
+    actions.push({
+      label: t('dashboard.batchAcceptPeerReview'),
+      run: async () => {
+        await Promise.all([...selectedTrackIds.value].map(id => trackApi.intakeDecision(id, 'accept')))
+        await reloadTracks()
+      },
+    })
+    actions.push({
+      label: t('dashboard.batchAcceptProducerDirect'),
+      run: async () => {
+        await Promise.all([...selectedTrackIds.value].map(id => trackApi.intakeDecision(id, 'accept_producer_direct')))
+        await reloadTracks()
+      },
+    })
+  }
+  if (status === 'producer_mastering_gate') {
+    actions.push({
+      label: t('dashboard.batchSendToMastering'),
+      run: async () => {
+        await Promise.all([...selectedTrackIds.value].map(id => trackApi.producerGate(id, 'send_to_mastering')))
+        await reloadTracks()
+      },
+    })
+  }
+  return actions
+})
+
+async function reloadTracks() {
+  const loaded = await trackApi.list()
+  tracks.value = loaded
+  selectedTrackIds.value = new Set()
+  batchMode.value = false
+}
+
+async function runBatchAction(action: BatchAction) {
+  const count = selectedTrackIds.value.size
+  batchProcessing.value = true
+  try {
+    await action.run()
+    toastSuccess(t('dashboard.batchSuccess', { count }))
+  } catch {
+    toastError(t('common.requestFailed'))
+  } finally {
+    batchProcessing.value = false
+  }
+}
+
 function statusColor(status: string): string {
   return TRACK_STATUS_COLORS[status as TrackStatus] ?? '#6b7280'
 }
 
 function nonZeroStatuses(byStatus: Partial<Record<TrackStatus, number>>): [TrackStatus, number][] {
   return Object.entries(byStatus).filter(([, count]) => (count ?? 0) > 0) as [TrackStatus, number][]
+}
+
+function statusLabel(status: string, album: Album): string {
+  const step = album.workflow_config?.steps.find(candidate => candidate.id === status)
+  if (step) return translateStepLabel(step, t)
+  return t(`status.${status}`, status)
 }
 
 const albumNonZeroStatuses = computed(() => {
@@ -295,7 +395,7 @@ function openAlbumSettings(albumId: number) {
               <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground mb-4">
                 <span v-for="[statusKey, count] in albumNonZeroStatuses[album.id]" :key="statusKey" class="flex items-center gap-1">
                   <span class="h-2 w-2 rounded-full" :style="{ backgroundColor: statusColor(statusKey) }"></span>
-                  {{ t(`status.${statusKey}`, statusKey) }} ({{ count }})
+                  {{ statusLabel(statusKey, album) }} ({{ count }})
                 </span>
               </div>
               <div class="flex items-center justify-between mb-4">
@@ -338,9 +438,19 @@ function openAlbumSettings(albumId: number) {
             <button @click="filterStatus = ''" class="text-primary hover:underline ml-1">{{ t('dashboard.clearFilter') }}</button>
           </span>
         </h2>
-        <button @click="router.push('/upload')" class="btn-primary text-sm flex-shrink-0 self-start sm:self-auto">
-          {{ t('dashboard.submitTrack') }}
-        </button>
+        <div class="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            v-if="isProducerOfAny"
+            @click="toggleBatchMode"
+            class="btn-secondary text-sm"
+            :class="batchMode ? 'border-primary text-primary' : ''"
+          >
+            {{ batchMode ? t('dashboard.batchModeOff') : t('dashboard.batchModeOn') }}
+          </button>
+          <button @click="router.push('/upload')" class="btn-primary text-sm flex-shrink-0">
+            {{ t('dashboard.submitTrack') }}
+          </button>
+        </div>
       </div>
 
       <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
@@ -359,6 +469,7 @@ function openAlbumSettings(albumId: number) {
             <table class="w-full">
               <thead>
                 <tr class="border-b border-border text-left text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider">
+                  <th v-if="batchMode" class="px-4 py-3 w-8"></th>
                   <th class="px-4 py-3">{{ t('dashboard.colNumber') }}</th>
                   <th class="px-4 py-3">{{ t('dashboard.colTitle') }}</th>
                   <th class="px-4 py-3">{{ t('dashboard.colArtist') }}</th>
@@ -372,14 +483,30 @@ function openAlbumSettings(albumId: number) {
                 <tr
                   v-for="track in group.tracks"
                   :key="track.id"
-                  @click="router.push(`/tracks/${track.id}`)"
+                  @click="batchMode ? toggleBatchSelect(track.id) : router.push(`/tracks/${track.id}`)"
                   class="border-b border-border last:border-0 hover:bg-white/5 cursor-pointer transition-colors"
+                  :class="batchMode && selectedTrackIds.has(track.id) ? 'bg-primary/5' : ''"
                 >
+                  <td v-if="batchMode" class="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      :checked="selectedTrackIds.has(track.id)"
+                      @click.stop="toggleBatchSelect(track.id)"
+                      class="checkbox"
+                    />
+                  </td>
                   <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ track.track_number || '—' }}</td>
                   <td class="px-4 py-3 text-sm font-medium text-foreground">{{ track.title }}</td>
                   <td class="px-4 py-3 text-sm text-muted-foreground">{{ track.artist }}</td>
                   <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ formatDuration(track.duration) }}</td>
-                  <td class="px-4 py-3"><StatusBadge :status="track.status" type="track" /></td>
+                  <td class="px-4 py-3">
+                    <StatusBadge
+                      :status="track.status"
+                      type="track"
+                      :variant="track.workflow_variant"
+                      :label="track.workflow_step?.label ?? null"
+                    />
+                  </td>
                   <td class="px-4 py-3 text-sm text-muted-foreground">
                     <span v-if="track.open_issue_count" class="text-error">{{ t('dashboard.openCount', { count: track.open_issue_count }) }}</span>
                     <span v-else>--</span>
@@ -394,15 +521,21 @@ function openAlbumSettings(albumId: number) {
             <div
               v-for="track in group.tracks"
               :key="track.id"
-              @click="router.push(`/tracks/${track.id}`)"
+              @click="batchMode ? toggleBatchSelect(track.id) : router.push(`/tracks/${track.id}`)"
               class="bg-card border border-border p-3 cursor-pointer active:bg-white/5 transition-colors"
+              :class="batchMode && selectedTrackIds.has(track.id) ? 'border-primary/50 bg-primary/5' : ''"
             >
               <div class="flex items-center justify-between gap-2 mb-1.5">
                 <div class="flex items-center gap-2 min-w-0">
                   <span v-if="track.track_number" class="text-xs text-muted-foreground font-mono flex-shrink-0">#{{ track.track_number }}</span>
                   <span class="text-sm font-medium text-foreground truncate">{{ track.title }}</span>
                 </div>
-                <StatusBadge :status="track.status" type="track" />
+                <StatusBadge
+                  :status="track.status"
+                  type="track"
+                  :variant="track.workflow_variant"
+                  :label="track.workflow_step?.label ?? null"
+                />
               </div>
               <div class="flex items-center gap-3 text-xs text-muted-foreground">
                 <span>{{ track.artist }}</span>
@@ -416,4 +549,47 @@ function openAlbumSettings(albumId: number) {
       </div>
     </div>
   </div>
+
+  <!-- Batch action floating bar -->
+  <Transition name="slide-up">
+    <div
+      v-if="batchMode && selectedTrackIds.size > 0"
+      class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-card border border-border shadow-2xl rounded-2xl px-5 py-3 flex items-center gap-3 flex-wrap justify-center z-50 max-w-lg w-[calc(100%-2rem)]"
+    >
+      <span class="text-sm font-mono text-muted-foreground whitespace-nowrap">
+        {{ t('dashboard.batchSelected', { count: selectedTrackIds.size }) }}
+      </span>
+      <div class="h-4 w-px bg-border flex-shrink-0"></div>
+      <template v-if="batchCommonStatus">
+        <button
+          v-for="action in batchActions"
+          :key="action.label"
+          :disabled="batchProcessing"
+          @click="runBatchAction(action)"
+          class="px-3 py-1.5 rounded-full text-sm font-mono bg-primary hover:bg-primary-hover text-black transition-colors disabled:opacity-50 whitespace-nowrap"
+        >
+          {{ batchProcessing ? t('common.loading') : action.label }}
+        </button>
+        <span v-if="batchActions.length === 0" class="text-xs text-muted-foreground">
+          {{ t('dashboard.batchNoActions') }}
+        </span>
+      </template>
+      <span v-else class="text-xs text-muted-foreground">{{ t('dashboard.batchMixedStatus') }}</span>
+      <button @click="selectedTrackIds = new Set()" class="btn-secondary text-sm px-3 py-1.5">
+        {{ t('common.cancel') }}
+      </button>
+    </div>
+  </Transition>
 </template>
+
+<style scoped>
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.2s ease;
+}
+.slide-up-enter-from,
+.slide-up-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(12px);
+}
+</style>

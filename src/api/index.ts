@@ -252,7 +252,7 @@ export const trackApi = {
     form.append('file', file)
     return request<Track>(`/tracks/${id}/source-versions`, { method: 'POST', body: form })
   },
-  intakeDecision: (id: number, decision: 'accept' | 'reject_final' | 'reject_resubmittable') =>
+  intakeDecision: (id: number, decision: 'accept' | 'accept_producer_direct' | 'reject_final' | 'reject_resubmittable') =>
     request<Track>(`/tracks/${id}/intake-decision`, { method: 'POST', body: JSON.stringify({ decision }) }),
   finishPeerReview: (id: number, decision: 'needs_revision' | 'pass') =>
     request<Track>(`/tracks/${id}/peer-review/finish`, { method: 'POST', body: JSON.stringify({ decision }) }),

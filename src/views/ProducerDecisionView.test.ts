@@ -87,7 +87,7 @@ describe('ProducerDecisionView', () => {
     const wrapper = mountWithPlugins(ProducerDecisionView)
     await flushPromises()
 
-    const acceptBtn = wrapper.findAll('button.workflow-action').find(button => button.text() === 'Accept and Assign Review')
+    const acceptBtn = wrapper.findAll('button.workflow-action').find(button => button.text() === 'Send to Peer Review')
     expect(acceptBtn).toBeTruthy()
   })
 
@@ -102,7 +102,7 @@ describe('ProducerDecisionView', () => {
     const wrapper = mountWithPlugins(ProducerDecisionView)
     await flushPromises()
 
-    const acceptBtn = wrapper.findAll('button.workflow-action').find(button => button.text() === 'Accept and Assign Review')
+    const acceptBtn = wrapper.findAll('button.workflow-action').find(button => button.text() === 'Send to Peer Review')
     expect(acceptBtn).toBeTruthy()
     await acceptBtn!.trigger('click')
     await flushPromises()

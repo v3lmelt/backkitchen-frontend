@@ -283,6 +283,8 @@ export interface ChecklistItem {
   created_at: string
 }
 
+export type WorkflowVariant = 'standard' | 'producer_direct'
+
 export interface WorkflowEvent {
   id: number
   event_type: string
@@ -305,6 +307,7 @@ export interface Track {
   track_number?: number | null
   status: TrackStatus
   rejection_mode: RejectionMode | null
+  workflow_variant: WorkflowVariant
   version: number
   workflow_cycle: number
   submitter_id: number | null

@@ -10,7 +10,7 @@ import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import WorkflowActionBar from '@/components/workflow/WorkflowActionBar.vue'
-import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue'
+import type { WorkflowAction, WorkflowActionConfirm } from '@/components/workflow/WorkflowActionBar.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 
 const route = useRoute()
@@ -23,6 +23,13 @@ const allCycleIssues = ref<Issue[]>([])
 const checklist = ref<ChecklistItem[]>([])
 const loading = ref(true)
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
+const isIssueFormOpen = ref(false)
+const waveformMode = computed<'seek' | 'annotate'>(() => (isIssueFormOpen.value ? 'annotate' : 'seek'))
+
+function onRequestWaveformMode(next: 'seek' | 'annotate') {
+  if (next === 'annotate') issueFormRef.value?.openForm()
+  else issueFormRef.value?.closeForm()
+}
 
 onMounted(loadPage)
 
@@ -43,7 +50,7 @@ async function loadPage() {
 const isSubmittedState = computed(() => track.value?.status === 'submitted')
 const isMasteringGateState = computed(() => track.value?.status === 'producer_mastering_gate')
 
-const audioUrl = computed(() => track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio` : '')
+const audioUrl = computed(() => track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio?v=${track.value.version ?? 0}` : '')
 
 const { downloading, downloadProgress, downloadTrackAudio } = useAudioDownload()
 const handleDownload = () => downloadTrackAudio(audioUrl, track)
@@ -67,11 +74,7 @@ function onIssueSelect(issue: Issue) {
   router.push(`/issues/${issue.id}`)
 }
 
-async function handleIntake(decision: 'accept' | 'reject_final' | 'reject_resubmittable') {
-  if (decision === 'reject_final') {
-    const confirmed = window.confirm(t('producer.rejectFinalConfirm'))
-    if (!confirmed) return
-  }
+async function handleIntake(decision: 'accept' | 'accept_producer_direct' | 'reject_final' | 'reject_resubmittable') {
   await trackApi.intakeDecision(trackId.value, decision)
   router.push(`/tracks/${trackId.value}`)
 }
@@ -86,11 +89,25 @@ const intakeActions = computed<WorkflowAction[]>(() => [
     label: t('producer.rejectResubmittable'),
     type: 'return',
     handler: () => handleIntake('reject_resubmittable'),
+    confirm: {
+      title: t('producer.rejectResubmittableConfirmTitle'),
+      message: t('producer.rejectResubmittableConfirmMessage'),
+    } as WorkflowActionConfirm,
   },
   {
     label: t('producer.rejectFinal'),
     type: 'reject',
     handler: () => handleIntake('reject_final'),
+    confirm: {
+      title: t('producer.rejectFinalConfirmTitle'),
+      message: t('producer.rejectFinalConfirm'),
+      confirmLabel: t('producer.rejectFinal'),
+    } as WorkflowActionConfirm,
+  },
+  {
+    label: t('producer.acceptProducerDirect'),
+    type: 'advance',
+    handler: () => handleIntake('accept_producer_direct'),
   },
   {
     label: t('producer.acceptAndAssign'),
@@ -127,7 +144,7 @@ const gateActions = computed<WorkflowAction[]>(() => [
         </button>
       </div>
 
-      <WorkflowProgress :status="track.status" />
+      <WorkflowProgress :status="track.status" :variant="track.workflow_variant" />
 
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="card text-center">
@@ -156,9 +173,9 @@ const gateActions = computed<WorkflowAction[]>(() => [
       <template v-if="isMasteringGateState">
         <!-- Waveform Player -->
         <div v-if="audioUrl">
-          <div class="flex items-center justify-between mb-2">
-            <p class="text-xs text-muted-foreground">{{ t('producer.waveformHint') }}</p>
-            <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+          <div class="flex items-start justify-between gap-3 mb-2">
+            <p class="text-xs text-muted-foreground leading-relaxed">{{ t('producer.waveformHint') }}</p>
+            <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1 shrink-0">
               {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
             </button>
           </div>
@@ -166,10 +183,13 @@ const gateActions = computed<WorkflowAction[]>(() => [
             :audio-url="audioUrl"
             :issues="waveformIssues"
             :selectable="true"
+            :mode="waveformMode"
             :selected-range="issueFormRef?.selectedRange ?? null"
+            :draft-markers="issueFormRef?.markers ?? []"
             @click="(t: number) => issueFormRef?.handleClick(t)"
             @regionClick="onIssueSelect"
             @rangeSelect="(s: number, e: number) => issueFormRef?.handleRangeSelect(s, e)"
+            @requestModeChange="onRequestWaveformMode"
           />
         </div>
 
@@ -179,6 +199,7 @@ const gateActions = computed<WorkflowAction[]>(() => [
           :track-id="trackId"
           phase="producer"
           @created="(issue: Issue) => allCycleIssues.push(issue)"
+          @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
         >
           <template #heading>
             <h3 class="text-sm font-sans font-semibold text-foreground">
