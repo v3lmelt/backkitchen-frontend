@@ -10,15 +10,29 @@ export interface TimeReference {
   length: number
 }
 
+export interface MarkerIndexReference {
+  raw: string
+  markerIndex: number
+  zeroBasedIndex: number
+  index: number
+  length: number
+}
+
 export type TimeReferenceSegment =
   | { type: 'text'; value: string }
   | { type: 'reference'; value: TimeReference }
+
+export type InlineReferenceSegment =
+  | { type: 'text'; value: string }
+  | { type: 'time'; value: TimeReference }
+  | { type: 'marker'; value: MarkerIndexReference }
 
 const TIME_VALUE = '\\d{1,2}:\\d{2}(?::\\d{2})?(?:\\.\\d{1,3})?'
 const TIME_REFERENCE_PATTERN = new RegExp(
   String.raw`(?<![\w])(?:(?<prefix>[at]):)?(?<start>${TIME_VALUE})(?:\s*-\s*(?<end>${TIME_VALUE}))?(?![\w])`,
   'gi',
 )
+const MARKER_REFERENCE_PATTERN = /(?<![\w])#(?<index>\d{1,3})(?![\w])/g
 
 export function parseTimecode(value: string): number | null {
   const trimmed = value.trim()
@@ -72,6 +86,28 @@ export function extractTimeReferences(text: string): TimeReference[] {
   return references
 }
 
+export function extractMarkerIndexReferences(text: string): MarkerIndexReference[] {
+  const matches = text.matchAll(new RegExp(MARKER_REFERENCE_PATTERN))
+  const references: MarkerIndexReference[] = []
+
+  for (const match of matches) {
+    const markerIndexRaw = match.groups?.index
+    if (!markerIndexRaw || match.index == null) continue
+    const markerIndex = Number(markerIndexRaw)
+    if (!Number.isInteger(markerIndex) || markerIndex <= 0) continue
+
+    references.push({
+      raw: match[0],
+      markerIndex,
+      zeroBasedIndex: markerIndex - 1,
+      index: match.index,
+      length: match[0].length,
+    })
+  }
+
+  return references
+}
+
 export function splitTextWithTimeReferences(text: string): TimeReferenceSegment[] {
   const references = extractTimeReferences(text)
   if (!references.length) return [{ type: 'text', value: text }]
@@ -85,6 +121,60 @@ export function splitTextWithTimeReferences(text: string): TimeReferenceSegment[
     }
 
     segments.push({ type: 'reference', value: reference })
+    cursor = reference.index + reference.length
+  }
+
+  if (cursor < text.length) {
+    segments.push({ type: 'text', value: text.slice(cursor) })
+  }
+
+  return segments
+}
+
+export function splitTextWithInlineReferences(text: string): InlineReferenceSegment[] {
+  const timeReferences = extractTimeReferences(text)
+  const markerReferences = extractMarkerIndexReferences(text)
+
+  if (!timeReferences.length && !markerReferences.length) {
+    return [{ type: 'text', value: text }]
+  }
+
+  const allReferences: Array<
+    | { type: 'time'; index: number; length: number; value: TimeReference }
+    | { type: 'marker'; index: number; length: number; value: MarkerIndexReference }
+  > = [
+    ...timeReferences.map(reference => ({
+      type: 'time' as const,
+      index: reference.index,
+      length: reference.length,
+      value: reference,
+    })),
+    ...markerReferences.map(reference => ({
+      type: 'marker' as const,
+      index: reference.index,
+      length: reference.length,
+      value: reference,
+    })),
+  ]
+
+  allReferences.sort((a, b) => a.index - b.index || b.length - a.length)
+
+  const segments: InlineReferenceSegment[] = []
+  let cursor = 0
+
+  for (const reference of allReferences) {
+    if (reference.index < cursor) continue
+
+    if (reference.index > cursor) {
+      segments.push({ type: 'text', value: text.slice(cursor, reference.index) })
+    }
+
+    if (reference.type === 'time') {
+      segments.push({ type: 'time', value: reference.value })
+    } else {
+      segments.push({ type: 'marker', value: reference.value })
+    }
+
     cursor = reference.index + reference.length
   }
 
