@@ -396,6 +396,11 @@ export const authApi = {
     return request<User>('/auth/me/avatar', { method: 'POST', body: form })
   },
   deleteAvatar: () => request<User>('/auth/me/avatar', { method: 'DELETE' }),
+  deleteAccount: (password: string) =>
+    request<void>('/auth/me/delete-account', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
 }
 
 export const adminApi = {

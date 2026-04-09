@@ -675,7 +675,18 @@
     "preferences": "偏好设置",
     "preferencesDesc": "个性化你的使用体验",
     "preferencesComingSoon": "更多偏好设置即将推出。",
-    "avatarError": "头像上传失败，请重试。"
+    "avatarError": "头像上传失败，请重试。",
+    "danger": {
+      "title": "危险区域",
+      "desc": "永久注销你的账户。账户将被匿名化，登录凭证立即失效。如果你是任何社团的创建者或未归档专辑的制作人，需要先处理这些资源。",
+      "deleteButton": "注销账户",
+      "confirmMessage": "此操作不可撤销。请输入密码确认。",
+      "passwordLabel": "当前密码",
+      "passwordPlaceholder": "输入当前密码确认",
+      "confirmButton": "确认注销",
+      "errorPasswordRequired": "请输入当前密码。",
+      "errorGeneric": "注销失败，请重试。"
+    }
   },
   "invitations": {
     "title": "专辑邀请",

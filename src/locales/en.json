@@ -865,7 +865,18 @@
     "preferences": "Preferences",
     "preferencesDesc": "Customize your experience",
     "preferencesComingSoon": "More preferences coming soon.",
-    "avatarError": "Failed to upload avatar. Please try again."
+    "avatarError": "Failed to upload avatar. Please try again.",
+    "danger": {
+      "title": "Danger Zone",
+      "desc": "Permanently close your account. Your account will be anonymized and your session invalidated immediately. If you own any circles or produce any non-archived albums, you must handle those resources first.",
+      "deleteButton": "Delete account",
+      "confirmMessage": "This action cannot be undone. Please enter your password to confirm.",
+      "passwordLabel": "Current password",
+      "passwordPlaceholder": "Enter your current password",
+      "confirmButton": "Confirm deletion",
+      "errorPasswordRequired": "Please enter your current password.",
+      "errorGeneric": "Failed to delete account. Please try again."
+    }
   },
   "admin": {
     "title": "Admin Panel",
