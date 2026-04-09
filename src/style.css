@@ -3,12 +3,18 @@
 @tailwind utilities;
 
 @layer base {
-  html {
+  html, body {
+    height: 100%;
+    overflow: hidden;
     font-family: theme('fontFamily.sans');
   }
 
   body {
     @apply bg-background text-foreground antialiased m-0 font-sans;
+  }
+
+  #app {
+    height: 100%;
   }
 }
 
