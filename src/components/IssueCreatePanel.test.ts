@@ -18,7 +18,7 @@ describe('IssueCreatePanel', () => {
       id: 99,
       phase: 'peer',
       workflow_cycle: 1,
-      time_start: 1.5,
+      markers: [{ id: 1, issue_id: 99, marker_type: 'point', time_start: 1.5, time_end: null }],
     })
   })
 
@@ -39,15 +39,16 @@ describe('IssueCreatePanel', () => {
     expect(wrapper.find('input').exists()).toBe(true)
   })
 
-  it('submits issue with form data', async () => {
+  it('submits issue with form data and markers', async () => {
     const wrapper = mountWithPlugins(IssueCreatePanel, {
       props: { trackId: 7, phase: 'mastering' },
     })
 
-    // Open form
-    await wrapper.find('button.btn-primary').trigger('click')
+    // Add a marker via handleClick, then fill form
+    const vm = wrapper.vm as any
+    vm.handleClick(1.5)
+    await wrapper.vm.$nextTick()
 
-    // Fill form
     await wrapper.find('input').setValue('Clicks at 1:30')
     await wrapper.find('textarea').setValue('Audible clicking artifacts')
 
@@ -61,8 +62,8 @@ describe('IssueCreatePanel', () => {
       title: 'Clicks at 1:30',
       description: 'Audible clicking artifacts',
       severity: 'major',
-      issue_type: 'point',
       phase: 'mastering',
+      markers: expect.arrayContaining([expect.objectContaining({ marker_type: 'point', time_start: 1.5 })]),
     }))
   })
 
@@ -71,7 +72,11 @@ describe('IssueCreatePanel', () => {
       props: { trackId: 1, phase: 'peer' },
     })
 
-    await wrapper.find('button.btn-primary').trigger('click')
+    // Add a marker first
+    const vm = wrapper.vm as any
+    vm.handleClick(2.0)
+    await wrapper.vm.$nextTick()
+
     await wrapper.find('input').setValue('Test')
     await wrapper.find('textarea').setValue('Desc')
     const submitBtn = wrapper.findAll('button').find(b => b.classes().includes('btn-primary') && b.classes().includes('text-sm'))!
@@ -82,7 +87,7 @@ describe('IssueCreatePanel', () => {
     expect(wrapper.emitted('created')).toBeTruthy()
   })
 
-  it('exposes handleClick that sets point time and opens form', () => {
+  it('exposes handleClick that adds point marker and opens form', () => {
     const wrapper = mountWithPlugins(IssueCreatePanel, {
       props: { trackId: 1, phase: 'peer' },
     })
@@ -91,7 +96,7 @@ describe('IssueCreatePanel', () => {
     expect(vm.showForm).toBe(true)
   })
 
-  it('exposes handleRangeSelect that sets range and opens form', () => {
+  it('exposes handleRangeSelect that adds range marker and opens form', () => {
     const wrapper = mountWithPlugins(IssueCreatePanel, {
       props: { trackId: 1, phase: 'peer' },
     })

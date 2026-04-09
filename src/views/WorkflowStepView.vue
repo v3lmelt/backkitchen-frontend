@@ -10,6 +10,7 @@ import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import { ChevronLeft, Upload } from 'lucide-vue-next'
+import { useAudioDownload } from '@/composables/useAudioDownload'
 
 const route = useRoute()
 const router = useRouter()
@@ -46,6 +47,9 @@ const transitions = computed<WorkflowTransitionOption[]>(() => track.value?.work
 const audioUrl = computed(() =>
   track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio` : '',
 )
+
+const { downloading, downloadProgress, downloadTrackAudio } = useAudioDownload()
+const handleDownload = () => downloadTrackAudio(audioUrl, track)
 
 const stepIssues = computed(() =>
   issues.value.filter(i => i.phase === currentStep.value?.id || i.phase === track.value?.status),
@@ -126,7 +130,12 @@ function goBack() {
 
     <!-- Gate step: show issues + decision buttons -->
     <template v-if="currentStep.type === 'gate'">
-      <div v-if="audioUrl" class="card">
+      <div v-if="audioUrl" class="card space-y-3">
+        <div class="flex items-center justify-end">
+          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+          </button>
+        </div>
         <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" />
       </div>
 
@@ -156,7 +165,12 @@ function goBack() {
 
     <!-- Review step: show issues, create issues, decision -->
     <template v-if="currentStep.type === 'review'">
-      <div v-if="audioUrl" class="card">
+      <div v-if="audioUrl" class="card space-y-3">
+        <div class="flex items-center justify-end">
+          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+          </button>
+        </div>
         <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" />
       </div>
 
@@ -212,8 +226,13 @@ function goBack() {
         </button>
       </div>
 
-      <div v-if="audioUrl" class="card">
-        <h3 class="text-sm font-mono font-semibold mb-3">{{ t('workflowStep.currentAudio') }}</h3>
+      <div v-if="audioUrl" class="card space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.currentAudio') }}</h3>
+          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+          </button>
+        </div>
         <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" />
       </div>
 
@@ -225,8 +244,13 @@ function goBack() {
 
     <!-- Delivery step: upload master + transition buttons -->
     <template v-if="currentStep.type === 'delivery'">
-      <div v-if="audioUrl" class="card">
-        <h3 class="text-sm font-mono font-semibold mb-3">{{ t('workflowStep.sourceAudio') }}</h3>
+      <div v-if="audioUrl" class="card space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.sourceAudio') }}</h3>
+          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+          </button>
+        </div>
         <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" />
       </div>
 

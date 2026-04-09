@@ -14,13 +14,13 @@ export type LegacyTrackStatus =
 export type TrackStatus = LegacyTrackStatus | (string & {})
 
 export type RejectionMode = 'final' | 'resubmittable'
-export type IssueType = 'point' | 'range'
+export type MarkerType = 'point' | 'range'
 export type IssueSeverity = 'critical' | 'major' | 'minor' | 'suggestion'
 export type IssueStatus = 'open' | 'disagreed' | 'resolved'
 export type IssuePhase = string
 export type UserRole = 'member' | 'producer'
 
-export type WorkflowStepType = 'gate' | 'review' | 'revision' | 'delivery'
+export type WorkflowStepType = 'approval' | 'gate' | 'review' | 'revision' | 'delivery'
 
 export interface WorkflowStepDef {
   id: string
@@ -31,6 +31,16 @@ export interface WorkflowStepDef {
   transitions: Record<string, string>
   return_to?: string | null
   revision_step?: string | null
+  // Approval-specific
+  allow_permanent_reject?: boolean | null
+  // Review-specific
+  assignment_mode?: 'manual' | 'auto' | null
+  reviewer_pool?: number[] | null
+  required_reviewer_count?: number | null
+  // Approval/delivery assignee override
+  assignee_user_id?: number | null
+  // Delivery-specific
+  require_confirmation?: boolean | null
 }
 
 export interface WorkflowConfig {
@@ -157,15 +167,49 @@ export interface TrackSourceVersion {
   created_at: string
 }
 
+export interface StageAssignment {
+  id: number
+  track_id: number
+  stage_id: string
+  user_id: number
+  status: 'pending' | 'completed'
+  assigned_at: string
+  completed_at: string | null
+  user?: User | null
+}
+
+export interface ReopenRequest {
+  id: number
+  track_id: number
+  requested_by_id: number
+  target_stage_id: string
+  reason: string
+  status: 'pending' | 'approved' | 'rejected'
+  decided_by_id: number | null
+  created_at: string
+  decided_at: string | null
+  requested_by?: User | null
+  decided_by?: User | null
+}
+
 export interface MasterDelivery {
   id: number
   workflow_cycle: number
   delivery_number: number
   file_path: string
   uploaded_by_id: number | null
+  confirmed_at: string | null
   producer_approved_at: string | null
   submitter_approved_at: string | null
   created_at: string
+}
+
+export interface IssueMarker {
+  id: number
+  issue_id: number
+  marker_type: MarkerType
+  time_start: number
+  time_end: number | null
 }
 
 export interface Issue {
@@ -180,11 +224,9 @@ export interface Issue {
   master_delivery_id: number | null
   title: string
   description: string
-  issue_type: IssueType
   severity: IssueSeverity
   status: IssueStatus
-  time_start: number
-  time_end: number | null
+  markers: IssueMarker[]
   created_at: string
   updated_at: string
   comment_count?: number

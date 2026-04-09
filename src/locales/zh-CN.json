@@ -166,7 +166,8 @@
   },
   "workflowBuilder": {
     "stepTypes": {
-      "gate": "关卡（决策）",
+      "gate": "审批",
+      "approval": "审批",
       "review": "评审",
       "revision": "修订（上传）",
       "delivery": "交付（上传）"
@@ -224,6 +225,25 @@
       "note2": "步骤 ID 仅支持小写字母、数字和下划线，且必须唯一。",
       "note3": "至少需要有一条路径通往「已完成」终态，否则曲目将无法正常结项。"
     }
+  },
+  "workflowEditor": {
+    "chooseType": "选择要添加的阶段类型：",
+    "assigneeOverride": "指定操作人（可选）",
+    "useRoleDefault": "使用默认角色",
+    "assignmentMode": "审阅人分配方式",
+    "manual": "手动指派",
+    "auto": "自动分配",
+    "requiredReviewers": "所需审阅人数",
+    "allowPermanentReject": "允许永久拒绝曲目",
+    "requireConfirmation": "上传后需确认才推进",
+    "hasRevision": "支持打回修订（自动创建修订阶段）",
+    "revisionLabel": "修订阶段名称",
+    "revisionAssignee": "修订负责角色",
+    "unsavedChanges": "有未保存的更改",
+    "noChanges": "无更改",
+    "saveWorkflow": "保存工作流",
+    "saved": "工作流已保存",
+    "migrationWarning": "以下曲目因阶段变更已被迁移："
   },
   "workflowTemplate": {
     "title": "工作流模板",
@@ -360,14 +380,37 @@
     "archiveConfirm": "确认归档此曲目？归档后 14 天内可恢复，超期将被永久删除。",
     "system": "系统",
     "rejectionMode": "拒绝模式：{mode}",
+    "masterAudio": "母带音频",
+    "reopen": "重新开始",
+    "requestReopen": "申请重新开始",
+    "reopenDesc": "选择要回退到的阶段，曲目将进入新的工作周期。",
+    "requestReopenDesc": "向制作人申请重新开始此曲目。",
+    "reopenTarget": "目标阶段",
+    "selectStage": "选择阶段",
+    "reopenReason": "申请理由",
+    "reopenReasonPlaceholder": "请说明重新开始的原因…",
+    "confirmDelivery": "确认提交",
+    "reupload": "重新上传",
+    "deliveryPreview": "请试听并确认上传的母带文件",
     "actions": {
       "intake": "接收审批",
+      "accept": "接收",
       "peer_review": "进入同行评审",
       "upload_revision": "上传修订版",
       "resubmit": "重新提交曲目",
       "producer_gate": "制作人审批",
+      "approve": "通过",
+      "reject": "打回",
+      "pass": "通过",
+      "needs_revision": "需要修订",
+      "send_to_mastering": "送去母带",
       "mastering": "进入母带制作",
-      "final_review": "进入终审"
+      "deliver": "交付",
+      "request_revision": "请求修订",
+      "final_review": "进入终审",
+      "confirm_delivery": "确认母带",
+      "reject_final": "最终拒绝",
+      "reject_resubmittable": "拒绝（可重新提交）"
     }
   },
   "peerReview": {
@@ -650,6 +693,11 @@
     "statusNotePlaceholder": "描述你的修改内容（可选）",
     "revisionNote": "修改说明",
     "batchStatusNote": "批量修改说明（可选）",
+    "timedMarkers": "时间标记",
+    "generalIssue": "整体问题",
+    "clickToAddMarker": "点击波形添加标记",
+    "clickWaveformToAdd": "点击或拖选波形来添加时间标记",
+    "markersCount": "{count} 个标记",
     "status": {
       "resolved": "已解决",
       "disagreed": "有异议"
@@ -722,6 +770,7 @@
     "workflow": {
       "customWorkflow": "自定义工作流",
       "locked": "工作流已锁定，无法更改。",
+      "viewOnly": "只有制作人可以修改工作流配置。",
       "defaultWorkflow": "该专辑使用默认工作流。",
       "defaultDesc": "已提交 → 同行评审 → 制作人审批 → 母带制作 → 终审 → 已完成",
       "returnTo": "返回到"

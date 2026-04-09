@@ -68,13 +68,13 @@ describe('FinalReviewView', () => {
         current_master_delivery: { id: 55, producer_approved_at: null, submitter_approved_at: null },
       },
       issues: [
-        { id: 1, phase: 'final_review', master_delivery_id: 55, time_start: 1 },
-        { id: 2, phase: 'final_review', master_delivery_id: 44, time_start: 2 },
+        { id: 1, phase: 'final_review', master_delivery_id: 55, markers: [{ id: 1, issue_id: 1, marker_type: 'point', time_start: 1, time_end: null }] },
+        { id: 2, phase: 'final_review', master_delivery_id: 44, markers: [{ id: 2, issue_id: 2, marker_type: 'point', time_start: 2, time_end: null }] },
       ],
       checklist_items: [],
       events: [],
     })
-    mocks.issueCreateMock.mockResolvedValue({ id: 99, phase: 'final_review', master_delivery_id: 55, time_start: 1 })
+    mocks.issueCreateMock.mockResolvedValue({ id: 99, phase: 'final_review', master_delivery_id: 55, markers: [{ id: 99, issue_id: 99, marker_type: 'point', time_start: 1, time_end: null }] })
     mocks.approveFinalReviewMock.mockResolvedValue({})
     mocks.returnToMasteringMock.mockResolvedValue({})
   })

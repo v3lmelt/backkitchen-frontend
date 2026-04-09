@@ -262,9 +262,12 @@ onBeforeUnmount(() => {
               {{ fullIssue?.title ?? issue.title }}
             </h2>
             <p class="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
-              <span>
-                {{ formatTime(issue.time_start) }}
-                <span v-if="issue.time_end"> – {{ formatTime(issue.time_end) }}</span>
+              <span v-if="issue.markers.length === 0" class="italic">{{ t('issue.generalIssue') }}</span>
+              <span v-else>
+                <template v-for="(m, mi) in issue.markers" :key="mi">
+                  <span v-if="mi > 0" class="text-border mx-1">·</span>
+                  <span>{{ formatTime(m.time_start) }}<span v-if="m.time_end"> – {{ formatTime(m.time_end) }}</span></span>
+                </template>
               </span>
               <span class="text-border">·</span>
               <span :class="issue.phase === 'peer' ? 'font-mono' : ''">{{ authorLabel(issue) }}</span>

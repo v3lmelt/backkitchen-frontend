@@ -114,7 +114,7 @@ describe('ProducerDecisionView', () => {
     mocks.trackGetMock.mockResolvedValue({
       track: { id: 5, title: 'Track 5', status: 'producer_mastering_gate', workflow_cycle: 1, file_path: '/audio.wav' },
       issues: [
-        { id: 1, phase: 'peer', workflow_cycle: 1, status: 'open', title: 'I1', severity: 'major', time_start: 1 },
+        { id: 1, phase: 'peer', workflow_cycle: 1, status: 'open', title: 'I1', severity: 'major', markers: [{ id: 1, issue_id: 1, marker_type: 'point', time_start: 1, time_end: null }] },
       ],
       checklist_items: [{ id: 1, label: 'Balance', passed: true, note: null }],
       events: [],
@@ -149,8 +149,8 @@ describe('ProducerDecisionView', () => {
     mocks.trackGetMock.mockResolvedValue({
       track: { id: 5, title: 'Track 5', status: 'producer_mastering_gate', workflow_cycle: 1, file_path: '/a.wav' },
       issues: [
-        { id: 1, phase: 'peer', workflow_cycle: 1, status: 'open', title: 'I', severity: 'major', time_start: 1 },
-        { id: 2, phase: 'peer', workflow_cycle: 1, status: 'resolved', title: 'I2', severity: 'minor', time_start: 2 },
+        { id: 1, phase: 'peer', workflow_cycle: 1, status: 'open', title: 'I', severity: 'major', markers: [{ id: 1, issue_id: 1, marker_type: 'point', time_start: 1, time_end: null }] },
+        { id: 2, phase: 'peer', workflow_cycle: 1, status: 'resolved', title: 'I2', severity: 'minor', markers: [{ id: 2, issue_id: 2, marker_type: 'point', time_start: 2, time_end: null }] },
       ],
       checklist_items: [],
       events: [],

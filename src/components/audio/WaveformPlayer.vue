@@ -2,7 +2,7 @@
 import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CircleAlert, CircleCheckBig, Play, Pause } from 'lucide-vue-next'
-import type { Issue } from '@/types'
+import type { Issue, IssueMarker } from '@/types'
 import type WaveSurfer from 'wavesurfer.js'
 import type RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
 import { resolveAssetUrl } from '@/api'
@@ -103,8 +103,14 @@ interface PointMarkerGroup {
   popoverAlign: 'left' | 'center' | 'right'
 }
 
+interface MarkerWithIssue {
+  marker: IssueMarker
+  issue: Issue
+}
+
 interface RangeLaneItem {
-  issue: Issue & { time_end: number }
+  marker: IssueMarker & { time_end: number }
+  issue: Issue
   lane: number
 }
 
@@ -160,28 +166,28 @@ function getRangeWidth(start: number, end: number): string {
 const pointGroups = computed<PointMarkerGroup[]>(() => {
   if (!props.issues?.length || duration.value <= 0) return []
 
-  const grouped = new Map<number, Issue[]>()
+  // Flatten: each point marker → its parent issue (an issue can appear in multiple groups)
+  const grouped = new Map<number, Map<number, Issue>>()
   for (const issue of props.issues) {
-    if (issue.issue_type !== 'point') continue
-    const key = Math.round(issue.time_start * 1000)
-    const entries = grouped.get(key)
-    if (entries) {
-      entries.push(issue)
-    } else {
-      grouped.set(key, [issue])
+    for (const marker of issue.markers) {
+      if (marker.marker_type !== 'point') continue
+      const key = Math.round(marker.time_start * 1000)
+      if (!grouped.has(key)) grouped.set(key, new Map())
+      grouped.get(key)!.set(issue.id, issue)
     }
   }
 
   return Array.from(grouped.entries())
-    .map(([key, issues]) => {
+    .map(([key, issueMap]) => {
       const time = key / 1000
       const percent = getMarkerPercent(time)
+      const issues = [...issueMap.values()].sort((a, b) => a.created_at.localeCompare(b.created_at))
       return {
         key: String(key),
         time,
         percent,
         left: `${percent}%`,
-        issues: [...issues].sort((a, b) => a.created_at.localeCompare(b.created_at)),
+        issues,
         status: getMarkerStatus(issues),
         markerAlign: getPointMarkerAlign(percent),
         popoverAlign: getPointPopoverAlign(percent),
@@ -190,27 +196,35 @@ const pointGroups = computed<PointMarkerGroup[]>(() => {
     .sort((a, b) => a.time - b.time)
 })
 
-const rangeIssues = computed(() =>
-  (props.issues ?? []).filter(
-    (i): i is Issue & { time_end: number } => i.issue_type === 'range' && i.time_end !== null,
-  ),
-)
+// Flatten all range markers with their parent issue
+const rangeMarkerItems = computed<MarkerWithIssue[]>(() => {
+  const items: MarkerWithIssue[] = []
+  for (const issue of props.issues ?? []) {
+    for (const marker of issue.markers) {
+      if (marker.marker_type === 'range' && marker.time_end !== null) {
+        items.push({ marker, issue })
+      }
+    }
+  }
+  return items
+})
 
 const rangeLaneItems = computed<RangeLaneItem[]>(() => {
   const laneEnds: number[] = []
 
-  return [...rangeIssues.value]
-    .sort((a, b) => a.time_start - b.time_start || a.time_end - b.time_end)
-    .map((issue) => {
-      let lane = laneEnds.findIndex(end => issue.time_start >= end)
+  return [...rangeMarkerItems.value]
+    .sort((a, b) => a.marker.time_start - b.marker.time_start || a.marker.time_end! - b.marker.time_end!)
+    .map(({ marker, issue }) => {
+      const m = marker as IssueMarker & { time_end: number }
+      let lane = laneEnds.findIndex(end => m.time_start >= end)
       if (lane === -1) {
         lane = laneEnds.length
-        laneEnds.push(issue.time_end)
+        laneEnds.push(m.time_end)
       } else {
-        laneEnds[lane] = issue.time_end
+        laneEnds[lane] = m.time_end
       }
 
-      return { issue, lane }
+      return { marker: m, issue, lane }
     })
 })
 
@@ -220,7 +234,7 @@ const rangeLaneCount = computed(() =>
 
 const overlayHeight = computed(() => props.height || 128)
 
-const hasPointIssues = computed(() => (props.issues ?? []).some(i => i.issue_type === 'point'))
+const hasPointIssues = computed(() => (props.issues ?? []).some(i => i.markers.some(m => m.marker_type === 'point')))
 const hasRangeIssues = computed(() => rangeLaneItems.value.length > 0)
 const rangeRulerHeight = computed(() => Math.max(rangeLaneCount.value, 1) * 6)
 
@@ -338,11 +352,11 @@ function _removeRegionById(id: string) {
   region?.remove?.()
 }
 
-function _addHighlightRegion(issue: Issue & { time_end: number }) {
+function _addHighlightRegion(issue: Issue, start: number, end: number) {
   if (!regionsPlugin.value) return
   const region = regionsPlugin.value.addRegion({
-    start: issue.time_start,
-    end: issue.time_end,
+    start,
+    end,
     color: severityRegionColor(issue.severity),
     drag: false,
     resize: false,
@@ -354,7 +368,8 @@ function _addHighlightRegion(issue: Issue & { time_end: number }) {
 }
 
 function highlightIssue(issue: Issue | null) {
-  const newId = (issue?.issue_type === 'range' && issue.time_end !== null) ? issue.id : null
+  const hasRange = issue?.markers.some(m => m.marker_type === 'range' && m.time_end !== null)
+  const newId = hasRange ? issue!.id : null
   activeRangeIssueId.value = activeRangeIssueId.value === newId ? null : newId
 
   if (highlightRegionId.value) {
@@ -363,14 +378,18 @@ function highlightIssue(issue: Issue | null) {
   }
   if (activeRangeIssueId.value !== null) {
     const target = props.issues?.find(i => i.id === activeRangeIssueId.value)
-    if (target && target.issue_type === 'range' && target.time_end !== null) {
-      _addHighlightRegion(target as Issue & { time_end: number })
+    if (target) {
+      const rangeMarker = target.markers.find(m => m.marker_type === 'range' && m.time_end !== null)
+      if (rangeMarker && rangeMarker.time_end !== null) {
+        _addHighlightRegion(target, rangeMarker.time_start, rangeMarker.time_end)
+      }
     }
   }
 }
 
-function handleTimelineClick(issue: Issue & { time_end: number }) {
-  seekTo(issue.time_start)
+function handleTimelineClick(issue: Issue) {
+  const firstMarker = issue.markers[0]
+  if (firstMarker) seekTo(firstMarker.time_start)
   emit('regionClick', issue)  // parent's onIssueSelect will call highlightIssue
 }
 
@@ -618,8 +637,9 @@ function renderIssueRegions() {
   // Restore highlight if one was active
   if (activeRangeIssueId.value !== null) {
     const issue = props.issues?.find(i => i.id === activeRangeIssueId.value)
-    if (issue && issue.issue_type === 'range' && issue.time_end !== null) {
-      _addHighlightRegion(issue as Issue & { time_end: number })
+    const rangeM = issue?.markers.find(m => m.marker_type === 'range' && m.time_end !== null)
+    if (issue && rangeM && rangeM.time_end !== null) {
+      _addHighlightRegion(issue, rangeM.time_start, rangeM.time_end!)
     } else {
       activeRangeIssueId.value = null
     }
@@ -631,7 +651,8 @@ function renderIssueRegions() {
 watch(() => props.issues, (issues) => {
   if (activeRangeIssueId.value === null) return
   const issue = issues?.find(i => i.id === activeRangeIssueId.value)
-  if (!issue || issue.issue_type !== 'range' || issue.time_end === null) {
+  const hasRange = issue?.markers.some(m => m.marker_type === 'range' && m.time_end !== null)
+  if (!issue || !hasRange) {
     activeRangeIssueId.value = null
     if (highlightRegionId.value) {
       _removeRegionById(highlightRegionId.value)
@@ -819,7 +840,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom })
               />
               <span class="min-w-0">
                 <span class="block truncate text-xs font-medium text-foreground">{{ issue.title }}</span>
-                <span class="block text-[11px] text-muted-foreground">{{ formatTime(issue.time_start) }}</span>
+                <span class="block text-[11px] text-muted-foreground">{{ formatTime(group.time) }}</span>
               </span>
             </button>
           </div>
@@ -835,13 +856,13 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom })
         >
           <button
             v-for="item in rangeLaneItems"
-            :key="item.issue.id"
+            :key="`${item.issue.id}-${item.marker.id}`"
             type="button"
             class="group absolute min-w-[4px] cursor-pointer transition-all duration-150"
             :class="activeRangeIssueId === item.issue.id ? 'z-10' : 'z-[1]'"
             :style="{
-              left: getMarkerPosition(item.issue.time_start),
-              width: getRangeWidth(item.issue.time_start, item.issue.time_end),
+              left: getMarkerPosition(item.marker.time_start),
+              width: getRangeWidth(item.marker.time_start, item.marker.time_end),
               bottom: rangeLaneOffset(item.lane),
               height: '4px',
               ...rangeRulerBarStyle(item.issue),
@@ -852,7 +873,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom })
               class="pointer-events-none absolute left-1/2 bottom-full z-20 mb-1.5 min-w-max -translate-x-1/2 whitespace-nowrap rounded-full border bg-card px-2.5 py-1 text-[11px] font-mono text-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100"
               :class="activeRangeIssueId === item.issue.id ? 'opacity-100' : ''"
               :style="rangeRulerTooltipStyle(item.issue)"
-            >{{ formatTimeShort(item.issue.time_start) }} <span class="opacity-50 mx-0.5">→</span> {{ formatTimeShort(item.issue.time_end) }}</span>
+            >{{ formatTimeShort(item.marker.time_start) }} <span class="opacity-50 mx-0.5">→</span> {{ formatTimeShort(item.marker.time_end) }}</span>
           </button>
         </div>
         <div

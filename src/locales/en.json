@@ -162,7 +162,8 @@
   },
   "workflowBuilder": {
     "stepTypes": {
-      "gate": "Gate (Decision)",
+      "gate": "Approval",
+      "approval": "Approval",
       "review": "Review",
       "revision": "Revision (Upload)",
       "delivery": "Delivery (Upload)"
@@ -220,6 +221,25 @@
       "note2": "Step IDs must be unique and use only lowercase letters, numbers, and underscores.",
       "note3": "There must be at least one path leading to \"Completed\", otherwise tracks cannot finish."
     }
+  },
+  "workflowEditor": {
+    "chooseType": "Choose stage type to add:",
+    "assigneeOverride": "Assignee override (optional)",
+    "useRoleDefault": "Use default role",
+    "assignmentMode": "Reviewer assignment mode",
+    "manual": "Manual",
+    "auto": "Auto (load-balanced)",
+    "requiredReviewers": "Required reviewer count",
+    "allowPermanentReject": "Allow permanently rejecting track",
+    "requireConfirmation": "Require confirmation after upload",
+    "hasRevision": "Enable reject/revision loop (auto-creates revision stage)",
+    "revisionLabel": "Revision stage label",
+    "revisionAssignee": "Revision assignee role",
+    "unsavedChanges": "Unsaved changes",
+    "noChanges": "No changes",
+    "saveWorkflow": "Save Workflow",
+    "saved": "Workflow saved",
+    "migrationWarning": "The following tracks were migrated due to stage changes:"
   },
   "workflowTemplate": {
     "title": "Workflow Templates",
@@ -356,14 +376,37 @@
     "archiveConfirm": "Archive this track? It can be restored within 14 days. After that, it will be permanently deleted.",
     "system": "System",
     "rejectionMode": "rejection mode: {mode}",
+    "masterAudio": "Master Audio",
+    "reopen": "Reopen",
+    "requestReopen": "Request Reopen",
+    "reopenDesc": "Select the stage to return to. The track will start a new workflow cycle.",
+    "requestReopenDesc": "Request the producer to reopen this track.",
+    "reopenTarget": "Target Stage",
+    "selectStage": "Select stage",
+    "reopenReason": "Reason",
+    "reopenReasonPlaceholder": "Explain why you need to reopen…",
+    "confirmDelivery": "Confirm Delivery",
+    "reupload": "Re-upload",
+    "deliveryPreview": "Preview and confirm the uploaded master file",
     "actions": {
       "intake": "Open Intake",
+      "accept": "Accept",
       "peer_review": "Open Peer Review",
       "upload_revision": "Upload Revision",
       "resubmit": "Resubmit Track",
       "producer_gate": "Open Producer Gate",
+      "approve": "Approve",
+      "reject": "Reject",
+      "pass": "Pass",
+      "needs_revision": "Needs Revision",
+      "send_to_mastering": "Send to Mastering",
       "mastering": "Open Mastering",
-      "final_review": "Open Final Review"
+      "deliver": "Deliver",
+      "request_revision": "Request Revision",
+      "final_review": "Open Final Review",
+      "confirm_delivery": "Confirm Delivery",
+      "reject_final": "Reject (Final)",
+      "reject_resubmittable": "Reject (Resubmittable)"
     }
   },
   "peerReview": {
@@ -611,6 +654,11 @@
     "statusNotePlaceholder": "Describe your changes (optional)",
     "revisionNote": "Revision Note",
     "batchStatusNote": "Batch revision note (optional)",
+    "timedMarkers": "Timed Markers",
+    "generalIssue": "General Issue",
+    "clickToAddMarker": "Click waveform to add markers",
+    "clickWaveformToAdd": "Click or drag on the waveform to add markers",
+    "markersCount": "{count} markers",
     "status": {
       "resolved": "Resolved",
       "disagreed": "Disagreed"
@@ -683,6 +731,7 @@
     "workflow": {
       "customWorkflow": "Custom Workflow",
       "locked": "Workflow is locked and cannot be changed.",
+      "viewOnly": "Only the producer can modify workflow configuration.",
       "defaultWorkflow": "This album uses the default workflow.",
       "defaultDesc": "Submitted → Peer Review → Producer Gate → Mastering → Final Review → Completed",
       "returnTo": "return_to"

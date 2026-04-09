@@ -7,9 +7,10 @@ import { albumApi, trackApi, checklistApi, invitationApi, userApi, circleApi, AP
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
-import type { Album, ChecklistTemplateItem, Invitation, Track, User } from '@/types'
+import type { Album, ChecklistTemplateItem, Invitation, Track, User, WorkflowConfig } from '@/types'
 import { Archive, RotateCcw, Upload } from 'lucide-vue-next'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
+import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 
@@ -74,6 +75,30 @@ const webhookTestResult = ref<boolean | null>(null)
 const WEBHOOK_EVENT_TYPES = [
   'track_status_changed', 'new_issue', 'issue_status_changed', 'new_comment', 'new_discussion',
 ]
+
+// Workflow state
+const savingWorkflow = ref(false)
+const workflowMigrations = ref<Array<{ track_id: number; track_title: string; from_step: string; to_step: string }>>([])
+
+async function saveWorkflow(config: WorkflowConfig) {
+  if (!album.value) return
+  savingWorkflow.value = true
+  workflowMigrations.value = []
+  try {
+    const result = await albumApi.updateWorkflow(album.value.id, config)
+    if (result.migrations?.length) {
+      workflowMigrations.value = result.migrations
+    }
+    // Refresh album data
+    const fresh = await albumApi.get(album.value.id)
+    album.value = fresh
+    toastSuccess(t('workflowEditor.saved'))
+  } catch (e: any) {
+    toastError(e.message || 'Failed to save workflow')
+  } finally {
+    savingWorkflow.value = false
+  }
+}
 
 const isProducerOfAlbum = computed(() => album.value?.producer_id === appStore.currentUser?.id)
 const isMasteringEngineerOfAlbum = computed(() => album.value?.mastering_engineer_id === appStore.currentUser?.id)
@@ -764,39 +789,23 @@ async function testWebhook() {
         </div>
       </div>
 
-      <!-- Webhook tab (producer only) -->
-      <!-- Workflow (read-only) -->
+      <!-- Workflow editor -->
       <div v-else-if="activeTab === 'workflow'" class="card space-y-5">
-        <template v-if="album?.workflow_config">
-          <div class="flex items-center gap-2 mb-2">
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-warning-bg text-warning">{{ t('albumSettings.workflow.customWorkflow') }}</span>
-            <span class="text-xs text-muted-foreground">{{ t('albumSettings.workflow.locked') }}</span>
+        <div v-if="!isProducerOfAlbum" class="text-sm text-muted-foreground">
+          {{ t('albumSettings.workflow.viewOnly') }}
+        </div>
+        <div v-if="workflowMigrations.length" class="bg-warning-bg border border-warning/20 rounded-none p-3 space-y-1">
+          <p class="text-xs font-mono text-warning">{{ t('workflowEditor.migrationWarning') }}</p>
+          <div v-for="m in workflowMigrations" :key="m.track_id" class="text-xs text-muted-foreground">
+            {{ m.track_title }}: {{ m.from_step }} → {{ m.to_step }}
           </div>
-          <p v-if="album.workflow_template_name" class="text-xs text-muted-foreground mb-2">
-            {{ t('workflowTemplate.basedOnTemplate', { name: album.workflow_template_name }) }}
-          </p>
-          <div v-for="step in album.workflow_config.steps" :key="step.id" class="border border-border p-3 space-y-2">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="text-sm font-mono font-semibold text-foreground">{{ step.label }}</span>
-              <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs bg-info-bg text-info">{{ t(`workflowBuilder.stepTypes.${step.type}`) }}</span>
-              <span class="text-xs text-muted-foreground sm:ml-auto">{{ t(`workflowBuilder.roles.${step.assignee_role}`) }}</span>
-            </div>
-            <div v-if="Object.keys(step.transitions).length" class="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1">
-              <span v-for="(target, decision) in step.transitions" :key="decision">
-                {{ decision }} &rarr; {{ target }}
-              </span>
-            </div>
-            <div v-if="step.return_to" class="text-xs text-muted-foreground">
-              {{ t('albumSettings.workflow.returnTo') }}: {{ step.return_to }}
-            </div>
-          </div>
-        </template>
-        <template v-else>
-          <p class="text-sm text-muted-foreground">{{ t('albumSettings.workflow.defaultWorkflow') }}</p>
-          <div class="text-xs text-muted-foreground space-y-1">
-            <p>{{ t('albumSettings.workflow.defaultDesc') }}</p>
-          </div>
-        </template>
+        </div>
+        <WorkflowEditor
+          :workflow-config="album?.workflow_config ?? null"
+          :album-members="album?.members ?? []"
+          :saving="savingWorkflow"
+          @save="saveWorkflow"
+        />
       </div>
 
       <div v-else-if="activeTab === 'archive'" class="space-y-4">

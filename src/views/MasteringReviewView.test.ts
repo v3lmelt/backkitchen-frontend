@@ -78,9 +78,9 @@ describe('MasteringReviewView', () => {
     mocks.trackGetMock.mockResolvedValue({
       track: { id: 6, title: 'Track 6', status: 'mastering', workflow_cycle: 2, file_path: '/audio.wav' },
       issues: [
-        { id: 1, phase: 'mastering', workflow_cycle: 2, time_start: 1 },
-        { id: 2, phase: 'mastering', workflow_cycle: 1, time_start: 2 },
-        { id: 3, phase: 'peer', workflow_cycle: 2, time_start: 3 },
+        { id: 1, phase: 'mastering', workflow_cycle: 2, markers: [{ id: 1, issue_id: 1, marker_type: 'point', time_start: 1, time_end: null }] },
+        { id: 2, phase: 'mastering', workflow_cycle: 1, markers: [{ id: 2, issue_id: 2, marker_type: 'point', time_start: 2, time_end: null }] },
+        { id: 3, phase: 'peer', workflow_cycle: 2, markers: [{ id: 3, issue_id: 3, marker_type: 'point', time_start: 3, time_end: null }] },
       ],
       checklist_items: [],
       events: [],

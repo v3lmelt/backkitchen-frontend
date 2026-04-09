@@ -13,6 +13,8 @@ import type {
   Invitation,
   InviteCode,
   PresignedUploadResponse,
+  ReopenRequest,
+  StageAssignment,
   WebhookConfig,
   WorkflowConfig,
   WorkflowTemplate,
@@ -144,6 +146,12 @@ export const albumApi = {
     }),
   testWebhook: (id: number) =>
     request<{ success: boolean }>(`/albums/${id}/webhook/test`, { method: 'POST' }),
+  getWorkflow: (id: number) =>
+    request<WorkflowConfig>(`/albums/${id}/workflow`),
+  updateWorkflow: (id: number, config: WorkflowConfig) =>
+    request<{ ok: boolean; migrations: Array<{ track_id: number; track_title: string; from_step: string; to_step: string }> }>(
+      `/albums/${id}/workflow`, { method: 'PUT', body: JSON.stringify(config) },
+    ),
   reorderTracks: (albumId: number, trackIds: number[]) =>
     request<Track[]>(`/albums/${albumId}/track-order`, {
       method: 'PATCH',
@@ -251,12 +259,46 @@ export const trackApi = {
       method: 'POST',
       body: JSON.stringify({ decision }),
     }),
+  // Stage assignments
+  assignReviewer: (trackId: number, userIds: number[]) =>
+    request<StageAssignment[]>(`/tracks/${trackId}/assign-reviewer`, {
+      method: 'POST',
+      body: JSON.stringify({ user_ids: userIds }),
+    }),
+  listAssignments: (trackId: number) =>
+    request<StageAssignment[]>(`/tracks/${trackId}/assignments`),
+  // Delivery confirmation
+  confirmDelivery: (trackId: number, deliveryId: number) =>
+    request<Track>(`/tracks/${trackId}/master-deliveries/${deliveryId}/confirm`, { method: 'POST' }),
+  // Track reopen
+  requestReopen: (trackId: number, targetStageId: string, reason: string) =>
+    request<ReopenRequest>(`/tracks/${trackId}/reopen-request`, {
+      method: 'POST',
+      body: JSON.stringify({ target_stage_id: targetStageId, reason }),
+    }),
+  reopen: (trackId: number, targetStageId: string) =>
+    request<Track>(`/tracks/${trackId}/reopen`, {
+      method: 'POST',
+      body: JSON.stringify({ target_stage_id: targetStageId }),
+    }),
+  decideReopenRequest: (requestId: number, decision: 'approve' | 'reject') =>
+    request<ReopenRequest>(`/tracks/reopen-requests/${requestId}/decide`, {
+      method: 'POST',
+      body: JSON.stringify({ decision }),
+    }),
 }
 
 export const issueApi = {
   listForTrack: (trackId: number) => request<Issue[]>(`/tracks/${trackId}/issues`),
   get: (id: number) => request<Issue>(`/issues/${id}`),
-  create: (trackId: number, data: Omit<Issue, 'id' | 'track_id' | 'author_id' | 'author' | 'workflow_cycle' | 'source_version_id' | 'master_delivery_id' | 'status' | 'created_at' | 'updated_at' | 'comment_count' | 'comments'>) =>
+  create: (trackId: number, data: {
+    title: string
+    description: string
+    severity: string
+    phase: string
+    markers: { marker_type: string; time_start: number; time_end?: number | null }[]
+    master_delivery_id?: number | null
+  }) =>
     request<Issue>(`/tracks/${trackId}/issues`, { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: Partial<Pick<Issue, 'status' | 'title' | 'description' | 'severity'>> & { status_note?: string }) =>
     request<Issue>(`/issues/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),

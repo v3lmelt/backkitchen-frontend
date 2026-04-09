@@ -50,14 +50,14 @@ describe('AuthorRevisionView', () => {
     mocks.trackGetMock.mockResolvedValue({
       track: { id: 8, title: 'Track 8', status: 'mastering_revision', workflow_cycle: 3 },
       issues: [
-        { id: 1, phase: 'mastering', workflow_cycle: 3, status: 'open', title: 'Issue A', description: 'A', time_start: 1 },
-        { id: 2, phase: 'mastering', workflow_cycle: 3, status: 'disagreed', title: 'Issue B', description: 'B', time_start: 2 },
-        { id: 3, phase: 'peer', workflow_cycle: 3, status: 'open', title: 'Ignore', description: 'X', time_start: 3 },
+        { id: 1, phase: 'mastering', workflow_cycle: 3, status: 'open', title: 'Issue A', description: 'A', markers: [{ id: 1, issue_id: 1, marker_type: 'point', time_start: 1, time_end: null }] },
+        { id: 2, phase: 'mastering', workflow_cycle: 3, status: 'disagreed', title: 'Issue B', description: 'B', markers: [{ id: 2, issue_id: 2, marker_type: 'point', time_start: 2, time_end: null }] },
+        { id: 3, phase: 'peer', workflow_cycle: 3, status: 'open', title: 'Ignore', description: 'X', markers: [{ id: 3, issue_id: 3, marker_type: 'point', time_start: 3, time_end: null }] },
       ],
       checklist_items: [],
       events: [],
     })
-    mocks.issueUpdateMock.mockResolvedValue({ id: 1, phase: 'mastering', workflow_cycle: 3, status: 'disagreed', title: 'Issue A', description: 'A', time_start: 1 })
+    mocks.issueUpdateMock.mockResolvedValue({ id: 1, phase: 'mastering', workflow_cycle: 3, status: 'disagreed', title: 'Issue A', description: 'A', markers: [{ id: 1, issue_id: 1, marker_type: 'point', time_start: 1, time_end: null }] })
     mocks.uploadSourceVersionMock.mockResolvedValue({})
   })
 

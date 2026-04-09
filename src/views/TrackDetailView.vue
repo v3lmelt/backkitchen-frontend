@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, discussionApi, API_ORIGIN, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Track, Issue, Discussion, WorkflowEvent, TrackSourceVersion, WorkflowConfig } from '@/types'
+import type { Track, Issue, Discussion, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
@@ -128,6 +128,10 @@ const audioUrl = computed(() => {
   if (!t?.file_path) return ''
   return `${API_ORIGIN}/api/tracks/${trackId.value}/audio?v=${t.version ?? 0}`
 })
+const masterAudioUrl = computed(() => {
+  if (!track.value?.current_master_delivery) return ''
+  return `${API_ORIGIN}/api/tracks/${trackId.value}/master-audio`
+})
 const { downloading, downloadProgress, downloadTrackAudio } = useAudioDownload()
 const handleDownload = () => downloadTrackAudio(audioUrl, track)
 const currentCycleIssues = computed(() => issues.value.filter(issue => issue.workflow_cycle === track.value?.workflow_cycle))
@@ -215,6 +219,39 @@ const progressActions = computed<WorkflowProgressAction[]>(() => {
   }))
 })
 
+// Reopen logic
+const isMasteringEngineer = computed(() => track.value?.mastering_engineer_id === appStore.currentUser?.id)
+const isSubmitter = computed(() => track.value?.submitter_id === appStore.currentUser?.id)
+const canDirectReopen = computed(() => track.value?.status === 'completed' && (isProducer.value || isMasteringEngineer.value))
+const canRequestReopen = computed(() => track.value?.status === 'completed' && isSubmitter.value && !isProducer.value && !isMasteringEngineer.value)
+const showReopenModal = ref(false)
+const reopenTargetStage = ref('')
+const reopenReason = ref('')
+const reopening = ref(false)
+
+const reopenableStages = computed<WorkflowStepDef[]>(() => {
+  if (!workflowConfig.value) return []
+  return workflowConfig.value.steps.filter(s => s.type === 'delivery' || s.type === 'revision')
+})
+
+async function handleReopen() {
+  if (!track.value || !reopenTargetStage.value) return
+  reopening.value = true
+  try {
+    if (canDirectReopen.value) {
+      await trackApi.reopen(track.value.id, reopenTargetStage.value)
+    } else {
+      await trackApi.requestReopen(track.value.id, reopenTargetStage.value, reopenReason.value)
+    }
+    showReopenModal.value = false
+    reopenTargetStage.value = ''
+    reopenReason.value = ''
+    await loadTrack()
+  } finally {
+    reopening.value = false
+  }
+}
+
 watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, versions, compareVersion]) => {
   if (!currentTrack) return
   const rawValue = Array.isArray(compareVersion) ? compareVersion[0] : compareVersion
@@ -289,6 +326,21 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
         </div>
         <div v-else class="card text-center text-muted-foreground py-8">
           {{ t('trackDetail.noAudioFile') }}
+        </div>
+
+        <!-- Master audio player -->
+        <div v-if="masterAudioUrl">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-muted-foreground">
+              {{ t('trackDetail.masterAudio') }}
+              <span v-if="track.current_master_delivery" class="text-xs text-muted-foreground ml-1">v{{ track.current_master_delivery.delivery_number }}</span>
+            </h3>
+          </div>
+          <WaveformPlayer
+            :audio-url="masterAudioUrl"
+            :issues="[]"
+            :track-id="trackId"
+          />
         </div>
 
         <div>
@@ -412,6 +464,45 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             <div v-for="event in events" :key="event.id" class="border-b border-border last:border-0 py-3 first:pt-0">
               <div class="text-sm text-foreground">{{ formatTimelineEvent(event) }}</div>
               <div class="text-xs text-muted-foreground mt-0.5">{{ fmtDate(event.created_at) }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Reopen (completed tracks) -->
+        <div v-if="canDirectReopen || canRequestReopen" class="pt-2">
+          <button
+            v-if="!showReopenModal"
+            @click="showReopenModal = true"
+            class="w-full flex items-center justify-center gap-2 rounded-full border border-primary/40 text-primary hover:bg-primary/10 transition-colors h-10 text-sm font-mono"
+          >
+            {{ canDirectReopen ? t('trackDetail.reopen') : t('trackDetail.requestReopen') }}
+          </button>
+          <div v-else class="card space-y-3">
+            <p class="text-sm text-muted-foreground">
+              {{ canDirectReopen ? t('trackDetail.reopenDesc') : t('trackDetail.requestReopenDesc') }}
+            </p>
+            <div class="space-y-2">
+              <label class="text-xs text-muted-foreground mb-1 block">{{ t('trackDetail.reopenTarget') }}</label>
+              <select v-model="reopenTargetStage" class="select-field w-full">
+                <option value="" disabled>{{ t('trackDetail.selectStage') }}</option>
+                <option v-for="s in reopenableStages" :key="s.id" :value="s.id">{{ s.label }}</option>
+              </select>
+            </div>
+            <div v-if="canRequestReopen" class="space-y-2">
+              <label class="text-xs text-muted-foreground mb-1 block">{{ t('trackDetail.reopenReason') }}</label>
+              <textarea v-model="reopenReason" class="textarea-field w-full text-sm h-20" :placeholder="t('trackDetail.reopenReasonPlaceholder')" />
+            </div>
+            <div class="flex gap-2">
+              <button
+                @click="handleReopen"
+                :disabled="reopening || !reopenTargetStage || (canRequestReopen && !reopenReason.trim())"
+                class="flex-1 btn-primary h-9 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {{ reopening ? t('common.loading') : t('common.confirm') }}
+              </button>
+              <button @click="showReopenModal = false" class="flex-1 btn-secondary h-9 text-sm">
+                {{ t('common.cancel') }}
+              </button>
             </div>
           </div>
         </div>

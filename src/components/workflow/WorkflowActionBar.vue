@@ -28,7 +28,7 @@ defineProps<{
         </div>
 
         <!-- Right: actions -->
-        <div class="flex items-center gap-2 sm:ml-auto flex-shrink-0">
+        <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
           <!-- Secondary: return / reject -->
           <button
             v-for="action in actions.filter(a => a.type !== 'advance')"
@@ -36,7 +36,7 @@ defineProps<{
             :disabled="action.disabled"
             @click="action.handler()"
             :class="[
-              'ghost-btn group flex items-center gap-2 rounded-full font-mono font-medium text-sm px-4 h-9 transition-all duration-200',
+              'ghost-btn group flex items-center gap-2 rounded-full font-mono font-medium text-sm px-4 h-9 transition-all duration-200 whitespace-nowrap',
               action.type === 'reject'
                 ? 'text-error border-error/30 hover:bg-error/10'
                 : 'text-muted-foreground border-border hover:text-foreground hover:border-muted-foreground',
@@ -62,12 +62,12 @@ defineProps<{
             :key="action.label"
             :disabled="action.disabled"
             @click="action.handler()"
-            class="advance-btn group relative overflow-hidden flex items-center gap-2 rounded-full font-mono font-semibold text-sm px-6 h-10
-                   disabled:opacity-30 disabled:cursor-not-allowed"
+            class="advance-btn group relative overflow-hidden flex items-center justify-center gap-2 rounded-full font-mono font-semibold text-sm px-6 h-10
+                   w-full sm:w-auto disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <!-- shimmer sweep -->
             <span class="shimmer" aria-hidden="true"></span>
-            <span class="relative z-10">{{ action.label }}</span>
+            <span class="relative z-10 whitespace-nowrap">{{ action.label }}</span>
             <ChevronRight
               class="relative z-10 w-4 h-4 flex-shrink-0 transition-transform duration-200 group-hover:translate-x-0.5"
               :stroke-width="2.5"

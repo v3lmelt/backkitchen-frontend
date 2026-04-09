@@ -53,14 +53,14 @@ describe('PeerReviewView', () => {
     mocks.trackGetMock.mockResolvedValue({
       track: { id: 7, title: 'Track 7', version: 2, workflow_cycle: 2, file_path: '/audio.wav' },
       issues: [
-        { id: 1, phase: 'peer', workflow_cycle: 2, time_start: 1.1 },
-        { id: 2, phase: 'peer', workflow_cycle: 1, time_start: 5.2 },
-        { id: 3, phase: 'mastering', workflow_cycle: 2, time_start: 9.9 },
+        { id: 1, phase: 'peer', workflow_cycle: 2, markers: [{ id: 1, issue_id: 1, marker_type: 'point', time_start: 1.1, time_end: null }] },
+        { id: 2, phase: 'peer', workflow_cycle: 1, markers: [{ id: 2, issue_id: 2, marker_type: 'point', time_start: 5.2, time_end: null }] },
+        { id: 3, phase: 'mastering', workflow_cycle: 2, markers: [{ id: 3, issue_id: 3, marker_type: 'point', time_start: 9.9, time_end: null }] },
       ],
       checklist_items: [],
       events: [],
     })
-    mocks.issueCreateMock.mockResolvedValue({ id: 11, phase: 'peer', workflow_cycle: 2, time_start: 1.3 })
+    mocks.issueCreateMock.mockResolvedValue({ id: 11, phase: 'peer', workflow_cycle: 2, markers: [{ id: 11, issue_id: 11, marker_type: 'point', time_start: 1.3, time_end: null }] })
     mocks.checklistSubmitMock.mockResolvedValue([{ id: 99, label: 'Balance', passed: true, note: null }])
     mocks.finishPeerReviewMock.mockResolvedValue({})
   })

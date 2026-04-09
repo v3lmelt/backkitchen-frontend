@@ -67,8 +67,11 @@ function onWaveformReady() {
 
 function seekWaveformToIssue() {
   if (!issue.value || !waveformRef.value) return
-  waveformRef.value.seekTo(issue.value.time_start)
-  if (issue.value.issue_type === 'range') {
+  const firstMarker = issue.value.markers[0]
+  if (firstMarker) {
+    waveformRef.value.seekTo(firstMarker.time_start)
+  }
+  if (issue.value.markers.some(m => m.marker_type === 'range')) {
     waveformRef.value.highlightIssue(issue.value)
   }
 }
@@ -149,7 +152,7 @@ const siblingIssues = computed(() => {
   const { phase, workflow_cycle } = issue.value
   return allTrackIssues.value
     .filter(i => i.phase === phase && i.workflow_cycle === workflow_cycle)
-    .sort((a, b) => a.time_start - b.time_start)
+    .sort((a, b) => (a.markers[0]?.time_start ?? Infinity) - (b.markers[0]?.time_start ?? Infinity))
 })
 
 const visibleSiblingIssues = computed(() => {
@@ -396,13 +399,13 @@ function openVersionCompare() {
         <StatusBadge :status="issue.phase" type="phase" />
         <StatusBadge :status="issue.severity" type="severity" />
         <StatusBadge :status="issue.status" type="issue" />
-        <span class="text-sm text-muted-foreground">
-          {{ formatTimestamp(issue.time_start) }}
-          <span v-if="issue.time_end"> - {{ formatTimestamp(issue.time_end) }}</span>
-        </span>
-        <span class="text-sm text-muted-foreground">
-          {{ issue.issue_type === 'range' ? t('issueType.range') : t('issueType.point') }}
-        </span>
+        <span v-if="issue.markers.length === 0" class="text-sm text-muted-foreground italic">{{ t('issue.generalIssue') }}</span>
+        <template v-else v-for="(m, mi) in issue.markers" :key="mi">
+          <span class="text-sm text-muted-foreground">
+            {{ formatTimestamp(m.time_start) }}
+            <span v-if="m.time_end"> - {{ formatTimestamp(m.time_end) }}</span>
+          </span>
+        </template>
       </div>
     </div>
 
@@ -421,9 +424,13 @@ function openVersionCompare() {
                   v{{ displayedAudioVersionNumber }}
                 </span>
               </div>
-              <span class="text-xs text-muted-foreground font-mono">
-                {{ formatTimestampShort(issue.time_start) }}<span v-if="issue.time_end"> – {{ formatTimestampShort(issue.time_end) }}</span>
+              <span v-if="issue.markers.length > 0" class="text-xs text-muted-foreground font-mono">
+                <template v-for="(m, mi) in issue.markers" :key="mi">
+                  <span v-if="mi > 0" class="mx-1 opacity-50">·</span>
+                  {{ formatTimestampShort(m.time_start) }}<span v-if="m.time_end"> – {{ formatTimestampShort(m.time_end) }}</span>
+                </template>
               </span>
+              <span v-else class="text-xs text-muted-foreground italic">{{ t('issue.generalIssue') }}</span>
             </div>
             <WaveformPlayer
               ref="waveformRef"
@@ -745,8 +752,10 @@ function openVersionCompare() {
                   </div>
                 </div>
                 <span class="text-xs font-mono text-muted-foreground flex-shrink-0">
-                  {{ formatTimestamp(item.time_start) }}
-                  <template v-if="item.time_end">-{{ formatTimestamp(item.time_end) }}</template>
+                  <template v-if="item.markers.length === 0">{{ t('issue.generalIssue') }}</template>
+                  <template v-else v-for="(m, mi) in item.markers" :key="mi">
+                    <span v-if="mi > 0" class="mx-0.5 opacity-50">·</span>{{ formatTimestamp(m.time_start) }}<template v-if="m.time_end">-{{ formatTimestamp(m.time_end) }}</template>
+                  </template>
                 </span>
               </div>
             </button>

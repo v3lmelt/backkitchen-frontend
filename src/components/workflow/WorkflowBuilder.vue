@@ -208,22 +208,33 @@ function emitConfig() {
       {{ t('workflowBuilder.emptyHint') }}
     </div>
 
-    <div v-for="(step, idx) in steps" :key="idx" class="border border-border rounded-none p-4 space-y-3 bg-card">
+    <div v-for="(step, idx) in steps" :key="idx" class="border border-border rounded-none p-3 sm:p-4 space-y-3 bg-card">
       <!-- Step header -->
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         <GripVertical class="w-4 h-4 text-muted-foreground flex-shrink-0" />
         <span class="text-xs font-mono text-muted-foreground w-6">{{ idx + 1 }}</span>
+        <div class="flex items-center gap-1 ml-auto sm:hidden">
+          <button @click="moveStep(idx, -1)" :disabled="idx === 0" class="p-1 hover:text-foreground text-muted-foreground disabled:opacity-30">
+            <ChevronUp class="w-4 h-4" />
+          </button>
+          <button @click="moveStep(idx, 1)" :disabled="idx === steps.length - 1" class="p-1 hover:text-foreground text-muted-foreground disabled:opacity-30">
+            <ChevronDown class="w-4 h-4" />
+          </button>
+          <button @click="removeStep(idx)" class="p-1 hover:text-error text-muted-foreground">
+            <Trash2 class="w-4 h-4" />
+          </button>
+        </div>
         <input
           v-model="step.id"
-          class="input-field text-xs font-mono !h-8 w-32"
+          class="input-field text-xs font-mono !h-8 w-full sm:w-32 order-1 sm:order-none"
           placeholder="step_id"
         />
         <input
           v-model="step.label"
-          class="input-field text-xs !h-8 flex-1"
+          class="input-field text-xs !h-8 w-full sm:flex-1 order-2 sm:order-none"
           :placeholder="t('workflowBuilder.stepLabelPlaceholder')"
         />
-        <div class="flex gap-1">
+        <div class="hidden sm:flex gap-1 order-3">
           <button @click="moveStep(idx, -1)" :disabled="idx === 0" class="p-1 hover:text-foreground text-muted-foreground disabled:opacity-30">
             <ChevronUp class="w-4 h-4" />
           </button>
@@ -237,7 +248,7 @@ function emitConfig() {
       </div>
 
       <!-- Step config -->
-      <div class="grid grid-cols-2 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowBuilder.typeLabel') }}</label>
           <select v-model="step.type" class="select-field-sm w-full">
@@ -253,7 +264,7 @@ function emitConfig() {
       </div>
 
       <!-- Revision: return_to -->
-      <div v-if="step.type === 'revision'" class="grid grid-cols-2 gap-3">
+      <div v-if="step.type === 'revision'" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowBuilder.returnToLabel') }}</label>
           <select v-model="step.return_to" class="select-field-sm w-full">
@@ -264,7 +275,7 @@ function emitConfig() {
       </div>
 
       <!-- Review/Delivery: revision_step -->
-      <div v-if="step.type === 'review' || step.type === 'delivery'" class="grid grid-cols-2 gap-3">
+      <div v-if="step.type === 'review' || step.type === 'delivery'" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowBuilder.pairedRevisionLabel') }}</label>
           <select v-model="step.revision_step" class="select-field-sm w-full">
@@ -282,18 +293,18 @@ function emitConfig() {
             <Plus class="w-3 h-3 inline" /> {{ t('workflowBuilder.addTransition') }}
           </button>
         </div>
-        <div v-for="(tr, trIdx) in step.transitions" :key="trIdx" class="flex items-center gap-2">
+        <div v-for="(tr, trIdx) in step.transitions" :key="trIdx" class="flex flex-wrap sm:flex-nowrap items-center gap-2">
           <input
             v-model="tr.decision"
-            class="input-field text-xs !h-7 w-36 font-mono"
+            class="input-field text-xs !h-7 w-full sm:w-36 font-mono"
             placeholder="decision_key"
           />
-          <span class="text-xs text-muted-foreground">&rarr;</span>
-          <select v-model="tr.target" class="select-field-sm flex-1">
+          <span class="text-xs text-muted-foreground hidden sm:inline">&rarr;</span>
+          <select v-model="tr.target" class="select-field-sm w-full sm:flex-1">
             <option value="">{{ t('workflowBuilder.targetPlaceholder') }}</option>
             <option v-for="opt in targetOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
-          <button @click="removeTransition(idx, trIdx)" class="p-1 hover:text-error text-muted-foreground">
+          <button @click="removeTransition(idx, trIdx)" class="p-1 hover:text-error text-muted-foreground ml-auto sm:ml-0">
             <Trash2 class="w-3.5 h-3.5" />
           </button>
         </div>

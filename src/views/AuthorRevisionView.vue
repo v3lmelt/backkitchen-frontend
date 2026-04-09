@@ -249,7 +249,7 @@ const workflowActions = computed<WorkflowAction[]>(() => [
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2 mb-1 flex-wrap">
                   <StatusBadge :status="issue.severity" type="severity" />
-                  <span class="text-xs text-muted-foreground">{{ formatTimestamp(issue.time_start) }}</span>
+                  <span class="text-xs text-muted-foreground">{{ issue.markers.length ? formatTimestamp(issue.markers[0].time_start) : t('issue.generalIssue') }}</span>
                 </div>
                 <h4 class="text-sm font-medium text-foreground">{{ issue.title }}</h4>
                 <p class="text-xs text-muted-foreground mt-1">{{ issue.description }}</p>
@@ -271,7 +271,7 @@ const workflowActions = computed<WorkflowAction[]>(() => [
                 <StatusBadge :status="issue.status" type="issue" />
                 <span class="text-sm text-foreground truncate">{{ issue.title }}</span>
               </div>
-              <span class="text-xs text-muted-foreground flex-shrink-0">{{ formatTimestamp(issue.time_start) }}</span>
+              <span class="text-xs text-muted-foreground flex-shrink-0">{{ issue.markers.length ? formatTimestamp(issue.markers[0].time_start) : t('issue.generalIssue') }}</span>
             </div>
           </div>
         </div>

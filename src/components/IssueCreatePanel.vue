@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { X } from 'lucide-vue-next'
 import { issueApi } from '@/api'
 import type { Issue } from '@/types'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
@@ -20,20 +21,12 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const showForm = ref(false)
-const newIssue = ref(makeBlank())
+const issueMode = ref<'timed' | 'general'>('timed')
+const title = ref('')
+const description = ref('')
+const severity = ref<'critical' | 'major' | 'minor' | 'suggestion'>('major')
+const markers = ref<{ marker_type: 'point' | 'range'; time_start: number; time_end: number | null }[]>([])
 const descriptionInputFocused = ref(false)
-
-function makeBlank() {
-  return {
-    title: '',
-    description: '',
-    severity: 'major' as 'critical' | 'major' | 'minor' | 'suggestion',
-    issue_type: 'point' as 'point' | 'range',
-    time_start: 0,
-    time_end: null as number | null,
-    phase: props.phase,
-  }
-}
 
 const severityOptions = computed(() => [
   { value: 'critical', label: t('severity.critical') },
@@ -42,50 +35,98 @@ const severityOptions = computed(() => [
   { value: 'suggestion', label: t('severity.suggestion') },
 ])
 
-const issueTypeOptions = computed(() => [
-  { value: 'point', label: t('issueType.point') },
-  { value: 'range', label: t('issueType.range') },
-])
-
+// The selected range for the WaveformPlayer to highlight (last range marker being edited)
 const selectedRange = computed(() => {
-  if (newIssue.value.issue_type === 'range' && showForm.value && newIssue.value.time_end !== null) {
-    return { start: newIssue.value.time_start, end: newIssue.value.time_end }
+  if (issueMode.value !== 'timed' || !showForm.value) return null
+  const lastRange = [...markers.value].reverse().find(m => m.marker_type === 'range' && m.time_end !== null)
+  if (lastRange && lastRange.time_end !== null) {
+    return { start: lastRange.time_start, end: lastRange.time_end }
   }
   return null
 })
 
 function handleClick(time: number) {
-  newIssue.value.issue_type = 'point'
-  newIssue.value.time_start = roundToMilliseconds(time)
-  newIssue.value.time_end = null
+  markers.value.push({
+    marker_type: 'point',
+    time_start: roundToMilliseconds(time),
+    time_end: null,
+  })
+  issueMode.value = 'timed'
   showForm.value = true
 }
 
 function handleRangeSelect(start: number, end: number) {
-  newIssue.value.issue_type = 'range'
-  newIssue.value.time_start = start
-  newIssue.value.time_end = end
+  markers.value.push({
+    marker_type: 'range',
+    time_start: start,
+    time_end: end,
+  })
+  issueMode.value = 'timed'
   showForm.value = true
 }
 
+function removeMarker(index: number) {
+  markers.value.splice(index, 1)
+}
+
+function resetForm() {
+  title.value = ''
+  description.value = ''
+  severity.value = 'major'
+  markers.value = []
+  issueMode.value = 'timed'
+}
+
 async function submitIssue() {
-  const payload: Record<string, unknown> = { ...newIssue.value }
+  const payload: Parameters<typeof issueApi.create>[1] = {
+    title: title.value,
+    description: description.value,
+    severity: severity.value,
+    phase: props.phase,
+    markers: issueMode.value === 'general' ? [] : markers.value.map(m => ({
+      marker_type: m.marker_type,
+      time_start: m.time_start,
+      time_end: m.time_end,
+    })),
+  }
   if (props.masterDeliveryId != null) {
     payload.master_delivery_id = props.masterDeliveryId
   }
-  const created = await issueApi.create(props.trackId, payload as any)
+  const created = await issueApi.create(props.trackId, payload)
   emit('created', created)
   showForm.value = false
-  newIssue.value = makeBlank()
+  resetForm()
 }
 
-watch(() => newIssue.value.issue_type, (type) => {
-  if (type === 'point') newIssue.value.time_end = null
-})
+function switchMode(mode: 'timed' | 'general') {
+  if (mode === issueMode.value) return
+  issueMode.value = mode
+  if (mode === 'general') {
+    markers.value = []
+  }
+}
 
 function formatTime(seconds: number): string {
   return formatTimestamp(seconds)
 }
+
+const canSubmit = computed(() => {
+  if (!title.value.trim() || !description.value.trim()) return false
+  if (issueMode.value === 'timed' && markers.value.length === 0) return false
+  return true
+})
+
+// Heading text
+const formHeading = computed(() => {
+  if (issueMode.value === 'general') return t('issue.generalIssue')
+  if (markers.value.length === 0) return t('issue.clickToAddMarker')
+  if (markers.value.length === 1) {
+    const m = markers.value[0]
+    if (m.marker_type === 'point') return t('common.newIssueAt', { time: formatTime(m.time_start) })
+    return `${formatTime(m.time_start)} – ${formatTime(m.time_end!)}`
+  }
+  return t('issue.markersCount', { count: markers.value.length })
+})
 
 defineExpose({ handleClick, handleRangeSelect, selectedRange, showForm })
 </script>
@@ -100,13 +141,53 @@ defineExpose({ handleClick, handleRangeSelect, selectedRange, showForm })
     </div>
 
     <div v-if="showForm" class="card space-y-3 border-primary/50">
+      <!-- Mode tabs -->
+      <div class="flex rounded-full border border-border overflow-hidden">
+        <button
+          @click="switchMode('timed')"
+          class="flex-1 px-3 py-1.5 text-xs font-mono font-medium transition-colors"
+          :class="issueMode === 'timed' ? 'bg-primary text-background' : 'text-muted-foreground hover:text-foreground'"
+        >{{ t('issue.timedMarkers') }}</button>
+        <button
+          @click="switchMode('general')"
+          class="flex-1 px-3 py-1.5 text-xs font-mono font-medium transition-colors"
+          :class="issueMode === 'general' ? 'bg-primary text-background' : 'text-muted-foreground hover:text-foreground'"
+        >{{ t('issue.generalIssue') }}</button>
+      </div>
+
       <h4 class="text-sm font-sans font-semibold text-foreground">
-        {{ t('common.newIssueAt', { time: formatTime(newIssue.time_start) }) }}
+        {{ formHeading }}
       </h4>
-      <input v-model="newIssue.title" class="input-field w-full" :placeholder="t('common.issueTitlePlaceholder')" />
+
+      <!-- Marker list (timed mode) -->
+      <div v-if="issueMode === 'timed' && markers.length > 0" class="space-y-1.5">
+        <div
+          v-for="(marker, index) in markers"
+          :key="index"
+          class="flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5"
+        >
+          <span
+            class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-mono"
+            :class="marker.marker_type === 'point' ? 'bg-info-bg text-info' : 'bg-warning-bg text-warning'"
+          >{{ marker.marker_type === 'point' ? t('issueType.point') : t('issueType.range') }}</span>
+          <span class="text-xs font-mono text-foreground">
+            {{ formatTime(marker.time_start) }}
+            <template v-if="marker.time_end !== null"> – {{ formatTime(marker.time_end) }}</template>
+          </span>
+          <button @click="removeMarker(index)" class="ml-auto text-muted-foreground hover:text-error transition-colors">
+            <X class="w-3.5 h-3.5" :stroke-width="2" />
+          </button>
+        </div>
+        <p class="text-[11px] text-muted-foreground">{{ t('issue.clickWaveformToAdd') }}</p>
+      </div>
+      <div v-else-if="issueMode === 'timed' && markers.length === 0">
+        <p class="text-xs text-muted-foreground">{{ t('issue.clickWaveformToAdd') }}</p>
+      </div>
+
+      <input v-model="title" class="input-field w-full" :placeholder="t('common.issueTitlePlaceholder')" />
       <div class="relative">
         <textarea
-          v-model="newIssue.description"
+          v-model="description"
           class="textarea-field w-full h-20"
           :placeholder="t('common.descriptionPlaceholder')"
           @focus="descriptionInputFocused = true"
@@ -114,27 +195,14 @@ defineExpose({ handleClick, handleRangeSelect, selectedRange, showForm })
         />
         <TimestampSyntaxPopover
           :visible="descriptionInputFocused"
-          :text="newIssue.description"
+          :text="description"
           default-target="track"
         />
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <CustomSelect v-model="newIssue.severity" :options="severityOptions" />
-        <CustomSelect v-model="newIssue.issue_type" :options="issueTypeOptions" />
-      </div>
-      <div v-if="newIssue.issue_type === 'range'" class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="text-xs text-muted-foreground">{{ t('common.rangeStart') }}</label>
-          <input v-model.number="newIssue.time_start" type="number" step="0.001" class="input-field w-full" />
-        </div>
-        <div>
-          <label class="text-xs text-muted-foreground">{{ t('common.rangeEnd') }}</label>
-          <input v-model.number="newIssue.time_end" type="number" step="0.001" class="input-field w-full" />
-        </div>
-      </div>
+      <CustomSelect v-model="severity" :options="severityOptions" />
       <div class="flex gap-2">
-        <button @click="submitIssue" class="btn-primary text-sm">{{ t('common.submitIssue') }}</button>
-        <button @click="showForm = false" class="btn-secondary text-sm">{{ t('common.cancel') }}</button>
+        <button @click="submitIssue" :disabled="!canSubmit" class="btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed">{{ t('common.submitIssue') }}</button>
+        <button @click="showForm = false; resetForm()" class="btn-secondary text-sm">{{ t('common.cancel') }}</button>
       </div>
     </div>
   </div>
