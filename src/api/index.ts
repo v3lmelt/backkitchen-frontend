@@ -56,6 +56,63 @@ function authHeaders(headers?: HeadersInit): HeadersInit {
   }
 }
 
+function clearStoredAuth() {
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem('backkitchen_user')
+}
+
+let verifyPromise: Promise<boolean> | null = null
+
+/**
+ * Verify whether the currently-stored token is still accepted by the server.
+ * Concurrent 401s share a single in-flight check. Returns `true` if the token
+ * is valid (or the check itself could not run), `false` only when the server
+ * confirms the token is no longer valid.
+ */
+async function verifyTokenStillValid(): Promise<boolean> {
+  const token = localStorage.getItem(TOKEN_KEY)
+  if (!token) return false
+  if (verifyPromise) return verifyPromise
+  verifyPromise = (async () => {
+    try {
+      const res = await fetch(`${BASE}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return res.status !== 401
+    } catch {
+      // Network error — assume the token is still valid so we don't
+      // log the user out on a flaky connection.
+      return true
+    } finally {
+      verifyPromise = null
+    }
+  })()
+  return verifyPromise
+}
+
+/**
+ * Called when an endpoint responds with 401. We only wipe local credentials
+ * when the failure is actually an auth/token problem — otherwise a single
+ * unrelated 401 (or a transient backend bug) would force the user back to
+ * /login mid-session.
+ */
+async function handleUnauthorized(url: string): Promise<void> {
+  // /auth/me is the oracle itself — trust its verdict directly.
+  if (url === '/auth/me' || url.startsWith('/auth/me?') || url.startsWith('/auth/me/')) {
+    clearStoredAuth()
+    return
+  }
+  // 401 from /auth/login means bad credentials on a fresh attempt,
+  // not an expired session; leave stored auth (if any) alone.
+  if (url.startsWith('/auth/login')) {
+    return
+  }
+  const stillValid = await verifyTokenStillValid()
+  if (!stillValid) {
+    clearStoredAuth()
+  }
+}
+
 export function uploadWithProgress<T>(
   url: string,
   body: FormData,
@@ -79,8 +136,9 @@ export function uploadWithProgress<T>(
         resolve(JSON.parse(xhr.responseText))
       } else {
         if (xhr.status === 401) {
-          localStorage.removeItem(TOKEN_KEY)
-          localStorage.removeItem('backkitchen_user')
+          // Fire-and-forget: the upload has already failed, we just need
+          // to decide whether the session should be cleared.
+          void handleUnauthorized(url)
         }
         let msg = `Request failed: ${xhr.status}`
         try {
@@ -107,8 +165,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     if (res.status === 401) {
-      localStorage.removeItem(TOKEN_KEY)
-      localStorage.removeItem('backkitchen_user')
+      await handleUnauthorized(url)
     }
     throw new Error(parseErrorDetail(body.detail) || `Request failed: ${res.status}`)
   }
