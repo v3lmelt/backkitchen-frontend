@@ -1,5 +1,14 @@
 <script setup lang="ts">
+import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ChevronRight, RotateCcw, X } from 'lucide-vue-next'
+import BaseModal from '@/components/common/BaseModal.vue'
+
+export interface WorkflowActionConfirm {
+  title?: string
+  message: string
+  confirmLabel?: string
+}
 
 export interface WorkflowAction {
   label: string
@@ -7,6 +16,8 @@ export interface WorkflowAction {
   type: 'advance' | 'return' | 'reject'
   disabled?: boolean
   handler: () => void
+  /** If set, clicking shows a confirmation dialog before calling handler */
+  confirm?: WorkflowActionConfirm
 }
 
 defineProps<{
@@ -14,10 +25,52 @@ defineProps<{
   /** Optional one-line hint shown above buttons */
   hint?: string
 }>()
+
+const { t } = useI18n()
+const pendingAction = ref<WorkflowAction | null>(null)
+
+function handleClick(action: WorkflowAction) {
+  if (action.confirm) {
+    pendingAction.value = action
+  } else {
+    action.handler()
+  }
+}
+
+function confirmPending() {
+  pendingAction.value?.handler()
+  pendingAction.value = null
+}
 </script>
 
 <template>
-  <div class="workflow-action-bar mt-auto sticky bottom-0 z-40 -mx-4 md:-mx-6 -mb-4 md:-mb-6 pt-4">
+  <!-- Confirmation modal -->
+  <BaseModal v-if="pendingAction" @close="pendingAction = null" max-width="max-w-sm" :closable="false">
+    <div class="space-y-4">
+      <h3 class="text-sm font-mono font-semibold text-foreground">
+        {{ pendingAction.confirm?.title ?? pendingAction.label }}
+      </h3>
+      <p class="text-sm text-muted-foreground leading-relaxed">{{ pendingAction.confirm?.message }}</p>
+      <div class="flex gap-2 pt-1">
+        <button
+          @click="confirmPending"
+          :class="[
+            'flex-1 rounded-full font-mono font-medium text-sm h-9 transition-colors',
+            pendingAction.type === 'reject'
+              ? 'bg-error hover:bg-error/80 text-white'
+              : 'border border-muted-foreground/40 text-foreground hover:bg-foreground/5',
+          ]"
+        >
+          {{ pendingAction.confirm?.confirmLabel ?? t('common.confirm') }}
+        </button>
+        <button @click="pendingAction = null" class="flex-1 btn-secondary h-9 text-sm">
+          {{ t('common.cancel') }}
+        </button>
+      </div>
+    </div>
+  </BaseModal>
+
+  <div class="workflow-action-bar">
     <div class="bar-surface border-t border-border px-4 md:px-8 py-3">
       <div class="flex flex-col sm:flex-row sm:items-center gap-4">
 
@@ -34,7 +87,7 @@ defineProps<{
             v-for="action in actions.filter(a => a.type !== 'advance')"
             :key="action.label"
             :disabled="action.disabled"
-            @click="action.handler()"
+            @click="handleClick(action)"
             :class="[
               'ghost-btn group flex items-center gap-2 rounded-full font-mono font-medium text-sm px-4 h-9 transition-all duration-200 whitespace-nowrap',
               action.type === 'reject'
@@ -61,7 +114,7 @@ defineProps<{
             v-for="action in actions.filter(a => a.type === 'advance')"
             :key="action.label"
             :disabled="action.disabled"
-            @click="action.handler()"
+            @click="handleClick(action)"
             class="advance-btn group relative overflow-hidden flex items-center justify-center gap-2 rounded-full font-mono font-semibold text-sm px-6 h-10
                    w-full sm:w-auto disabled:opacity-30 disabled:cursor-not-allowed"
           >
@@ -80,8 +133,23 @@ defineProps<{
 </template>
 
 <style scoped>
+.workflow-action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+}
+
+@media (min-width: 768px) {
+  .workflow-action-bar {
+    left: var(--sidebar-w, 15rem);
+  }
+}
+
 .bar-surface {
   background: #111111;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
 }
 
 /* ── Pulsing status dot ── */
