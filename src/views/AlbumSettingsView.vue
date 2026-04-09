@@ -35,6 +35,27 @@ const coverImageFile = ref<File | null>(null)
 const coverPreviewUrl = ref<string | null>(null)
 const uploadingCover = ref(false)
 
+// Metadata edit state
+const metadataState = reactive<{
+  title: string
+  description: string
+  release_date: string
+  catalog_number: string
+  circle_name: string
+  genres: string[]
+  genre_input: string
+}>({
+  title: '',
+  description: '',
+  release_date: '',
+  catalog_number: '',
+  circle_name: '',
+  genres: [],
+  genre_input: '',
+})
+const savingMetadata = ref(false)
+const metadataError = ref('')
+
 // Team state
 const teamState = reactive<{ mastering_engineer_id: number | null; member_ids: number[] }>({
   mastering_engineer_id: null,
@@ -46,6 +67,7 @@ const inviteUserId = ref('')
 const inviteError = ref('')
 const inviteSuccess = ref('')
 const invitingUser = ref(false)
+const addMemberUserId = ref<number | null>(null)
 
 // Deadline state
 const deadlineState = reactive({ deadline: '', peer_review: '', mastering: '', final_review: '' })
@@ -130,9 +152,53 @@ const availableTabs = computed(() => {
     tabs.push({ key: 'order', label: t('albumSettings.tabs.order') })
     tabs.push({ key: 'archive', label: t('albumSettings.tabs.archive') })
     tabs.push({ key: 'webhook', label: t('albumSettings.tabs.webhook') })
+    tabs.push({ key: 'danger', label: t('albumSettings.tabs.danger') })
   }
   return tabs
 })
+
+// Album archive state
+const archivingAlbum = ref(false)
+const restoringAlbum = ref(false)
+const showArchiveConfirm = ref(false)
+
+const archivedRemainingDays = computed(() => {
+  if (!album.value?.archived_at) return 0
+  const archived = new Date(album.value.archived_at)
+  const expiry = new Date(archived.getTime() + 14 * 24 * 60 * 60 * 1000)
+  const remaining = Math.ceil((expiry.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+  return Math.max(0, remaining)
+})
+
+async function archiveAlbum() {
+  if (!album.value) return
+  archivingAlbum.value = true
+  try {
+    const updated = await albumApi.archive(album.value.id)
+    album.value = updated
+    showArchiveConfirm.value = false
+    toastSuccess(t('albumSettings.danger.archived'))
+    router.push('/albums')
+  } catch (e: any) {
+    toastError(e.message || t('albumSettings.danger.archiveFailed'))
+  } finally {
+    archivingAlbum.value = false
+  }
+}
+
+async function restoreAlbum() {
+  if (!album.value) return
+  restoringAlbum.value = true
+  try {
+    const updated = await albumApi.restore(album.value.id)
+    album.value = updated
+    toastSuccess(t('albumSettings.danger.restored'))
+  } catch (e: any) {
+    toastError(e.message || t('albumSettings.danger.restoreFailed'))
+  } finally {
+    restoringAlbum.value = false
+  }
+}
 
 function toDateInput(iso: string | null | undefined): string {
   if (!iso) return ''
@@ -149,6 +215,17 @@ function syncTeamState() {
   if (!album.value) return
   teamState.mastering_engineer_id = album.value.mastering_engineer_id
   teamState.member_ids = album.value.members.map(m => m.user_id)
+}
+
+function syncMetadataState() {
+  if (!album.value) return
+  metadataState.title = album.value.title
+  metadataState.description = album.value.description || ''
+  metadataState.release_date = album.value.release_date ? album.value.release_date.slice(0, 10) : ''
+  metadataState.catalog_number = album.value.catalog_number || ''
+  metadataState.circle_name = album.value.circle_name || ''
+  metadataState.genres = album.value.genres ? [...album.value.genres] : []
+  metadataState.genre_input = ''
 }
 
 function syncDeadlineState() {
@@ -176,6 +253,7 @@ onMounted(async () => {
 
     syncTeamState()
     syncDeadlineState()
+    syncMetadataState()
     activeTab.value = 'info'
 
     const loadTasks: Promise<any>[] = []
@@ -250,6 +328,46 @@ async function saveCover() {
   }
 }
 
+// Metadata actions
+function addGenre() {
+  const tag = metadataState.genre_input.trim()
+  if (tag && !metadataState.genres.includes(tag)) {
+    metadataState.genres.push(tag)
+  }
+  metadataState.genre_input = ''
+}
+
+function removeGenre(genre: string) {
+  metadataState.genres = metadataState.genres.filter(g => g !== genre)
+}
+
+async function saveMetadata() {
+  if (!album.value) return
+  metadataError.value = ''
+  if (!metadataState.title.trim()) {
+    metadataError.value = t('albumNew.titleRequired')
+    return
+  }
+  savingMetadata.value = true
+  try {
+    const updated = await albumApi.updateMetadata(album.value.id, {
+      title: metadataState.title.trim(),
+      description: metadataState.description.trim() || null,
+      release_date: metadataState.release_date || null,
+      catalog_number: metadataState.catalog_number.trim() || null,
+      circle_name: metadataState.circle_name.trim() || null,
+      genres: metadataState.genres.length ? [...metadataState.genres] : null,
+    })
+    album.value = updated
+    syncMetadataState()
+    toastSuccess(t('settings.metadataSaved'))
+  } catch (e: any) {
+    toastError(e.message || t('common.requestFailed'))
+  } finally {
+    savingMetadata.value = false
+  }
+}
+
 // Team actions
 function toggleMember(userId: number) {
   if (teamState.member_ids.includes(userId)) {
@@ -266,6 +384,46 @@ async function saveTeam() {
     const updated = await albumApi.updateTeam(album.value.id, teamState)
     album.value = updated
     syncTeamState()
+  } finally {
+    savingTeam.value = false
+  }
+}
+
+// Member list actions (inline add/remove)
+const availableUserOptions = computed<SelectOption[]>(() =>
+  users.value
+    .filter(u => !teamState.member_ids.includes(u.id))
+    .map(u => ({ value: u.id, label: u.display_name }))
+)
+
+async function removeMemberFromAlbum(userId: number) {
+  if (!album.value || userId === album.value.producer_id) return
+  const next = { ...teamState, member_ids: teamState.member_ids.filter(id => id !== userId) }
+  savingTeam.value = true
+  try {
+    const updated = await albumApi.updateTeam(album.value.id, next)
+    album.value = updated
+    syncTeamState()
+    toastSuccess(t('circleDetail.memberRemoved'))
+  } catch (e: any) {
+    toastError(e.message || t('common.requestFailed'))
+  } finally {
+    savingTeam.value = false
+  }
+}
+
+async function addMemberToAlbum() {
+  if (!album.value || addMemberUserId.value == null) return
+  if (teamState.member_ids.includes(addMemberUserId.value)) return
+  const next = { ...teamState, member_ids: [...teamState.member_ids, addMemberUserId.value] }
+  savingTeam.value = true
+  try {
+    const updated = await albumApi.updateTeam(album.value.id, next)
+    album.value = updated
+    syncTeamState()
+    addMemberUserId.value = null
+  } catch (e: any) {
+    toastError(e.message || t('common.requestFailed'))
   } finally {
     savingTeam.value = false
   }
@@ -461,9 +619,19 @@ async function testWebhook() {
           <span class="text-xs font-mono px-2 py-0.5 rounded-full" :class="roleBadgeClass">
             {{ userRoleInAlbum }}
           </span>
+          <span v-if="album.archived_at" class="text-xs font-mono px-2 py-0.5 rounded-full bg-error-bg text-error">
+            {{ t('albums.archivedBadge') }}
+          </span>
         </div>
         <p v-if="album.description" class="text-xs text-muted-foreground mt-0.5 truncate">{{ album.description }}</p>
       </div>
+    </div>
+
+    <!-- Archived banner -->
+    <div v-if="album.archived_at" class="card border-error/30 bg-error-bg/30">
+      <p class="text-xs font-mono text-error">
+        {{ t('albumSettings.danger.archivedBanner', { date: formatDate(album.archived_at), days: archivedRemainingDays }) }}
+      </p>
     </div>
 
     <!-- Tab bar -->
@@ -519,16 +687,104 @@ async function testWebhook() {
             </p>
           </div>
 
-          <!-- Album metadata -->
+          <!-- Album metadata — editable for producer, read-only otherwise -->
           <div class="flex-1 min-w-0 space-y-4">
-            <div>
-              <div class="text-xs text-muted-foreground mb-1">{{ t('albumNew.albumTitle') }}</div>
-              <div class="text-base font-mono font-semibold text-foreground">{{ album.title }}</div>
-            </div>
-            <div v-if="album.description">
-              <div class="text-xs text-muted-foreground mb-1">{{ t('albumNew.description') }}</div>
-              <div class="text-sm text-foreground">{{ album.description }}</div>
-            </div>
+            <template v-if="isProducerOfAlbum">
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">{{ t('albumNew.albumTitle') }}</label>
+                <input
+                  v-model="metadataState.title"
+                  class="input-field w-full text-sm"
+                  :placeholder="t('albumNew.albumTitlePlaceholder')"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">{{ t('albumNew.description') }}</label>
+                <textarea
+                  v-model="metadataState.description"
+                  class="textarea-field w-full h-20 text-sm"
+                  :placeholder="t('albumNew.descriptionPlaceholder')"
+                />
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div v-if="!album.circle_id">
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.circleName') }}</label>
+                  <input v-model="metadataState.circle_name" class="input-field w-full text-sm" :placeholder="t('settings.circleNamePlaceholder')" />
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.catalogNumber') }}</label>
+                  <input v-model="metadataState.catalog_number" class="input-field w-full text-sm" :placeholder="t('settings.catalogNumberPlaceholder')" />
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.releaseDate') }}</label>
+                  <input v-model="metadataState.release_date" type="date" class="input-field w-full text-sm" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs text-muted-foreground mb-2">{{ t('settings.genres') }}</label>
+                <div class="flex items-center gap-2 mb-2">
+                  <input
+                    v-model="metadataState.genre_input"
+                    class="input-field flex-1 text-sm"
+                    :placeholder="t('settings.genrePlaceholder')"
+                    @keyup.enter="addGenre"
+                  />
+                  <button @click="addGenre" class="btn-secondary text-xs px-3 py-1.5 flex-shrink-0">
+                    {{ t('settings.addGenre') }}
+                  </button>
+                </div>
+                <div v-if="metadataState.genres.length" class="flex flex-wrap gap-1">
+                  <span
+                    v-for="genre in metadataState.genres"
+                    :key="genre"
+                    class="inline-flex items-center gap-1 text-xs bg-info-bg text-info px-2 py-0.5 rounded-full font-mono"
+                  >
+                    {{ genre }}
+                    <button @click="removeGenre(genre)" class="hover:opacity-70 ml-0.5">×</button>
+                  </span>
+                </div>
+              </div>
+              <p v-if="metadataError" class="text-xs text-error">{{ metadataError }}</p>
+              <button
+                @click="saveMetadata"
+                :disabled="savingMetadata"
+                class="btn-primary text-sm"
+              >
+                {{ savingMetadata ? t('settings.saving') : t('settings.saveMetadata') }}
+              </button>
+            </template>
+            <template v-else>
+              <div>
+                <div class="text-xs text-muted-foreground mb-1">{{ t('albumNew.albumTitle') }}</div>
+                <div class="text-base font-mono font-semibold text-foreground">{{ album.title }}</div>
+              </div>
+              <div v-if="album.description">
+                <div class="text-xs text-muted-foreground mb-1">{{ t('albumNew.description') }}</div>
+                <div class="text-sm text-foreground">{{ album.description }}</div>
+              </div>
+              <div v-if="album.circle_name || album.catalog_number || album.release_date" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div v-if="album.circle_name">
+                  <div class="text-xs text-muted-foreground mb-1">{{ t('settings.circleName') }}</div>
+                  <div class="text-sm text-foreground">{{ album.circle_name }}</div>
+                </div>
+                <div v-if="album.catalog_number">
+                  <div class="text-xs text-muted-foreground mb-1">{{ t('settings.catalogNumber') }}</div>
+                  <div class="text-sm text-foreground font-mono">{{ album.catalog_number }}</div>
+                </div>
+                <div v-if="album.release_date">
+                  <div class="text-xs text-muted-foreground mb-1">{{ t('settings.releaseDate') }}</div>
+                  <div class="text-sm text-foreground font-mono">{{ album.release_date.slice(0, 10) }}</div>
+                </div>
+              </div>
+              <div v-if="album.genres?.length">
+                <div class="text-xs text-muted-foreground mb-1">{{ t('settings.genres') }}</div>
+                <div class="flex flex-wrap gap-1">
+                  <span v-for="genre in album.genres" :key="genre" class="text-xs bg-info-bg text-info px-2 py-0.5 rounded-full font-mono">
+                    {{ genre }}
+                  </span>
+                </div>
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -536,23 +792,80 @@ async function testWebhook() {
       <!-- Team tab -->
       <div v-if="activeTab === 'team'" class="space-y-4">
         <template v-if="isProducerOfAlbum">
-          <div class="card space-y-5">
-            <div>
-              <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.masteringEngineerSelect') }}</label>
-              <CustomSelect v-model="teamState.mastering_engineer_id" :options="userOptions" :placeholder="t('settings.noneOption')" />
+          <!-- Mastering engineer selector -->
+          <div class="card space-y-3">
+            <label class="block text-xs text-muted-foreground">{{ t('settings.masteringEngineerSelect') }}</label>
+            <div class="flex items-center gap-2">
+              <CustomSelect
+                v-model="teamState.mastering_engineer_id"
+                :options="userOptions"
+                :placeholder="t('settings.noneOption')"
+                class="flex-1"
+              />
+              <button @click="saveTeam" :disabled="savingTeam" class="btn-primary text-xs px-3 py-1.5 shrink-0">
+                {{ savingTeam ? t('settings.saving') : t('common.save') }}
+              </button>
             </div>
-            <div>
-              <div class="text-xs text-muted-foreground mb-2">{{ t('settings.participants') }}</div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <label v-for="user in users" :key="user.id" class="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-                  <input type="checkbox" class="checkbox" :checked="teamState.member_ids.includes(user.id)" @change="toggleMember(user.id)" />
-                  <span>{{ user.display_name }}</span>
-                </label>
+          </div>
+
+          <!-- Members list (aligned with CircleDetailView style) -->
+          <div class="card space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('albumSettings.team.members') }}</h3>
+              <span class="text-xs text-muted-foreground">{{ teamState.member_ids.length }}</span>
+            </div>
+            <div v-if="teamState.member_ids.length === 0" class="text-sm text-muted-foreground">
+              {{ t('albumSettings.team.noMembers') }}
+            </div>
+            <div v-else class="space-y-1">
+              <div
+                v-for="userId in teamState.member_ids"
+                :key="userId"
+                class="flex items-center gap-3 px-3 py-2 border border-border bg-background"
+              >
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-mono text-foreground truncate">
+                    {{ getUserDisplayName(userId) }}
+                    <span v-if="userId === album.producer_id" class="ml-2 text-xs font-mono px-2 py-0.5 rounded-full bg-warning-bg text-warning">
+                      {{ t('albumSettings.team.producer') }}
+                    </span>
+                    <span v-else-if="userId === album.mastering_engineer_id" class="ml-2 text-xs font-mono px-2 py-0.5 rounded-full bg-info-bg text-info">
+                      {{ t('albumSettings.team.masteringEngineer') }}
+                    </span>
+                  </p>
+                </div>
+                <button
+                  v-if="userId !== album.producer_id"
+                  @click="removeMemberFromAlbum(userId)"
+                  class="text-error text-xs hover:underline shrink-0"
+                >
+                  {{ t('circleDetail.remove') }}
+                </button>
               </div>
             </div>
-            <button @click="saveTeam" :disabled="savingTeam" class="btn-primary text-sm">
-              {{ savingTeam ? t('settings.saving') : t('settings.saveTeam') }}
-            </button>
+          </div>
+
+          <!-- Add member -->
+          <div class="card space-y-3">
+            <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('albumSettings.team.addMember') }}</h3>
+            <div v-if="availableUserOptions.length === 0" class="text-xs text-muted-foreground">
+              {{ t('albumSettings.team.allAdded') }}
+            </div>
+            <div v-else class="flex items-center gap-2">
+              <CustomSelect
+                v-model="addMemberUserId"
+                :options="availableUserOptions"
+                :placeholder="t('albumSettings.team.selectUserPlaceholder')"
+                class="flex-1"
+              />
+              <button
+                @click="addMemberToAlbum"
+                :disabled="!addMemberUserId || savingTeam"
+                class="btn-secondary text-xs px-3 py-1.5 shrink-0"
+              >
+                {{ t('common.confirm') }}
+              </button>
+            </div>
           </div>
 
           <div class="card space-y-3">
@@ -766,7 +1079,12 @@ async function testWebhook() {
               <span class="text-xs text-muted-foreground font-mono w-6 text-right flex-shrink-0">{{ index + 1 }}</span>
               <span class="text-sm font-medium text-foreground flex-1 truncate">{{ element.title }}</span>
               <span class="text-xs text-muted-foreground truncate max-w-[120px]">{{ element.artist }}</span>
-              <StatusBadge :status="element.status" type="track" />
+               <StatusBadge
+                 :status="element.status"
+                 type="track"
+                 :variant="element.workflow_variant"
+                 :label="element.workflow_step?.label ?? null"
+               />
             </div>
           </template>
         </draggable>
@@ -802,8 +1120,9 @@ async function testWebhook() {
         </div>
         <WorkflowEditor
           :workflow-config="album?.workflow_config ?? null"
-          :album-members="album?.members ?? []"
+          :member-options="userOptions"
           :saving="savingWorkflow"
+          :saveable="true"
           @save="saveWorkflow"
         />
       </div>
@@ -830,7 +1149,12 @@ async function testWebhook() {
             <div class="text-xs text-muted-foreground mt-0.5">
               {{ aTrack.artist }}
               <span class="mx-1">·</span>
-              <StatusBadge :status="aTrack.status" type="track" />
+              <StatusBadge
+                :status="aTrack.status"
+                type="track"
+                :variant="aTrack.workflow_variant"
+                :label="aTrack.workflow_step?.label ?? null"
+              />
               <span class="mx-1">·</span>
               <span class="text-warning">{{ t('albumSettings.archive.remainingDays', { days: archiveRemainingDays(aTrack.archived_at) }) }}</span>
             </div>
@@ -882,6 +1206,65 @@ async function testWebhook() {
           </button>
           <span v-if="webhookTestResult === true" class="text-xs text-success">✓</span>
           <span v-if="webhookTestResult === false" class="text-xs text-error">✗</span>
+        </div>
+      </div>
+
+      <!-- Danger zone tab (producer only) -->
+      <div v-else-if="activeTab === 'danger'" class="space-y-4">
+        <div class="card space-y-4 border-error/40">
+          <h3 class="text-sm font-mono font-semibold text-error">{{ t('albumSettings.danger.title') }}</h3>
+
+          <template v-if="!album.archived_at">
+            <div class="space-y-2">
+              <p class="text-sm font-mono font-semibold text-foreground">{{ t('albumSettings.danger.archiveTitle') }}</p>
+              <p class="text-xs text-muted-foreground">{{ t('albumSettings.danger.archiveDesc') }}</p>
+            </div>
+            <button
+              v-if="!showArchiveConfirm"
+              @click="showArchiveConfirm = true"
+              class="text-sm font-mono px-4 h-10 rounded-full bg-error hover:opacity-90 text-white transition-opacity"
+            >
+              {{ t('albumSettings.danger.archiveButton') }}
+            </button>
+            <div v-else class="space-y-2">
+              <p class="text-xs text-error">
+                {{ t('albumSettings.danger.archiveConfirm', { title: album.title }) }}
+              </p>
+              <div class="flex gap-2">
+                <button
+                  @click="archiveAlbum"
+                  :disabled="archivingAlbum"
+                  class="text-sm font-mono px-4 h-10 rounded-full bg-error hover:opacity-90 text-white transition-opacity disabled:opacity-50"
+                >
+                  {{ archivingAlbum ? t('common.loading') : t('common.confirm') }}
+                </button>
+                <button
+                  @click="showArchiveConfirm = false"
+                  :disabled="archivingAlbum"
+                  class="btn-secondary text-sm"
+                >
+                  {{ t('common.cancel') }}
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="space-y-2">
+              <p class="text-sm font-mono font-semibold text-foreground">{{ t('albumSettings.danger.restoreTitle') }}</p>
+              <p class="text-xs text-muted-foreground">{{ t('albumSettings.danger.restoreDesc') }}</p>
+              <p class="text-xs text-warning">
+                {{ t('albumSettings.danger.archivedBanner', { date: formatDate(album.archived_at), days: archivedRemainingDays }) }}
+              </p>
+            </div>
+            <button
+              @click="restoreAlbum"
+              :disabled="restoringAlbum"
+              class="btn-primary text-sm"
+            >
+              {{ restoringAlbum ? t('common.loading') : t('albumSettings.danger.restoreButton') }}
+            </button>
+          </template>
         </div>
       </div>
 

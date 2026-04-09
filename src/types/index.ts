@@ -22,10 +22,19 @@ export type UserRole = 'member' | 'producer'
 
 export type WorkflowStepType = 'approval' | 'gate' | 'review' | 'revision' | 'delivery'
 
+export type WorkflowUiVariant =
+  | 'generic'
+  | 'intake'
+  | 'peer_review'
+  | 'producer_gate'
+  | 'mastering'
+  | 'final_review'
+
 export interface WorkflowStepDef {
   id: string
   label: string
   type: WorkflowStepType
+  ui_variant?: WorkflowUiVariant | null
   assignee_role: string
   order: number
   transitions: Record<string, string>

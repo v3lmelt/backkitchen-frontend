@@ -82,10 +82,6 @@ const router = createRouter({
       component: () => import('@/views/UploadTrackView.vue'),
     },
     {
-      path: '/settings',
-      redirect: '/albums',
-    },
-    {
       path: '/albums',
       name: 'albums',
       component: () => import('@/views/AlbumsView.vue'),

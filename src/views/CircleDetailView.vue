@@ -178,7 +178,10 @@
             <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowTemplate.templateDescription') }}</label>
             <textarea v-model="editTemplateDesc" class="textarea-field w-full h-16" :placeholder="t('workflowTemplate.templateDescriptionPlaceholder')" />
           </div>
-          <WorkflowBuilder v-model="editTemplateConfig" />
+          <WorkflowEditor
+            v-model:workflow-config="editTemplateConfig"
+            :member-options="circleMemberOptions"
+          />
           <div class="flex gap-2">
             <button @click="saveTemplate" :disabled="savingTpl || !editTemplateName.trim() || !editTemplateConfig" class="btn-primary text-xs">
               {{ savingTpl ? t('workflowTemplate.saving') : t('workflowTemplate.save') }}
@@ -223,6 +226,85 @@
           </div>
         </template>
       </div>
+
+      <!-- danger zone tab -->
+      <div v-if="activeTab === 'danger'" class="flex flex-col gap-4 max-w-xl">
+        <div class="bg-card border border-error/40 rounded-none p-6 space-y-4">
+          <h3 class="text-sm font-mono font-semibold text-error">{{ t('circleDetail.danger.title') }}</h3>
+
+          <!-- Owner: delete circle -->
+          <template v-if="isOwner">
+            <div class="space-y-2">
+              <p class="text-sm font-mono font-semibold text-foreground">{{ t('circleDetail.danger.deleteTitle') }}</p>
+              <p class="text-xs text-muted-foreground">{{ t('circleDetail.danger.deleteDesc') }}</p>
+            </div>
+            <button
+              v-if="!showDeleteConfirm"
+              @click="showDeleteConfirm = true"
+              class="text-sm font-mono px-4 h-10 rounded-full bg-error hover:opacity-90 text-white transition-opacity"
+            >
+              {{ t('circleDetail.danger.deleteButton') }}
+            </button>
+            <div v-else class="space-y-2">
+              <p class="text-xs text-error">
+                {{ t('circleDetail.danger.deleteConfirm', { name: circle.name }) }}
+              </p>
+              <div class="flex gap-2">
+                <button
+                  @click="deleteCircle"
+                  :disabled="deletingCircle"
+                  class="text-sm font-mono px-4 h-10 rounded-full bg-error hover:opacity-90 text-white transition-opacity disabled:opacity-50"
+                >
+                  {{ deletingCircle ? t('common.loading') : t('common.confirm') }}
+                </button>
+                <button
+                  @click="showDeleteConfirm = false"
+                  :disabled="deletingCircle"
+                  class="btn-secondary text-sm"
+                >
+                  {{ t('common.cancel') }}
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <!-- Non-owner: leave circle -->
+          <template v-else>
+            <div class="space-y-2">
+              <p class="text-sm font-mono font-semibold text-foreground">{{ t('circleDetail.danger.leaveTitle') }}</p>
+              <p class="text-xs text-muted-foreground">{{ t('circleDetail.danger.leaveDesc') }}</p>
+            </div>
+            <button
+              v-if="!showLeaveConfirm"
+              @click="showLeaveConfirm = true"
+              class="text-sm font-mono px-4 h-10 rounded-full bg-error hover:opacity-90 text-white transition-opacity"
+            >
+              {{ t('circleDetail.danger.leaveButton') }}
+            </button>
+            <div v-else class="space-y-2">
+              <p class="text-xs text-error">
+                {{ t('circleDetail.danger.leaveConfirm', { name: circle.name }) }}
+              </p>
+              <div class="flex gap-2">
+                <button
+                  @click="leaveCircle"
+                  :disabled="leavingCircle"
+                  class="text-sm font-mono px-4 h-10 rounded-full bg-error hover:opacity-90 text-white transition-opacity disabled:opacity-50"
+                >
+                  {{ leavingCircle ? t('common.loading') : t('common.confirm') }}
+                </button>
+                <button
+                  @click="showLeaveConfirm = false"
+                  :disabled="leavingCircle"
+                  class="btn-secondary text-sm"
+                >
+                  {{ t('common.cancel') }}
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
     </template>
   </div>
 </template>
@@ -237,7 +319,7 @@ import type { Circle, InviteCode, WorkflowConfig, WorkflowTemplate } from '@/typ
 import { useToast } from '@/composables/useToast'
 import { parseUTC } from '@/utils/time'
 import { Smile, Upload, Plus, Pencil, Trash2 } from 'lucide-vue-next'
-import WorkflowBuilder from '@/components/workflow/WorkflowBuilder.vue'
+import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 
 const { t } = useI18n()
@@ -284,8 +366,50 @@ const tabs = computed(() => {
   ]
   if (isOwner.value) base.push({ id: 'invites', label: t('circleDetail.tabs.invites') })
   base.push({ id: 'templates', label: t('circleDetail.tabs.templates') })
+  base.push({ id: 'danger', label: t('circleDetail.tabs.danger') })
   return base
 })
+
+// Danger zone state
+const showDeleteConfirm = ref(false)
+const showLeaveConfirm = ref(false)
+const deletingCircle = ref(false)
+const leavingCircle = ref(false)
+
+async function deleteCircle() {
+  if (!circle.value) return
+  deletingCircle.value = true
+  try {
+    await circleApi.delete(circle.value.id)
+    toast.success(t('circleDetail.danger.deleted'))
+    router.push('/circles')
+  } catch (e: any) {
+    toast.error(e.message || t('circleDetail.danger.deleteFailed'))
+  } finally {
+    deletingCircle.value = false
+  }
+}
+
+async function leaveCircle() {
+  if (!circle.value) return
+  leavingCircle.value = true
+  try {
+    await circleApi.leave(circle.value.id)
+    toast.success(t('circleDetail.danger.left'))
+    router.push('/circles')
+  } catch (e: any) {
+    toast.error(e.message || t('circleDetail.danger.leaveFailed'))
+  } finally {
+    leavingCircle.value = false
+  }
+}
+
+const circleMemberOptions = computed(() =>
+  (circle.value?.members ?? []).map(member => ({
+    value: member.user_id,
+    label: member.user.display_name,
+  })),
+)
 
 onMounted(async () => {
   const id = Number(route.params.circleId)
@@ -403,7 +527,7 @@ function startEditTemplate(tpl: WorkflowTemplate) {
   editingTemplate.value = tpl
   editTemplateName.value = tpl.name
   editTemplateDesc.value = tpl.description ?? ''
-  editTemplateConfig.value = { ...tpl.workflow_config }
+  editTemplateConfig.value = JSON.parse(JSON.stringify(tpl.workflow_config))
   showNewTemplate.value = true
 }
 

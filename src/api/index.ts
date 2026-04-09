@@ -138,6 +138,8 @@ export const albumApi = {
     circle_id?: number | null
     circle_name?: string | null
     genres?: string[] | null
+    workflow_config?: WorkflowConfig | null
+    workflow_template_id?: number | null
   }) =>
     request<Album>('/albums', { method: 'POST', body: JSON.stringify(data) }),
   updateTeam: (id: number, data: { mastering_engineer_id: number | null; member_ids: number[] }) =>
@@ -168,6 +170,8 @@ export const albumApi = {
       body: JSON.stringify({ track_ids: trackIds }),
     }),
   updateMetadata: (id: number, data: {
+    title?: string
+    description?: string | null
     release_date?: string | null
     catalog_number?: string | null
     circle_name?: string | null
@@ -206,6 +210,10 @@ export const circleApi = {
   },
   join: (code: string) =>
     request<CircleSummary>('/circles/join', { method: 'POST', body: JSON.stringify({ code }) }),
+  leave: (circleId: number) =>
+    request<void>(`/circles/${circleId}/leave`, { method: 'POST' }),
+  delete: (circleId: number) =>
+    request<void>(`/circles/${circleId}`, { method: 'DELETE' }),
   removeMember: (circleId: number, userId: number) =>
     request<void>(`/circles/${circleId}/members/${userId}`, { method: 'DELETE' }),
   listInviteCodes: (circleId: number) =>
