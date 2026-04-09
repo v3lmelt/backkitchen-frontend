@@ -3,7 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { issueApi, trackApi, r2Api, uploadToR2, uploadWithProgress, API_ORIGIN } from '@/api'
-import type { Issue, IssueStatus, Track, TrackSourceVersion } from '@/types'
+import type { Issue, IssueStatus, Track, TrackSourceVersion, WorkflowEvent } from '@/types'
 import { useAppStore } from '@/stores/app'
 import { extractAudioDuration } from '@/utils/audio'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
@@ -12,7 +12,7 @@ import WorkflowActionBar from '@/components/workflow/WorkflowActionBar.vue'
 import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 import BaseModal from '@/components/common/BaseModal.vue'
-import { formatTimestamp, formatLocaleDate } from '@/utils/time'
+import { formatTimestamp, formatLocaleDate, formatRelativeTime } from '@/utils/time'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 
@@ -25,6 +25,7 @@ const trackId = computed(() => Number(route.params.id))
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
 const sourceVersions = ref<TrackSourceVersion[]>([])
+const events = ref<WorkflowEvent[]>([])
 const loading = ref(true)
 const selectedFile = ref<File | null>(null)
 const uploading = ref(false)
@@ -44,6 +45,7 @@ async function loadPage() {
     const detail = await trackApi.get(trackId.value)
     track.value = detail.track
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
+    events.value = detail.events ?? []
     const phase = detail.track.status === 'mastering_revision' ? 'mastering' : 'peer'
     issues.value = detail.issues.filter(issue => issue.phase === phase && issue.workflow_cycle === detail.track.workflow_cycle)
   } finally {
@@ -63,7 +65,7 @@ const uploadButtonLabel = computed(() =>
     ? t('revision.submitBackToMastering')
     : t('revision.submitBackToPeer')
 )
-const audioUrl = computed(() => track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio` : '')
+const audioUrl = computed(() => track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio?v=${track.value.version ?? 0}` : '')
 const waveformIssues = computed(() => {
   const currentVersion = track.value?.version
   if (currentVersion == null) return issues.value
@@ -136,6 +138,20 @@ async function submitRevision() {
 
 const formatDate = (d: string) => formatLocaleDate(d, locale.value)
 
+// Find the last transition event that put the track into the current revision state
+const rejectionEvent = computed<WorkflowEvent | null>(() => {
+  if (!track.value) return null
+  return [...events.value].reverse().find(e => e.to_status === track.value!.status) ?? null
+})
+
+// Translate a decision key to a human-readable label for the revision banner
+function decisionLabel(decision: unknown): string {
+  if (typeof decision !== 'string') return ''
+  const key = `trackDetail.actions.${decision}`
+  if (t(key) !== key) return t(key)
+  return decision.replaceAll('_', ' ')
+}
+
 function openBatchAction(status: IssueStatus) {
   batchTargetStatus.value = status
   batchStatusNote.value = ''
@@ -188,6 +204,21 @@ const workflowActions = computed<WorkflowAction[]>(() => [
         <button @click="router.push(`/tracks/${trackId}`)" class="btn-secondary text-sm flex-shrink-0 self-start">
           {{ t('common.backToTrack') }}
         </button>
+      </div>
+
+      <!-- Rejection context banner -->
+      <div v-if="rejectionEvent" class="flex items-start gap-3 rounded-none border border-warning/30 bg-warning-bg px-4 py-3">
+        <div class="mt-0.5 h-2 w-2 flex-shrink-0 rounded-full bg-warning"></div>
+        <div class="min-w-0 text-sm">
+          <span class="font-mono font-medium text-warning">{{ t('revision.returnedBy', { name: rejectionEvent.actor?.display_name ?? t('trackDetail.system') }) }}</span>
+          <span class="text-muted-foreground ml-2">{{ formatRelativeTime(rejectionEvent.created_at, locale) }}</span>
+          <span v-if="rejectionEvent.payload?.decision" class="ml-2 text-muted-foreground">
+            · {{ decisionLabel(rejectionEvent.payload.decision) }}
+          </span>
+          <p v-if="pendingIssues.length > 0" class="mt-0.5 text-warning/80">
+            {{ t('revision.openIssuesReminder', { count: pendingIssues.length }) }}
+          </p>
+        </div>
       </div>
 
       <div class="grid grid-cols-3 gap-2 sm:gap-4">
@@ -294,7 +325,7 @@ const workflowActions = computed<WorkflowAction[]>(() => [
 
     <Transition name="slide-up">
       <div v-if="selectedIssueIds.length > 0"
-        class="fixed bottom-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 bg-card border border-border rounded-2xl shadow-2xl px-4 sm:px-5 py-3 flex items-center gap-2 sm:gap-3 flex-wrap justify-center z-50">
+        class="fixed bottom-24 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 bg-card border border-border rounded-2xl shadow-2xl px-4 sm:px-5 py-3 flex items-center gap-2 sm:gap-3 flex-wrap justify-center z-50">
         <span class="text-sm text-muted-foreground">{{ selectedIssueIds.length }} {{ t('issue.selected') }}</span>
         <div class="h-4 w-px bg-border"></div>
         <button @click="openBatchAction('disagreed')" class="px-3 py-1.5 rounded-full text-sm bg-info-bg text-info border border-info/30 hover:bg-info/20 transition-colors">

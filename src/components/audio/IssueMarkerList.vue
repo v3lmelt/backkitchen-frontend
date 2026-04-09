@@ -11,15 +11,19 @@ const props = withDefaults(defineProps<{
   selectable?: boolean
   selectedIds?: number[]
   currentSourceVersionNumber?: number | null
+  hoveredIssueId?: number | null
 }>(), {
   selectable: false,
   selectedIds: () => [],
   currentSourceVersionNumber: null,
+  hoveredIssueId: null,
 })
 
 const emit = defineEmits<{
   select: [issue: Issue]
   'update:selectedIds': [ids: number[]]
+  hover: [issue: Issue]
+  leave: []
 }>()
 
 const { t } = useI18n()
@@ -67,8 +71,13 @@ function markerSummary(issue: Issue): string {
       v-for="(issue, index) in issues"
       :key="issue.id"
       @click="emit('select', issue)"
+      @mouseenter="emit('hover', issue)"
+      @mouseleave="emit('leave')"
       class="card cursor-pointer transition-colors"
-      :class="isOutdatedIssue(issue) ? 'opacity-60 hover:border-border' : 'hover:border-primary/50'"
+      :class="[
+        isOutdatedIssue(issue) ? 'opacity-60 hover:border-border' : 'hover:border-primary/50',
+        hoveredIssueId === issue.id ? '!border-primary/70 bg-warning-bg/40' : '',
+      ]"
     >
       <div class="flex items-start gap-2">
         <input

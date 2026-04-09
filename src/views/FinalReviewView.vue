@@ -22,6 +22,13 @@ const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
 const loading = ref(true)
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
+const isIssueFormOpen = ref(false)
+const waveformMode = computed<'seek' | 'annotate'>(() => (isIssueFormOpen.value ? 'annotate' : 'seek'))
+
+function onRequestWaveformMode(next: 'seek' | 'annotate') {
+  if (next === 'annotate') issueFormRef.value?.openForm()
+  else issueFormRef.value?.closeForm()
+}
 
 onMounted(loadPage)
 
@@ -37,7 +44,11 @@ async function loadPage() {
   }
 }
 
-const masterAudioUrl = computed(() => track.value?.current_master_delivery ? `${API_ORIGIN}/api/tracks/${trackId.value}/master-audio` : '')
+const masterAudioUrl = computed(() => {
+  const d = track.value?.current_master_delivery
+  if (!d) return ''
+  return `${API_ORIGIN}/api/tracks/${trackId.value}/master-audio?v=${d.delivery_number}&c=${d.workflow_cycle ?? 1}`
+})
 const masterDeliveryId = computed(() => track.value?.current_master_delivery?.id ?? null)
 
 const { downloading, downloadProgress, downloadTrackAudio } = useAudioDownload()
@@ -96,8 +107,8 @@ const workflowActions = computed<WorkflowAction[]>(() => [
       </div>
 
       <div v-if="masterAudioUrl">
-        <div class="flex items-center justify-between mb-2">
-          <p class="text-xs text-muted-foreground">{{ t('finalReview.waveformHint') }}</p>
+        <div class="flex items-start justify-between gap-3 mb-2">
+          <p class="text-xs text-muted-foreground leading-relaxed">{{ t('finalReview.waveformHint') }}</p>
           <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
             {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
           </button>
@@ -106,10 +117,13 @@ const workflowActions = computed<WorkflowAction[]>(() => [
           :audio-url="masterAudioUrl"
           :issues="issues"
           :selectable="true"
+          :mode="waveformMode"
           :selected-range="issueFormRef?.selectedRange ?? null"
+          :draft-markers="issueFormRef?.markers ?? []"
           @click="(t: number) => issueFormRef?.handleClick(t)"
           @regionClick="onIssueSelect"
           @rangeSelect="(s: number, e: number) => issueFormRef?.handleRangeSelect(s, e)"
+          @requestModeChange="onRequestWaveformMode"
         />
       </div>
 
@@ -121,6 +135,7 @@ const workflowActions = computed<WorkflowAction[]>(() => [
             phase="final_review"
             :master-delivery-id="masterDeliveryId"
             @created="(issue: Issue) => issues.push(issue)"
+            @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
             <template #heading>
               <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('finalReview.issuesHeading', { count: issues.length }) }}</h3>

@@ -14,6 +14,7 @@ import IssueCreatePanel from './IssueCreatePanel.vue'
 describe('IssueCreatePanel', () => {
   beforeEach(() => {
     mocks.createMock.mockReset()
+    localStorage.clear()
     mocks.createMock.mockResolvedValue({
       id: 99,
       phase: 'peer',
@@ -109,10 +110,51 @@ describe('IssueCreatePanel', () => {
     const wrapper = mountWithPlugins(IssueCreatePanel, {
       props: { trackId: 1, phase: 'peer' },
     })
-    await wrapper.find('button.btn-primary').trigger('click')
+    await wrapper.find('button.btn-primary.text-xs').trigger('click')
     expect(wrapper.find('input').exists()).toBe(true)
 
     await wrapper.findAll('button').find(b => b.classes().includes('btn-secondary'))!.trigger('click')
     expect(wrapper.find('input').exists()).toBe(false)
+  })
+
+  it('toggles same point marker off on second click', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 1, phase: 'peer' },
+    })
+
+    const vm = wrapper.vm as any
+    vm.handleClick(2.5)
+    vm.handleClick(2.5)
+
+    await wrapper.vm.$nextTick()
+    expect(vm.markers).toHaveLength(0)
+  })
+
+  it('toggles same range marker off on second drag selection', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 1, phase: 'peer' },
+    })
+
+    const vm = wrapper.vm as any
+    vm.handleRangeSelect(1.0, 2.0)
+    vm.handleRangeSelect(1.0, 2.0)
+
+    await wrapper.vm.$nextTick()
+    expect(vm.markers).toHaveLength(0)
+  })
+
+  it('removes last marker through exposed helper', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 1, phase: 'peer' },
+    })
+
+    const vm = wrapper.vm as any
+    vm.handleClick(1.0)
+    vm.handleClick(2.0)
+    vm.removeLastMarker()
+
+    await wrapper.vm.$nextTick()
+    expect(vm.markers).toHaveLength(1)
+    expect(vm.markers[0].time_start).toBe(1)
   })
 })

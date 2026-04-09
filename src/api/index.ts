@@ -285,6 +285,11 @@ export const trackApi = {
     }),
   listAssignments: (trackId: number) =>
     request<StageAssignment[]>(`/tracks/${trackId}/assignments`),
+  reassignReviewer: (trackId: number, userId?: number) =>
+    request<Track>(`/tracks/${trackId}/reassign-reviewer`, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId ?? null }),
+    }),
   // Delivery confirmation
   confirmDelivery: (trackId: number, deliveryId: number) =>
     request<Track>(`/tracks/${trackId}/master-deliveries/${deliveryId}/confirm`, { method: 'POST' }),

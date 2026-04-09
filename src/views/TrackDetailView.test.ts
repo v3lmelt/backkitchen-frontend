@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   pushMock: vi.fn(),
   openMock: vi.fn(),
   trackGetMock: vi.fn(),
+  trackReopenMock: vi.fn(),
+  trackRequestReopenMock: vi.fn(),
   discussionCreateMock: vi.fn(),
   currentUser: { id: 2 },
 }))
@@ -19,7 +21,11 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/api', () => ({
   API_ORIGIN: '',
-  trackApi: { get: mocks.trackGetMock },
+  trackApi: {
+    get: mocks.trackGetMock,
+    reopen: mocks.trackReopenMock,
+    requestReopen: mocks.trackRequestReopenMock,
+  },
   discussionApi: { create: mocks.discussionCreateMock },
 }))
 
@@ -43,8 +49,7 @@ vi.mock('@/components/audio/IssueMarkerList.vue', () => ({
 
 vi.mock('@/components/workflow/WorkflowProgress.vue', () => ({
   default: {
-    props: ['actions'],
-    template: '<div class="workflow-progress"><button v-for="action in actions" :key="action.label" class="progress-action" @click="action.handler()">{{ action.label }}</button></div>',
+    template: '<div class="workflow-progress"></div>',
   },
 }))
 
@@ -67,7 +72,11 @@ describe('TrackDetailView', () => {
     mocks.openMock.mockReset()
     mocks.discussionCreateMock.mockReset()
     mocks.trackGetMock.mockReset()
+    mocks.trackReopenMock.mockReset()
+    mocks.trackRequestReopenMock.mockReset()
     vi.stubGlobal('open', mocks.openMock)
+    mocks.trackReopenMock.mockResolvedValue({})
+    mocks.trackRequestReopenMock.mockResolvedValue({})
     mocks.trackGetMock.mockResolvedValue({
       track: {
         id: 7,
@@ -131,7 +140,94 @@ describe('TrackDetailView', () => {
 
     expect(wrapper.find('.waveform').text()).toContain('compare:201')
 
-    await wrapper.find('button.progress-action').trigger('click')
+    await wrapper.find('button.workflow-cta-btn').trigger('click')
     expect(mocks.pushMock).toHaveBeenCalledWith('/tracks/7/review')
+  })
+
+  it('shows a single step CTA for custom workflows', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 7,
+        album_id: 5,
+        status: 'intake',
+        title: 'Track 7',
+        artist: 'Nova',
+        version: 3,
+        workflow_cycle: 2,
+        file_path: '/audio.wav',
+        submitter_id: 2,
+        producer_id: 8,
+        allowed_actions: ['accept', 'reject_final'],
+        workflow_step: { id: 'intake', label: 'Intake', type: 'approval', assignee_role: 'producer', order: 0, transitions: {} },
+        open_issue_count: 1,
+        submitter: { display_name: 'Nova' },
+        peer_reviewer: { id: 4, display_name: 'Echo' },
+        current_source_version: { id: 301 },
+        current_master_delivery: null,
+      },
+      issues: [],
+      discussions: [],
+      events: [],
+      source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
+      workflow_config: { version: 2, steps: [{ id: 'intake', label: 'Intake', type: 'approval', assignee_role: 'producer', order: 0, transitions: { accept: 'peer_review' } }] },
+    })
+
+    const wrapper = mountWithPlugins(TrackDetailView)
+    await flushPromises()
+
+    const buttons = wrapper.findAll('button.workflow-cta-btn')
+    expect(buttons).toHaveLength(2)
+    expect(buttons.every(button => button.text().includes('Open Intake'))).toBe(true)
+
+    await buttons[0].trigger('click')
+    expect(mocks.pushMock).toHaveBeenCalledWith('/tracks/7/step/intake')
+  })
+
+  it('prioritizes remaster reopen targets and labels them clearly', async () => {
+    mocks.currentUser = { id: 2 }
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 7,
+        album_id: 5,
+        status: 'completed',
+        title: 'Track 7',
+        artist: 'Nova',
+        version: 3,
+        workflow_cycle: 2,
+        file_path: '/audio.wav',
+        submitter_id: 2,
+        producer_id: 8,
+        mastering_engineer_id: 9,
+        allowed_actions: [],
+        open_issue_count: 0,
+        submitter: { display_name: 'Nova' },
+        current_source_version: { id: 301 },
+        current_master_delivery: { producer_approved_at: '2024-01-01T00:00:00Z', submitter_approved_at: '2024-01-02T00:00:00Z' },
+      },
+      issues: [],
+      discussions: [],
+      events: [],
+      source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'producer_revision', label: 'Producer Revision', type: 'revision', assignee_role: 'submitter', order: 2, transitions: {} },
+          { id: 'mastering_revision', label: 'Mastering Revision', type: 'revision', assignee_role: 'submitter', order: 3, transitions: {} },
+          { id: 'mastering', label: 'Mastering', type: 'delivery', assignee_role: 'mastering_engineer', order: 4, transitions: {} },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(TrackDetailView)
+    await flushPromises()
+
+    const reopenButton = wrapper.findAll('button').find(button => button.text().includes('Request Workflow Reopen'))
+    expect(reopenButton).toBeTruthy()
+    await reopenButton!.trigger('click')
+    await flushPromises()
+
+    const options = wrapper.findAll('option').map(option => option.text())
+    expect(options[1]).toContain('remaster current delivery')
+    expect(options[2]).toContain('revise source first, then remaster')
   })
 })
