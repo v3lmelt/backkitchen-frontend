@@ -378,6 +378,13 @@ export const authApi = {
     request<AuthResponse>(`/auth/verify-email?token=${encodeURIComponent(token)}`, { method: 'POST' }),
   resendVerification: (email: string) =>
     request<void>(`/auth/resend-verification?email=${encodeURIComponent(email)}`, { method: 'POST' }),
+  forgotPassword: (email: string) =>
+    request<void>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+  resetPassword: (token: string, new_password: string) =>
+    request<AuthResponse>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, new_password }),
+    }),
   me: () => request<User>('/auth/me'),
   updateProfile: (data: { display_name?: string; email?: string }) =>
     request<User>('/auth/me', { method: 'PATCH', body: JSON.stringify(data) }),

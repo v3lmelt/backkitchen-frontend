@@ -58,6 +58,26 @@
       "resent": "Verification email resent.",
       "backToSignIn": "Back to sign in"
     },
+    "forgotPassword": {
+      "title": "Reset your password",
+      "subtitle": "Enter your email and we'll send you a password reset link.",
+      "submit": "Send reset email",
+      "sent": "If that email is registered, a reset link has been sent.",
+      "backToLogin": "Back to sign in",
+      "errorInvalidEmail": "Please enter a valid email address."
+    },
+    "resetPassword": {
+      "title": "Set a new password",
+      "subtitle": "Enter your new password. The link expires in 1 hour.",
+      "newPassword": "New password",
+      "newPasswordPlaceholder": "At least 8 characters",
+      "confirmPassword": "Confirm new password",
+      "confirmPasswordPlaceholder": "Re-enter your new password",
+      "submit": "Reset password",
+      "errorMissingToken": "Reset link is invalid or missing",
+      "errorTooShort": "Password must be at least 8 characters",
+      "errorMismatch": "Passwords do not match"
+    },
     "langToggle": "中文"
   },
   "common": {
