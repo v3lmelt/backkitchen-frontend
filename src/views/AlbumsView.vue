@@ -1,27 +1,33 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { albumApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Album } from '@/types'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
-import { Music } from 'lucide-vue-next'
+import { Music, Archive } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
 const albums = ref<Album[]>([])
 const loading = ref(true)
+const activeTab = ref<'active' | 'archived'>('active')
 
-onMounted(async () => {
+async function load() {
   loading.value = true
   try {
-    albums.value = await albumApi.list()
+    albums.value = await albumApi.list(
+      activeTab.value === 'archived' ? { archived_only: true } : undefined,
+    )
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(load)
+watch(activeTab, load)
 
 const myAlbums = computed(() => {
   const userId = appStore.currentUser?.id
@@ -60,14 +66,39 @@ function roleBadgeClass(album: Album): string {
       </RouterLink>
     </div>
 
+    <!-- Tab switcher -->
+    <div class="flex gap-0 border-b border-border">
+      <button
+        @click="activeTab = 'active'"
+        class="px-4 py-2.5 text-sm font-mono transition-colors border-b-2 -mb-px"
+        :class="activeTab === 'active'
+          ? 'text-foreground border-primary'
+          : 'text-muted-foreground border-transparent hover:text-foreground'"
+      >
+        {{ t('albums.tabActive') }}
+      </button>
+      <button
+        @click="activeTab = 'archived'"
+        class="px-4 py-2.5 text-sm font-mono transition-colors border-b-2 -mb-px flex items-center gap-1.5"
+        :class="activeTab === 'archived'
+          ? 'text-foreground border-primary'
+          : 'text-muted-foreground border-transparent hover:text-foreground'"
+      >
+        <Archive class="w-3.5 h-3.5" :stroke-width="2" />
+        {{ t('albums.tabArchived') }}
+      </button>
+    </div>
+
     <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
 
     <div v-else-if="myAlbums.length === 0" class="flex flex-col items-center justify-center py-20 text-center">
       <div class="w-16 h-16 bg-card border border-border flex items-center justify-center mb-4">
-        <Music class="w-8 h-8 text-muted-foreground" :stroke-width="1.5" />
+        <component :is="activeTab === 'archived' ? Archive : Music" class="w-8 h-8 text-muted-foreground" :stroke-width="1.5" />
       </div>
-      <p class="text-base font-mono font-semibold text-foreground">{{ t('albums.noAlbums') }}</p>
-      <p class="text-sm text-muted-foreground mt-1">{{ t('albums.noAlbumsHint') }}</p>
+      <p class="text-base font-mono font-semibold text-foreground">
+        {{ activeTab === 'archived' ? t('albums.archivedEmpty') : t('albums.noAlbums') }}
+      </p>
+      <p v-if="activeTab === 'active'" class="text-sm text-muted-foreground mt-1">{{ t('albums.noAlbumsHint') }}</p>
     </div>
 
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -86,6 +117,7 @@ function roleBadgeClass(album: Album): string {
               :src="album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : albumPlaceholder"
               :alt="album.title"
               class="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200"
+              :class="{ 'opacity-60 grayscale': album.archived_at }"
             />
           </div>
           <div class="p-4 space-y-2">
@@ -96,7 +128,10 @@ function roleBadgeClass(album: Album): string {
                 </h3>
                 <p v-if="album.circle_name" class="text-xs text-muted-foreground mt-0.5">{{ album.circle_name }}</p>
               </div>
-              <span class="flex-shrink-0 text-xs font-mono px-2 py-0.5 rounded-full" :class="roleBadgeClass(album)">
+              <span v-if="album.archived_at" class="flex-shrink-0 text-xs font-mono px-2 py-0.5 rounded-full bg-error-bg text-error">
+                {{ t('albums.archivedBadge') }}
+              </span>
+              <span v-else class="flex-shrink-0 text-xs font-mono px-2 py-0.5 rounded-full" :class="roleBadgeClass(album)">
                 {{ userRoleInAlbum(album) }}
               </span>
             </div>

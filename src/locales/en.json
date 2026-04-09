@@ -693,7 +693,11 @@
     "pinDashboard": "Pin to Dashboard",
     "unpinDashboard": "Unpin from Dashboard",
     "pinHint": "Click the pin icon to show an album on the dashboard",
-    "pinHintActive": "Only pinned albums are shown on the dashboard"
+    "pinHintActive": "Only pinned albums are shown on the dashboard",
+    "tabActive": "Active",
+    "tabArchived": "Archived",
+    "archivedEmpty": "No archived albums",
+    "archivedBadge": "Archived"
   },
   "albumNew": {
     "heading": "New Album",

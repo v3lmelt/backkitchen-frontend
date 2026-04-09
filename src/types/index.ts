@@ -114,6 +114,7 @@ export interface Album {
   members: AlbumMember[]
   created_at: string
   updated_at: string
+  archived_at?: string | null
   track_count: number
 }
 

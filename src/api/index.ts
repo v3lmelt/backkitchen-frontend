@@ -117,8 +117,18 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const albumApi = {
-  list: () => request<Album[]>('/albums'),
+  list: (params?: { include_archived?: boolean; archived_only?: boolean }) => {
+    const q = new URLSearchParams()
+    if (params?.include_archived) q.set('include_archived', 'true')
+    if (params?.archived_only) q.set('archived_only', 'true')
+    const qs = q.toString()
+    return request<Album[]>(`/albums${qs ? `?${qs}` : ''}`)
+  },
   get: (id: number) => request<Album>(`/albums/${id}`),
+  archive: (id: number) =>
+    request<Album>(`/albums/${id}/archive`, { method: 'POST' }),
+  restore: (id: number) =>
+    request<Album>(`/albums/${id}/restore`, { method: 'POST' }),
   create: (data: {
     title: string
     description?: string

@@ -743,7 +743,11 @@
     "pinDashboard": "固定到仪表盘",
     "unpinDashboard": "从仪表盘移除",
     "pinHint": "点击图钉图标可将专辑固定到仪表盘",
-    "pinHintActive": "已固定的专辑将显示在仪表盘"
+    "pinHintActive": "已固定的专辑将显示在仪表盘",
+    "tabActive": "活跃",
+    "tabArchived": "已归档",
+    "archivedEmpty": "没有已归档的专辑",
+    "archivedBadge": "已归档"
   },
   "albumNew": {
     "heading": "新建专辑",
