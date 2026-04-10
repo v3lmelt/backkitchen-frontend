@@ -116,9 +116,12 @@ const isReviewer = computed(() => {
 })
 
 
+const loadError = ref(false)
+
 async function loadIssue(id: number) {
   const token = ++loadCount
   loading.value = true
+  loadError.value = false
   try {
     const fetched = await issueApi.get(id)
     if (token !== loadCount) return
@@ -132,6 +135,8 @@ async function loadIssue(id: number) {
       cachedTrack.value = detail.track
       cachedTrackId = fetched.track_id
     }
+  } catch {
+    if (token === loadCount) loadError.value = true
   } finally {
     if (token === loadCount) loading.value = false
   }
@@ -411,6 +416,10 @@ function openVersionCompare() {
 
 <template>
   <div v-if="loading" class="max-w-4xl mx-auto"><SkeletonLoader :rows="5" :card="true" /></div>
+  <div v-else-if="loadError" class="card max-w-md mx-auto mt-12 text-center space-y-3">
+    <p class="text-sm text-error">{{ t('common.loadFailed') }}</p>
+    <button @click="loadIssue(issueId)" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
+  </div>
     <div v-else-if="issue" class="max-w-7xl mx-auto space-y-6">
     <div
       v-if="issueIsOutdated"

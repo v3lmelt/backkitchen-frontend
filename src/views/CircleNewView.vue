@@ -65,7 +65,7 @@
         </div>
       </div>
 
-      <p v-if="error" class="text-error text-sm">{{ error }}</p>
+      <div v-if="error" class="bg-error-bg border border-error/30 rounded-none px-4 py-3 text-sm text-error">{{ error }}</div>
 
       <button @click="submit" :disabled="submitting" class="btn-primary text-sm w-full">
         {{ submitting ? t('common.loading') : t('circleNew.create') }}
