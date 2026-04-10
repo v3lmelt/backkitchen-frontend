@@ -309,23 +309,15 @@ export const trackApi = {
     form.append('file', file)
     return request<Track>(`/tracks/${id}/source-versions`, { method: 'POST', body: form })
   },
-  intakeDecision: (id: number, decision: 'accept' | 'accept_producer_direct' | 'reject_final' | 'reject_resubmittable') =>
-    request<Track>(`/tracks/${id}/intake-decision`, { method: 'POST', body: JSON.stringify({ decision }) }),
-  finishPeerReview: (id: number, decision: 'needs_revision' | 'pass') =>
-    request<Track>(`/tracks/${id}/peer-review/finish`, { method: 'POST', body: JSON.stringify({ decision }) }),
-  producerGate: (id: number, decision: 'send_to_mastering' | 'request_peer_revision') =>
-    request<Track>(`/tracks/${id}/producer-gate`, { method: 'POST', body: JSON.stringify({ decision }) }),
-  requestMasteringRevision: (id: number) =>
-    request<Track>(`/tracks/${id}/mastering/request-revision`, { method: 'POST' }),
   uploadMasterDelivery: (id: number, file: File) => {
     const form = new FormData()
     form.append('file', file)
     return request<Track>(`/tracks/${id}/master-deliveries`, { method: 'POST', body: form })
   },
+  // Final-review approve is retained: the custom workflow engine delegates
+  // to this endpoint for the producer+submitter dual-confirmation step.
   approveFinalReview: (id: number) =>
     request<Track>(`/tracks/${id}/final-review/approve`, { method: 'POST' }),
-  returnToMastering: (id: number) =>
-    request<Track>(`/tracks/${id}/final-review/return`, { method: 'POST' }),
   delete: (id: number) => request<void>(`/tracks/${id}`, { method: 'DELETE' }),
   archive: (id: number) => request<Track>(`/tracks/${id}/archive`, { method: 'POST' }),
   restore: (id: number) => request<Track>(`/tracks/${id}/restore`, { method: 'POST' }),
