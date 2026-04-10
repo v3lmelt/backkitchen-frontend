@@ -27,6 +27,15 @@ const form = ref({
   bpm: '',
 })
 const selectedFile = ref<File | null>(null)
+const titleError = ref('')
+const artistError = ref('')
+
+function validateTitle() {
+  titleError.value = form.value.title.trim() ? '' : t('upload.titleRequired')
+}
+function validateArtist() {
+  artistError.value = form.value.artist.trim() ? '' : t('upload.artistRequired')
+}
 
 const albumOptions = computed<SelectOption[]>(() =>
   albums.value.map((a) => ({ value: a.id, label: a.title }))
@@ -60,7 +69,10 @@ function onDrop(e: DragEvent) {
 }
 
 async function upload() {
-  if (!selectedFile.value || !form.value.title || !form.value.artist) return
+  validateTitle()
+  validateArtist()
+  if (titleError.value || artistError.value) return
+  if (!selectedFile.value) return
   if (!form.value.album_id) {
     toastError(t('upload.albumRequired'))
     return
@@ -154,11 +166,13 @@ function formatFileSize(bytes: number): string {
     <div class="card space-y-4">
       <div>
         <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.trackTitle') }}</label>
-        <input v-model="form.title" class="input-field w-full" :placeholder="t('upload.titlePlaceholder')" />
+        <input v-model="form.title" class="input-field w-full" :class="{ 'border-error': titleError }" :placeholder="t('upload.titlePlaceholder')" @blur="validateTitle" />
+        <p v-if="titleError" class="text-xs text-error mt-1">{{ titleError }}</p>
       </div>
       <div>
         <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.artist') }}</label>
-        <input v-model="form.artist" class="input-field w-full" :placeholder="t('upload.artistPlaceholder')" />
+        <input v-model="form.artist" class="input-field w-full" :class="{ 'border-error': artistError }" :placeholder="t('upload.artistPlaceholder')" @blur="validateArtist" />
+        <p v-if="artistError" class="text-xs text-error mt-1">{{ artistError }}</p>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>

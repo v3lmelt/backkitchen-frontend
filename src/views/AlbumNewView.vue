@@ -21,6 +21,12 @@ const users = ref<User[]>([])
 
 const form = ref({ title: '', description: '' })
 const titleError = ref('')
+const titleTouched = ref(false)
+
+function validateTitle() {
+  titleTouched.value = true
+  titleError.value = form.value.title.trim() ? '' : t('albumNew.titleRequired')
+}
 
 const coverInputRef = ref<HTMLInputElement | null>(null)
 const coverImageFile = ref<File | null>(null)
@@ -150,11 +156,8 @@ function toggleMember(userId: number) {
 }
 
 async function create() {
-  titleError.value = ''
-  if (!form.value.title.trim()) {
-    titleError.value = t('albumNew.titleRequired')
-    return
-  }
+  validateTitle()
+  if (titleError.value) return
   creating.value = true
   try {
     const payload: any = { ...form.value }
@@ -243,7 +246,9 @@ async function create() {
               <input
                 v-model="form.title"
                 class="input-field w-full"
+                :class="{ 'border-error': titleError }"
                 :placeholder="t('albumNew.albumTitlePlaceholder')"
+                @blur="validateTitle"
                 @keyup.enter="create"
               />
               <p v-if="titleError" class="text-xs text-error mt-1">{{ titleError }}</p>

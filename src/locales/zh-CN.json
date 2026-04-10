@@ -715,7 +715,9 @@
     "submit": "提交曲目",
     "uploadFailed": "上传失败",
     "uploadSuccess": "曲目提交成功",
-    "albumRequired": "请先选择专辑再提交"
+    "albumRequired": "请先选择专辑再提交",
+    "titleRequired": "请输入曲目标题",
+    "artistRequired": "请输入艺术家名称"
   },
   "settings": {
     "heading": "专辑设置",
@@ -1042,7 +1044,8 @@
     "descriptionPlaceholder": "社团简介…",
     "website": "官网",
     "websitePlaceholder": "https://…",
-    "create": "创建社团"
+    "create": "创建社团",
+    "nameRequired": "请输入社团名称"
   },
   "circleDetail": {
     "tabs": {

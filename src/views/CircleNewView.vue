@@ -39,9 +39,12 @@
           <input
             v-model="form.name"
             class="input-field w-full"
+            :class="{ 'border-error': nameError }"
             :placeholder="t('circleNew.namePlaceholder')"
+            @blur="validateName"
             @keyup.enter="submit"
           />
+          <p v-if="nameError" class="text-xs text-error mt-1">{{ nameError }}</p>
         </div>
         <div>
           <label class="block text-xs text-muted-foreground mb-1">{{ t('circleNew.description') }}</label>
@@ -89,6 +92,11 @@ const logoFile = ref<File | null>(null)
 const logoPreviewUrl = ref<string | null>(null)
 const submitting = ref(false)
 const error = ref('')
+const nameError = ref('')
+
+function validateName() {
+  nameError.value = form.name.trim() ? '' : t('circleNew.nameRequired')
+}
 
 const form = reactive({
   name: '',
@@ -115,7 +123,8 @@ function onLogoChange(e: Event) {
 }
 
 async function submit() {
-  if (!form.name.trim()) return
+  validateName()
+  if (nameError.value) return
   submitting.value = true
   error.value = ''
   try {

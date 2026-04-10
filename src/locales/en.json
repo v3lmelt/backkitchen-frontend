@@ -715,7 +715,9 @@
     "submit": "Submit Track",
     "uploadFailed": "Upload failed",
     "uploadSuccess": "Track submitted successfully",
-    "albumRequired": "Please select an album before submitting"
+    "albumRequired": "Please select an album before submitting",
+    "titleRequired": "Please enter a track title",
+    "artistRequired": "Please enter an artist name"
   },
   "settings": {
     "heading": "Album Settings",
@@ -996,7 +998,8 @@
     "descriptionPlaceholder": "Circle description...",
     "website": "Website",
     "websitePlaceholder": "https://...",
-    "create": "Create Circle"
+    "create": "Create Circle",
+    "nameRequired": "Please enter a circle name"
   },
   "circleDetail": {
     "tabs": {
