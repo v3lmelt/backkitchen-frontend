@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-const PUBLIC_ROUTES = ['/login', '/register', '/verify-email']
+const PUBLIC_ROUTES = ['/login', '/register', '/verify-email', '/forgot-password', '/reset-password']
 const TOKEN_KEY = 'backkitchen_token'
 
 const router = createRouter({
@@ -22,6 +22,16 @@ const router = createRouter({
       component: () => import('@/views/VerifyEmailView.vue'),
     },
     {
+      path: '/forgot-password',
+      name: 'forgot-password',
+      component: () => import('@/views/ForgotPasswordView.vue'),
+    },
+    {
+      path: '/reset-password',
+      name: 'reset-password',
+      component: () => import('@/views/ResetPasswordView.vue'),
+    },
+    {
       path: '/',
       name: 'dashboard',
       component: () => import('@/views/DashboardView.vue'),
@@ -32,34 +42,9 @@ const router = createRouter({
       component: () => import('@/views/TrackDetailView.vue'),
     },
     {
-      path: '/tracks/:id/review',
-      name: 'peer-review',
-      component: () => import('@/views/PeerReviewView.vue'),
-    },
-    {
       path: '/issues/:id',
       name: 'issue-detail',
       component: () => import('@/views/IssueDetailView.vue'),
-    },
-    {
-      path: '/tracks/:id/revision',
-      name: 'author-revision',
-      component: () => import('@/views/AuthorRevisionView.vue'),
-    },
-    {
-      path: '/tracks/:id/producer',
-      name: 'producer-decision',
-      component: () => import('@/views/ProducerDecisionView.vue'),
-    },
-    {
-      path: '/tracks/:id/mastering',
-      name: 'mastering-review',
-      component: () => import('@/views/MasteringReviewView.vue'),
-    },
-    {
-      path: '/tracks/:id/final-review',
-      name: 'final-review',
-      component: () => import('@/views/FinalReviewView.vue'),
     },
     {
       path: '/tracks/:id/step/:stepId',
@@ -70,10 +55,6 @@ const router = createRouter({
       path: '/upload',
       name: 'upload',
       component: () => import('@/views/UploadTrackView.vue'),
-    },
-    {
-      path: '/settings',
-      redirect: '/albums',
     },
     {
       path: '/albums',
@@ -120,7 +101,7 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const token = localStorage.getItem(TOKEN_KEY)
-  if (to.path === '/verify-email') return true
+  if (to.path === '/verify-email' || to.path === '/reset-password') return true
   if (PUBLIC_ROUTES.includes(to.path)) {
     if (token) return '/'
     return true

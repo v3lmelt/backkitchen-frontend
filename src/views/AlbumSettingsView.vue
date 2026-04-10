@@ -7,11 +7,13 @@ import { albumApi, trackApi, checklistApi, invitationApi, userApi, circleApi, AP
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
-import type { Album, ChecklistTemplateItem, Invitation, Track, User } from '@/types'
+import type { Album, ChecklistTemplateItem, Invitation, Track, User, WebhookDelivery, WorkflowConfig } from '@/types'
 import { Archive, RotateCcw, Upload } from 'lucide-vue-next'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
+import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
+import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -34,6 +36,27 @@ const coverImageFile = ref<File | null>(null)
 const coverPreviewUrl = ref<string | null>(null)
 const uploadingCover = ref(false)
 
+// Metadata edit state
+const metadataState = reactive<{
+  title: string
+  description: string
+  release_date: string
+  catalog_number: string
+  circle_name: string
+  genres: string[]
+  genre_input: string
+}>({
+  title: '',
+  description: '',
+  release_date: '',
+  catalog_number: '',
+  circle_name: '',
+  genres: [],
+  genre_input: '',
+})
+const savingMetadata = ref(false)
+const metadataError = ref('')
+
 // Team state
 const teamState = reactive<{ mastering_engineer_id: number | null; member_ids: number[] }>({
   mastering_engineer_id: null,
@@ -45,6 +68,7 @@ const inviteUserId = ref('')
 const inviteError = ref('')
 const inviteSuccess = ref('')
 const invitingUser = ref(false)
+const addMemberUserId = ref<number | null>(null)
 
 // Deadline state
 const deadlineState = reactive({ deadline: '', peer_review: '', mastering: '', final_review: '' })
@@ -55,6 +79,8 @@ const templateItems = ref<ChecklistTemplateItem[]>([])
 const templateIsDefault = ref(false)
 const savingTemplate = ref(false)
 const templateError = ref('')
+const savedTemplateSnapshot = ref('')
+const templateDirty = computed(() => JSON.stringify(templateItems.value) !== savedTemplateSnapshot.value)
 
 // Track order state
 const tracks = ref<Track[]>([])
@@ -70,10 +96,36 @@ const webhookState = reactive({ url: '', enabled: false, events: [] as string[] 
 const savingWebhook = ref(false)
 const testingWebhook = ref(false)
 const webhookTestResult = ref<boolean | null>(null)
+const webhookDeliveries = ref<WebhookDelivery[]>([])
+const loadingDeliveries = ref(false)
 
 const WEBHOOK_EVENT_TYPES = [
   'track_status_changed', 'new_issue', 'issue_status_changed', 'new_comment', 'new_discussion',
 ]
+
+// Workflow state
+const savingWorkflow = ref(false)
+const workflowMigrations = ref<Array<{ track_id: number; track_title: string; from_step: string; to_step: string }>>([])
+
+async function saveWorkflow(config: WorkflowConfig) {
+  if (!album.value) return
+  savingWorkflow.value = true
+  workflowMigrations.value = []
+  try {
+    const result = await albumApi.updateWorkflow(album.value.id, config)
+    if (result.migrations?.length) {
+      workflowMigrations.value = result.migrations
+    }
+    // Refresh album data
+    const fresh = await albumApi.get(album.value.id)
+    album.value = fresh
+    toastSuccess(t('workflowEditor.saved'))
+  } catch (e: any) {
+    toastError(e.message || 'Failed to save workflow')
+  } finally {
+    savingWorkflow.value = false
+  }
+}
 
 const isProducerOfAlbum = computed(() => album.value?.producer_id === appStore.currentUser?.id)
 const isMasteringEngineerOfAlbum = computed(() => album.value?.mastering_engineer_id === appStore.currentUser?.id)
@@ -105,9 +157,53 @@ const availableTabs = computed(() => {
     tabs.push({ key: 'order', label: t('albumSettings.tabs.order') })
     tabs.push({ key: 'archive', label: t('albumSettings.tabs.archive') })
     tabs.push({ key: 'webhook', label: t('albumSettings.tabs.webhook') })
+    tabs.push({ key: 'danger', label: t('albumSettings.tabs.danger') })
   }
   return tabs
 })
+
+// Album archive state
+const archivingAlbum = ref(false)
+const restoringAlbum = ref(false)
+const showArchiveConfirm = ref(false)
+
+const archivedRemainingDays = computed(() => {
+  if (!album.value?.archived_at) return 0
+  const archived = new Date(album.value.archived_at)
+  const expiry = new Date(archived.getTime() + 14 * 24 * 60 * 60 * 1000)
+  const remaining = Math.ceil((expiry.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+  return Math.max(0, remaining)
+})
+
+async function archiveAlbum() {
+  if (!album.value) return
+  archivingAlbum.value = true
+  try {
+    const updated = await albumApi.archive(album.value.id)
+    album.value = updated
+    showArchiveConfirm.value = false
+    toastSuccess(t('albumSettings.danger.archived'))
+    router.push('/albums')
+  } catch (e: any) {
+    toastError(e.message || t('albumSettings.danger.archiveFailed'))
+  } finally {
+    archivingAlbum.value = false
+  }
+}
+
+async function restoreAlbum() {
+  if (!album.value) return
+  restoringAlbum.value = true
+  try {
+    const updated = await albumApi.restore(album.value.id)
+    album.value = updated
+    toastSuccess(t('albumSettings.danger.restored'))
+  } catch (e: any) {
+    toastError(e.message || t('albumSettings.danger.restoreFailed'))
+  } finally {
+    restoringAlbum.value = false
+  }
+}
 
 function toDateInput(iso: string | null | undefined): string {
   if (!iso) return ''
@@ -124,6 +220,17 @@ function syncTeamState() {
   if (!album.value) return
   teamState.mastering_engineer_id = album.value.mastering_engineer_id
   teamState.member_ids = album.value.members.map(m => m.user_id)
+}
+
+function syncMetadataState() {
+  if (!album.value) return
+  metadataState.title = album.value.title
+  metadataState.description = album.value.description || ''
+  metadataState.release_date = album.value.release_date ? album.value.release_date.slice(0, 10) : ''
+  metadataState.catalog_number = album.value.catalog_number || ''
+  metadataState.circle_name = album.value.circle_name || ''
+  metadataState.genres = album.value.genres ? [...album.value.genres] : []
+  metadataState.genre_input = ''
 }
 
 function syncDeadlineState() {
@@ -151,6 +258,7 @@ onMounted(async () => {
 
     syncTeamState()
     syncDeadlineState()
+    syncMetadataState()
     activeTab.value = 'info'
 
     const loadTasks: Promise<any>[] = []
@@ -165,6 +273,7 @@ onMounted(async () => {
         checklistApi.getTemplate(albumData.id).then(tpl => {
           templateItems.value = tpl.items.map(item => ({ ...item }))
           templateIsDefault.value = tpl.is_default
+          savedTemplateSnapshot.value = JSON.stringify(templateItems.value)
         }).catch(() => { console.warn('[AlbumSettings] Failed to load checklist template') }),
         albumApi.tracks(albumData.id).then(ts => { tracks.value = ts }),
         albumApi.archivedTracks(albumData.id).then(ts => { archivedTracks.value = ts }).catch(() => {}),
@@ -178,12 +287,14 @@ onMounted(async () => {
           webhookState.enabled = false
           webhookState.events = []
         }),
+        albumApi.getWebhookDeliveries(albumData.id).then(d => { webhookDeliveries.value = d }).catch(() => {}),
       )
     } else if (albumData.members.some(m => m.user_id === userId)) {
       loadTasks.push(
         checklistApi.getTemplate(albumData.id).then(tpl => {
           templateItems.value = tpl.items.map(item => ({ ...item }))
           templateIsDefault.value = tpl.is_default
+          savedTemplateSnapshot.value = JSON.stringify(templateItems.value)
         }).catch(() => { console.warn('[AlbumSettings] Failed to load checklist template') }),
       )
     }
@@ -225,14 +336,46 @@ async function saveCover() {
   }
 }
 
-// Team actions
-function toggleMember(userId: number) {
-  if (teamState.member_ids.includes(userId)) {
-    teamState.member_ids = teamState.member_ids.filter(id => id !== userId)
-  } else {
-    teamState.member_ids = [...teamState.member_ids, userId]
+// Metadata actions
+function addGenre() {
+  const tag = metadataState.genre_input.trim()
+  if (tag && !metadataState.genres.includes(tag)) {
+    metadataState.genres.push(tag)
+  }
+  metadataState.genre_input = ''
+}
+
+function removeGenre(genre: string) {
+  metadataState.genres = metadataState.genres.filter(g => g !== genre)
+}
+
+async function saveMetadata() {
+  if (!album.value) return
+  metadataError.value = ''
+  if (!metadataState.title.trim()) {
+    metadataError.value = t('albumNew.titleRequired')
+    return
+  }
+  savingMetadata.value = true
+  try {
+    const updated = await albumApi.updateMetadata(album.value.id, {
+      title: metadataState.title.trim(),
+      description: metadataState.description.trim() || null,
+      release_date: metadataState.release_date || null,
+      catalog_number: metadataState.catalog_number.trim() || null,
+      circle_name: metadataState.circle_name.trim() || null,
+      genres: metadataState.genres.length ? [...metadataState.genres] : null,
+    })
+    album.value = updated
+    syncMetadataState()
+    toastSuccess(t('settings.metadataSaved'))
+  } catch (e: any) {
+    toastError(e.message || t('common.requestFailed'))
+  } finally {
+    savingMetadata.value = false
   }
 }
+
 
 async function saveTeam() {
   if (!album.value) return
@@ -241,6 +384,46 @@ async function saveTeam() {
     const updated = await albumApi.updateTeam(album.value.id, teamState)
     album.value = updated
     syncTeamState()
+  } finally {
+    savingTeam.value = false
+  }
+}
+
+// Member list actions (inline add/remove)
+const availableUserOptions = computed<SelectOption[]>(() =>
+  users.value
+    .filter(u => !teamState.member_ids.includes(u.id))
+    .map(u => ({ value: u.id, label: u.display_name }))
+)
+
+async function removeMemberFromAlbum(userId: number) {
+  if (!album.value || userId === album.value.producer_id) return
+  const next = { ...teamState, member_ids: teamState.member_ids.filter(id => id !== userId) }
+  savingTeam.value = true
+  try {
+    const updated = await albumApi.updateTeam(album.value.id, next)
+    album.value = updated
+    syncTeamState()
+    toastSuccess(t('circleDetail.memberRemoved'))
+  } catch (e: any) {
+    toastError(e.message || t('common.requestFailed'))
+  } finally {
+    savingTeam.value = false
+  }
+}
+
+async function addMemberToAlbum() {
+  if (!album.value || addMemberUserId.value == null) return
+  if (teamState.member_ids.includes(addMemberUserId.value)) return
+  const next = { ...teamState, member_ids: [...teamState.member_ids, addMemberUserId.value] }
+  savingTeam.value = true
+  try {
+    const updated = await albumApi.updateTeam(album.value.id, next)
+    album.value = updated
+    syncTeamState()
+    addMemberUserId.value = null
+  } catch (e: any) {
+    toastError(e.message || t('common.requestFailed'))
   } finally {
     savingTeam.value = false
   }
@@ -320,6 +503,7 @@ async function saveTemplate() {
     )
     templateItems.value = result.items.map(item => ({ ...item }))
     templateIsDefault.value = false
+    savedTemplateSnapshot.value = JSON.stringify(templateItems.value)
     toastSuccess(t('settings.templateSaved'))
   } catch (err: any) {
     templateError.value = err.message || t('settings.templateSaveFailed')
@@ -337,6 +521,7 @@ async function resetTemplate() {
     const tpl = await checklistApi.getTemplate(album.value.id)
     templateItems.value = tpl.items.map(item => ({ ...item }))
     templateIsDefault.value = true
+    savedTemplateSnapshot.value = JSON.stringify(templateItems.value)
     toastSuccess(t('settings.templateReset'))
   } catch (err: any) {
     templateError.value = err.message || t('settings.templateSaveFailed')
@@ -417,12 +602,24 @@ async function testWebhook() {
     webhookTestResult.value = false
   } finally {
     testingWebhook.value = false
+    // Refresh delivery history after test
+    albumApi.getWebhookDeliveries(album.value.id).then(d => { webhookDeliveries.value = d }).catch(() => {})
+  }
+}
+
+async function refreshDeliveries() {
+  if (!album.value) return
+  loadingDeliveries.value = true
+  try {
+    webhookDeliveries.value = await albumApi.getWebhookDeliveries(album.value.id)
+  } finally {
+    loadingDeliveries.value = false
   }
 }
 </script>
 
 <template>
-  <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
+  <div v-if="loading" class="max-w-4xl mx-auto"><SkeletonLoader :rows="5" :card="true" /></div>
 
   <div v-else-if="album" class="max-w-4xl mx-auto space-y-6">
     <!-- Album header -->
@@ -436,9 +633,19 @@ async function testWebhook() {
           <span class="text-xs font-mono px-2 py-0.5 rounded-full" :class="roleBadgeClass">
             {{ userRoleInAlbum }}
           </span>
+          <span v-if="album.archived_at" class="text-xs font-mono px-2 py-0.5 rounded-full bg-error-bg text-error">
+            {{ t('albums.archivedBadge') }}
+          </span>
         </div>
         <p v-if="album.description" class="text-xs text-muted-foreground mt-0.5 truncate">{{ album.description }}</p>
       </div>
+    </div>
+
+    <!-- Archived banner -->
+    <div v-if="album.archived_at" class="card border-error/30 bg-error-bg/30">
+      <p class="text-xs font-mono text-error">
+        {{ t('albumSettings.danger.archivedBanner', { date: formatDate(album.archived_at), days: archivedRemainingDays }) }}
+      </p>
     </div>
 
     <!-- Tab bar -->
@@ -494,16 +701,104 @@ async function testWebhook() {
             </p>
           </div>
 
-          <!-- Album metadata -->
+          <!-- Album metadata — editable for producer, read-only otherwise -->
           <div class="flex-1 min-w-0 space-y-4">
-            <div>
-              <div class="text-xs text-muted-foreground mb-1">{{ t('albumNew.albumTitle') }}</div>
-              <div class="text-base font-mono font-semibold text-foreground">{{ album.title }}</div>
-            </div>
-            <div v-if="album.description">
-              <div class="text-xs text-muted-foreground mb-1">{{ t('albumNew.description') }}</div>
-              <div class="text-sm text-foreground">{{ album.description }}</div>
-            </div>
+            <template v-if="isProducerOfAlbum">
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">{{ t('albumNew.albumTitle') }}</label>
+                <input
+                  v-model="metadataState.title"
+                  class="input-field w-full text-sm"
+                  :placeholder="t('albumNew.albumTitlePlaceholder')"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">{{ t('albumNew.description') }}</label>
+                <textarea
+                  v-model="metadataState.description"
+                  class="textarea-field w-full h-20 text-sm"
+                  :placeholder="t('albumNew.descriptionPlaceholder')"
+                />
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div v-if="!album.circle_id">
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.circleName') }}</label>
+                  <input v-model="metadataState.circle_name" class="input-field w-full text-sm" :placeholder="t('settings.circleNamePlaceholder')" />
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.catalogNumber') }}</label>
+                  <input v-model="metadataState.catalog_number" class="input-field w-full text-sm" :placeholder="t('settings.catalogNumberPlaceholder')" />
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.releaseDate') }}</label>
+                  <input v-model="metadataState.release_date" type="date" class="input-field w-full text-sm" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs text-muted-foreground mb-2">{{ t('settings.genres') }}</label>
+                <div class="flex items-center gap-2 mb-2">
+                  <input
+                    v-model="metadataState.genre_input"
+                    class="input-field flex-1 text-sm"
+                    :placeholder="t('settings.genrePlaceholder')"
+                    @keyup.enter="addGenre"
+                  />
+                  <button @click="addGenre" class="btn-secondary text-xs px-3 py-1.5 flex-shrink-0">
+                    {{ t('settings.addGenre') }}
+                  </button>
+                </div>
+                <div v-if="metadataState.genres.length" class="flex flex-wrap gap-1">
+                  <span
+                    v-for="genre in metadataState.genres"
+                    :key="genre"
+                    class="inline-flex items-center gap-1 text-xs bg-info-bg text-info px-2 py-0.5 rounded-full font-mono"
+                  >
+                    {{ genre }}
+                    <button @click="removeGenre(genre)" class="hover:opacity-70 ml-0.5">×</button>
+                  </span>
+                </div>
+              </div>
+              <p v-if="metadataError" class="text-xs text-error">{{ metadataError }}</p>
+              <button
+                @click="saveMetadata"
+                :disabled="savingMetadata"
+                class="btn-primary text-sm"
+              >
+                {{ savingMetadata ? t('settings.saving') : t('settings.saveMetadata') }}
+              </button>
+            </template>
+            <template v-else>
+              <div>
+                <div class="text-xs text-muted-foreground mb-1">{{ t('albumNew.albumTitle') }}</div>
+                <div class="text-base font-mono font-semibold text-foreground">{{ album.title }}</div>
+              </div>
+              <div v-if="album.description">
+                <div class="text-xs text-muted-foreground mb-1">{{ t('albumNew.description') }}</div>
+                <div class="text-sm text-foreground">{{ album.description }}</div>
+              </div>
+              <div v-if="album.circle_name || album.catalog_number || album.release_date" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div v-if="album.circle_name">
+                  <div class="text-xs text-muted-foreground mb-1">{{ t('settings.circleName') }}</div>
+                  <div class="text-sm text-foreground">{{ album.circle_name }}</div>
+                </div>
+                <div v-if="album.catalog_number">
+                  <div class="text-xs text-muted-foreground mb-1">{{ t('settings.catalogNumber') }}</div>
+                  <div class="text-sm text-foreground font-mono">{{ album.catalog_number }}</div>
+                </div>
+                <div v-if="album.release_date">
+                  <div class="text-xs text-muted-foreground mb-1">{{ t('settings.releaseDate') }}</div>
+                  <div class="text-sm text-foreground font-mono">{{ album.release_date.slice(0, 10) }}</div>
+                </div>
+              </div>
+              <div v-if="album.genres?.length">
+                <div class="text-xs text-muted-foreground mb-1">{{ t('settings.genres') }}</div>
+                <div class="flex flex-wrap gap-1">
+                  <span v-for="genre in album.genres" :key="genre" class="text-xs bg-info-bg text-info px-2 py-0.5 rounded-full font-mono">
+                    {{ genre }}
+                  </span>
+                </div>
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -511,23 +806,80 @@ async function testWebhook() {
       <!-- Team tab -->
       <div v-if="activeTab === 'team'" class="space-y-4">
         <template v-if="isProducerOfAlbum">
-          <div class="card space-y-5">
-            <div>
-              <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.masteringEngineerSelect') }}</label>
-              <CustomSelect v-model="teamState.mastering_engineer_id" :options="userOptions" :placeholder="t('settings.noneOption')" />
+          <!-- Mastering engineer selector -->
+          <div class="card space-y-3">
+            <label class="block text-xs text-muted-foreground">{{ t('settings.masteringEngineerSelect') }}</label>
+            <div class="flex items-center gap-2">
+              <CustomSelect
+                v-model="teamState.mastering_engineer_id"
+                :options="userOptions"
+                :placeholder="t('settings.noneOption')"
+                class="flex-1"
+              />
+              <button @click="saveTeam" :disabled="savingTeam" class="btn-primary text-xs px-3 py-1.5 shrink-0">
+                {{ savingTeam ? t('settings.saving') : t('common.save') }}
+              </button>
             </div>
-            <div>
-              <div class="text-xs text-muted-foreground mb-2">{{ t('settings.participants') }}</div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <label v-for="user in users" :key="user.id" class="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-                  <input type="checkbox" class="checkbox" :checked="teamState.member_ids.includes(user.id)" @change="toggleMember(user.id)" />
-                  <span>{{ user.display_name }}</span>
-                </label>
+          </div>
+
+          <!-- Members list (aligned with CircleDetailView style) -->
+          <div class="card space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('albumSettings.team.members') }}</h3>
+              <span class="text-xs text-muted-foreground">{{ teamState.member_ids.length }}</span>
+            </div>
+            <div v-if="teamState.member_ids.length === 0" class="text-sm text-muted-foreground">
+              {{ t('albumSettings.team.noMembers') }}
+            </div>
+            <div v-else class="space-y-1">
+              <div
+                v-for="userId in teamState.member_ids"
+                :key="userId"
+                class="flex items-center gap-3 px-3 py-2 border border-border bg-background"
+              >
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-mono text-foreground truncate">
+                    {{ getUserDisplayName(userId) }}
+                    <span v-if="userId === album.producer_id" class="ml-2 text-xs font-mono px-2 py-0.5 rounded-full bg-warning-bg text-warning">
+                      {{ t('albumSettings.team.producer') }}
+                    </span>
+                    <span v-else-if="userId === album.mastering_engineer_id" class="ml-2 text-xs font-mono px-2 py-0.5 rounded-full bg-info-bg text-info">
+                      {{ t('albumSettings.team.masteringEngineer') }}
+                    </span>
+                  </p>
+                </div>
+                <button
+                  v-if="userId !== album.producer_id"
+                  @click="removeMemberFromAlbum(userId)"
+                  class="text-error text-xs hover:underline shrink-0"
+                >
+                  {{ t('circleDetail.remove') }}
+                </button>
               </div>
             </div>
-            <button @click="saveTeam" :disabled="savingTeam" class="btn-primary text-sm">
-              {{ savingTeam ? t('settings.saving') : t('settings.saveTeam') }}
-            </button>
+          </div>
+
+          <!-- Add member -->
+          <div class="card space-y-3">
+            <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('albumSettings.team.addMember') }}</h3>
+            <div v-if="availableUserOptions.length === 0" class="text-xs text-muted-foreground">
+              {{ t('albumSettings.team.allAdded') }}
+            </div>
+            <div v-else class="flex items-center gap-2">
+              <CustomSelect
+                v-model="addMemberUserId"
+                :options="availableUserOptions"
+                :placeholder="t('albumSettings.team.selectUserPlaceholder')"
+                class="flex-1"
+              />
+              <button
+                @click="addMemberToAlbum"
+                :disabled="!addMemberUserId || savingTeam"
+                class="btn-secondary text-xs px-3 py-1.5 shrink-0"
+              >
+                {{ t('common.confirm') }}
+              </button>
+            </div>
           </div>
 
           <div class="card space-y-3">
@@ -686,6 +1038,7 @@ async function testWebhook() {
             <button @click="saveTemplate" :disabled="savingTemplate" class="btn-primary text-xs px-3 py-1.5">
               {{ savingTemplate ? t('settings.saving') : t('settings.saveTemplate') }}
             </button>
+            <span v-if="templateDirty" class="text-xs text-warning font-mono">{{ t('settings.unsavedChanges') }}</span>
             <button
               @click="resetTemplate"
               :disabled="savingTemplate || templateIsDefault"
@@ -741,7 +1094,12 @@ async function testWebhook() {
               <span class="text-xs text-muted-foreground font-mono w-6 text-right flex-shrink-0">{{ index + 1 }}</span>
               <span class="text-sm font-medium text-foreground flex-1 truncate">{{ element.title }}</span>
               <span class="text-xs text-muted-foreground truncate max-w-[120px]">{{ element.artist }}</span>
-              <StatusBadge :status="element.status" type="track" />
+               <StatusBadge
+                 :status="element.status"
+                 type="track"
+                 :variant="element.workflow_variant"
+                 :label="element.workflow_step?.label ?? null"
+               />
             </div>
           </template>
         </draggable>
@@ -764,39 +1122,24 @@ async function testWebhook() {
         </div>
       </div>
 
-      <!-- Webhook tab (producer only) -->
-      <!-- Workflow (read-only) -->
+      <!-- Workflow editor -->
       <div v-else-if="activeTab === 'workflow'" class="card space-y-5">
-        <template v-if="album?.workflow_config">
-          <div class="flex items-center gap-2 mb-2">
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-warning-bg text-warning">{{ t('albumSettings.workflow.customWorkflow') }}</span>
-            <span class="text-xs text-muted-foreground">{{ t('albumSettings.workflow.locked') }}</span>
+        <div v-if="!isProducerOfAlbum" class="text-sm text-muted-foreground">
+          {{ t('albumSettings.workflow.viewOnly') }}
+        </div>
+        <div v-if="workflowMigrations.length" class="bg-warning-bg border border-warning/20 rounded-none p-3 space-y-1">
+          <p class="text-xs font-mono text-warning">{{ t('workflowEditor.migrationWarning') }}</p>
+          <div v-for="m in workflowMigrations" :key="m.track_id" class="text-xs text-muted-foreground">
+            {{ m.track_title }}: {{ m.from_step }} → {{ m.to_step }}
           </div>
-          <p v-if="album.workflow_template_name" class="text-xs text-muted-foreground mb-2">
-            {{ t('workflowTemplate.basedOnTemplate', { name: album.workflow_template_name }) }}
-          </p>
-          <div v-for="step in album.workflow_config.steps" :key="step.id" class="border border-border p-3 space-y-2">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="text-sm font-mono font-semibold text-foreground">{{ step.label }}</span>
-              <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs bg-info-bg text-info">{{ t(`workflowBuilder.stepTypes.${step.type}`) }}</span>
-              <span class="text-xs text-muted-foreground sm:ml-auto">{{ t(`workflowBuilder.roles.${step.assignee_role}`) }}</span>
-            </div>
-            <div v-if="Object.keys(step.transitions).length" class="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1">
-              <span v-for="(target, decision) in step.transitions" :key="decision">
-                {{ decision }} &rarr; {{ target }}
-              </span>
-            </div>
-            <div v-if="step.return_to" class="text-xs text-muted-foreground">
-              {{ t('albumSettings.workflow.returnTo') }}: {{ step.return_to }}
-            </div>
-          </div>
-        </template>
-        <template v-else>
-          <p class="text-sm text-muted-foreground">{{ t('albumSettings.workflow.defaultWorkflow') }}</p>
-          <div class="text-xs text-muted-foreground space-y-1">
-            <p>{{ t('albumSettings.workflow.defaultDesc') }}</p>
-          </div>
-        </template>
+        </div>
+        <WorkflowEditor
+          :workflow-config="album?.workflow_config ?? null"
+          :member-options="userOptions"
+          :saving="savingWorkflow"
+          :saveable="true"
+          @save="saveWorkflow"
+        />
       </div>
 
       <div v-else-if="activeTab === 'archive'" class="space-y-4">
@@ -821,7 +1164,12 @@ async function testWebhook() {
             <div class="text-xs text-muted-foreground mt-0.5">
               {{ aTrack.artist }}
               <span class="mx-1">·</span>
-              <StatusBadge :status="aTrack.status" type="track" />
+              <StatusBadge
+                :status="aTrack.status"
+                type="track"
+                :variant="aTrack.workflow_variant"
+                :label="aTrack.workflow_step?.label ?? null"
+              />
               <span class="mx-1">·</span>
               <span class="text-warning">{{ t('albumSettings.archive.remainingDays', { days: archiveRemainingDays(aTrack.archived_at) }) }}</span>
             </div>
@@ -873,6 +1221,95 @@ async function testWebhook() {
           </button>
           <span v-if="webhookTestResult === true" class="text-xs text-success">✓</span>
           <span v-if="webhookTestResult === false" class="text-xs text-error">✗</span>
+        </div>
+
+        <!-- Delivery history -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-mono font-semibold text-foreground">{{ t('settings.webhookDeliveries') }}</span>
+            <button @click="refreshDeliveries" :disabled="loadingDeliveries" class="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              {{ loadingDeliveries ? t('common.loading') : t('common.refresh') }}
+            </button>
+          </div>
+          <div v-if="webhookDeliveries.length === 0" class="text-xs text-muted-foreground py-3 text-center">
+            {{ t('settings.webhookNoDeliveries') }}
+          </div>
+          <div v-else class="space-y-1.5">
+            <div
+              v-for="d in webhookDeliveries"
+              :key="d.id"
+              class="flex items-start gap-3 text-xs py-2 px-3 bg-background border border-border rounded-none"
+            >
+              <span
+                class="shrink-0 font-mono px-2 py-0.5 rounded-full text-[11px]"
+                :class="d.success ? 'bg-success-bg text-success' : 'bg-error-bg text-error'"
+              >
+                {{ d.success ? (d.status_code ?? 'OK') : (d.status_code ?? t('common.error')) }}
+              </span>
+              <span class="font-mono text-muted-foreground shrink-0">{{ d.event_type }}</span>
+              <span v-if="d.error_detail" class="text-error truncate flex-1" :title="d.error_detail">{{ d.error_detail }}</span>
+              <span class="text-muted-foreground ml-auto shrink-0">{{ new Date(d.created_at).toLocaleString() }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Danger zone tab (producer only) -->
+      <div v-else-if="activeTab === 'danger'" class="space-y-4">
+        <div class="card space-y-4 border-error/40">
+          <h3 class="text-sm font-mono font-semibold text-error">{{ t('albumSettings.danger.title') }}</h3>
+
+          <template v-if="!album.archived_at">
+            <div class="space-y-2">
+              <p class="text-sm font-mono font-semibold text-foreground">{{ t('albumSettings.danger.archiveTitle') }}</p>
+              <p class="text-xs text-muted-foreground">{{ t('albumSettings.danger.archiveDesc') }}</p>
+            </div>
+            <button
+              v-if="!showArchiveConfirm"
+              @click="showArchiveConfirm = true"
+              class="text-sm font-mono px-4 h-10 rounded-full bg-error hover:opacity-90 text-white transition-opacity"
+            >
+              {{ t('albumSettings.danger.archiveButton') }}
+            </button>
+            <div v-else class="space-y-2">
+              <p class="text-xs text-error">
+                {{ t('albumSettings.danger.archiveConfirm', { title: album.title }) }}
+              </p>
+              <div class="flex gap-2">
+                <button
+                  @click="archiveAlbum"
+                  :disabled="archivingAlbum"
+                  class="text-sm font-mono px-4 h-10 rounded-full bg-error hover:opacity-90 text-white transition-opacity disabled:opacity-50"
+                >
+                  {{ archivingAlbum ? t('common.loading') : t('common.confirm') }}
+                </button>
+                <button
+                  @click="showArchiveConfirm = false"
+                  :disabled="archivingAlbum"
+                  class="btn-secondary text-sm"
+                >
+                  {{ t('common.cancel') }}
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="space-y-2">
+              <p class="text-sm font-mono font-semibold text-foreground">{{ t('albumSettings.danger.restoreTitle') }}</p>
+              <p class="text-xs text-muted-foreground">{{ t('albumSettings.danger.restoreDesc') }}</p>
+              <p class="text-xs text-warning">
+                {{ t('albumSettings.danger.archivedBanner', { date: formatDate(album.archived_at), days: archivedRemainingDays }) }}
+              </p>
+            </div>
+            <button
+              @click="restoreAlbum"
+              :disabled="restoringAlbum"
+              class="btn-primary text-sm"
+            >
+              {{ restoringAlbum ? t('common.loading') : t('albumSettings.danger.restoreButton') }}
+            </button>
+          </template>
         </div>
       </div>
 

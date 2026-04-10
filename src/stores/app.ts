@@ -53,7 +53,12 @@ export const useAppStore = defineStore('app', () => {
       } catch { /* ignore — default false */ }
       startNotificationPolling()
     } catch {
-      clearAuth()
+      // request() already removes the token from localStorage on 401.
+      // Only wipe Pinia state if that happened; network/server errors
+      // should not log the user out while their token is still valid.
+      if (!localStorage.getItem(TOKEN_KEY)) {
+        clearAuth()
+      }
     } finally {
       bootstrapped.value = true
     }

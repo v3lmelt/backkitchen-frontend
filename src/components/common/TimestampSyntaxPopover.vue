@@ -1,38 +1,69 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Info } from 'lucide-vue-next'
-import { extractTimeReferences, resolveTimeReferenceTarget, type TimestampTarget } from '@/utils/timestamps'
+import {
+  extractMarkerIndexReferences,
+  extractTimeReferences,
+  resolveTimeReferenceTarget,
+  type TimestampTarget,
+} from '@/utils/timestamps'
 
 const props = withDefaults(defineProps<{
   text: string
   cursorPos?: number
   defaultTarget?: TimestampTarget
+  visible?: boolean
 }>(), {
   defaultTarget: 'track',
   cursorPos: 0,
+  visible: false,
 })
 
 const { t } = useI18n()
 
 const manualOpen = ref(false)
+// Set when the user explicitly closes the popover while it's auto-showing due to
+// a timestamp pattern. Cleared automatically once the cursor moves away from any
+// timestamp so the auto-show can trigger again next time.
+const userClosed = ref(false)
 
-// Check whether the cursor is near a timestamp-like pattern.
-// Uses a small window instead of whitespace-delimited words so that CJK text
-// (which has no spaces between words) doesn't keep the popover open forever.
+// Check whether the cursor is currently sitting inside or immediately after a
+// timestamp token. We can't just regex over a rolling window — in short CJK
+// text (no whitespace) the whole string fits in the window and the popover
+// would never close. So we find real timestamps via extractTimeReferences and
+// also allow a small "in-progress" match right at the cursor for partial input
+// like "03:" before the second digits are typed.
 const typingTimestamp = computed(() => {
-  const pos = props.cursorPos ?? props.text.length
-  const start = Math.max(0, pos - 10)
-  const end = Math.min(props.text.length, pos + 10)
-  const nearby = props.text.slice(start, end)
-  // Match timestamp patterns: "03:15", "03:", "t:03:15", "a:1:23", etc.
-  return /(?:[ta]:)?\d{1,2}:\d{0,2}/.test(nearby)
+  const cursor = props.cursorPos ?? props.text.length
+  // 1. Full, valid timestamps: is cursor inside or immediately after one?
+  for (const ref of extractTimeReferences(props.text)) {
+    const start = ref.index
+    const end = ref.index + ref.length
+    if (cursor >= start && cursor <= end) return true
+  }
+  // 2. In-progress partial timestamp ending exactly at the cursor.
+  const snippet = props.text.slice(Math.max(0, cursor - 8), cursor)
+  return /(?:^|[^\w])(?:[ta]:)?\d{1,2}:\d{0,2}$/.test(snippet)
 })
 const matches = computed(() => extractTimeReferences(props.text))
-const isVisible = computed(() => manualOpen.value || typingTimestamp.value)
+const markerMatches = computed(() => extractMarkerIndexReferences(props.text))
+const isVisible = computed(() => props.visible || manualOpen.value || (typingTimestamp.value && !userClosed.value))
+
+// Once the cursor moves away from a timestamp, reset userClosed so the popover
+// can auto-show again the next time the user types near a timestamp.
+watch(typingTimestamp, (val) => {
+  if (!val) userClosed.value = false
+})
 
 function toggleManual() {
-  manualOpen.value = !manualOpen.value
+  if (isVisible.value) {
+    manualOpen.value = false
+    userClosed.value = true
+  } else {
+    manualOpen.value = true
+    userClosed.value = false
+  }
 }
 
 function targetLabel(target: TimestampTarget) {
@@ -42,6 +73,7 @@ function targetLabel(target: TimestampTarget) {
 const examples = computed(() => ([
   { code: '03:15', description: t('timestamp.examples.point') },
   { code: '03:15-04:12', description: t('timestamp.examples.range') },
+  { code: '#1', description: t('timestamp.examples.marker') },
   { code: 't:03:15', description: t('timestamp.examples.track') },
   { code: 'a:03:15', description: t('timestamp.examples.attachment') },
 ]))
@@ -98,6 +130,17 @@ const examples = computed(() => ([
           {{ match.raw }}
           <span class="text-warning/50">·</span>
           <span class="text-muted-foreground">{{ targetLabel(resolveTimeReferenceTarget(match, defaultTarget)) }}</span>
+        </span>
+      </div>
+      <div v-if="markerMatches.length" class="mt-2 flex flex-wrap gap-1.5 border-t border-border pt-2">
+        <span
+          v-for="(match, index) in markerMatches"
+          :key="`marker-${match.index}-${index}`"
+          class="inline-flex items-center gap-1 rounded-full bg-info-bg px-2 py-0.5 text-[11px] font-mono text-info"
+        >
+          {{ match.raw }}
+          <span class="text-info/50">·</span>
+          <span class="text-muted-foreground">{{ t('timestamp.markerReference') }}</span>
         </span>
       </div>
     </div>

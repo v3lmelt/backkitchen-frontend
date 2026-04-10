@@ -2,20 +2,26 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { issueApi, r2Api, uploadToR2, trackApi, API_ORIGIN, resolveAssetUrl } from '@/api'
+import { issueApi, commentApi, r2Api, uploadToR2, trackApi, API_ORIGIN, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Comment, Issue, IssueStatus } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import TimestampText from '@/components/common/TimestampText.vue'
+import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
+import { useToast } from '@/composables/useToast'
 import { formatTimestamp, formatTimestampShort, formatLocaleDate, formatDuration } from '@/utils/time'
-import type { TimeReference, TimestampTarget } from '@/utils/timestamps'
-import { ChevronLeft, ChevronRight, Music, ImageIcon } from 'lucide-vue-next'
+import type { MarkerIndexReference, TimeReference, TimestampTarget } from '@/utils/timestamps'
+import { ChevronLeft, ChevronRight, Music, ImageIcon, Pencil, Trash2 } from 'lucide-vue-next'
+
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024  // 10 MB
+const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
 
 const route = useRoute()
 const router = useRouter()
 const { t, locale } = useI18n()
+const { error: toastError } = useToast()
 const appStore = useAppStore()
 const issueId = computed(() => Number(route.params.id))
 
@@ -58,7 +64,7 @@ const audioUrl = computed(() => {
   if (canOpenIssueSourceAudio.value) {
     return `${API_ORIGIN}/api/tracks/${issue.value.track_id}/source-versions/${issue.value.source_version_id}/audio`
   }
-  return `${API_ORIGIN}/api/tracks/${issue.value.track_id}/audio`
+  return `${API_ORIGIN}/api/tracks/${issue.value.track_id}/audio?v=${issue.value.source_version_number ?? 0}`
 })
 
 function onWaveformReady() {
@@ -67,8 +73,11 @@ function onWaveformReady() {
 
 function seekWaveformToIssue() {
   if (!issue.value || !waveformRef.value) return
-  waveformRef.value.seekTo(issue.value.time_start)
-  if (issue.value.issue_type === 'range') {
+  const firstMarker = issue.value.markers[0]
+  if (firstMarker) {
+    waveformRef.value.seekTo(firstMarker.time_start)
+  }
+  if (issue.value.markers.some(m => m.marker_type === 'range')) {
     waveformRef.value.highlightIssue(issue.value)
   }
 }
@@ -112,9 +121,12 @@ const isReviewer = computed(() => {
 })
 
 
+const loadError = ref(false)
+
 async function loadIssue(id: number) {
   const token = ++loadCount
   loading.value = true
+  loadError.value = false
   try {
     const fetched = await issueApi.get(id)
     if (token !== loadCount) return
@@ -128,12 +140,17 @@ async function loadIssue(id: number) {
       cachedTrack.value = detail.track
       cachedTrackId = fetched.track_id
     }
+  } catch {
+    if (token === loadCount) loadError.value = true
   } finally {
     if (token === loadCount) loading.value = false
   }
 }
 
-onMounted(() => loadIssue(issueId.value))
+onMounted(() => {
+  loadIssue(issueId.value)
+  window.addEventListener('keydown', handleKeydown)
+})
 watch(issueId, (id) => {
   loadIssue(id)
   nextTick(() => {
@@ -142,6 +159,7 @@ watch(issueId, (id) => {
 })
 onBeforeUnmount(() => {
   imagePreviewUrls.value.forEach(url => URL.revokeObjectURL(url))
+  window.removeEventListener('keydown', handleKeydown)
 })
 
 const siblingIssues = computed(() => {
@@ -149,7 +167,7 @@ const siblingIssues = computed(() => {
   const { phase, workflow_cycle } = issue.value
   return allTrackIssues.value
     .filter(i => i.phase === phase && i.workflow_cycle === workflow_cycle)
-    .sort((a, b) => a.time_start - b.time_start)
+    .sort((a, b) => (a.markers[0]?.time_start ?? Infinity) - (b.markers[0]?.time_start ?? Infinity))
 })
 
 const visibleSiblingIssues = computed(() => {
@@ -181,6 +199,10 @@ function onFileSelect(event: Event) {
   const input = event.target as HTMLInputElement
   if (!input.files) return
   for (const file of Array.from(input.files)) {
+    if (file.size > MAX_IMAGE_SIZE) {
+      toastError(t('upload.fileTooLarge', { max: '10 MB' }))
+      continue
+    }
     selectedImages.value.push(file)
     imagePreviewUrls.value.push(URL.createObjectURL(file))
   }
@@ -200,6 +222,10 @@ function onAudioSelect(event: Event) {
   if (!input.files) return
   for (const file of Array.from(input.files)) {
     if (selectedAudios.value.length >= MAX_AUDIOS) break
+    if (file.size > MAX_AUDIO_SIZE) {
+      toastError(t('upload.fileTooLarge', { max: '200 MB' }))
+      continue
+    }
     selectedAudios.value.push(file)
   }
   input.value = ''
@@ -243,6 +269,20 @@ async function handleCommentReference(comment: Comment, reference: TimeReference
   }
 
   await playTrackReference(reference)
+}
+
+function resolveIssueMarkerReference(reference: MarkerIndexReference) {
+  const marker = issue.value?.markers[reference.zeroBasedIndex]
+  if (!marker) return null
+  return marker
+}
+
+async function jumpToIssueMarkerReference(reference: MarkerIndexReference) {
+  const marker = resolveIssueMarkerReference(reference)
+  if (!marker) return
+  if (!waveformRef.value) return
+
+  await waveformRef.value.playFrom(marker.time_start)
 }
 
 const submittingComment = ref(false)
@@ -302,6 +342,34 @@ async function addComment() {
   }
 }
 
+// Comment edit/delete
+const editingCommentId = ref<number | null>(null)
+const editingCommentContent = ref('')
+
+function startEditComment(comment: Comment) {
+  editingCommentId.value = comment.id
+  editingCommentContent.value = comment.content
+}
+
+async function saveEditComment(comment: Comment) {
+  const content = editingCommentContent.value.trim()
+  if (!content || !issue.value?.comments) return
+  try {
+    const updated = await commentApi.update(comment.id, content)
+    const idx = issue.value.comments.findIndex(c => c.id === comment.id)
+    if (idx !== -1) issue.value.comments[idx] = updated
+    editingCommentId.value = null
+  } catch { /* handled by request wrapper */ }
+}
+
+async function deleteComment(comment: Comment) {
+  if (!issue.value?.comments) return
+  try {
+    await commentApi.delete(comment.id)
+    issue.value.comments = issue.value.comments.filter(c => c.id !== comment.id)
+  } catch { /* handled by request wrapper */ }
+}
+
 function selectStatus(status: IssueStatus) {
   pendingStatus.value = status
   statusNote.value = ''
@@ -326,20 +394,51 @@ function cancelStatusChange() {
 
 function goBackToTrack() {
   if (!issue.value) return
-  router.push(`/tracks/${issue.value.track_id}`)
+  router.push({
+    path: `/tracks/${issue.value.track_id}`,
+    query: { returnTo: route.fullPath },
+  })
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  const tag = (document.activeElement as HTMLElement)?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return
+  if (e.code === 'Space') {
+    e.preventDefault()
+    waveformRef.value?.togglePlay()
+  } else if (e.code === 'ArrowLeft') {
+    e.preventDefault()
+    const t = waveformRef.value?.getCurrentTime() ?? 0
+    waveformRef.value?.seekTo(Math.max(0, t - 5))
+  } else if (e.code === 'ArrowRight') {
+    e.preventDefault()
+    const t = waveformRef.value?.getCurrentTime() ?? 0
+    waveformRef.value?.seekTo(t + 5)
+  } else if (e.key === 'j' || e.key === 'J') {
+    if (prevIssue.value) router.push(`/issues/${prevIssue.value.id}`)
+  } else if (e.key === 'k' || e.key === 'K') {
+    if (nextIssue.value) router.push(`/issues/${nextIssue.value.id}`)
+  }
 }
 
 function openVersionCompare() {
   if (!issue.value?.track_id || !issue.value.source_version_id) return
   router.push({
     path: `/tracks/${issue.value.track_id}`,
-    query: { compareVersion: String(issue.value.source_version_id) },
+    query: {
+      compareVersion: String(issue.value.source_version_id),
+      returnTo: route.fullPath,
+    },
   })
 }
 </script>
 
 <template>
-  <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
+  <div v-if="loading" class="max-w-4xl mx-auto"><SkeletonLoader :rows="5" :card="true" /></div>
+  <div v-else-if="loadError" class="card max-w-md mx-auto mt-12 text-center space-y-3">
+    <p class="text-sm text-error">{{ t('common.loadFailed') }}</p>
+    <button @click="loadIssue(issueId)" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
+  </div>
     <div v-else-if="issue" class="max-w-7xl mx-auto space-y-6">
     <div
       v-if="issueIsOutdated"
@@ -361,9 +460,9 @@ function openVersionCompare() {
     <!-- Header -->
     <div>
       <div class="flex items-center justify-between mb-2">
-        <button @click="goBackToTrack" class="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
-          <ChevronLeft class="w-4 h-4" :stroke-width="2" />
-          {{ t('issueDetail.back') }}
+        <button @click="goBackToTrack" class="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1 max-w-xs truncate">
+          <ChevronLeft class="w-4 h-4 shrink-0" :stroke-width="2" />
+          <span class="truncate">{{ cachedTrack?.title || t('issueDetail.back') }}</span>
         </button>
         <div v-if="siblingIssues.length > 1" class="flex items-center gap-1 text-sm text-muted-foreground">
           <button
@@ -386,7 +485,7 @@ function openVersionCompare() {
         </div>
       </div>
       <h1 class="text-2xl font-sans font-bold text-foreground">{{ issue.title }}</h1>
-      <div class="flex items-center gap-3 mt-2">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mt-2">
         <span
           v-if="issue.source_version_number != null"
           class="inline-flex items-center rounded-full bg-border px-2 py-1 text-xs font-mono text-foreground"
@@ -396,13 +495,15 @@ function openVersionCompare() {
         <StatusBadge :status="issue.phase" type="phase" />
         <StatusBadge :status="issue.severity" type="severity" />
         <StatusBadge :status="issue.status" type="issue" />
-        <span class="text-sm text-muted-foreground">
-          {{ formatTimestamp(issue.time_start) }}
-          <span v-if="issue.time_end"> - {{ formatTimestamp(issue.time_end) }}</span>
-        </span>
-        <span class="text-sm text-muted-foreground">
-          {{ issue.issue_type === 'range' ? t('issueType.range') : t('issueType.point') }}
-        </span>
+        <span v-if="issue.markers.length === 0" class="text-sm text-muted-foreground italic">{{ t('issue.generalIssue') }}</span>
+        <template v-else v-for="(m, mi) in issue.markers" :key="mi">
+          <span class="inline-flex items-center gap-1 whitespace-nowrap">
+            <span class="text-[10px] font-mono uppercase tracking-wide text-muted-foreground/60 select-none">{{ m.marker_type === 'range' ? t('issueType.range') : t('issueType.point') }}</span>
+            <span class="text-sm font-mono text-muted-foreground">
+              {{ formatTimestamp(m.time_start) }}<span v-if="m.time_end"> – {{ formatTimestamp(m.time_end) }}</span>
+            </span>
+          </span>
+        </template>
       </div>
     </div>
 
@@ -421,19 +522,27 @@ function openVersionCompare() {
                   v{{ displayedAudioVersionNumber }}
                 </span>
               </div>
-              <span class="text-xs text-muted-foreground font-mono">
-                {{ formatTimestampShort(issue.time_start) }}<span v-if="issue.time_end"> – {{ formatTimestampShort(issue.time_end) }}</span>
+              <span v-if="issue.markers.length > 0" class="text-xs text-muted-foreground font-mono">
+                <template v-for="(m, mi) in issue.markers" :key="mi">
+                  <span v-if="mi > 0" class="mx-1 opacity-50">·</span>
+                  {{ formatTimestampShort(m.time_start) }}<span v-if="m.time_end"> – {{ formatTimestampShort(m.time_end) }}</span>
+                </template>
               </span>
+              <span v-else class="text-xs text-muted-foreground italic">{{ t('issue.generalIssue') }}</span>
             </div>
             <WaveformPlayer
               ref="waveformRef"
               :audio-url="audioUrl"
               :issues="waveformIssues"
-              :height="80"
+              :height="120"
               @ready="onWaveformReady"
             />
-            <div v-if="issueIsOutdated" class="border-t border-border px-4 py-3 text-xs text-muted-foreground">
-              {{ t(canOpenIssueSourceAudio ? 'issueDetail.outdatedWaveformHint' : 'issueDetail.outdatedWaveformUnavailable') }}
+            <div class="border-t border-border px-4 py-2 flex items-center justify-between gap-4">
+              <div v-if="issueIsOutdated" class="text-xs text-muted-foreground">
+                {{ t(canOpenIssueSourceAudio ? 'issueDetail.outdatedWaveformHint' : 'issueDetail.outdatedWaveformUnavailable') }}
+              </div>
+              <div v-else class="flex-1" />
+              <span class="text-[11px] font-mono text-muted-foreground/50 whitespace-nowrap hidden sm:block select-none">{{ t('issueDetail.keyboardHint') }}</span>
             </div>
           </div>
         <!-- Description -->
@@ -442,6 +551,7 @@ function openVersionCompare() {
             :text="issue.description"
             class="text-sm text-foreground"
             @activate="(reference) => playTrackReference(reference)"
+            @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
           />
           <div class="text-xs text-muted-foreground mt-3">
             {{ t('issueDetail.created', { date: fmtDate(issue.created_at) }) }}
@@ -519,15 +629,20 @@ function openVersionCompare() {
             {{ t('issueDetail.commentsHeading', { count: issue.comments?.length || 0 }) }}
           </h3>
 
+          <p v-if="!issue.comments?.length" class="text-sm text-muted-foreground italic">
+            {{ t('issueDetail.commentsEmptyHint') }}
+          </p>
+
           <template v-for="comment in issue.comments" :key="comment.id">
             <div v-if="comment.is_status_note" class="rounded-lg bg-warning-bg border border-warning/20 px-3 py-2">
               <span class="text-xs font-semibold text-warning block mb-1">{{ t('issue.revisionNote') }}</span>
-              <TimestampText
-                :text="comment.content"
-                class="text-sm text-foreground"
-                :default-target="comment.audios?.length ? 'attachment' : 'track'"
-                @activate="(reference, target) => handleCommentReference(comment, reference, target)"
-              />
+                <TimestampText
+                  :text="comment.content"
+                  class="text-sm text-foreground"
+                  :default-target="comment.audios?.length ? 'attachment' : 'track'"
+                  @activate="(reference, target) => handleCommentReference(comment, reference, target)"
+                  @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
+                />
               <p class="text-xs text-muted-foreground mt-1">{{ comment.author?.display_name || t('issueDetail.unknown') }} · {{ fmtDate(comment.created_at) }}</p>
             </div>
             <div v-else class="card">
@@ -543,12 +658,35 @@ function openVersionCompare() {
                   {{ comment.author?.display_name || t('issueDetail.unknown') }}
                 </span>
                 <span class="text-xs text-muted-foreground">{{ fmtDate(comment.created_at) }}</span>
+                <template v-if="comment.author_id === appStore.currentUser?.id && !comment.is_status_note">
+                  <button @click="startEditComment(comment)" class="text-muted-foreground hover:text-foreground transition-colors ml-auto">
+                    <Pencil class="w-3.5 h-3.5" :stroke-width="2" />
+                  </button>
+                  <button @click="deleteComment(comment)" class="text-muted-foreground hover:text-error transition-colors">
+                    <Trash2 class="w-3.5 h-3.5" :stroke-width="2" />
+                  </button>
+                </template>
               </div>
+              <template v-if="editingCommentId === comment.id">
+                <textarea
+                  v-model="editingCommentContent"
+                  class="textarea-field w-full text-sm"
+                  rows="3"
+                  @keydown.ctrl.enter="saveEditComment(comment)"
+                  @keydown.meta.enter="saveEditComment(comment)"
+                />
+                <div class="flex gap-2 mt-1">
+                  <button @click="saveEditComment(comment)" class="btn-primary text-xs">{{ t('common.save') }}</button>
+                  <button @click="editingCommentId = null" class="btn-secondary text-xs">{{ t('common.cancel') }}</button>
+                </div>
+              </template>
               <TimestampText
+                v-else
                 :text="comment.content"
                 class="text-sm text-foreground"
                 :default-target="comment.audios?.length ? 'attachment' : 'track'"
                 @activate="(reference, target) => handleCommentReference(comment, reference, target)"
+                @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
               />
               <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-3">
                 <a
@@ -693,7 +831,25 @@ function openVersionCompare() {
             <h3 class="text-sm font-sans font-semibold text-foreground">
               {{ t('issueDetail.issueList', { count: visibleSiblingIssues.length }) }}
             </h3>
-            <span class="text-xs font-mono text-muted-foreground">{{ currentSiblingIndex + 1 }} / {{ siblingIssues.length }}</span>
+            <div class="flex items-center gap-1 text-muted-foreground">
+              <button
+                @click="prevIssue && router.push(`/issues/${prevIssue.id}`)"
+                :disabled="!prevIssue"
+                class="p-0.5 rounded hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                :title="prevIssue?.title"
+              >
+                <ChevronLeft class="w-3.5 h-3.5" :stroke-width="2" />
+              </button>
+              <span class="text-xs font-mono">{{ currentSiblingIndex + 1 }} / {{ siblingIssues.length }}</span>
+              <button
+                @click="nextIssue && router.push(`/issues/${nextIssue.id}`)"
+                :disabled="!nextIssue"
+                class="p-0.5 rounded hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                :title="nextIssue?.title"
+              >
+                <ChevronRight class="w-3.5 h-3.5" :stroke-width="2" />
+              </button>
+            </div>
           </div>
 
           <label class="flex items-center justify-between gap-3 rounded-full border border-border bg-background px-3 py-2 text-sm text-foreground cursor-pointer select-none shrink-0">
@@ -724,30 +880,33 @@ function openVersionCompare() {
                 isOutdatedIssue(item) ? 'opacity-60' : '',
               ]"
             >
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0 space-y-2">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="text-xs font-mono text-muted-foreground">#{{ index + 1 }}</span>
-                    <span
-                      v-if="item.source_version_number != null"
-                      class="inline-flex items-center rounded-full bg-border px-2 py-0.5 text-[11px] font-mono text-foreground"
-                    >
-                      v{{ item.source_version_number }}
-                    </span>
-                    <span v-if="item.id === issueId" class="inline-flex items-center rounded-full bg-warning-bg px-2 py-0.5 text-[11px] font-mono text-warning border border-warning/20">
-                      {{ t('issueDetail.currentIssue') }}
-                    </span>
-                  </div>
-                  <p class="text-sm font-medium leading-snug" :class="isOutdatedIssue(item) ? 'text-muted-foreground' : 'text-foreground'">{{ item.title }}</p>
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <StatusBadge :status="item.severity" type="severity" />
-                    <StatusBadge :status="item.status" type="issue" />
-                  </div>
+              <div class="min-w-0 space-y-2">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-xs font-mono text-muted-foreground">#{{ index + 1 }}</span>
+                  <span
+                    v-if="item.source_version_number != null"
+                    class="inline-flex items-center rounded-full bg-border px-2 py-0.5 text-[11px] font-mono text-foreground"
+                  >
+                    v{{ item.source_version_number }}
+                  </span>
+                  <span v-if="item.id === issueId" class="inline-flex items-center rounded-full bg-warning-bg px-2 py-0.5 text-[11px] font-mono text-warning border border-warning/20">
+                    {{ t('issueDetail.currentIssue') }}
+                  </span>
                 </div>
-                <span class="text-xs font-mono text-muted-foreground flex-shrink-0">
-                  {{ formatTimestamp(item.time_start) }}
-                  <template v-if="item.time_end">-{{ formatTimestamp(item.time_end) }}</template>
-                </span>
+                <p class="text-sm font-medium leading-snug break-words" :class="isOutdatedIssue(item) ? 'text-muted-foreground' : 'text-foreground'">{{ item.title }}</p>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <StatusBadge :status="item.severity" type="severity" />
+                  <StatusBadge :status="item.status" type="issue" />
+                </div>
+                <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] font-mono text-muted-foreground">
+                  <template v-if="item.markers.length === 0">
+                    <span class="italic">{{ t('issue.generalIssue') }}</span>
+                  </template>
+                  <template v-else v-for="(m, mi) in item.markers" :key="mi">
+                    <span v-if="mi > 0" class="opacity-50">·</span>
+                    <span class="whitespace-nowrap">{{ formatTimestampShort(m.time_start) }}<template v-if="m.time_end">-{{ formatTimestampShort(m.time_end) }}</template></span>
+                  </template>
+                </div>
               </div>
             </button>
 

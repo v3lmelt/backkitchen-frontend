@@ -19,8 +19,8 @@
     </div>
 
     <!-- loading -->
-    <div v-if="loading" class="flex items-center justify-center py-24">
-      <div class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <div v-if="loading">
+      <SkeletonLoader :rows="4" :card="true" />
     </div>
 
     <!-- empty -->
@@ -89,6 +89,7 @@ import type { CircleSummary } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { UserPlus, Plus, Smile } from 'lucide-vue-next'
 import BaseModal from '@/components/common/BaseModal.vue'
+import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()

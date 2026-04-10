@@ -8,6 +8,10 @@ export const useTrackStore = defineStore('tracks', () => {
   const currentTrack = ref<Track | null>(null)
   const loading = ref(false)
 
+  function setCurrentTrack(track: Track | null) {
+    currentTrack.value = track
+  }
+
   async function loadTracks(params?: { status?: TrackStatus; album_id?: number }) {
     loading.value = true
     try {
@@ -26,5 +30,5 @@ export const useTrackStore = defineStore('tracks', () => {
     }
   }
 
-  return { tracks, currentTrack, loading, loadTracks, loadTrack }
+  return { tracks, currentTrack, loading, setCurrentTrack, loadTracks, loadTrack }
 })

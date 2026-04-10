@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { albumApi, r2Api, uploadToR2, uploadWithProgress } from '@/api'
 import type { Album, Track } from '@/types'
@@ -12,7 +12,10 @@ import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 
 const router = useRouter()
+const route = useRoute()
 const { t } = useI18n()
+
+const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
 const appStore = useAppStore()
 const { error: toastError, success: toastSuccess } = useToast()
 const albums = ref<Album[]>([])
@@ -27,6 +30,33 @@ const form = ref({
   bpm: '',
 })
 const selectedFile = ref<File | null>(null)
+const audioDuration = ref<number | null>(null)
+const titleError = ref('')
+const artistError = ref('')
+
+function validateTitle() {
+  titleError.value = form.value.title.trim() ? '' : t('upload.titleRequired')
+}
+function validateArtist() {
+  artistError.value = form.value.artist.trim() ? '' : t('upload.artistRequired')
+}
+
+function formatDurationFull(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = Math.floor(seconds % 60)
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+async function extractFileMeta(file: File) {
+  audioDuration.value = null
+  try {
+    audioDuration.value = await extractAudioDuration(file)
+  } catch {
+    // Not all formats support browser-side extraction
+  }
+}
 
 const albumOptions = computed<SelectOption[]>(() =>
   albums.value.map((a) => ({ value: a.id, label: a.title }))
@@ -39,28 +69,43 @@ onMounted(async () => {
   }
 })
 
+function validateFileSize(file: File): boolean {
+  if (file.size > MAX_AUDIO_SIZE) {
+    toastError(t('upload.fileTooLarge', { max: '200 MB' }))
+    return false
+  }
+  return true
+}
+
 function onFileSelect(e: Event) {
   const input = e.target as HTMLInputElement
   if (input.files?.[0]) {
+    if (!validateFileSize(input.files[0])) { input.value = ''; return }
     selectedFile.value = input.files[0]
     if (!form.value.title) {
       form.value.title = input.files[0].name.replace(/\.[^/.]+$/, '')
     }
+    extractFileMeta(input.files[0])
   }
 }
 
 function onDrop(e: DragEvent) {
   dragOver.value = false
   if (e.dataTransfer?.files?.[0]) {
+    if (!validateFileSize(e.dataTransfer.files[0])) return
     selectedFile.value = e.dataTransfer.files[0]
     if (!form.value.title) {
       form.value.title = e.dataTransfer.files[0].name.replace(/\.[^/.]+$/, '')
     }
+    extractFileMeta(e.dataTransfer.files[0])
   }
 }
 
 async function upload() {
-  if (!selectedFile.value || !form.value.title || !form.value.artist) return
+  validateTitle()
+  validateArtist()
+  if (titleError.value || artistError.value) return
+  if (!selectedFile.value) return
   if (!form.value.album_id) {
     toastError(t('upload.albumRequired'))
     return
@@ -109,7 +154,7 @@ async function upload() {
       )
     }
     toastSuccess(t('upload.uploadSuccess'))
-    router.push(`/tracks/${track.id}`)
+    router.push({ path: `/tracks/${track.id}`, query: { returnTo: route.fullPath } })
   } catch (err: any) {
     toastError(err.message || t('upload.uploadFailed'))
   } finally {
@@ -146,7 +191,13 @@ function formatFileSize(bytes: number): string {
       </p>
       <div v-else class="text-foreground">
         <p class="font-medium">{{ selectedFile.name }}</p>
-        <p class="text-sm text-muted-foreground">{{ formatFileSize(selectedFile.size) }}</p>
+        <div class="flex items-center justify-center gap-3 text-sm text-muted-foreground mt-1">
+          <span>{{ formatFileSize(selectedFile.size) }}</span>
+          <template v-if="audioDuration !== null">
+            <span class="text-border">·</span>
+            <span class="font-mono text-info">{{ formatDurationFull(audioDuration) }}</span>
+          </template>
+        </div>
       </div>
     </div>
 
@@ -154,11 +205,13 @@ function formatFileSize(bytes: number): string {
     <div class="card space-y-4">
       <div>
         <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.trackTitle') }}</label>
-        <input v-model="form.title" class="input-field w-full" :placeholder="t('upload.titlePlaceholder')" />
+        <input v-model="form.title" class="input-field w-full" :class="{ 'border-error': titleError }" :placeholder="t('upload.titlePlaceholder')" @blur="validateTitle" />
+        <p v-if="titleError" class="text-xs text-error mt-1">{{ titleError }}</p>
       </div>
       <div>
         <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.artist') }}</label>
-        <input v-model="form.artist" class="input-field w-full" :placeholder="t('upload.artistPlaceholder')" />
+        <input v-model="form.artist" class="input-field w-full" :class="{ 'border-error': artistError }" :placeholder="t('upload.artistPlaceholder')" @blur="validateArtist" />
+        <p v-if="artistError" class="text-xs text-error mt-1">{{ artistError }}</p>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
@@ -171,18 +224,23 @@ function formatFileSize(bytes: number): string {
         </div>
       </div>
 
-      <button
-        @click="upload"
-        :disabled="uploading || !selectedFile || !form.title || !form.artist"
-        :class="[
-          'w-full text-sm font-medium px-4 py-3 rounded-full transition-colors',
-          uploading || !selectedFile || !form.title || !form.artist
-            ? 'bg-border text-muted-foreground cursor-not-allowed'
-            : 'btn-primary'
-        ]"
-      >
-        {{ uploading ? t('upload.uploading') : t('upload.submit') }}
-      </button>
+      <div class="flex gap-3">
+        <button @click="router.back()" :disabled="uploading" class="btn-secondary text-sm flex-1">
+          {{ t('common.cancel') }}
+        </button>
+        <button
+          @click="upload"
+          :disabled="uploading || !selectedFile || !form.title || !form.artist"
+          :class="[
+            'flex-1 text-sm font-medium px-4 py-3 rounded-full transition-colors',
+            uploading || !selectedFile || !form.title || !form.artist
+              ? 'bg-border text-muted-foreground cursor-not-allowed'
+              : 'btn-primary'
+          ]"
+        >
+          {{ uploading ? t('upload.uploading') : t('upload.submit') }}
+        </button>
+      </div>
       <div v-if="uploading" class="space-y-1">
         <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
           <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>

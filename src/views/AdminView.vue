@@ -7,6 +7,7 @@ import { adminApi } from '@/api'
 import { useToast } from '@/composables/useToast'
 import { Check } from 'lucide-vue-next'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { User, UserRole } from '@/types'
 
@@ -98,7 +99,7 @@ const roleSelectOptions = computed(() =>
   <div class="max-w-5xl mx-auto space-y-6">
     <h1 class="text-2xl font-mono font-bold text-foreground">{{ t('admin.title') }}</h1>
 
-    <div v-if="loading" class="text-muted-foreground text-sm">{{ t('common.loading') }}</div>
+    <div v-if="loading"><SkeletonLoader :rows="5" :card="true" /></div>
 
     <div v-else class="card">
       <h2 class="text-sm font-mono font-semibold text-foreground mb-4">{{ t('admin.userManagement') }}</h2>

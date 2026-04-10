@@ -3,12 +3,18 @@
 @tailwind utilities;
 
 @layer base {
-  html {
+  html, body {
+    height: 100%;
+    overflow: hidden;
     font-family: theme('fontFamily.sans');
   }
 
   body {
     @apply bg-background text-foreground antialiased m-0 font-sans;
+  }
+
+  #app {
+    height: 100%;
   }
 }
 
@@ -18,6 +24,9 @@
   }
   .btn-secondary {
     @apply bg-card hover:bg-border text-foreground font-medium px-4 py-2 rounded-full border border-border transition-colors;
+  }
+  .btn-destructive {
+    @apply text-sm font-mono px-4 h-10 rounded-full bg-error hover:opacity-90 text-white transition-opacity disabled:opacity-50;
   }
   .input-field {
     @apply appearance-none bg-background border border-border rounded-full text-sm text-foreground
@@ -133,4 +142,12 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #444444;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }

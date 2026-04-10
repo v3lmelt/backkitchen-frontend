@@ -27,6 +27,9 @@ const _CACHE_TTL = 50 * 60 * 1000
  * directly without any extra network call.
  */
 export async function resolveAudioUrl(url: string): Promise<string> {
+  // Blob URLs are local object URLs — no auth token needed and query params break them
+  if (url.startsWith('blob:')) return url
+
   const authedUrl = withAuthToken(url)
 
   // Skip resolve call when R2 is not enabled — no redirect to worry about

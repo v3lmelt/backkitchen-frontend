@@ -8,7 +8,7 @@
       <h1 class="text-2xl font-mono font-bold text-foreground">{{ t('circleNew.heading') }}</h1>
     </div>
 
-    <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
+    <div v-if="loading"><SkeletonLoader :rows="3" :card="true" /></div>
 
     <template v-else>
       <!-- logo -->
@@ -39,9 +39,12 @@
           <input
             v-model="form.name"
             class="input-field w-full"
+            :class="{ 'border-error': nameError }"
             :placeholder="t('circleNew.namePlaceholder')"
+            @blur="validateName"
             @keyup.enter="submit"
           />
+          <p v-if="nameError" class="text-xs text-error mt-1">{{ nameError }}</p>
         </div>
         <div>
           <label class="block text-xs text-muted-foreground mb-1">{{ t('circleNew.description') }}</label>
@@ -62,7 +65,7 @@
         </div>
       </div>
 
-      <p v-if="error" class="text-error text-sm">{{ error }}</p>
+      <div v-if="error" class="bg-error-bg border border-error/30 rounded-none px-4 py-3 text-sm text-error">{{ error }}</div>
 
       <button @click="submit" :disabled="submitting" class="btn-primary text-sm w-full">
         {{ submitting ? t('common.loading') : t('circleNew.create') }}
@@ -78,6 +81,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { circleApi } from '@/api'
 import { ChevronLeft, Smile, Upload } from 'lucide-vue-next'
+import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -89,6 +93,11 @@ const logoFile = ref<File | null>(null)
 const logoPreviewUrl = ref<string | null>(null)
 const submitting = ref(false)
 const error = ref('')
+const nameError = ref('')
+
+function validateName() {
+  nameError.value = form.name.trim() ? '' : t('circleNew.nameRequired')
+}
 
 const form = reactive({
   name: '',
@@ -115,7 +124,8 @@ function onLogoChange(e: Event) {
 }
 
 async function submit() {
-  if (!form.name.trim()) return
+  validateName()
+  if (nameError.value) return
   submitting.value = true
   error.value = ''
   try {

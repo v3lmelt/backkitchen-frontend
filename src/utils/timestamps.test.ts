@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  extractMarkerIndexReferences,
   extractTimeReferences,
   parseTimecode,
   resolveTimeReferenceTarget,
+  splitTextWithInlineReferences,
   splitTextWithTimeReferences,
 } from './timestamps'
 
@@ -99,5 +101,68 @@ describe('resolveTimeReferenceTarget', () => {
   it('prefers explicit prefixes over context default', () => {
     const [reference] = extractTimeReferences('a:03:15')
     expect(resolveTimeReferenceTarget(reference, 'track')).toBe('attachment')
+  })
+})
+
+describe('extractMarkerIndexReferences', () => {
+  it('extracts marker number references in #i format', () => {
+    expect(extractMarkerIndexReferences('Fix #1 and compare #12, skip #0')).toEqual([
+      {
+        raw: '#1',
+        markerIndex: 1,
+        zeroBasedIndex: 0,
+        index: 4,
+        length: 2,
+      },
+      {
+        raw: '#12',
+        markerIndex: 12,
+        zeroBasedIndex: 11,
+        index: 19,
+        length: 3,
+      },
+    ])
+  })
+})
+
+describe('splitTextWithInlineReferences', () => {
+  it('splits text with both time and marker references', () => {
+    expect(splitTextWithInlineReferences('At #2 check 03:15 and #1')).toEqual([
+      { type: 'text', value: 'At ' },
+      {
+        type: 'marker',
+        value: {
+          raw: '#2',
+          markerIndex: 2,
+          zeroBasedIndex: 1,
+          index: 3,
+          length: 2,
+        },
+      },
+      { type: 'text', value: ' check ' },
+      {
+        type: 'time',
+        value: {
+          raw: '03:15',
+          prefixTarget: null,
+          startSeconds: 195,
+          endSeconds: null,
+          isRange: false,
+          index: 12,
+          length: 5,
+        },
+      },
+      { type: 'text', value: ' and ' },
+      {
+        type: 'marker',
+        value: {
+          raw: '#1',
+          markerIndex: 1,
+          zeroBasedIndex: 0,
+          index: 22,
+          length: 2,
+        },
+      },
+    ])
   })
 })

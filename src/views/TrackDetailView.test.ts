@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   pushMock: vi.fn(),
   openMock: vi.fn(),
   trackGetMock: vi.fn(),
+  trackReopenMock: vi.fn(),
+  trackRequestReopenMock: vi.fn(),
   discussionCreateMock: vi.fn(),
   currentUser: { id: 2 },
 }))
@@ -19,7 +21,11 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/api', () => ({
   API_ORIGIN: '',
-  trackApi: { get: mocks.trackGetMock },
+  trackApi: {
+    get: mocks.trackGetMock,
+    reopen: mocks.trackReopenMock,
+    requestReopen: mocks.trackRequestReopenMock,
+  },
   discussionApi: { create: mocks.discussionCreateMock },
 }))
 
@@ -29,8 +35,8 @@ vi.mock('@/stores/app', () => ({
 
 vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
   default: {
-    props: ['compareVersionId'],
-    template: '<div class="waveform">compare:{{ compareVersionId ?? "none" }}</div>',
+    props: ['audioUrl', 'compareVersionId', 'compareAudioUrl'],
+    template: '<div class="waveform">audio:{{ audioUrl ?? "none" }} compare:{{ compareVersionId ?? "none" }} compareAudio:{{ compareAudioUrl ?? "none" }}</div>',
   },
 }))
 
@@ -43,8 +49,7 @@ vi.mock('@/components/audio/IssueMarkerList.vue', () => ({
 
 vi.mock('@/components/workflow/WorkflowProgress.vue', () => ({
   default: {
-    props: ['actions'],
-    template: '<div class="workflow-progress"><button v-for="action in actions" :key="action.label" class="progress-action" @click="action.handler()">{{ action.label }}</button></div>',
+    template: '<div class="workflow-progress"></div>',
   },
 }))
 
@@ -54,7 +59,21 @@ vi.mock('@/components/workflow/StatusBadge.vue', () => ({
 
 vi.mock('@/components/common/CustomSelect.vue', () => ({
   default: {
-    template: '<div class="compare-select"></div>',
+    props: ['modelValue', 'options'],
+    emits: ['update:modelValue'],
+    template: `
+      <div class="compare-select">
+        <button
+          v-for="option in options"
+          :key="option.value"
+          type="button"
+          class="compare-option"
+          @click="$emit('update:modelValue', option.value)"
+        >
+          {{ option.label }}
+        </button>
+      </div>
+    `,
   },
 }))
 
@@ -67,7 +86,11 @@ describe('TrackDetailView', () => {
     mocks.openMock.mockReset()
     mocks.discussionCreateMock.mockReset()
     mocks.trackGetMock.mockReset()
+    mocks.trackReopenMock.mockReset()
+    mocks.trackRequestReopenMock.mockReset()
     vi.stubGlobal('open', mocks.openMock)
+    mocks.trackReopenMock.mockResolvedValue({})
+    mocks.trackRequestReopenMock.mockResolvedValue({})
     mocks.trackGetMock.mockResolvedValue({
       track: {
         id: 7,
@@ -123,15 +146,169 @@ describe('TrackDetailView', () => {
     expect(wrapper.text()).toContain('Fresh discussion')
   })
 
-  it('opens compare mode from the route query and navigates workflow actions', async () => {
+  it('opens compare mode from the route query', async () => {
     mocks.route = { params: { id: '7' }, query: { compareVersion: '201' } }
 
     const wrapper = mountWithPlugins(TrackDetailView)
     await flushPromises()
 
     expect(wrapper.find('.waveform').text()).toContain('compare:201')
+  })
 
-    await wrapper.find('button.progress-action').trigger('click')
-    expect(mocks.pushMock).toHaveBeenCalledWith('/tracks/7/review')
+  it('wires master compare audio into the master waveform', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 7,
+        album_id: 5,
+        status: 'mastering',
+        title: 'Track 7',
+        artist: 'Nova',
+        version: 3,
+        workflow_cycle: 2,
+        file_path: '/audio.wav',
+        submitter_id: 2,
+        producer_id: 8,
+        allowed_actions: [],
+        open_issue_count: 0,
+        submitter: { display_name: 'Nova' },
+        current_source_version: { id: 301 },
+        current_master_delivery: {
+          id: 21,
+          delivery_number: 4,
+          workflow_cycle: 2,
+          file_path: 'master-v4.wav',
+          created_at: '2024-01-04T00:00:00Z',
+          producer_approved_at: null,
+          submitter_approved_at: null,
+        },
+      },
+      issues: [],
+      discussions: [],
+      events: [],
+      source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
+      master_deliveries: [
+        {
+          id: 21,
+          delivery_number: 4,
+          workflow_cycle: 2,
+          file_path: 'master-v4.wav',
+          created_at: '2024-01-04T00:00:00Z',
+          producer_approved_at: null,
+          submitter_approved_at: null,
+        },
+        {
+          id: 20,
+          delivery_number: 3,
+          workflow_cycle: 2,
+          file_path: 'master-v3.wav',
+          created_at: '2024-01-03T00:00:00Z',
+          producer_approved_at: null,
+          submitter_approved_at: null,
+        },
+      ],
+    })
+
+    const wrapper = mountWithPlugins(TrackDetailView)
+    await flushPromises()
+
+    const compareButtons = wrapper.findAll('button').filter(button => button.text().includes('Compare'))
+    expect(compareButtons).toHaveLength(1)
+
+    await compareButtons[0].trigger('click')
+    await flushPromises()
+
+    await wrapper.find('.compare-option').trigger('click')
+    await flushPromises()
+
+    const waveforms = wrapper.findAll('.waveform')
+    expect(waveforms).toHaveLength(2)
+    expect(waveforms[1].text()).toContain('compareAudio:/api/tracks/7/master-deliveries/20/audio?v=3&c=2')
+  })
+
+  it('shows a single step CTA for custom workflows', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 7,
+        album_id: 5,
+        status: 'intake',
+        title: 'Track 7',
+        artist: 'Nova',
+        version: 3,
+        workflow_cycle: 2,
+        file_path: '/audio.wav',
+        submitter_id: 2,
+        producer_id: 8,
+        allowed_actions: ['accept', 'reject_final'],
+        workflow_step: { id: 'intake', label: 'Intake', type: 'approval', assignee_role: 'producer', order: 0, transitions: {} },
+        open_issue_count: 1,
+        submitter: { display_name: 'Nova' },
+        peer_reviewer: { id: 4, display_name: 'Echo' },
+        current_source_version: { id: 301 },
+        current_master_delivery: null,
+      },
+      issues: [],
+      discussions: [],
+      events: [],
+      source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
+      workflow_config: { version: 2, steps: [{ id: 'intake', label: 'Intake', type: 'approval', assignee_role: 'producer', order: 0, transitions: { accept: 'peer_review' } }] },
+    })
+
+    const wrapper = mountWithPlugins(TrackDetailView)
+    await flushPromises()
+
+    const buttons = wrapper.findAll('button.workflow-cta-btn')
+    expect(buttons).toHaveLength(2)
+    expect(buttons.every(button => button.text().includes('Open Intake'))).toBe(true)
+
+    await buttons[0].trigger('click')
+    expect(mocks.pushMock).toHaveBeenCalledWith({ path: '/tracks/7/step/intake', query: undefined })
+  })
+
+  it('prioritizes remaster reopen targets and labels them clearly', async () => {
+    mocks.currentUser = { id: 2 }
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 7,
+        album_id: 5,
+        status: 'completed',
+        title: 'Track 7',
+        artist: 'Nova',
+        version: 3,
+        workflow_cycle: 2,
+        file_path: '/audio.wav',
+        submitter_id: 2,
+        producer_id: 8,
+        mastering_engineer_id: 9,
+        allowed_actions: [],
+        open_issue_count: 0,
+        submitter: { display_name: 'Nova' },
+        current_source_version: { id: 301 },
+        current_master_delivery: { producer_approved_at: '2024-01-01T00:00:00Z', submitter_approved_at: '2024-01-02T00:00:00Z' },
+      },
+      issues: [],
+      discussions: [],
+      events: [],
+      source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'producer_revision', label: 'Producer Revision', type: 'revision', assignee_role: 'submitter', order: 2, transitions: {} },
+          { id: 'mastering_revision', label: 'Mastering Revision', type: 'revision', assignee_role: 'submitter', order: 3, transitions: {} },
+          { id: 'mastering', label: 'Mastering', type: 'delivery', assignee_role: 'mastering_engineer', order: 4, transitions: {} },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(TrackDetailView)
+    await flushPromises()
+
+    const reopenButton = wrapper.findAll('button').find(button => button.text().includes('Request Workflow Reopen'))
+    expect(reopenButton).toBeTruthy()
+    await reopenButton!.trigger('click')
+    await flushPromises()
+
+    const options = wrapper.findAll('option').map(option => option.text())
+    expect(options[1]).toContain('remaster current delivery')
+    expect(options[2]).toContain('revise source first, then remaster')
   })
 })

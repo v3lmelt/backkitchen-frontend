@@ -1,19 +1,25 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
+import { useTrackStore } from '@/stores/tracks'
 import type { Notification } from '@/types'
 import { formatRelativeTime } from '@/utils/time'
+import { translateStepLabel } from '@/utils/workflow'
 import { Menu, Bell } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
+const trackStore = useTrackStore()
 const { t, locale } = useI18n()
 
 const LOCALE_KEY = 'backkitchen_locale'
 const showNotifications = ref(false)
+const breadcrumbExpanded = ref(false)
+
+watch(() => route.path, () => { breadcrumbExpanded.value = false })
 
 function toggleLocale() {
   locale.value = locale.value === 'zh-CN' ? 'en' : 'zh-CN'
@@ -36,9 +42,34 @@ async function handleNotificationClick(notif: Notification) {
   if (notif.related_issue_id) {
     router.push(`/issues/${notif.related_issue_id}`)
   } else if (notif.related_track_id) {
-    router.push(`/tracks/${notif.related_track_id}`)
+    router.push({ path: `/tracks/${notif.related_track_id}`, query: { returnTo: route.fullPath } })
   }
 }
+
+const currentTrack = computed(() => {
+  const routeTrackId = Number(route.params.id)
+  if (!Number.isFinite(routeTrackId)) return null
+  if (trackStore.currentTrack?.id !== routeTrackId) return null
+  return trackStore.currentTrack
+})
+
+const currentTrackLabel = computed(() => {
+  const title = currentTrack.value?.title?.trim()
+  if (title) return title
+  if (route.params.id) return `Track #${route.params.id}`
+  return t('header.pages.trackDetail')
+})
+
+const currentWorkflowStepLabel = computed(() => {
+  if (route.name !== 'workflow-step') return ''
+
+  const step = currentTrack.value?.workflow_step
+  if (step) return translateStepLabel(step, t)
+
+  const stepId = typeof route.params.stepId === 'string' ? route.params.stepId : ''
+  if (!stepId) return ''
+  return translateStepLabel({ id: stepId, label: stepId }, t)
+})
 
 const pageTitle = computed(() => {
   const name = route.name as string
@@ -60,6 +91,7 @@ const pageTitle = computed(() => {
     'circle-new': t('header.pages.circleNew'),
     'circle-detail': t('header.pages.circles'),
     profile: t('header.pages.profile'),
+    'workflow-step': currentWorkflowStepLabel.value || t('header.pages.default'),
   }
   return map[name] || t('header.pages.default')
 })
@@ -77,6 +109,13 @@ const breadcrumbs = computed(() => {
     crumbs.push({ label: t('header.pages.circleNew'), path: '/circles/new' })
   } else if (route.name === 'circle-detail') {
     crumbs.push({ label: t('header.pages.circles'), path: '/circles' })
+  } else if (route.name === 'track-detail') {
+    crumbs.push({ label: currentTrackLabel.value, path: route.path })
+  } else if (route.name === 'workflow-step') {
+    crumbs.push({ label: currentTrackLabel.value, path: `/tracks/${route.params.id}` })
+    crumbs.push({ label: currentWorkflowStepLabel.value || pageTitle.value, path: route.path })
+  } else if (route.name === 'issue-detail') {
+    crumbs.push({ label: `Issue #${route.params.id}`, path: route.path })
   } else {
     crumbs.push({ label: pageTitle.value, path: route.path })
   }
@@ -111,14 +150,49 @@ function handleMenuToggle() {
         <Menu class="w-5 h-5" :stroke-width="2" />
       </button>
       <nav class="flex items-center gap-2 text-sm min-w-0 overflow-hidden">
-        <template v-for="(crumb, i) in breadcrumbs" :key="crumb.path">
-          <span v-if="i > 0" class="text-muted-foreground flex-shrink-0">/</span>
+        <template v-if="breadcrumbs.length <= 3">
+          <template v-for="(crumb, i) in breadcrumbs" :key="crumb.path">
+            <span v-if="i > 0" class="text-muted-foreground flex-shrink-0">/</span>
+            <RouterLink
+              :to="crumb.path"
+              class="truncate"
+              :class="i === breadcrumbs.length - 1 ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'"
+            >
+              {{ crumb.label }}
+            </RouterLink>
+          </template>
+        </template>
+        <!-- Collapse middle crumbs on mobile when path is deep -->
+        <template v-else>
+          <!-- First crumb -->
+          <RouterLink :to="breadcrumbs[0].path" class="text-muted-foreground hover:text-foreground truncate flex-shrink-0">
+            {{ breadcrumbs[0].label }}
+          </RouterLink>
+          <span class="text-muted-foreground flex-shrink-0">/</span>
+          <!-- Collapsed middle -->
+          <div class="relative flex-shrink-0" v-if="!breadcrumbExpanded">
+            <button
+              @click="breadcrumbExpanded = true"
+              class="text-muted-foreground hover:text-foreground font-mono px-1"
+              title="Show full path"
+            >…</button>
+          </div>
+          <!-- Expanded middle crumbs (hidden on mobile by default) -->
+          <template v-if="breadcrumbExpanded">
+            <template v-for="crumb in breadcrumbs.slice(1, -1)" :key="crumb.path">
+              <RouterLink :to="crumb.path" class="text-muted-foreground hover:text-foreground truncate flex-shrink-0">
+                {{ crumb.label }}
+              </RouterLink>
+              <span class="text-muted-foreground flex-shrink-0">/</span>
+            </template>
+          </template>
+          <span v-else class="text-muted-foreground flex-shrink-0">/</span>
+          <!-- Last crumb (always shown) -->
           <RouterLink
-            :to="crumb.path"
-            class="truncate"
-            :class="i === breadcrumbs.length - 1 ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'"
+            :to="breadcrumbs[breadcrumbs.length - 1].path"
+            class="text-foreground truncate"
           >
-            {{ crumb.label }}
+            {{ breadcrumbs[breadcrumbs.length - 1].label }}
           </RouterLink>
         </template>
       </nav>

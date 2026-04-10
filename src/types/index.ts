@@ -14,23 +14,44 @@ export type LegacyTrackStatus =
 export type TrackStatus = LegacyTrackStatus | (string & {})
 
 export type RejectionMode = 'final' | 'resubmittable'
-export type IssueType = 'point' | 'range'
+export type MarkerType = 'point' | 'range'
 export type IssueSeverity = 'critical' | 'major' | 'minor' | 'suggestion'
 export type IssueStatus = 'open' | 'disagreed' | 'resolved'
 export type IssuePhase = string
 export type UserRole = 'member' | 'producer'
 
-export type WorkflowStepType = 'gate' | 'review' | 'revision' | 'delivery'
+export type WorkflowStepType = 'approval' | 'gate' | 'review' | 'revision' | 'delivery'
+
+export type WorkflowUiVariant =
+  | 'generic'
+  | 'intake'
+  | 'peer_review'
+  | 'producer_gate'
+  | 'mastering'
+  | 'final_review'
 
 export interface WorkflowStepDef {
   id: string
   label: string
   type: WorkflowStepType
+  ui_variant?: WorkflowUiVariant | null
   assignee_role: string
   order: number
   transitions: Record<string, string>
   return_to?: string | null
   revision_step?: string | null
+  // Approval-specific
+  allow_permanent_reject?: boolean | null
+  // Review-specific
+  assignment_mode?: 'manual' | 'auto' | null
+  reviewer_pool?: number[] | null
+  required_reviewer_count?: number | null
+  // Approval/delivery assignee override
+  assignee_user_id?: number | null
+  // Delivery-specific
+  require_confirmation?: boolean | null
+  // Additional roles that may act on this step
+  actor_roles?: string[] | null
 }
 
 export interface WorkflowConfig {
@@ -104,6 +125,7 @@ export interface Album {
   members: AlbumMember[]
   created_at: string
   updated_at: string
+  archived_at?: string | null
   track_count: number
 }
 
@@ -157,15 +179,49 @@ export interface TrackSourceVersion {
   created_at: string
 }
 
+export interface StageAssignment {
+  id: number
+  track_id: number
+  stage_id: string
+  user_id: number
+  status: 'pending' | 'completed'
+  assigned_at: string
+  completed_at: string | null
+  user?: User | null
+}
+
+export interface ReopenRequest {
+  id: number
+  track_id: number
+  requested_by_id: number
+  target_stage_id: string
+  reason: string
+  status: 'pending' | 'approved' | 'rejected'
+  decided_by_id: number | null
+  created_at: string
+  decided_at: string | null
+  requested_by?: User | null
+  decided_by?: User | null
+}
+
 export interface MasterDelivery {
   id: number
   workflow_cycle: number
   delivery_number: number
   file_path: string
   uploaded_by_id: number | null
+  confirmed_at: string | null
   producer_approved_at: string | null
   submitter_approved_at: string | null
   created_at: string
+}
+
+export interface IssueMarker {
+  id: number
+  issue_id: number
+  marker_type: MarkerType
+  time_start: number
+  time_end: number | null
 }
 
 export interface Issue {
@@ -180,11 +236,9 @@ export interface Issue {
   master_delivery_id: number | null
   title: string
   description: string
-  issue_type: IssueType
   severity: IssueSeverity
   status: IssueStatus
-  time_start: number
-  time_end: number | null
+  markers: IssueMarker[]
   created_at: string
   updated_at: string
   comment_count?: number
@@ -231,6 +285,8 @@ export interface ChecklistItem {
   created_at: string
 }
 
+export type WorkflowVariant = 'standard' | 'producer_direct'
+
 export interface WorkflowEvent {
   id: number
   event_type: string
@@ -244,7 +300,7 @@ export interface WorkflowEvent {
 export interface Track {
   id: number
   title: string
-  artist: string
+  artist: string | null
   album_id: number
   album_title?: string
   file_path: string | null
@@ -253,6 +309,7 @@ export interface Track {
   track_number?: number | null
   status: TrackStatus
   rejection_mode: RejectionMode | null
+  workflow_variant: WorkflowVariant
   version: number
   workflow_cycle: number
   submitter_id: number | null
@@ -272,6 +329,7 @@ export interface Track {
   workflow_step?: WorkflowStepDef | null
   workflow_transitions?: WorkflowTransitionOption[] | null
   source_versions?: TrackSourceVersion[]
+  is_public: boolean
 }
 
 export interface TrackDetailResponse {
@@ -280,6 +338,7 @@ export interface TrackDetailResponse {
   checklist_items: ChecklistItem[]
   events: WorkflowEvent[]
   source_versions?: TrackSourceVersion[]
+  master_deliveries?: MasterDelivery[]
   discussions?: Discussion[]
   workflow_config?: WorkflowConfig | null
 }
@@ -342,6 +401,16 @@ export interface WebhookConfig {
   url: string
   enabled: boolean
   events: string[]
+}
+
+export interface WebhookDelivery {
+  id: number
+  event_type: string
+  success: boolean
+  status_code: number | null
+  target_url: string
+  error_detail: string | null
+  created_at: string
 }
 
 export interface AlbumStats {

@@ -1,23 +1,32 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CircleAlert, CircleCheckBig, Play, Pause } from 'lucide-vue-next'
-import type { Issue } from '@/types'
+import { Play, Pause, Headphones, MapPin } from 'lucide-vue-next'
+import type { Issue, IssueMarker } from '@/types'
 import type WaveSurfer from 'wavesurfer.js'
 import type RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
 import { resolveAssetUrl } from '@/api'
 import { formatTimestamp, formatTimestampShort, roundToMilliseconds } from '@/utils/time'
 import { resolveAudioUrl } from '@/utils/url'
 
-const props = defineProps<{
+type InteractionMode = 'seek' | 'annotate'
+
+const props = withDefaults(defineProps<{
   audioUrl: string
   issues?: Issue[]
   height?: number
   selectable?: boolean
+  mode?: InteractionMode
   selectedRange?: { start: number; end: number } | null
   compareVersionId?: number | null
+  compareAudioUrl?: string
   trackId?: number
-}>()
+  draftMarkers?: { marker_type: 'point' | 'range'; time_start: number; time_end: number | null }[]
+  draftRangeAnchor?: number | null
+  hoveredIssueId?: number | null
+}>(), {
+  mode: 'seek',
+})
 
 const emit = defineEmits<{
   ready: [duration: number]
@@ -25,6 +34,9 @@ const emit = defineEmits<{
   click: [time: number]
   regionClick: [issue: Issue]
   rangeSelect: [start: number, end: number]
+  issueHover: [issue: Issue]
+  issueLeave: []
+  requestModeChange: [mode: InteractionMode]
 }>()
 
 const { t } = useI18n()
@@ -44,9 +56,19 @@ const selectionRegionId = ref<string | null>(null)
 const highlightRegionId = ref<string | null>(null)
 const activeRangeIssueId = ref<number | null>(null)
 const lastSelectionAt = ref(0)
+const lastEmittedSelection = ref<{ id: string; start: number; end: number } | null>(null)
 const activePointGroupKey = ref<string | null>(null)
 const abMode = ref<'A' | 'B'>('A')
-const isCompareMode = computed(() => !!props.compareVersionId)
+const hoverTime = ref<number | null>(null)
+const hoverLeft = ref<number>(0)
+const compareSourceUrl = computed(() => {
+  if (props.compareAudioUrl) return props.compareAudioUrl
+  if (props.compareVersionId && props.trackId) {
+    return resolveAssetUrl(`/api/tracks/${props.trackId}/source-versions/${props.compareVersionId}/audio`)
+  }
+  return ''
+})
+const isCompareMode = computed(() => !!compareSourceUrl.value)
 const isCompareLoading = ref(false)
 const compareLoadProgress = ref(0)
 const isCompareReady = ref(false)
@@ -54,15 +76,15 @@ const compareDuration = ref(0)
 const compareCurrentTime = ref(0)
 const activeDuration = computed(() => abMode.value === 'B' && compareDuration.value > 0 ? compareDuration.value : duration.value)
 const activeCurrentTime = computed(() => abMode.value === 'B' && compareDuration.value > 0 ? compareCurrentTime.value : currentTime.value)
-const selectionVisualColor = 'rgba(34, 211, 238, 0.28)'
+const markerTimelineDuration = computed(() => activeDuration.value)
+// Draft (currently-being-edited) markers use the primary orange with a dashed
+// edge — distinct from the solid "major" severity even though they share hue.
+const DRAFT_EDGE = '#FF8400'
+const DRAFT_FILL = 'rgba(255, 132, 0, 0.22)'
+const selectionVisualColor = DRAFT_FILL
 
-const SEVERITY_REGION_COLORS: Record<string, string> = {
-  critical: 'rgba(239,68,68,0.22)',
-  major: 'rgba(249,115,22,0.22)',
-  minor: 'rgba(234,179,8,0.22)',
-  suggestion: 'rgba(59,130,246,0.22)',
-}
-
+// Severity tones — all values sourced from the design system tokens in
+// CLAUDE.md (error / primary / info / muted-foreground).
 const RANGE_TONES: Record<string, { edge: string; fill: string; soft: string; glow: string }> = {
   critical: {
     edge: '#FF5C33',
@@ -90,6 +112,13 @@ const RANGE_TONES: Record<string, { edge: string; fill: string; soft: string; gl
   },
 }
 
+const RESOLVED_TONE = {
+  edge: '#B6FFCE',
+  fill: 'rgba(182, 255, 206, 0.58)',
+  soft: 'rgba(182, 255, 206, 0.22)',
+  glow: 'rgba(182, 255, 206, 0.18)',
+}
+
 type MarkerStatus = 'unresolved' | 'resolved'
 
 interface PointMarkerGroup {
@@ -103,8 +132,14 @@ interface PointMarkerGroup {
   popoverAlign: 'left' | 'center' | 'right'
 }
 
+interface MarkerWithIssue {
+  marker: IssueMarker
+  issue: Issue
+}
+
 interface RangeLaneItem {
-  issue: Issue & { time_end: number }
+  marker: IssueMarker & { time_end: number }
+  issue: Issue
   lane: number
 }
 
@@ -118,13 +153,13 @@ function getMarkerStatus(issues: Issue[]): MarkerStatus {
 }
 
 function getMarkerPosition(time: number): string {
-  if (duration.value <= 0) return '0%'
-  return `${clampPercent((time / duration.value) * 100)}%`
+  if (markerTimelineDuration.value <= 0) return '0%'
+  return `${clampPercent((time / markerTimelineDuration.value) * 100)}%`
 }
 
 function getMarkerPercent(time: number): number {
-  if (duration.value <= 0) return 0
-  return clampPercent((time / duration.value) * 100)
+  if (markerTimelineDuration.value <= 0) return 0
+  return clampPercent((time / markerTimelineDuration.value) * 100)
 }
 
 function getPointMarkerAlign(percent: number): 'left' | 'center' | 'right' {
@@ -152,36 +187,36 @@ function popoverAnchorClass(align: 'left' | 'center' | 'right'): string {
 }
 
 function getRangeWidth(start: number, end: number): string {
-  if (duration.value <= 0) return '0%'
-  const width = ((Math.max(end, start) - start) / duration.value) * 100
+  if (markerTimelineDuration.value <= 0) return '0%'
+  const width = ((Math.max(end, start) - start) / markerTimelineDuration.value) * 100
   return `${Math.max(clampPercent(width), 0.35)}%`
 }
 
 const pointGroups = computed<PointMarkerGroup[]>(() => {
-  if (!props.issues?.length || duration.value <= 0) return []
+  if (!props.issues?.length || markerTimelineDuration.value <= 0) return []
 
-  const grouped = new Map<number, Issue[]>()
+  // Flatten: each point marker → its parent issue (an issue can appear in multiple groups)
+  const grouped = new Map<number, Map<number, Issue>>()
   for (const issue of props.issues) {
-    if (issue.issue_type !== 'point') continue
-    const key = Math.round(issue.time_start * 1000)
-    const entries = grouped.get(key)
-    if (entries) {
-      entries.push(issue)
-    } else {
-      grouped.set(key, [issue])
+    for (const marker of issue.markers) {
+      if (marker.marker_type !== 'point') continue
+      const key = Math.round(marker.time_start * 1000)
+      if (!grouped.has(key)) grouped.set(key, new Map())
+      grouped.get(key)!.set(issue.id, issue)
     }
   }
 
   return Array.from(grouped.entries())
-    .map(([key, issues]) => {
+    .map(([key, issueMap]) => {
       const time = key / 1000
       const percent = getMarkerPercent(time)
+      const issues = [...issueMap.values()].sort((a, b) => a.created_at.localeCompare(b.created_at))
       return {
         key: String(key),
         time,
         percent,
         left: `${percent}%`,
-        issues: [...issues].sort((a, b) => a.created_at.localeCompare(b.created_at)),
+        issues,
         status: getMarkerStatus(issues),
         markerAlign: getPointMarkerAlign(percent),
         popoverAlign: getPointPopoverAlign(percent),
@@ -190,27 +225,35 @@ const pointGroups = computed<PointMarkerGroup[]>(() => {
     .sort((a, b) => a.time - b.time)
 })
 
-const rangeIssues = computed(() =>
-  (props.issues ?? []).filter(
-    (i): i is Issue & { time_end: number } => i.issue_type === 'range' && i.time_end !== null,
-  ),
-)
+// Flatten all range markers with their parent issue
+const rangeMarkerItems = computed<MarkerWithIssue[]>(() => {
+  const items: MarkerWithIssue[] = []
+  for (const issue of props.issues ?? []) {
+    for (const marker of issue.markers) {
+      if (marker.marker_type === 'range' && marker.time_end !== null) {
+        items.push({ marker, issue })
+      }
+    }
+  }
+  return items
+})
 
 const rangeLaneItems = computed<RangeLaneItem[]>(() => {
   const laneEnds: number[] = []
 
-  return [...rangeIssues.value]
-    .sort((a, b) => a.time_start - b.time_start || a.time_end - b.time_end)
-    .map((issue) => {
-      let lane = laneEnds.findIndex(end => issue.time_start >= end)
+  return [...rangeMarkerItems.value]
+    .sort((a, b) => a.marker.time_start - b.marker.time_start || a.marker.time_end! - b.marker.time_end!)
+    .map(({ marker, issue }) => {
+      const m = marker as IssueMarker & { time_end: number }
+      let lane = laneEnds.findIndex(end => m.time_start >= end)
       if (lane === -1) {
         lane = laneEnds.length
-        laneEnds.push(issue.time_end)
+        laneEnds.push(m.time_end)
       } else {
-        laneEnds[lane] = issue.time_end
+        laneEnds[lane] = m.time_end
       }
 
-      return { issue, lane }
+      return { marker: m, issue, lane }
     })
 })
 
@@ -218,9 +261,36 @@ const rangeLaneCount = computed(() =>
   rangeLaneItems.value.reduce((max, item) => Math.max(max, item.lane + 1), 0),
 )
 
+const draftPointList = computed(() => {
+  if (!props.draftMarkers?.length || markerTimelineDuration.value <= 0) return []
+  return props.draftMarkers
+    .filter(m => m.marker_type === 'point')
+    .map((m, i) => ({
+      index: i + 1,
+      time: m.time_start,
+      left: getMarkerPosition(m.time_start),
+    }))
+})
+
+const draftRangeList = computed(() => {
+  if (!props.draftMarkers?.length || markerTimelineDuration.value <= 0) return []
+  return props.draftMarkers
+    .filter(m => m.marker_type === 'range' && m.time_end !== null)
+    .map((m, i) => ({
+      index: i + 1,
+      time_start: m.time_start,
+      time_end: m.time_end!,
+    }))
+})
+
+const draftRangeAnchorLeft = computed(() => {
+  if (props.draftRangeAnchor == null || markerTimelineDuration.value <= 0) return null
+  return getMarkerPosition(props.draftRangeAnchor)
+})
+
 const overlayHeight = computed(() => props.height || 128)
 
-const hasPointIssues = computed(() => (props.issues ?? []).some(i => i.issue_type === 'point'))
+const hasPointIssues = computed(() => (props.issues ?? []).some(i => i.markers.some(m => m.marker_type === 'point')))
 const hasRangeIssues = computed(() => rangeLaneItems.value.length > 0)
 const rangeRulerHeight = computed(() => Math.max(rangeLaneCount.value, 1) * 6)
 
@@ -234,22 +304,42 @@ function selectIssue(issue: Issue) {
   emit('regionClick', issue)
 }
 
-function iconForStatus(status: MarkerStatus) {
-  return status === 'resolved' ? CircleCheckBig : CircleAlert
+// Dominant severity wins when multiple issues share the same timestamp.
+const SEVERITY_ORDER: Record<string, number> = {
+  critical: 4,
+  major: 3,
+  minor: 2,
+  suggestion: 1,
 }
 
-function iconClassForStatus(status: MarkerStatus) {
-  return status === 'resolved'
-    ? 'text-success bg-success/15 border-success/30'
-    : 'text-error bg-error/15 border-error/30'
+function dominantSeverity(issues: Issue[]): string {
+  return issues.reduce((acc, issue) => (
+    (SEVERITY_ORDER[issue.severity] ?? 0) > (SEVERITY_ORDER[acc] ?? 0) ? issue.severity : acc
+  ), issues[0]?.severity ?? 'major')
 }
 
-function lineClassForStatus(status: MarkerStatus) {
-  return status === 'resolved' ? 'bg-success/90' : 'bg-error/90'
+function pointGroupTone(group: PointMarkerGroup) {
+  if (group.status === 'resolved') return RESOLVED_TONE
+  return rangeTone(dominantSeverity(group.issues))
 }
 
-function severityRegionColor(severity: string): string {
-  return SEVERITY_REGION_COLORS[severity] ?? 'rgba(99,102,241,0.22)'
+function pointGroupDotStyle(group: PointMarkerGroup) {
+  const tone = pointGroupTone(group)
+  const hovered = group.issues.some(issue => issue.id === props.hoveredIssueId)
+  return {
+    background: tone.edge,
+    boxShadow: hovered ? `0 0 0 2px ${tone.soft}, 0 0 6px ${tone.glow}` : `0 0 0 1px rgba(0,0,0,0.4)`,
+    transform: hovered ? 'scale(1.2)' : 'scale(1)',
+  }
+}
+
+function pointGroupLineStyle(group: PointMarkerGroup) {
+  const tone = pointGroupTone(group)
+  const hovered = group.issues.some(issue => issue.id === props.hoveredIssueId)
+  return {
+    background: hovered ? tone.edge : tone.fill,
+    opacity: group.status === 'resolved' && !hovered ? '0.45' : '0.85',
+  }
 }
 
 function rangeTone(severity: string) {
@@ -257,19 +347,19 @@ function rangeTone(severity: string) {
 }
 
 function rangeRulerBarStyle(issue: Issue) {
-  const tone = rangeTone(issue.severity)
+  const tone = issue.status === 'resolved' ? RESOLVED_TONE : rangeTone(issue.severity)
   const isActive = activeRangeIssueId.value === issue.id
-  const isResolved = issue.status === 'resolved'
+  const isHovered = props.hoveredIssueId === issue.id
 
   return {
-    background: isActive ? tone.fill : tone.soft,
+    background: isActive || isHovered ? tone.fill : tone.soft,
     borderBottom: `2px solid ${tone.edge}`,
-    opacity: isResolved && !isActive ? '0.5' : '1',
+    boxShadow: isHovered ? `0 0 0 1px ${tone.edge} inset, 0 0 8px ${tone.glow}` : 'none',
   }
 }
 
 function rangeRulerTooltipStyle(issue: Issue) {
-  const tone = rangeTone(issue.severity)
+  const tone = issue.status === 'resolved' ? RESOLVED_TONE : rangeTone(issue.severity)
   return {
     borderColor: tone.edge,
     boxShadow: '0 4px 12px rgba(0,0,0,0.32)',
@@ -278,6 +368,25 @@ function rangeRulerTooltipStyle(issue: Issue) {
 
 function rangeLaneOffset(lane: number): string {
   return `${lane * 6}px`
+}
+
+function onWaveformPointerMove(event: PointerEvent) {
+  if (markerTimelineDuration.value <= 0) return
+  const target = event.currentTarget as HTMLElement | null
+  if (!target) return
+  const rect = target.getBoundingClientRect()
+  const x = Math.min(Math.max(event.clientX - rect.left, 0), rect.width)
+  hoverTime.value = (x / rect.width) * markerTimelineDuration.value
+  hoverLeft.value = x
+}
+
+function onWaveformPointerLeave() {
+  hoverTime.value = null
+}
+
+function setMode(mode: InteractionMode) {
+  if (mode === props.mode) return
+  emit('requestModeChange', mode)
 }
 
 function applyCompareMode(mode: 'A' | 'B') {
@@ -306,7 +415,7 @@ function applyCompareMode(mode: 'A' | 'B') {
   wavesurfer.value.setVolume(0)
   compareWaveSurfer.value.setVolume(1)
   wavesurfer.value.setOptions({ waveColor: 'rgba(74,74,90,0.15)', progressColor: 'rgba(34,211,238,0.2)', cursorWidth: 0 })
-  compareWaveSurfer.value.setOptions({ waveColor: 'rgba(249,115,22,0.28)', progressColor: '#FB923C', cursorWidth: 2 })
+  compareWaveSurfer.value.setOptions({ waveColor: 'rgba(249,115,22,0.28)', progressColor: '#FB923C', cursorWidth: 0 })
   // Ensure compare is actually playing when primary is playing
   if (wavesurfer.value.isPlaying() && !compareWaveSurfer.value.isPlaying()) {
     syncCompareToPrimaryTime()
@@ -331,6 +440,27 @@ function syncPrimaryToCompareTime(time: number) {
   wavesurfer.value.seekTo(targetTime / duration.value)
 }
 
+// Drag-to-select is only active in annotate mode. We call this on mount and
+// whenever `selectable`/`mode` changes to keep wavesurfer in sync.
+let disableDragSelectionFn: (() => void) | null = null
+function applyDragSelection() {
+  if (disableDragSelectionFn) {
+    disableDragSelectionFn()
+    disableDragSelectionFn = null
+  }
+  if (!regionsPlugin.value) return
+  if (!props.selectable) return
+  if (props.mode !== 'annotate') return
+  const result = (regionsPlugin.value as any).enableDragSelection?.({
+    color: selectionVisualColor,
+    drag: true,
+    resize: true,
+  })
+  if (typeof result === 'function') {
+    disableDragSelectionFn = result
+  }
+}
+
 function _removeRegionById(id: string) {
   const region = (regionsPlugin.value as any)?.getRegions?.()?.find(
     (r: { id: string; remove?: () => void }) => r.id === id,
@@ -338,12 +468,13 @@ function _removeRegionById(id: string) {
   region?.remove?.()
 }
 
-function _addHighlightRegion(issue: Issue & { time_end: number }) {
+function _addHighlightRegion(issue: Issue, start: number, end: number) {
   if (!regionsPlugin.value) return
+  const tone = issue.status === 'resolved' ? RESOLVED_TONE : rangeTone(issue.severity)
   const region = regionsPlugin.value.addRegion({
-    start: issue.time_start,
-    end: issue.time_end,
-    color: severityRegionColor(issue.severity),
+    start,
+    end,
+    color: tone.soft,
     drag: false,
     resize: false,
     id: `__hl_${issue.id}__`,
@@ -354,7 +485,8 @@ function _addHighlightRegion(issue: Issue & { time_end: number }) {
 }
 
 function highlightIssue(issue: Issue | null) {
-  const newId = (issue?.issue_type === 'range' && issue.time_end !== null) ? issue.id : null
+  const hasRange = issue?.markers.some(m => m.marker_type === 'range' && m.time_end !== null)
+  const newId = hasRange ? issue!.id : null
   activeRangeIssueId.value = activeRangeIssueId.value === newId ? null : newId
 
   if (highlightRegionId.value) {
@@ -363,23 +495,33 @@ function highlightIssue(issue: Issue | null) {
   }
   if (activeRangeIssueId.value !== null) {
     const target = props.issues?.find(i => i.id === activeRangeIssueId.value)
-    if (target && target.issue_type === 'range' && target.time_end !== null) {
-      _addHighlightRegion(target as Issue & { time_end: number })
+    if (target) {
+      const rangeMarker = target.markers.find(m => m.marker_type === 'range' && m.time_end !== null)
+      if (rangeMarker && rangeMarker.time_end !== null) {
+        _addHighlightRegion(target, rangeMarker.time_start, rangeMarker.time_end)
+      }
     }
   }
 }
 
-function handleTimelineClick(issue: Issue & { time_end: number }) {
-  seekTo(issue.time_start)
+function handleTimelineClick(issue: Issue) {
+  const firstMarker = issue.markers[0]
+  if (firstMarker) seekTo(firstMarker.time_start)
   emit('regionClick', issue)  // parent's onIssueSelect will call highlightIssue
 }
 
-function getCursorElement(): HTMLElement | null {
-  const waveformHost = Array.from(container.value?.children || []).find(
-    child => child instanceof HTMLElement && !!child.shadowRoot,
-  ) as HTMLElement | undefined
+function emitIssueHover(issue: Issue) {
+  emit('issueHover', issue)
+}
 
-  return waveformHost?.shadowRoot?.querySelector('[part="cursor"]') as HTMLElement | null
+function emitIssueLeave() {
+  emit('issueLeave')
+}
+
+function emitPointGroupHover(group: PointMarkerGroup) {
+  if (group.issues.length === 1) {
+    emit('issueHover', group.issues[0])
+  }
 }
 
 function syncSelectedRange(region: { id: string; start: number; end: number; remove?: () => void }) {
@@ -399,6 +541,12 @@ function syncSelectedRange(region: { id: string; start: number; end: number; rem
   }
 
   selectionRegionId.value = region.id
+  const prev = lastEmittedSelection.value
+  if (prev && prev.id === region.id && prev.start === start && prev.end === end) {
+    return
+  }
+
+  lastEmittedSelection.value = { id: region.id, start, end }
   lastSelectionAt.value = Date.now()
   emit('rangeSelect', start, end)
 }
@@ -412,8 +560,7 @@ function renderSelectionRegion() {
       _removeRegionById(selectionRegionId.value)
       selectionRegionId.value = null
     }
-    const cursor = getCursorElement()
-    if (cursor) cursor.style.opacity = '1'
+    lastEmittedSelection.value = null
     return
   }
 
@@ -424,11 +571,7 @@ function renderSelectionRegion() {
   const start = roundToMilliseconds(Math.min(selectedRange.start, selectedRange.end))
   const end = roundToMilliseconds(Math.max(selectedRange.start, selectedRange.end))
 
-  if (end <= start) {
-    const cursor = getCursorElement()
-    if (cursor) cursor.style.opacity = '1'
-    return
-  }
+  if (end <= start) return
 
   const region = regionsPlugin.value.addRegion({
     start,
@@ -436,36 +579,24 @@ function renderSelectionRegion() {
     drag: true,
     resize: true,
     color: selectionVisualColor,
-    content: t('waveform.editingRange'),
     id: '__draft_range__',
   })
 
   const element = (region as any).element as HTMLElement | undefined
   if (element) {
-    element.style.outline = '2px solid rgba(34, 211, 238, 0.95)'
+    element.style.outline = `2px dashed ${DRAFT_EDGE}`
     element.style.outlineOffset = '-2px'
-    element.style.boxShadow = 'inset 0 0 0 1px rgba(255, 255, 255, 0.28)'
-    element.style.borderTop = '2px solid rgba(34, 211, 238, 0.95)'
-    element.style.borderBottom = '2px solid rgba(34, 211, 238, 0.95)'
+    element.style.boxShadow = 'inset 0 0 0 1px rgba(255, 132, 0, 0.28)'
+    element.style.borderTop = `2px solid ${DRAFT_EDGE}`
+    element.style.borderBottom = `2px solid ${DRAFT_EDGE}`
   }
-
-  const content = element?.querySelector('[part="region-content"]') as HTMLElement | null
-  if (content) {
-    content.style.fontSize = '11px'
-    content.style.fontWeight = '700'
-    content.style.letterSpacing = '0.04em'
-    content.style.textTransform = 'uppercase'
-    content.style.color = '#A5F3FC'
-    content.style.background = 'rgba(8, 47, 73, 0.92)'
-    content.style.border = '1px solid rgba(34, 211, 238, 0.7)'
-    content.style.borderRadius = '9999px'
-    content.style.padding = '2px 8px'
-  }
-
-  const cursor = getCursorElement()
-  if (cursor) cursor.style.opacity = '0'
 
   selectionRegionId.value = region.id
+  lastEmittedSelection.value = {
+    id: region.id,
+    start,
+    end,
+  }
 }
 
 function formatTime(seconds: number): string {
@@ -501,8 +632,8 @@ onMounted(async () => {
     container: container.value,
     waveColor: '#4A4A5A',
     progressColor: '#22D3EE',
-    cursorColor: '#A855F7',
-    cursorWidth: 2,
+    cursorColor: 'transparent',
+    cursorWidth: 0,
     height: props.height || 128,
     barWidth: 2,
     barGap: 1,
@@ -540,6 +671,9 @@ onMounted(async () => {
 
   ws.on('click', () => {
     if (Date.now() - lastSelectionAt.value < 250) return
+    // In seek mode clicks only move the play head (wavesurfer handles that
+    // natively). Point markers are only created in annotate mode.
+    if (props.selectable && props.mode !== 'annotate') return
     emit('click', ws.getCurrentTime())
   })
 
@@ -576,19 +710,21 @@ onMounted(async () => {
     syncSelectedRange(region)
   })
 
-  if (props.selectable) {
-    ;(regions as any).enableDragSelection?.({
-      color: selectionVisualColor,
-      drag: true,
-      resize: true,
-      content: t('waveform.editingRange'),
-    })
-  }
+  applyDragSelection()
 
   loadedAudioUrl = props.audioUrl
   isPrimaryLoading.value = true
   primaryLoadProgress.value = 0
-  resolveAudioUrl(props.audioUrl).then(resolved => ws.load(resolved))
+  resolveAudioUrl(props.audioUrl)
+    .then(resolved => ws.load(resolved))
+    .catch((err) => {
+      // Clear the bookkeeping so a subsequent prop change (or retry) can
+      // re-attempt the load instead of being short-circuited by the
+      // de-dup check in the watcher below.
+      loadedAudioUrl = ''
+      isPrimaryLoading.value = false
+      console.warn('WaveformPlayer: failed to load audio', err)
+    })
 
   wavesurfer.value = ws
 })
@@ -602,8 +738,17 @@ watch(() => props.audioUrl, async (newUrl) => {
   loadedAudioUrl = newUrl
   isPrimaryLoading.value = true
   primaryLoadProgress.value = 0
-  const resolved = await resolveAudioUrl(newUrl)
-  wavesurfer.value.load(resolved)
+  try {
+    const resolved = await resolveAudioUrl(newUrl)
+    await wavesurfer.value.load(resolved)
+  } catch (err) {
+    // A transient failure (stale token, network hiccup, 4xx) must not
+    // permanently poison the component: clear loadedAudioUrl so the next
+    // identical prop still triggers a retry.
+    loadedAudioUrl = ''
+    isPrimaryLoading.value = false
+    console.warn('WaveformPlayer: failed to reload audio', err)
+  }
 })
 
 function renderIssueRegions() {
@@ -611,6 +756,7 @@ function renderIssueRegions() {
   isRenderingRegions.value = true
   regionsPlugin.value.clearRegions()
   selectionRegionId.value = null
+  lastEmittedSelection.value = null
   highlightRegionId.value = null
 
   renderSelectionRegion()
@@ -618,8 +764,9 @@ function renderIssueRegions() {
   // Restore highlight if one was active
   if (activeRangeIssueId.value !== null) {
     const issue = props.issues?.find(i => i.id === activeRangeIssueId.value)
-    if (issue && issue.issue_type === 'range' && issue.time_end !== null) {
-      _addHighlightRegion(issue as Issue & { time_end: number })
+    const rangeM = issue?.markers.find(m => m.marker_type === 'range' && m.time_end !== null)
+    if (issue && rangeM && rangeM.time_end !== null) {
+      _addHighlightRegion(issue, rangeM.time_start, rangeM.time_end!)
     } else {
       activeRangeIssueId.value = null
     }
@@ -631,7 +778,8 @@ function renderIssueRegions() {
 watch(() => props.issues, (issues) => {
   if (activeRangeIssueId.value === null) return
   const issue = issues?.find(i => i.id === activeRangeIssueId.value)
-  if (!issue || issue.issue_type !== 'range' || issue.time_end === null) {
+  const hasRange = issue?.markers.some(m => m.marker_type === 'range' && m.time_end !== null)
+  if (!issue || !hasRange) {
     activeRangeIssueId.value = null
     if (highlightRegionId.value) {
       _removeRegionById(highlightRegionId.value)
@@ -643,8 +791,14 @@ watch(() => props.selectedRange, renderSelectionRegion, { deep: true })
 watch(duration, () => {
   activePointGroupKey.value = null
 })
+watch(markerTimelineDuration, () => {
+  activePointGroupKey.value = null
+})
+watch([() => props.mode, () => props.selectable], () => {
+  applyDragSelection()
+})
 
-watch(() => props.compareVersionId, async (newId) => {
+watch(compareSourceUrl, async (newCompareUrl) => {
   if (compareWaveSurfer.value) {
     compareWaveSurfer.value.destroy()
     compareWaveSurfer.value = null
@@ -653,7 +807,7 @@ watch(() => props.compareVersionId, async (newId) => {
   }
   isCompareLoading.value = false
   isCompareReady.value = false
-  if (!newId || !props.trackId) {
+  if (!newCompareUrl) {
     abMode.value = 'A'
     applyCompareMode('A')
     return
@@ -708,11 +862,16 @@ watch(() => props.compareVersionId, async (newId) => {
     }
   })
 
-  const compareUrl = resolveAssetUrl(`/api/tracks/${props.trackId}/source-versions/${newId}/audio`)
   compareWaveSurfer.value = ws
   applyCompareMode(abMode.value)
 
-  resolveAudioUrl(compareUrl).then(url => ws.load(url))
+  resolveAudioUrl(newCompareUrl)
+    .then(url => ws.load(url))
+    .catch((err) => {
+      isCompareLoading.value = false
+      isCompareReady.value = false
+      console.warn('WaveformPlayer: failed to load compare audio', err)
+    })
 })
 
 watch(abMode, (mode) => {
@@ -758,21 +917,63 @@ async function playFrom(time: number) {
   await play()
 }
 
+function getCurrentTime() {
+  return activeCurrentTime.value
+}
+
 onBeforeUnmount(() => {
   wavesurfer.value?.destroy()
   compareWaveSurfer.value?.destroy()
 })
 
-defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom })
+defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTime })
 </script>
 
 <template>
   <div class="card space-y-3">
-    <div class="relative" :style="{ paddingTop: hasPointIssues ? '24px' : '0' }">
+    <!-- Mode toggle: shown only when parent enables selectable annotation -->
+    <div
+      v-if="selectable"
+      class="flex items-center justify-between gap-3"
+    >
+      <div
+        class="inline-flex rounded-full border border-border bg-background p-0.5"
+        role="tablist"
+        :aria-label="t('waveform.modeTabs')"
+      >
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="mode === 'seek'"
+          class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-mono transition-colors min-h-[32px] touch-manipulation"
+          :class="mode === 'seek' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+          @click="setMode('seek')"
+        >
+          <Headphones class="h-3.5 w-3.5" :stroke-width="2" />
+          {{ t('waveform.modeSeek') }}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="mode === 'annotate'"
+          class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-mono transition-colors min-h-[32px] touch-manipulation"
+          :class="mode === 'annotate' ? 'bg-primary text-background shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+          @click="setMode('annotate')"
+        >
+          <MapPin class="h-3.5 w-3.5" :stroke-width="2" />
+          {{ t('waveform.modeAnnotate') }}
+        </button>
+      </div>
+      <span class="hidden sm:inline text-[11px] text-muted-foreground">
+        {{ mode === 'annotate' ? t('waveform.modeHintAnnotate') : t('waveform.modeHintSeek') }}
+      </span>
+    </div>
+
+    <div class="relative" :style="{ paddingTop: hasPointIssues ? '14px' : '0' }">
       <div
         v-if="hasPointIssues"
         class="pointer-events-none absolute inset-x-0 top-0 z-10 overflow-visible"
-        :style="{ height: `${overlayHeight + 24}px` }"
+        :style="{ height: `${overlayHeight + 14}px` }"
       >
         <div
           v-for="group in pointGroups"
@@ -783,84 +984,146 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom })
         >
           <button
             type="button"
-            class="pointer-events-auto flex h-full flex-col items-center"
+            class="pointer-events-auto flex h-full flex-col items-center outline-none"
+            :aria-label="group.issues.length > 1 ? t('waveform.pointGroup', { count: group.issues.length }) : group.issues[0]?.title"
             @click="togglePointGroup(group.key)"
+            @mouseenter="emitPointGroupHover(group)"
+            @mouseleave="emitIssueLeave"
           >
-            <component
-              :is="iconForStatus(group.status)"
-              class="h-4 w-4 shrink-0 rounded-full border p-0.5"
-              :class="iconClassForStatus(group.status)"
+            <span
+              class="h-2.5 w-2.5 shrink-0 rounded-full transition-transform duration-150"
+              :style="pointGroupDotStyle(group)"
             />
             <span
               v-if="group.issues.length > 1"
-              class="mt-0.5 inline-flex min-w-5 shrink-0 items-center justify-center rounded-full border border-border bg-card px-1 text-[10px] font-semibold leading-4 text-foreground shadow"
+              class="mt-0.5 inline-flex min-w-[14px] shrink-0 items-center justify-center rounded-full border border-border bg-card px-1 text-[9px] font-mono font-semibold leading-[14px] text-foreground"
             >
               {{ group.issues.length }}
             </span>
-            <span class="mt-0.5 w-px flex-1" :class="lineClassForStatus(group.status)" />
+            <span
+              class="mt-0.5 w-px flex-1"
+              :style="pointGroupLineStyle(group)"
+            />
           </button>
 
           <div
             v-if="activePointGroupKey === group.key"
-            class="pointer-events-auto absolute top-6 z-20 w-56 rounded-lg border border-border bg-card/95 p-2 shadow-xl backdrop-blur"
+            class="pointer-events-auto absolute top-4 z-20 w-56 rounded-lg border border-border bg-card/95 p-2 shadow-xl backdrop-blur"
             :class="popoverAnchorClass(group.popoverAlign)"
           >
             <button
               v-for="issue in group.issues"
               :key="issue.id"
               type="button"
-              class="flex w-full items-start gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/70"
+              class="flex w-full items-start gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-border/40"
               @click="selectIssue(issue)"
+              @mouseenter="emitIssueHover(issue)"
+              @mouseleave="emitIssueLeave"
             >
-              <component
-                :is="iconForStatus(issue.status === 'resolved' ? 'resolved' : 'unresolved')"
-                class="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border p-0.5"
-                :class="iconClassForStatus(issue.status === 'resolved' ? 'resolved' : 'unresolved')"
+              <span
+                class="mt-1 h-2 w-2 shrink-0 rounded-full"
+                :style="{ background: issue.status === 'resolved' ? RESOLVED_TONE.edge : rangeTone(issue.severity).edge }"
               />
               <span class="min-w-0">
                 <span class="block truncate text-xs font-medium text-foreground">{{ issue.title }}</span>
-                <span class="block text-[11px] text-muted-foreground">{{ formatTime(issue.time_start) }}</span>
+                <span class="block text-[11px] text-muted-foreground">{{ formatTime(group.time) }}</span>
               </span>
             </button>
           </div>
         </div>
       </div>
 
-      <div class="relative" :style="{ paddingTop: hasRangeIssues && duration > 0 ? `${rangeRulerHeight + 4}px` : '0' }">
+      <div class="relative" :style="{ paddingTop: hasRangeIssues && markerTimelineDuration > 0 ? `${rangeRulerHeight + 4}px` : '0' }">
         <!-- Range ruler bar above waveform -->
         <div
-          v-if="hasRangeIssues && duration > 0"
+          v-if="hasRangeIssues && markerTimelineDuration > 0"
           class="absolute inset-x-0 top-0 z-10"
           :style="{ height: `${rangeRulerHeight}px` }"
         >
           <button
             v-for="item in rangeLaneItems"
-            :key="item.issue.id"
+            :key="`${item.issue.id}-${item.marker.id}`"
             type="button"
             class="group absolute min-w-[4px] cursor-pointer transition-all duration-150"
             :class="activeRangeIssueId === item.issue.id ? 'z-10' : 'z-[1]'"
             :style="{
-              left: getMarkerPosition(item.issue.time_start),
-              width: getRangeWidth(item.issue.time_start, item.issue.time_end),
+              left: getMarkerPosition(item.marker.time_start),
+              width: getRangeWidth(item.marker.time_start, item.marker.time_end),
               bottom: rangeLaneOffset(item.lane),
               height: '4px',
               ...rangeRulerBarStyle(item.issue),
             }"
             @click.stop="handleTimelineClick(item.issue)"
+            @mouseenter="emitIssueHover(item.issue)"
+            @mouseleave="emitIssueLeave"
           >
             <span
-              class="pointer-events-none absolute left-1/2 bottom-full z-20 mb-1.5 min-w-max -translate-x-1/2 whitespace-nowrap rounded-full border bg-card px-2.5 py-1 text-[11px] font-mono text-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-              :class="activeRangeIssueId === item.issue.id ? 'opacity-100' : ''"
+              class="pointer-events-none absolute left-1/2 top-full z-20 mt-1 min-w-max -translate-x-1/2 whitespace-nowrap rounded-full border bg-card px-2.5 py-1 text-[11px] font-mono text-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+              :class="activeRangeIssueId === item.issue.id || props.hoveredIssueId === item.issue.id ? 'opacity-100' : ''"
               :style="rangeRulerTooltipStyle(item.issue)"
-            >{{ formatTimeShort(item.issue.time_start) }} <span class="opacity-50 mx-0.5">→</span> {{ formatTimeShort(item.issue.time_end) }}</span>
+            >{{ formatTimeShort(item.marker.time_start) }} <span class="opacity-50 mx-0.5">→</span> {{ formatTimeShort(item.marker.time_end) }}</span>
           </button>
         </div>
         <div
           ref="container"
-          class="relative overflow-hidden rounded-none bg-[#0D0D0D] transition-[z-index]"
-          :class="abMode === 'A' ? 'z-[2]' : 'z-0'"
+          class="relative overflow-hidden rounded-none bg-[#0D0D0D] transition-[z-index] touch-manipulation"
+          :class="[abMode === 'A' ? 'z-[2]' : 'z-0', selectable && mode === 'annotate' ? 'cursor-crosshair' : 'cursor-pointer']"
           :style="{ height: `${props.height || 128}px` }"
+          @pointermove="onWaveformPointerMove"
+          @pointerleave="onWaveformPointerLeave"
         />
+        <!-- Draft marker overlays (pending markers being added to a new issue) -->
+        <div
+          v-if="(draftPointList.length || draftRangeList.length || draftRangeAnchorLeft !== null) && markerTimelineDuration > 0"
+          class="pointer-events-none absolute inset-0 z-10"
+        >
+          <!-- Draft range fills — primary orange with dashed outline -->
+          <div
+            v-for="(dr, i) in draftRangeList"
+            :key="`dr-${i}`"
+            class="absolute inset-y-0"
+            :style="{
+              left: getMarkerPosition(dr.time_start),
+              width: getRangeWidth(dr.time_start, dr.time_end),
+              background: DRAFT_FILL,
+              borderLeft: `2px dashed ${DRAFT_EDGE}`,
+              borderRight: `2px dashed ${DRAFT_EDGE}`,
+            }"
+          />
+          <!-- Draft point lines — primary orange dashed -->
+          <template v-for="(dp, i) in draftPointList" :key="`dp-${i}`">
+            <div
+              class="absolute top-0 bottom-0"
+              :style="{ left: dp.left, width: '0', borderLeft: `2px dashed ${DRAFT_EDGE}`, opacity: 0.9 }"
+            />
+            <span
+              class="absolute -top-3 flex h-3.5 w-3.5 -translate-x-1/2 items-center justify-center rounded-full text-[8px] font-mono font-bold leading-none text-background"
+              :style="{ left: dp.left, background: DRAFT_EDGE, boxShadow: '0 0 0 1px rgba(0,0,0,0.4)' }"
+            >{{ dp.index }}</span>
+          </template>
+          <template v-if="draftRangeAnchorLeft !== null">
+            <div
+              class="absolute top-0 bottom-0"
+              :style="{
+                left: draftRangeAnchorLeft,
+                width: '0',
+                borderLeft: `2px dashed ${DRAFT_EDGE}`,
+              }"
+            />
+            <span
+              class="absolute -top-3 flex h-3.5 w-3.5 -translate-x-1/2 items-center justify-center rounded-full text-[8px] font-mono font-bold leading-none text-background"
+              :style="{ left: draftRangeAnchorLeft, background: DRAFT_EDGE, boxShadow: '0 0 0 1px rgba(0,0,0,0.4)' }"
+            >A</span>
+          </template>
+        </div>
+        <!-- Hover time tooltip -->
+        <div
+          v-if="hoverTime !== null && markerTimelineDuration > 0 && !isPrimaryLoading"
+          class="pointer-events-none absolute top-1 z-20 -translate-x-1/2 rounded-full border border-border bg-card/95 px-2 py-0.5 text-[10px] font-mono text-foreground shadow-sm backdrop-blur"
+          :style="{ left: `${hoverLeft}px` }"
+        >
+          {{ formatTime(hoverTime) }}
+        </div>
         <div
           v-if="isPrimaryLoading"
           class="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-background/72"
@@ -898,7 +1161,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom })
     </div>
 
     <div class="flex items-center gap-4">
-      <button @click="togglePlay" class="text-cyan hover:text-cyan-dark transition-colors">
+      <button @click="togglePlay" class="text-primary hover:text-primary-hover transition-colors">
         <Play v-if="!isPlaying" class="w-8 h-8" fill="currentColor" :stroke-width="0" />
         <Pause v-else class="w-8 h-8" fill="currentColor" :stroke-width="0" />
       </button>

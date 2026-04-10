@@ -20,11 +20,9 @@ const makeIssue = (overrides: Record<string, unknown> = {}) => ({
   master_delivery_id: null,
   title: 'Test Issue',
   description: 'desc',
-  issue_type: 'point',
   severity: 'major',
   status: 'open',
-  time_start: 5.123,
-  time_end: null,
+  markers: [{ id: 1, issue_id: 1, marker_type: 'point', time_start: 5.123, time_end: null }],
   created_at: '2024-01-01',
   updated_at: '2024-01-01',
   comment_count: 0,
@@ -62,7 +60,7 @@ describe('IssueMarkerList', () => {
   it('renders range timestamp when time_end is set', () => {
     const wrapper = mountWithPlugins(IssueMarkerList, {
       props: {
-        issues: [makeIssue({ time_start: 2.0, time_end: 5.5 })],
+        issues: [makeIssue({ markers: [{ id: 1, issue_id: 1, marker_type: 'range', time_start: 2.0, time_end: 5.5 }] })],
       },
     })
     expect(wrapper.text()).toContain('0:02.0')

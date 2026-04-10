@@ -13,7 +13,10 @@ import type {
   Invitation,
   InviteCode,
   PresignedUploadResponse,
+  ReopenRequest,
+  StageAssignment,
   WebhookConfig,
+  WebhookDelivery,
   WorkflowConfig,
   WorkflowTemplate,
   Issue,
@@ -54,6 +57,63 @@ function authHeaders(headers?: HeadersInit): HeadersInit {
   }
 }
 
+function clearStoredAuth() {
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem('backkitchen_user')
+}
+
+let verifyPromise: Promise<boolean> | null = null
+
+/**
+ * Verify whether the currently-stored token is still accepted by the server.
+ * Concurrent 401s share a single in-flight check. Returns `true` if the token
+ * is valid (or the check itself could not run), `false` only when the server
+ * confirms the token is no longer valid.
+ */
+async function verifyTokenStillValid(): Promise<boolean> {
+  const token = localStorage.getItem(TOKEN_KEY)
+  if (!token) return false
+  if (verifyPromise) return verifyPromise
+  verifyPromise = (async () => {
+    try {
+      const res = await fetch(`${BASE}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return res.status !== 401
+    } catch {
+      // Network error — assume the token is still valid so we don't
+      // log the user out on a flaky connection.
+      return true
+    } finally {
+      verifyPromise = null
+    }
+  })()
+  return verifyPromise
+}
+
+/**
+ * Called when an endpoint responds with 401. We only wipe local credentials
+ * when the failure is actually an auth/token problem — otherwise a single
+ * unrelated 401 (or a transient backend bug) would force the user back to
+ * /login mid-session.
+ */
+async function handleUnauthorized(url: string): Promise<void> {
+  // /auth/me is the oracle itself — trust its verdict directly.
+  if (url === '/auth/me' || url.startsWith('/auth/me?') || url.startsWith('/auth/me/')) {
+    clearStoredAuth()
+    return
+  }
+  // 401 from /auth/login means bad credentials on a fresh attempt,
+  // not an expired session; leave stored auth (if any) alone.
+  if (url.startsWith('/auth/login')) {
+    return
+  }
+  const stillValid = await verifyTokenStillValid()
+  if (!stillValid) {
+    clearStoredAuth()
+  }
+}
+
 export function uploadWithProgress<T>(
   url: string,
   body: FormData,
@@ -77,8 +137,9 @@ export function uploadWithProgress<T>(
         resolve(JSON.parse(xhr.responseText))
       } else {
         if (xhr.status === 401) {
-          localStorage.removeItem(TOKEN_KEY)
-          localStorage.removeItem('backkitchen_user')
+          // Fire-and-forget: the upload has already failed, we just need
+          // to decide whether the session should be cleared.
+          void handleUnauthorized(url)
         }
         let msg = `Request failed: ${xhr.status}`
         try {
@@ -105,8 +166,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     if (res.status === 401) {
-      localStorage.removeItem(TOKEN_KEY)
-      localStorage.removeItem('backkitchen_user')
+      await handleUnauthorized(url)
     }
     throw new Error(parseErrorDetail(body.detail) || `Request failed: ${res.status}`)
   }
@@ -115,8 +175,18 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const albumApi = {
-  list: () => request<Album[]>('/albums'),
+  list: (params?: { include_archived?: boolean; archived_only?: boolean }) => {
+    const q = new URLSearchParams()
+    if (params?.include_archived) q.set('include_archived', 'true')
+    if (params?.archived_only) q.set('archived_only', 'true')
+    const qs = q.toString()
+    return request<Album[]>(`/albums${qs ? `?${qs}` : ''}`)
+  },
   get: (id: number) => request<Album>(`/albums/${id}`),
+  archive: (id: number) =>
+    request<Album>(`/albums/${id}/archive`, { method: 'POST' }),
+  restore: (id: number) =>
+    request<Album>(`/albums/${id}/restore`, { method: 'POST' }),
   create: (data: {
     title: string
     description?: string
@@ -126,6 +196,8 @@ export const albumApi = {
     circle_id?: number | null
     circle_name?: string | null
     genres?: string[] | null
+    workflow_config?: WorkflowConfig | null
+    workflow_template_id?: number | null
   }) =>
     request<Album>('/albums', { method: 'POST', body: JSON.stringify(data) }),
   updateTeam: (id: number, data: { mastering_engineer_id: number | null; member_ids: number[] }) =>
@@ -144,12 +216,22 @@ export const albumApi = {
     }),
   testWebhook: (id: number) =>
     request<{ success: boolean }>(`/albums/${id}/webhook/test`, { method: 'POST' }),
+  getWebhookDeliveries: (id: number) =>
+    request<WebhookDelivery[]>(`/albums/${id}/webhook/deliveries`),
+  getWorkflow: (id: number) =>
+    request<WorkflowConfig>(`/albums/${id}/workflow`),
+  updateWorkflow: (id: number, config: WorkflowConfig) =>
+    request<{ ok: boolean; migrations: Array<{ track_id: number; track_title: string; from_step: string; to_step: string }> }>(
+      `/albums/${id}/workflow`, { method: 'PUT', body: JSON.stringify(config) },
+    ),
   reorderTracks: (albumId: number, trackIds: number[]) =>
     request<Track[]>(`/albums/${albumId}/track-order`, {
       method: 'PATCH',
       body: JSON.stringify({ track_ids: trackIds }),
     }),
   updateMetadata: (id: number, data: {
+    title?: string
+    description?: string | null
     release_date?: string | null
     catalog_number?: string | null
     circle_name?: string | null
@@ -188,6 +270,10 @@ export const circleApi = {
   },
   join: (code: string) =>
     request<CircleSummary>('/circles/join', { method: 'POST', body: JSON.stringify({ code }) }),
+  leave: (circleId: number) =>
+    request<void>(`/circles/${circleId}/leave`, { method: 'POST' }),
+  delete: (circleId: number) =>
+    request<void>(`/circles/${circleId}`, { method: 'DELETE' }),
   removeMember: (circleId: number, userId: number) =>
     request<void>(`/circles/${circleId}/members/${userId}`, { method: 'DELETE' }),
   listInviteCodes: (circleId: number) =>
@@ -221,28 +307,20 @@ export const trackApi = {
   },
   get: (id: number) => request<TrackDetailResponse>(`/tracks/${id}`),
   upload: (formData: FormData) => request<Track>('/tracks', { method: 'POST', body: formData }),
-  uploadSourceVersion: (id: number, file: File) => {
+  uploadSourceVersion: (id: number, file: File, onProgress?: (percent: number) => void) => {
     const form = new FormData()
     form.append('file', file)
-    return request<Track>(`/tracks/${id}/source-versions`, { method: 'POST', body: form })
+    return uploadWithProgress<Track>(`/tracks/${id}/source-versions`, form, onProgress)
   },
-  intakeDecision: (id: number, decision: 'accept' | 'reject_final' | 'reject_resubmittable') =>
-    request<Track>(`/tracks/${id}/intake-decision`, { method: 'POST', body: JSON.stringify({ decision }) }),
-  finishPeerReview: (id: number, decision: 'needs_revision' | 'pass') =>
-    request<Track>(`/tracks/${id}/peer-review/finish`, { method: 'POST', body: JSON.stringify({ decision }) }),
-  producerGate: (id: number, decision: 'send_to_mastering' | 'request_peer_revision') =>
-    request<Track>(`/tracks/${id}/producer-gate`, { method: 'POST', body: JSON.stringify({ decision }) }),
-  requestMasteringRevision: (id: number) =>
-    request<Track>(`/tracks/${id}/mastering/request-revision`, { method: 'POST' }),
-  uploadMasterDelivery: (id: number, file: File) => {
+  uploadMasterDelivery: (id: number, file: File, onProgress?: (percent: number) => void) => {
     const form = new FormData()
     form.append('file', file)
-    return request<Track>(`/tracks/${id}/master-deliveries`, { method: 'POST', body: form })
+    return uploadWithProgress<Track>(`/tracks/${id}/master-deliveries`, form, onProgress)
   },
+  // Final-review approve is retained: the custom workflow engine delegates
+  // to this endpoint for the producer+submitter dual-confirmation step.
   approveFinalReview: (id: number) =>
     request<Track>(`/tracks/${id}/final-review/approve`, { method: 'POST' }),
-  returnToMastering: (id: number) =>
-    request<Track>(`/tracks/${id}/final-review/return`, { method: 'POST' }),
   delete: (id: number) => request<void>(`/tracks/${id}`, { method: 'DELETE' }),
   archive: (id: number) => request<Track>(`/tracks/${id}/archive`, { method: 'POST' }),
   restore: (id: number) => request<Track>(`/tracks/${id}/restore`, { method: 'POST' }),
@@ -251,12 +329,56 @@ export const trackApi = {
       method: 'POST',
       body: JSON.stringify({ decision }),
     }),
+  // Stage assignments
+  assignReviewer: (trackId: number, userIds: number[]) =>
+    request<StageAssignment[]>(`/tracks/${trackId}/assign-reviewer`, {
+      method: 'POST',
+      body: JSON.stringify({ user_ids: userIds }),
+    }),
+  listAssignments: (trackId: number) =>
+    request<StageAssignment[]>(`/tracks/${trackId}/assignments`),
+  reassignReviewer: (trackId: number, userId?: number) =>
+    request<Track>(`/tracks/${trackId}/reassign-reviewer`, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId ?? null }),
+    }),
+  // Delivery confirmation
+  confirmDelivery: (trackId: number, deliveryId: number) =>
+    request<Track>(`/tracks/${trackId}/master-deliveries/${deliveryId}/confirm`, { method: 'POST' }),
+  // Track reopen
+  requestReopen: (trackId: number, targetStageId: string, reason: string) =>
+    request<ReopenRequest>(`/tracks/${trackId}/reopen-request`, {
+      method: 'POST',
+      body: JSON.stringify({ target_stage_id: targetStageId, reason }),
+    }),
+  reopen: (trackId: number, targetStageId: string) =>
+    request<Track>(`/tracks/${trackId}/reopen`, {
+      method: 'POST',
+      body: JSON.stringify({ target_stage_id: targetStageId }),
+    }),
+  decideReopenRequest: (requestId: number, decision: 'approve' | 'reject') =>
+    request<ReopenRequest>(`/tracks/reopen-requests/${requestId}/decide`, {
+      method: 'POST',
+      body: JSON.stringify({ decision }),
+    }),
+  setVisibility: (trackId: number, isPublic: boolean) =>
+    request<Track>(`/tracks/${trackId}/visibility`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_public: isPublic }),
+    }),
 }
 
 export const issueApi = {
   listForTrack: (trackId: number) => request<Issue[]>(`/tracks/${trackId}/issues`),
   get: (id: number) => request<Issue>(`/issues/${id}`),
-  create: (trackId: number, data: Omit<Issue, 'id' | 'track_id' | 'author_id' | 'author' | 'workflow_cycle' | 'source_version_id' | 'master_delivery_id' | 'status' | 'created_at' | 'updated_at' | 'comment_count' | 'comments'>) =>
+  create: (trackId: number, data: {
+    title: string
+    description: string
+    severity: string
+    phase: string
+    markers: { marker_type: string; time_start: number; time_end?: number | null }[]
+    master_delivery_id?: number | null
+  }) =>
     request<Issue>(`/tracks/${trackId}/issues`, { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: Partial<Pick<Issue, 'status' | 'title' | 'description' | 'severity'>> & { status_note?: string }) =>
     request<Issue>(`/issues/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -320,6 +442,17 @@ export const discussionApi = {
     }
     return request<Discussion>(`/tracks/${trackId}/discussions`, { method: 'POST', body: form })
   },
+  update: (id: number, content: string) =>
+    request<Discussion>(`/discussions/${id}`, { method: 'PATCH', body: JSON.stringify({ content }) }),
+  delete: (id: number) =>
+    request<void>(`/discussions/${id}`, { method: 'DELETE' }),
+}
+
+export const commentApi = {
+  update: (id: number, content: string) =>
+    request<Comment>(`/comments/${id}`, { method: 'PATCH', body: JSON.stringify({ content }) }),
+  delete: (id: number) =>
+    request<void>(`/comments/${id}`, { method: 'DELETE' }),
 }
 
 export const userApi = {
@@ -336,6 +469,13 @@ export const authApi = {
     request<AuthResponse>(`/auth/verify-email?token=${encodeURIComponent(token)}`, { method: 'POST' }),
   resendVerification: (email: string) =>
     request<void>(`/auth/resend-verification?email=${encodeURIComponent(email)}`, { method: 'POST' }),
+  forgotPassword: (email: string) =>
+    request<void>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+  resetPassword: (token: string, new_password: string) =>
+    request<AuthResponse>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, new_password }),
+    }),
   me: () => request<User>('/auth/me'),
   updateProfile: (data: { display_name?: string; email?: string }) =>
     request<User>('/auth/me', { method: 'PATCH', body: JSON.stringify(data) }),
@@ -347,6 +487,11 @@ export const authApi = {
     return request<User>('/auth/me/avatar', { method: 'POST', body: form })
   },
   deleteAvatar: () => request<User>('/auth/me/avatar', { method: 'DELETE' }),
+  deleteAccount: (password: string) =>
+    request<void>('/auth/me/delete-account', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
 }
 
 export const adminApi = {

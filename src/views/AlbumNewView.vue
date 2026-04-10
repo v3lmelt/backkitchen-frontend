@@ -9,7 +9,8 @@ import type { CircleSummary, User, WorkflowConfig, WorkflowTemplate } from '@/ty
 import { ChevronLeft, Upload, ChevronDown, ChevronRight, HelpCircle, BookTemplate, Save } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
-import WorkflowBuilder from '@/components/workflow/WorkflowBuilder.vue'
+import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
+import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -21,6 +22,10 @@ const users = ref<User[]>([])
 
 const form = ref({ title: '', description: '' })
 const titleError = ref('')
+
+function validateTitle() {
+  titleError.value = form.value.title.trim() ? '' : t('albumNew.titleRequired')
+}
 
 const coverInputRef = ref<HTMLInputElement | null>(null)
 const coverImageFile = ref<File | null>(null)
@@ -56,6 +61,31 @@ const circleOptions = computed<SelectOption[]>(() =>
   circles.value.map((c) => ({ value: c.id, label: c.name }))
 )
 
+const workflowMemberOptions = computed<SelectOption[]>(() => {
+  const byId = new Map<number, SelectOption>()
+
+  const currentUser = appStore.currentUser
+  if (currentUser) {
+    byId.set(currentUser.id, { value: currentUser.id, label: currentUser.display_name })
+  }
+
+  if (teamState.mastering_engineer_id) {
+    const mastering = users.value.find(user => user.id === teamState.mastering_engineer_id)
+    if (mastering) {
+      byId.set(mastering.id, { value: mastering.id, label: mastering.display_name })
+    }
+  }
+
+  for (const memberId of teamState.member_ids) {
+    const member = users.value.find(user => user.id === memberId)
+    if (member) {
+      byId.set(member.id, { value: member.id, label: member.display_name })
+    }
+  }
+
+  return Array.from(byId.values())
+})
+
 onMounted(async () => {
   if (appStore.currentUser?.role !== 'producer') {
     router.replace('/albums')
@@ -77,7 +107,7 @@ async function loadTemplates() {
 }
 
 async function loadFromTemplate(template: WorkflowTemplate) {
-  workflowConfig.value = { ...template.workflow_config }
+  workflowConfig.value = JSON.parse(JSON.stringify(template.workflow_config))
   selectedTemplateId.value = template.id
   showTemplateList.value = false
 }
@@ -125,11 +155,8 @@ function toggleMember(userId: number) {
 }
 
 async function create() {
-  titleError.value = ''
-  if (!form.value.title.trim()) {
-    titleError.value = t('albumNew.titleRequired')
-    return
-  }
+  validateTitle()
+  if (titleError.value) return
   creating.value = true
   try {
     const payload: any = { ...form.value }
@@ -177,7 +204,7 @@ async function create() {
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto space-y-6">
+  <div class="max-w-4xl mx-auto space-y-6">
     <div class="flex items-center gap-3">
       <RouterLink to="/albums" class="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
         <ChevronLeft class="w-5 h-5" :stroke-width="2" />
@@ -185,7 +212,7 @@ async function create() {
       <h1 class="text-2xl font-mono font-bold text-foreground">{{ t('albumNew.heading') }}</h1>
     </div>
 
-    <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
+    <div v-if="loading"><SkeletonLoader :rows="4" :card="true" /></div>
 
     <template v-else>
       <!-- 基本信息 -->
@@ -218,7 +245,9 @@ async function create() {
               <input
                 v-model="form.title"
                 class="input-field w-full"
+                :class="{ 'border-error': titleError }"
                 :placeholder="t('albumNew.albumTitlePlaceholder')"
+                @blur="validateTitle"
                 @keyup.enter="create"
               />
               <p v-if="titleError" class="text-xs text-error mt-1">{{ titleError }}</p>
@@ -317,14 +346,19 @@ async function create() {
               <span class="text-xs font-mono font-medium text-info">{{ t('workflowBuilder.guide.title') }}</span>
               <component :is="showWorkflowGuide ? ChevronDown : ChevronRight" class="w-3.5 h-3.5 text-muted-foreground ml-auto" />
             </button>
-            <div v-if="showWorkflowGuide" class="px-3 pb-3 space-y-3 text-xs text-muted-foreground">
+            <div v-if="showWorkflowGuide" class="px-3 pb-3 space-y-3 text-xs text-muted-foreground leading-relaxed">
               <div>
-                <p class="font-mono font-semibold text-foreground mb-1">{{ t('workflowBuilder.guide.stepTypesTitle') }}</p>
+                <p class="font-mono font-semibold text-foreground mb-1">{{ t('workflowBuilder.guide.basicsTitle') }}</p>
+                <p>{{ t('workflowBuilder.guide.basicsDesc') }}</p>
+              </div>
+              <div>
+                <p class="font-mono font-semibold text-foreground mb-1">{{ t('workflowBuilder.guide.stageTypesTitle') }}</p>
                 <ul class="space-y-1 list-disc list-inside">
-                  <li>{{ t('workflowBuilder.guide.stepTypeGate') }}</li>
-                  <li>{{ t('workflowBuilder.guide.stepTypeReview') }}</li>
-                  <li>{{ t('workflowBuilder.guide.stepTypeRevision') }}</li>
-                  <li>{{ t('workflowBuilder.guide.stepTypeDelivery') }}</li>
+                  <li>{{ t('workflowBuilder.guide.stageIntake') }}</li>
+                  <li>{{ t('workflowBuilder.guide.stagePeerReview') }}</li>
+                  <li>{{ t('workflowBuilder.guide.stageProducerGate') }}</li>
+                  <li>{{ t('workflowBuilder.guide.stageMastering') }}</li>
+                  <li>{{ t('workflowBuilder.guide.stageFinalReview') }}</li>
                 </ul>
               </div>
               <div>
@@ -332,12 +366,16 @@ async function create() {
                 <p>{{ t('workflowBuilder.guide.rolesDesc') }}</p>
               </div>
               <div>
-                <p class="font-mono font-semibold text-foreground mb-1">{{ t('workflowBuilder.guide.transitionsTitle') }}</p>
-                <p>{{ t('workflowBuilder.guide.transitionsDesc') }}</p>
-              </div>
-              <div>
                 <p class="font-mono font-semibold text-foreground mb-1">{{ t('workflowBuilder.guide.revisionTitle') }}</p>
                 <p>{{ t('workflowBuilder.guide.revisionDesc') }}</p>
+              </div>
+              <div>
+                <p class="font-mono font-semibold text-foreground mb-1">{{ t('workflowBuilder.guide.reviewSettingsTitle') }}</p>
+                <p>{{ t('workflowBuilder.guide.reviewSettingsDesc') }}</p>
+              </div>
+              <div>
+                <p class="font-mono font-semibold text-foreground mb-1">{{ t('workflowBuilder.guide.rejectTargetsTitle') }}</p>
+                <p>{{ t('workflowBuilder.guide.rejectTargetsDesc') }}</p>
               </div>
               <div>
                 <p class="font-mono font-semibold text-foreground mb-1">{{ t('workflowBuilder.guide.notesTitle') }}</p>
@@ -381,7 +419,7 @@ async function create() {
               <div v-for="tpl in templates" :key="tpl.id" class="border border-border p-3 space-y-1 hover:bg-background/50 cursor-pointer transition-colors" @click="loadFromTemplate(tpl)">
                 <div class="flex items-center justify-between">
                   <span class="text-sm font-mono font-semibold text-foreground">{{ tpl.name }}</span>
-                  <span class="text-xs text-muted-foreground">{{ tpl.workflow_config.steps.length }} {{ t('workflowBuilder.addStep').replace(/^.*/, 'steps') }}</span>
+                  <span class="text-xs text-muted-foreground">{{ t('workflowTemplate.stepCount', { count: tpl.workflow_config.steps.length }) }}</span>
                 </div>
                 <p v-if="tpl.description" class="text-xs text-muted-foreground">{{ tpl.description }}</p>
                 <p class="text-xs text-muted-foreground">
@@ -413,14 +451,22 @@ async function create() {
             </div>
           </div>
 
-          <WorkflowBuilder v-model="workflowConfig" />
+          <WorkflowEditor
+            v-model:workflow-config="workflowConfig"
+            :member-options="workflowMemberOptions"
+          />
           <p v-if="workflowConfig" class="text-xs text-success">{{ t('albumNew.workflowValid') }}</p>
         </template>
       </div>
 
-      <button @click="create" :disabled="creating" class="btn-primary text-sm w-full">
-        {{ creating ? t('albumNew.creating') : t('albumNew.createButton') }}
-      </button>
+      <div class="flex gap-3">
+        <button @click="router.back()" :disabled="creating" class="btn-secondary text-sm flex-1">
+          {{ t('common.cancel') }}
+        </button>
+        <button @click="create" :disabled="creating" class="btn-primary text-sm flex-1">
+          {{ creating ? t('albumNew.creating') : t('albumNew.createButton') }}
+        </button>
+      </div>
     </template>
   </div>
 </template>

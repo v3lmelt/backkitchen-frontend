@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { TrackStatus, IssueStatus, IssueSeverity, IssuePhase } from '@/types'
+import type { TrackStatus, IssueStatus, IssueSeverity, IssuePhase, WorkflowVariant } from '@/types'
 
 const props = defineProps<{
   status: TrackStatus | IssueStatus | IssueSeverity | IssuePhase
   type?: 'track' | 'issue' | 'severity' | 'phase'
+  /** Track workflow variant — used for variant-aware labelling of shared states (e.g. peer_revision). */
+  variant?: WorkflowVariant
+  /** Explicit display label for custom workflow steps. */
+  label?: string | null
 }>()
 
 const { t } = useI18n()
@@ -45,8 +49,16 @@ const config = computed(() => {
 
   // For known statuses, use the class map; for custom step IDs, derive from step type prop
   const cls = classMap[statusKey] ?? 'bg-info-bg text-info'
-  // Try i18n key first, fall back to the raw status string (formatted)
-  const label = t(`status.${statusKey}`, String(props.status).replace(/_/g, ' '))
+  // Producer-direct variant reuses peer_revision/peer_review states, but the
+  // label should reflect that the producer (not a peer reviewer) is driving it.
+  const variantOverrideKey = props.type === 'track' && props.variant === 'producer_direct'
+    ? ({ peer_revision: 'status.producer_direct_revision' } as Record<string, string>)[String(props.status)]
+    : undefined
+  const label = variantOverrideKey
+    ? t(variantOverrideKey)
+    : props.label?.trim()
+      ? props.label
+    : t(`status.${statusKey}`, String(props.status).replace(/_/g, ' '))
   return { label, class: cls }
 })
 </script>

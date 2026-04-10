@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { MessageSquare } from 'lucide-vue-next'
+import { Globe, MessageSquare } from 'lucide-vue-next'
 import type { Issue } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatTimestampShort } from '@/utils/time'
@@ -11,15 +11,19 @@ const props = withDefaults(defineProps<{
   selectable?: boolean
   selectedIds?: number[]
   currentSourceVersionNumber?: number | null
+  hoveredIssueId?: number | null
 }>(), {
   selectable: false,
   selectedIds: () => [],
   currentSourceVersionNumber: null,
+  hoveredIssueId: null,
 })
 
 const emit = defineEmits<{
   select: [issue: Issue]
   'update:selectedIds': [ids: number[]]
+  hover: [issue: Issue]
+  leave: []
 }>()
 
 const { t } = useI18n()
@@ -47,6 +51,18 @@ function isOutdatedIssue(issue: Issue): boolean {
   if (issue.source_version_number == null || props.currentSourceVersionNumber == null) return false
   return issue.source_version_number !== props.currentSourceVersionNumber
 }
+
+function isGeneralIssue(issue: Issue): boolean {
+  return issue.markers.length === 0
+}
+
+function markerSummary(issue: Issue): string {
+  if (issue.markers.length === 0) return ''
+  return issue.markers.map(m => {
+    if (m.marker_type === 'point') return formatTime(m.time_start)
+    return `${formatTime(m.time_start)} - ${formatTime(m.time_end!)}`
+  }).join(', ')
+}
 </script>
 
 <template>
@@ -55,8 +71,13 @@ function isOutdatedIssue(issue: Issue): boolean {
       v-for="(issue, index) in issues"
       :key="issue.id"
       @click="emit('select', issue)"
+      @mouseenter="emit('hover', issue)"
+      @mouseleave="emit('leave')"
       class="card cursor-pointer transition-colors"
-      :class="isOutdatedIssue(issue) ? 'opacity-60 hover:border-border' : 'hover:border-primary/50'"
+      :class="[
+        isOutdatedIssue(issue) ? 'opacity-60 hover:border-border' : 'hover:border-primary/50',
+        hoveredIssueId === issue.id ? '!border-primary/70 bg-warning-bg/40' : '',
+      ]"
     >
       <div class="flex items-start gap-2">
         <input
@@ -81,7 +102,8 @@ function isOutdatedIssue(issue: Issue): boolean {
           </div>
           <h4 class="truncate text-sm font-medium" :class="isOutdatedIssue(issue) ? 'text-muted-foreground' : 'text-foreground'">{{ issue.title }}</h4>
           <p class="mt-0.5 flex items-center gap-1.5 text-xs" :class="isOutdatedIssue(issue) ? 'text-muted-foreground/80' : 'text-muted-foreground'">
-            <span>{{ formatTime(issue.time_start) }}<span v-if="issue.time_end"> - {{ formatTime(issue.time_end) }}</span></span>
+            <span v-if="isGeneralIssue(issue)" class="inline-flex items-center gap-1"><Globe class="w-3 h-3" :stroke-width="2" />{{ t('issue.generalIssue') }}</span>
+            <span v-else>{{ markerSummary(issue) }}</span>
             <span class="text-border">·</span>
             <span :class="issue.phase === 'peer' ? 'font-mono' : ''">{{ authorLabel(issue) }}</span>
           </p>

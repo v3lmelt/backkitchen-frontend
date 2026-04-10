@@ -1,71 +1,510 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, API_ORIGIN } from '@/api'
-import type { Track, Issue, WorkflowConfig, WorkflowStepDef, WorkflowTransitionOption } from '@/types'
+import { checklistApi, trackApi, API_ORIGIN } from '@/api'
+import type {
+  ChecklistItem,
+  ChecklistTemplateItem,
+  Issue,
+  Track,
+  TrackSourceVersion,
+  WorkflowConfig,
+  MasterDelivery,
+  WorkflowStepDef,
+  WorkflowTransitionOption,
+} from '@/types'
+import { formatLocaleDate, formatTimestampShort } from '@/utils/time'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
+import IssueDetailPanel from '@/components/IssueDetailPanel.vue'
+import WorkflowActionBar from '@/components/workflow/WorkflowActionBar.vue'
+import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue'
+import CustomSelect from '@/components/common/CustomSelect.vue'
+import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { ChevronLeft, Upload } from 'lucide-vue-next'
+import { useAudioDownload } from '@/composables/useAudioDownload'
+import { useToast } from '@/composables/useToast'
+import { useAppStore } from '@/stores/app'
+import { useTrackStore } from '@/stores/tracks'
+import { translateStepLabel } from '@/utils/workflow'
+import { hashId } from '@/utils/hash'
 
 const route = useRoute()
 const router = useRouter()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const { success: toastSuccess, error: toastError } = useToast()
+const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
+
+const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
+const appStore = useAppStore()
+const trackStore = useTrackStore()
 const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
+const sourceVersions = ref<TrackSourceVersion[]>([])
+const masterDeliveries = ref<MasterDelivery[]>([])
 const workflowConfig = ref<WorkflowConfig | null>(null)
+const checklistItems = ref<ChecklistItem[]>([])
+const templateItems = ref<ChecklistTemplateItem[]>([])
+const checklistDraft = ref<{ label: string; passed: boolean; note: string }[]>([])
 const loading = ref(true)
 const acting = ref(false)
 const uploadFile = ref<File | null>(null)
+const localDeliveryPreviewUrl = ref('')
 const uploading = ref(false)
+const error = ref('')
+const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
+const uploadProgress = ref(0)
+const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
+const hoveredIssueId = ref<number | null>(null)
+const selectedPeerIssue = ref<Issue | null>(null)
+const isIssueFormOpen = ref(false)
+const waveformMode = computed<'seek' | 'annotate'>(() => (isIssueFormOpen.value ? 'annotate' : 'seek'))
+const showSourceCompare = ref(false)
+const selectedCompareSourceVersionId = ref<number | null>(null)
+
+function onRequestWaveformMode(next: 'seek' | 'annotate') {
+  if (next === 'annotate' && isSourceCompareActive.value) return
+  if (next === 'annotate') issueFormRef.value?.openForm?.()
+  else issueFormRef.value?.closeForm?.()
+}
+
+const defaultChecklistLabelKeyMap: Record<string, string> = {
+  Arrangement: 'arrangement',
+  Balance: 'balance',
+  'Low-End': 'lowEnd',
+  'Stereo Image': 'stereoImage',
+  'Technical Cleanliness': 'technicalCleanliness',
+}
 
 onMounted(loadPage)
+onMounted(() => {
+  window.addEventListener('keydown', handleWaveformHotkeys)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleWaveformHotkeys)
+  resetDeliveryPreview()
+})
+
+const currentStep = computed<WorkflowStepDef | null>(() => track.value?.workflow_step ?? null)
+const transitions = computed<WorkflowTransitionOption[]>(() => track.value?.workflow_transitions ?? [])
+
+function inferClassicVariant(step: WorkflowStepDef | null) {
+  if (!step) return 'generic'
+  if (step.ui_variant && step.ui_variant !== 'generic') return step.ui_variant
+  if (step.id === 'intake') return 'intake'
+  if (step.id === 'peer_review') return 'peer_review'
+  if (step.id === 'producer_gate') return 'producer_gate'
+  if (step.id === 'mastering') return 'mastering'
+  if (step.id === 'final_review') return 'final_review'
+  return 'generic'
+}
+
+const stepVariant = computed(() => inferClassicVariant(currentStep.value))
+const activeVariant = computed<'generic' | 'intake' | 'peer_review' | 'producer_gate' | 'mastering' | 'final_review'>(() => {
+  if (stepVariant.value === 'intake') return 'intake'
+  if (stepVariant.value === 'peer_review') return 'peer_review'
+  if (stepVariant.value === 'producer_gate') return 'producer_gate'
+  if (stepVariant.value === 'mastering') return 'mastering'
+  if (stepVariant.value === 'final_review') return 'final_review'
+  return 'generic'
+})
+const isApprovalStep = computed(() => currentStep.value?.type === 'approval' || currentStep.value?.type === 'gate')
+
+const audioUrl = computed(() =>
+  track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio?v=${track.value.version ?? 0}` : '',
+)
+const currentSourceVersionId = computed(() => track.value?.current_source_version?.id ?? null)
+const olderSourceVersions = computed(() =>
+  sourceVersions.value
+    .filter(version => version.id !== currentSourceVersionId.value)
+    .sort((a, b) => b.version_number - a.version_number),
+)
+const sourceCompareOptions = computed<SelectOption[]>(() =>
+  olderSourceVersions.value.map((version) => ({
+    value: version.id,
+    label: `v${version.version_number} · ${fmtDate(version.created_at)}`,
+  })),
+)
+const selectedCompareSourceVersion = computed(() =>
+  olderSourceVersions.value.find(version => version.id === selectedCompareSourceVersionId.value) ?? null,
+)
+const isSourceCompareActive = computed(() => selectedCompareSourceVersion.value !== null)
+const displayedSourceVersionNumber = computed(() =>
+  selectedCompareSourceVersion.value?.version_number ?? track.value?.version ?? null,
+)
+
+const showMasterCompare = ref(false)
+const selectedCompareMasterDeliveryId = ref<number | null>(null)
+
+const { downloading, downloadProgress, downloadTrackAudio, downloadAudioAsset } = useAudioDownload()
+const handleDownload = () => downloadTrackAudio(audioUrl, track)
+const handleMasterDownload = () => downloadTrackAudio(masterAudioUrl, track, '_master')
+
+function resetDeliveryPreview() {
+  if (localDeliveryPreviewUrl.value) {
+    URL.revokeObjectURL(localDeliveryPreviewUrl.value)
+    localDeliveryPreviewUrl.value = ''
+  }
+}
+
+const currentVersion = computed(() => track.value?.version ?? null)
+const allCycleIssues = computed(() => issues.value)
+const stepIssues = computed(() =>
+  issues.value.filter(i => i.phase === currentStep.value?.id || i.phase === track.value?.status),
+)
+const fallbackStepIssues = computed(() => {
+  const fallbackPhases = ['peer', 'producer', 'mastering', 'final_review']
+  return issues.value.filter(i => fallbackPhases.includes(i.phase))
+})
+function filterIssuesForDisplayedSourceVersion(list: Issue[]): Issue[] {
+  const version = displayedSourceVersionNumber.value
+  if (version == null) return list
+  return list.filter(issue => issue.source_version_number == null || issue.source_version_number === version)
+}
+const waveformIssues = computed(() => {
+  return filterIssuesForDisplayedSourceVersion(stepIssues.value)
+})
+const fallbackWaveformIssues = computed(() => {
+  return filterIssuesForDisplayedSourceVersion(fallbackStepIssues.value)
+})
+const producerIssues = computed(() =>
+  issues.value.filter(i => i.phase === 'producer'),
+)
+const producerWaveformIssues = computed(() => {
+  return filterIssuesForDisplayedSourceVersion(producerIssues.value)
+})
+const peerIssues = computed(() =>
+  issues.value.filter(i => i.phase === 'peer' || i.phase === 'peer_review'),
+)
+const peerOpenCount = computed(() => peerIssues.value.filter(issue => issue.status === 'open').length)
+const peerResolvedCount = computed(() => peerIssues.value.filter(issue => issue.status === 'resolved').length)
+const peerDisagreedCount = computed(() => peerIssues.value.filter(issue => issue.status === 'disagreed').length)
+const peerDiscussedCount = computed(() => peerIssues.value.filter(issue => (issue.comment_count ?? 0) > 0).length)
+const revisionSnapshotIssues = computed(() => {
+  if (currentStep.value?.type !== 'revision') return []
+
+  const returnTo = currentStep.value.return_to ?? ''
+  const phaseMap: Record<string, string[]> = {
+    peer_review: ['peer', 'peer_review'],
+    producer_gate: ['producer', 'producer_gate'],
+    mastering: ['mastering'],
+    final_review: ['final_review'],
+  }
+
+  let relatedIssues = phaseMap[returnTo]?.length
+    ? issues.value.filter(issue => phaseMap[returnTo].includes(issue.phase))
+    : []
+
+  if (relatedIssues.length === 0 && returnTo) {
+    relatedIssues = issues.value.filter(issue => issue.phase === returnTo)
+  }
+
+  if (relatedIssues.length === 0) {
+    relatedIssues = fallbackStepIssues.value
+  }
+
+  return relatedIssues
+})
+const revisionOpenIssues = computed(() =>
+  revisionSnapshotIssues.value.filter(issue => issue.status !== 'resolved'),
+)
+const revisionResolvedIssues = computed(() =>
+  revisionSnapshotIssues.value.filter(issue => issue.status === 'resolved'),
+)
+const revisionWaveformIssues = computed(() => {
+  if (currentVersion.value == null) return revisionOpenIssues.value
+  return revisionOpenIssues.value.filter(
+    issue => issue.source_version_number == null || issue.source_version_number === currentVersion.value,
+  )
+})
+const openCount = computed(() => allCycleIssues.value.filter(i => i.status === 'open').length)
+const resolvedCount = computed(() => allCycleIssues.value.filter(i => i.status === 'resolved').length)
+const checklistPassedCount = computed(() => checklistItems.value.filter(item => item.passed).length)
+const checklistSaved = computed(() => checklistItems.value.length > 0)
+const masterDelivery = computed<MasterDelivery | null>(() => track.value?.current_master_delivery ?? null)
+const masterAudioUrl = computed(() => {
+  const d = masterDelivery.value
+  if (!d) return ''
+  return `${API_ORIGIN}/api/tracks/${trackId.value}/master-audio?v=${d.delivery_number}&c=${d.workflow_cycle ?? 1}`
+})
+const sortedMasterDeliveries = computed(() =>
+  [...masterDeliveries.value].sort((a, b) => {
+    if (a.workflow_cycle !== b.workflow_cycle) return b.workflow_cycle - a.workflow_cycle
+    return b.delivery_number - a.delivery_number
+  }),
+)
+const olderMasterDeliveries = computed(() => {
+  const currentId = masterDelivery.value?.id ?? null
+  return sortedMasterDeliveries.value
+    .filter(delivery => delivery.id !== currentId)
+})
+const masterCompareOptions = computed<SelectOption[]>(() =>
+  olderMasterDeliveries.value.map((delivery) => ({
+    value: delivery.id,
+    label: masterDeliveryOptionLabel(delivery),
+  })),
+)
+const selectedCompareMasterDelivery = computed(() =>
+  olderMasterDeliveries.value.find(delivery => delivery.id === selectedCompareMasterDeliveryId.value) ?? null,
+)
+const selectedCompareMasterAudioUrl = computed(() => {
+  const delivery = selectedCompareMasterDelivery.value
+  if (!delivery) return ''
+  return `${API_ORIGIN}/api/tracks/${trackId.value}/master-deliveries/${delivery.id}/audio?v=${delivery.delivery_number}&c=${delivery.workflow_cycle}`
+})
+const finalReviewIssues = computed(() => {
+  const deliveryId = masterDelivery.value?.id ?? null
+  if (!deliveryId) return []
+  return issues.value.filter(
+    issue => issue.phase === 'final_review' && issue.master_delivery_id === deliveryId,
+  )
+})
+const canConfirmDelivery = computed(() => {
+  if (currentStep.value?.type !== 'delivery' || !track.value || !masterDelivery.value) return false
+  const userId = appStore.currentUser?.id
+  if (!userId) return false
+  if (masterDelivery.value.confirmed_at) return false
+  if (currentStep.value?.assignee_user_id) return currentStep.value.assignee_user_id === userId
+  switch (currentStep.value?.assignee_role) {
+    case 'submitter':
+      return track.value.submitter_id === userId
+    case 'producer':
+      return track.value.producer_id === userId
+    case 'peer_reviewer':
+      return track.value.peer_reviewer_id === userId
+    case 'mastering_engineer':
+      return track.value.mastering_engineer_id === userId
+    default:
+      return false
+  }
+})
+const canApproveFinal = computed(() => {
+  if (!track.value || !masterDelivery.value) return false
+  const userId = appStore.currentUser?.id
+  if (!userId) return false
+  if (userId === track.value.producer_id) return !masterDelivery.value.producer_approved_at
+  if (userId === track.value.submitter_id) return !masterDelivery.value.submitter_approved_at
+  return false
+})
+
+// Resolve the user id the current revision step is assigned to.
+// Uses assignee_user_id override if present, otherwise maps the assignee_role
+// back to the track/album-level user id.
+const revisionAssigneeUserId = computed<number | null>(() => {
+  const step = currentStep.value
+  if (!step || step.type !== 'revision' || !track.value) return null
+  if (step.assignee_user_id != null) return step.assignee_user_id
+  switch (step.assignee_role) {
+    case 'submitter':
+      return track.value.submitter_id ?? null
+    case 'producer':
+      return track.value.producer_id ?? null
+    case 'mastering_engineer':
+      return track.value.mastering_engineer_id ?? null
+    case 'peer_reviewer':
+      return track.value.peer_reviewer_id ?? null
+    default:
+      return null
+  }
+})
+
+const isRevisionAssignee = computed(() => {
+  const assigneeId = revisionAssigneeUserId.value
+  const userId = appStore.currentUser?.id
+  return assigneeId != null && userId != null && assigneeId === userId
+})
+
+const revisionAssigneeRoleLabel = computed(() => {
+  const role = currentStep.value?.assignee_role
+  if (!role) return ''
+  return t(`workflowBuilder.roles.${role}`, role)
+})
+
+async function loadPeerChecklist(albumId: number) {
+  try {
+    const template = await checklistApi.getTemplate(albumId)
+    templateItems.value = template.items
+  } catch {
+    templateItems.value = [
+      { label: 'Arrangement', required: true, sort_order: 0 },
+      { label: 'Balance', required: true, sort_order: 1 },
+      { label: 'Low-End', required: true, sort_order: 2 },
+      { label: 'Stereo Image', required: true, sort_order: 3 },
+      { label: 'Technical Cleanliness', required: true, sort_order: 4 },
+    ]
+  }
+
+  const labels = templateItems.value
+    .slice()
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map(item => item.label)
+
+  if (checklistItems.value.length > 0) {
+    checklistDraft.value = labels.map(label => {
+      const item = checklistItems.value.find(entry => entry.label === label)
+      return { label, passed: item?.passed ?? false, note: item?.note ?? '' }
+    })
+    return
+  }
+
+  checklistDraft.value = labels.map(label => ({ label, passed: false, note: '' }))
+}
 
 async function loadPage() {
   loading.value = true
+  error.value = ''
   try {
     const detail = await trackApi.get(trackId.value)
     track.value = detail.track
+    trackStore.setCurrentTrack(detail.track)
+    sourceVersions.value = detail.source_versions ?? []
+    masterDeliveries.value = detail.master_deliveries ?? []
     workflowConfig.value = detail.workflow_config ?? null
     issues.value = detail.issues.filter(
       issue => issue.workflow_cycle === detail.track.workflow_cycle,
     )
+    if (selectedPeerIssue.value) {
+      selectedPeerIssue.value = issues.value.find(issue => issue.id === selectedPeerIssue.value?.id) ?? null
+    }
+    checklistItems.value = detail.checklist_items
+
+    if (inferClassicVariant(detail.track.workflow_step ?? null) === 'peer_review') {
+      await loadPeerChecklist(detail.track.album_id)
+    } else {
+      templateItems.value = []
+      checklistDraft.value = []
+    }
+  } catch (err) {
+    trackStore.setCurrentTrack(null)
+    throw err
   } finally {
     loading.value = false
   }
 }
 
-const currentStep = computed<WorkflowStepDef | null>(() => track.value?.workflow_step ?? null)
-const transitions = computed<WorkflowTransitionOption[]>(() => track.value?.workflow_transitions ?? [])
-
-const audioUrl = computed(() =>
-  track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio` : '',
-)
-
-const stepIssues = computed(() =>
-  issues.value.filter(i => i.phase === currentStep.value?.id || i.phase === track.value?.status),
-)
-const waveformIssues = computed(() => {
-  const currentVersion = track.value?.version
-  if (currentVersion == null) return stepIssues.value
-  return stepIssues.value.filter(
-    issue => issue.source_version_number == null || issue.source_version_number === currentVersion,
-  )
+watch(olderSourceVersions, (versions) => {
+  if (!versions.some(version => version.id === selectedCompareSourceVersionId.value)) {
+    selectedCompareSourceVersionId.value = null
+  }
+  if (versions.length === 0) {
+    showSourceCompare.value = false
+  }
 })
+
+watch(isSourceCompareActive, (active) => {
+  if (!active) return
+  issueFormRef.value?.closeForm?.()
+  hoveredIssueId.value = null
+})
+
+function toggleSourceCompare() {
+  showSourceCompare.value = !showSourceCompare.value
+  if (!showSourceCompare.value) {
+    selectedCompareSourceVersionId.value = null
+  }
+}
+
+watch(olderMasterDeliveries, (deliveries) => {
+  if (!deliveries.some(delivery => delivery.id === selectedCompareMasterDeliveryId.value)) {
+    selectedCompareMasterDeliveryId.value = null
+  }
+  if (deliveries.length === 0) {
+    showMasterCompare.value = false
+  }
+})
+
+function masterDeliveryOptionLabel(delivery: MasterDelivery): string {
+  const version = `v${delivery.delivery_number}`
+  const cycle = track.value && delivery.workflow_cycle !== track.value.workflow_cycle
+    ? ` · C${delivery.workflow_cycle}`
+    : ''
+  return `${version}${cycle} · ${fmtDate(delivery.created_at)}`
+}
+
+function toggleMasterCompare() {
+  showMasterCompare.value = !showMasterCompare.value
+  if (!showMasterCompare.value) {
+    selectedCompareMasterDeliveryId.value = null
+  }
+}
+
+function compareWithMasterDelivery(deliveryId: number) {
+  showMasterCompare.value = true
+  selectedCompareMasterDeliveryId.value = deliveryId
+}
+
+function handleMasterVersionDownload(delivery: MasterDelivery) {
+  const cycleSuffix = track.value && delivery.workflow_cycle !== track.value.workflow_cycle
+    ? `_cycle${delivery.workflow_cycle}`
+    : ''
+  const url = `${API_ORIGIN}/api/tracks/${trackId.value}/master-deliveries/${delivery.id}/audio?v=${delivery.delivery_number}&c=${delivery.workflow_cycle}`
+  downloadAudioAsset(url, `${track.value?.title ?? 'track'}_master_v${delivery.delivery_number}${cycleSuffix}`, delivery.file_path)
+}
+
+
+function onIssueSelect(issue: Issue) {
+  router.push(`/issues/${issue.id}`)
+}
+
+function openPeerIssue(issue: Issue) {
+  selectedPeerIssue.value = issue
+}
+
+function closePeerIssue() {
+  selectedPeerIssue.value = null
+}
+
+function onPeerIssueUpdated(updatedIssue: Issue) {
+  issues.value = issues.value.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue)
+  selectedPeerIssue.value = updatedIssue
+}
+
+function peerIssueMarkerSummary(issue: Issue): string {
+  if (!issue.markers.length) return t('issue.generalIssue')
+  return issue.markers
+    .map(marker => marker.time_end == null
+      ? formatTimestampShort(marker.time_start)
+      : `${formatTimestampShort(marker.time_start)} - ${formatTimestampShort(marker.time_end)}`)
+    .join(' · ')
+}
+
+function onIssueCreated(issue: Issue) {
+  issues.value.push(issue)
+}
+
+function trackDetailQuery() {
+  const returnTo = Array.isArray(route.query.returnTo) ? route.query.returnTo[0] : route.query.returnTo
+  return typeof returnTo === 'string' && returnTo.length > 0
+    ? { returnTo }
+    : { returnTo: route.fullPath }
+}
+
+function pushToTrackDetail() {
+  router.push({ path: `/tracks/${trackId.value}`, query: trackDetailQuery() })
+}
 
 async function executeTransition(decision: string) {
   if (!track.value) return
+  if (decision === 'reject_final') {
+    const confirmed = window.confirm(t('producer.rejectFinalConfirm'))
+    if (!confirmed) return
+  }
   acting.value = true
+  error.value = ''
   try {
+    if (activeVariant.value === 'peer_review' && checklistDraft.value.length > 0) {
+      await persistChecklist()
+    }
     await trackApi.workflowTransition(trackId.value, decision)
-    router.push(`/tracks/${trackId.value}`)
+    pushToTrackDetail()
   } catch (err: any) {
-    alert(err.message || t('workflowStep.transitionFailed'))
+    error.value = err.message || t('workflowStep.transitionFailed')
   } finally {
     acting.value = false
   }
@@ -74,24 +513,238 @@ async function executeTransition(decision: string) {
 async function handleUpload(kind: 'revision' | 'delivery') {
   if (!uploadFile.value || !track.value) return
   uploading.value = true
+  uploadProgress.value = 0
+  error.value = ''
   try {
     const fn = kind === 'revision' ? trackApi.uploadSourceVersion : trackApi.uploadMasterDelivery
-    await fn(trackId.value, uploadFile.value)
-    router.push(`/tracks/${trackId.value}`)
+    await fn(trackId.value, uploadFile.value, (percent) => {
+      uploadProgress.value = percent
+    })
+    if (kind === 'delivery') {
+      uploadFile.value = null
+      resetDeliveryPreview()
+      await loadPage()
+      toastSuccess(t('workflowStep.deliveryUploaded'))
+      return
+    }
+    pushToTrackDetail()
   } catch (err: any) {
-    alert(err.message || t('workflowStep.uploadFailed'))
+    error.value = err.message || t('workflowStep.uploadFailed')
   } finally {
     uploading.value = false
   }
 }
 
-function onFileChange(event: Event) {
-  const input = event.target as HTMLInputElement
-  uploadFile.value = input.files?.[0] ?? null
+async function confirmDelivery() {
+  if (!track.value || !masterDelivery.value) return
+  acting.value = true
+  error.value = ''
+  try {
+    await trackApi.confirmDelivery(track.value.id, masterDelivery.value.id)
+    await loadPage()
+    toastSuccess(t('trackDetail.actions.confirm_delivery', 'Confirm Delivery'))
+  } catch (err: any) {
+    error.value = err.message || t('workflowStep.transitionFailed')
+  } finally {
+    acting.value = false
+  }
 }
 
+async function approveFinal() {
+  if (!track.value) return
+  acting.value = true
+  error.value = ''
+  try {
+    await trackApi.approveFinalReview(track.value.id)
+    await loadPage()
+  } catch (err: any) {
+    error.value = err.message || t('workflowStep.transitionFailed')
+  } finally {
+    acting.value = false
+  }
+}
+
+function onFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  resetDeliveryPreview()
+  const file = input.files?.[0] ?? null
+  if (file && file.size > MAX_AUDIO_SIZE) {
+    toastError(t('upload.fileTooLarge', { max: '200 MB' }))
+    input.value = ''
+    return
+  }
+  uploadFile.value = file
+  if (uploadFile.value) {
+    localDeliveryPreviewUrl.value = URL.createObjectURL(uploadFile.value)
+  }
+}
+
+function transitionLabel(decision: string, fallbackLabel: string) {
+  if (activeVariant.value === 'producer_gate' && decision === 'approve') {
+    return t('producer.sendToMastering')
+  }
+  if (decision.startsWith('reject_to_')) {
+    const targetStepId = decision.slice('reject_to_'.length)
+    const targetStep = workflowConfig.value?.steps.find(step => step.id === targetStepId)
+    const label = targetStep ? translateStepLabel(targetStep, t) : targetStepId
+    return t('workflowStep.rejectToStep', { step: label })
+  }
+  return t(`trackDetail.actions.${decision}`, fallbackLabel)
+}
+
+function translateChecklistLabel(label: string): string {
+  const key = defaultChecklistLabelKeyMap[label]
+  return key ? t(`checklistLabels.${key}`) : label
+}
+
+async function persistChecklist(showToast = false) {
+  error.value = ''
+  checklistItems.value = await checklistApi.submit(
+    trackId.value,
+    checklistDraft.value.map(item => ({
+      label: item.label,
+      passed: item.passed,
+      note: item.note || undefined,
+    })),
+  )
+  if (showToast) {
+    toastSuccess(t('peerReview.checklistSubmitted'))
+  }
+}
+
+async function submitChecklist() {
+  try {
+    await persistChecklist(true)
+  } catch (err: any) {
+    error.value = err.message || t('common.requestFailed')
+  }
+}
+
+function actionTypeForTransition(decision: string): WorkflowAction['type'] {
+  if (decision === 'reject_final') return 'reject'
+  if (decision.includes('reject') || decision.includes('revision') || decision === 'return') return 'return'
+  return 'advance'
+}
+
+const classicActions = computed<WorkflowAction[]>(() =>
+  transitions.value.map((tr) => ({
+    label: transitionLabel(tr.decision, tr.label),
+    type: actionTypeForTransition(tr.decision),
+    disabled: acting.value,
+    handler: () => executeTransition(tr.decision),
+  })),
+)
+
+const deliveryActions = computed<WorkflowAction[]>(() => {
+  const actions = transitions.value.map((tr) => ({
+    label: transitionLabel(tr.decision, tr.label),
+    type: actionTypeForTransition(tr.decision),
+    disabled: acting.value,
+    handler: () => executeTransition(tr.decision),
+  }))
+  if (canConfirmDelivery.value) {
+    actions.unshift({
+      label: t('trackDetail.actions.confirm_delivery', 'Confirm Delivery'),
+      type: 'advance',
+      disabled: acting.value,
+      handler: confirmDelivery,
+    })
+  }
+  return actions
+})
+
+const finalReviewActions = computed<WorkflowAction[]>(() => {
+  const actions = transitions.value
+    .filter(tr => tr.decision !== 'approve')
+    .map((tr) => ({
+    label: tr.decision === 'reject_to_mastering' ? t('finalReview.requestRemastering') : transitionLabel(tr.decision, tr.label),
+    type: actionTypeForTransition(tr.decision),
+    disabled: acting.value,
+    handler: () => executeTransition(tr.decision),
+    }))
+  actions.unshift({
+    label: t('finalReview.approveMaster'),
+    type: 'advance',
+    disabled: acting.value || !canApproveFinal.value,
+    handler: approveFinal,
+  })
+  return actions
+})
+
 function goBack() {
-  router.push(`/tracks/${trackId.value}`)
+  pushToTrackDetail()
+}
+
+const genericReviewActions = computed<WorkflowAction[]>(() =>
+  transitions.value.map((tr) => ({
+    label: transitionLabel(tr.decision, tr.label),
+    type: tr.decision === 'return' || tr.decision.includes('revision') ? 'return' : 'advance',
+    disabled: acting.value,
+    handler: () => executeTransition(tr.decision),
+  })),
+)
+
+const genericApprovalActions = computed<WorkflowAction[]>(() =>
+  transitions.value.map((tr) => ({
+    label: transitionLabel(tr.decision, tr.label),
+    type: actionTypeForTransition(tr.decision),
+    disabled: acting.value,
+    handler: () => executeTransition(tr.decision),
+  })),
+)
+
+function canUseWaveformShortcuts(): boolean {
+  return ['peer_review', 'producer_gate', 'mastering', 'final_review'].includes(activeVariant.value)
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable) return true
+  return !!target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]')
+}
+
+function handleWaveformHotkeys(event: KeyboardEvent) {
+  if (!canUseWaveformShortcuts()) return
+  if (isEditableTarget(event.target)) return
+  if (!issueFormRef.value || !waveformRef.value) return
+
+  if (event.key === ' ') {
+    event.preventDefault()
+    waveformRef.value.togglePlay?.()
+    return
+  }
+
+  if (event.key === '[') {
+    event.preventDefault()
+    const time = waveformRef.value.getCurrentTime?.() ?? 0
+    issueFormRef.value.setRangeAnchorAt?.(time)
+    return
+  }
+
+  if (event.key === ']') {
+    event.preventDefault()
+    const time = waveformRef.value.getCurrentTime?.() ?? 0
+    issueFormRef.value.commitRangeFromAnchorTo?.(time)
+    return
+  }
+
+  if (event.key === 'Backspace') {
+    event.preventDefault()
+    issueFormRef.value.removeLastMarker?.()
+    return
+  }
+
+  if (event.key === 'Escape') {
+    issueFormRef.value.clearRangeAnchor?.()
+  }
+}
+
+function handleIssueHover(issue: Issue) {
+  hoveredIssueId.value = issue.id
+}
+
+function handleIssueLeave() {
+  hoveredIssueId.value = null
 }
 </script>
 
@@ -104,8 +757,770 @@ function goBack() {
     <div class="card text-muted-foreground">{{ t('common.loading') }}</div>
   </div>
 
+  <div v-else-if="activeVariant === 'intake'" class="max-w-4xl mx-auto min-h-full flex flex-col">
+    <div class="space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('producer.heading', { title: track.title }) }}</h1>
+          <p class="text-sm sm:text-base text-muted-foreground">{{ t('producer.subheading') }}</p>
+        </div>
+        <button @click="goBack" class="btn-secondary text-sm flex-shrink-0 self-start">
+          {{ t('common.backToTrack') }}
+        </button>
+      </div>
+
+      <WorkflowProgress :status="track.status" :workflow-config="workflowConfig" />
+
+      <div v-if="error" class="card border border-error/40 bg-error-bg text-sm text-error">
+        {{ error }}
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="card text-center">
+          <div class="text-2xl font-bold text-foreground">{{ allCycleIssues.length }}</div>
+          <div class="text-xs text-muted-foreground">{{ t('producer.cycleIssues') }}</div>
+        </div>
+        <div class="card text-center">
+          <div class="text-2xl font-bold text-error">{{ openCount }}</div>
+          <div class="text-xs text-muted-foreground">{{ t('producer.open') }}</div>
+        </div>
+        <div class="card text-center">
+          <div class="text-2xl font-bold text-success">{{ resolvedCount }}</div>
+          <div class="text-xs text-muted-foreground">{{ t('producer.resolved') }}</div>
+        </div>
+        <div class="card text-center">
+          <div class="text-2xl font-bold text-primary">{{ track.version }}</div>
+          <div class="text-xs text-muted-foreground">{{ t('dashboard.colVersion') }}</div>
+        </div>
+      </div>
+
+      <div class="card space-y-4 border-primary/50">
+        <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('producer.intakeHeading') }}</h3>
+        <p class="text-sm text-muted-foreground">{{ t('producer.intakeDesc') }}</p>
+      </div>
+
+      <div v-if="audioUrl">
+        <div class="flex items-start justify-between gap-3 mb-2">
+          <p class="text-xs text-muted-foreground leading-relaxed">{{ t('producer.waveformHint') }}</p>
+          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1 shrink-0">
+            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+          </button>
+        </div>
+        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" />
+      </div>
+    </div>
+
+    <WorkflowActionBar :actions="classicActions" :hint="t('producer.intakeHint')" />
+  </div>
+
+  <div v-else-if="activeVariant === 'peer_review'" class="max-w-4xl mx-auto min-h-full flex flex-col">
+    <div class="space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('peerReview.heading', { title: track.title }) }}</h1>
+          <p class="text-sm sm:text-base text-muted-foreground">{{ t('peerReview.subheading', { version: track.version }) }}</p>
+        </div>
+        <button @click="goBack" class="btn-secondary text-sm flex-shrink-0 self-start">
+          {{ t('common.backToTrack') }}
+        </button>
+      </div>
+
+      <div v-if="error" class="card border border-error/40 bg-error-bg text-sm text-error">
+        {{ error }}
+      </div>
+
+      <div v-if="audioUrl">
+        <div class="flex items-start justify-between gap-3 mb-2">
+          <p class="text-xs text-muted-foreground leading-relaxed">{{ t('peerReview.waveformHint') }}</p>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              v-if="olderSourceVersions.length > 0"
+              @click="toggleSourceCompare"
+              class="btn-secondary text-xs px-3 py-1"
+            >
+              {{ t('compare.title') }}
+            </button>
+            <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="mb-3 space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+            <CustomSelect
+              v-model="selectedCompareSourceVersionId"
+              :options="sourceCompareOptions"
+              :placeholder="`-- ${t('compare.selectVersion')} --`"
+              size="sm"
+            />
+            <button
+              v-if="selectedCompareSourceVersionId"
+              @click="selectedCompareSourceVersionId = null"
+              class="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {{ t('compare.clear') }}
+            </button>
+          </div>
+          <p v-if="isSourceCompareActive" class="text-xs text-warning">
+            {{ t('workflowStep.sourceCompareReadonlyHint') }}
+          </p>
+        </div>
+        <WaveformPlayer
+          ref="waveformRef"
+          :audio-url="audioUrl"
+          :issues="waveformIssues"
+          :track-id="trackId"
+          :compare-version-id="selectedCompareSourceVersionId"
+          :selectable="true"
+          :mode="waveformMode"
+          :selected-range="issueFormRef?.selectedRange ?? null"
+          :draft-markers="issueFormRef?.markers ?? []"
+          :draft-range-anchor="issueFormRef?.rangeAnchor ?? null"
+          :hovered-issue-id="hoveredIssueId"
+          @click="(time: number) => issueFormRef?.handleClick(time)"
+          @regionClick="onIssueSelect"
+          @rangeSelect="(start: number, end: number) => issueFormRef?.handleRangeSelect(start, end)"
+          @issueHover="handleIssueHover"
+          @issueLeave="handleIssueLeave"
+          @requestModeChange="onRequestWaveformMode"
+        />
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="space-y-4">
+          <IssueCreatePanel
+            ref="issueFormRef"
+            :track-id="trackId"
+            phase="peer"
+            @created="onIssueCreated"
+            @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
+          >
+            <template #heading>
+              <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('peerReview.issuesHeading', { count: fallbackWaveformIssues.length }) }}</h3>
+            </template>
+          </IssueCreatePanel>
+
+          <IssueMarkerList
+            :issues="fallbackWaveformIssues"
+            :current-source-version-number="displayedSourceVersionNumber"
+            :hovered-issue-id="hoveredIssueId"
+            @select="onIssueSelect"
+            @hover="handleIssueHover"
+            @leave="handleIssueLeave"
+          />
+        </div>
+
+        <div class="card space-y-4">
+          <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('peerReview.checklistHeading') }}</h3>
+          <div v-for="item in checklistDraft" :key="item.label" class="flex items-start gap-3">
+            <input
+              v-model="item.passed"
+              type="checkbox"
+              class="checkbox mt-1"
+            />
+            <div class="flex-1">
+              <div class="text-sm text-foreground">{{ translateChecklistLabel(item.label) }}</div>
+              <input
+                v-model="item.note"
+                class="input-field w-full text-xs mt-1"
+                :placeholder="t('common.notesOptionalPlaceholder')"
+              />
+            </div>
+          </div>
+          <button @click="submitChecklist" class="btn-secondary text-sm">
+            {{ t('peerReview.saveChecklist') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <WorkflowActionBar :actions="classicActions.map(action => ({ ...action, disabled: action.disabled || !checklistSaved }))" :hint="t('peerReview.actionHint')" />
+  </div>
+
+  <div v-else-if="activeVariant === 'producer_gate'" class="max-w-4xl mx-auto min-h-full flex flex-col">
+    <div class="space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('producer.heading', { title: track.title }) }}</h1>
+          <p class="text-sm sm:text-base text-muted-foreground">{{ t('producer.subheading') }}</p>
+        </div>
+        <button @click="goBack" class="btn-secondary text-sm flex-shrink-0 self-start">
+          {{ t('common.backToTrack') }}
+        </button>
+      </div>
+
+      <WorkflowProgress :status="track.status" :workflow-config="workflowConfig" />
+
+      <div v-if="error" class="card border border-error/40 bg-error-bg text-sm text-error">
+        {{ error }}
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="card text-center">
+          <div class="text-2xl font-bold text-foreground">{{ allCycleIssues.length }}</div>
+          <div class="text-xs text-muted-foreground">{{ t('producer.cycleIssues') }}</div>
+        </div>
+        <div class="card text-center">
+          <div class="text-2xl font-bold text-error">{{ openCount }}</div>
+          <div class="text-xs text-muted-foreground">{{ t('producer.open') }}</div>
+        </div>
+        <div class="card text-center">
+          <div class="text-2xl font-bold text-success">{{ resolvedCount }}</div>
+          <div class="text-xs text-muted-foreground">{{ t('producer.resolved') }}</div>
+        </div>
+        <div class="card text-center">
+          <div class="text-2xl font-bold text-primary">{{ checklistPassedCount }}/{{ checklistItems.length }}</div>
+          <div class="text-xs text-muted-foreground">{{ t('producer.checklistPassed') }}</div>
+        </div>
+      </div>
+
+      <div v-if="audioUrl">
+        <div class="flex items-start justify-between gap-3 mb-2">
+          <p class="text-xs text-muted-foreground leading-relaxed">{{ t('producer.waveformHint') }}</p>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              v-if="olderSourceVersions.length > 0"
+              @click="toggleSourceCompare"
+              class="btn-secondary text-xs px-3 py-1"
+            >
+              {{ t('compare.title') }}
+            </button>
+            <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="mb-3 space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+            <CustomSelect
+              v-model="selectedCompareSourceVersionId"
+              :options="sourceCompareOptions"
+              :placeholder="`-- ${t('compare.selectVersion')} --`"
+              size="sm"
+            />
+            <button
+              v-if="selectedCompareSourceVersionId"
+              @click="selectedCompareSourceVersionId = null"
+              class="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {{ t('compare.clear') }}
+            </button>
+          </div>
+          <p v-if="isSourceCompareActive" class="text-xs text-warning">
+            {{ t('workflowStep.sourceCompareReadonlyHint') }}
+          </p>
+        </div>
+        <WaveformPlayer
+          ref="waveformRef"
+          :audio-url="audioUrl"
+          :issues="producerWaveformIssues"
+          :track-id="trackId"
+          :compare-version-id="selectedCompareSourceVersionId"
+          :selectable="true"
+          :mode="waveformMode"
+          :selected-range="issueFormRef?.selectedRange ?? null"
+          :draft-markers="issueFormRef?.markers ?? []"
+          :draft-range-anchor="issueFormRef?.rangeAnchor ?? null"
+          :hovered-issue-id="hoveredIssueId"
+          @click="(time: number) => issueFormRef?.handleClick(time)"
+          @regionClick="onIssueSelect"
+          @rangeSelect="(start: number, end: number) => issueFormRef?.handleRangeSelect(start, end)"
+          @issueHover="handleIssueHover"
+          @issueLeave="handleIssueLeave"
+          @requestModeChange="onRequestWaveformMode"
+        />
+      </div>
+
+      <IssueCreatePanel
+        ref="issueFormRef"
+        :track-id="trackId"
+        phase="producer"
+        @created="onIssueCreated"
+        @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
+      >
+        <template #heading>
+          <h3 class="text-sm font-sans font-semibold text-foreground">
+            {{ t('producer.producerIssuesHeading', { count: producerWaveformIssues.length }) }}
+          </h3>
+        </template>
+      </IssueCreatePanel>
+
+      <IssueMarkerList
+        :issues="producerWaveformIssues"
+        :current-source-version-number="displayedSourceVersionNumber"
+        :hovered-issue-id="hoveredIssueId"
+        @select="onIssueSelect"
+        @hover="handleIssueHover"
+        @leave="handleIssueLeave"
+      />
+
+      <div v-if="checklistItems.length > 0" class="card">
+        <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('producer.checklistHeading') }}</h3>
+        <div class="space-y-2">
+          <div v-for="item in checklistItems" :key="item.id" class="flex items-center gap-3 text-sm">
+            <span :class="item.passed ? 'text-success' : 'text-error'">
+              {{ item.passed ? 'OK' : 'NG' }}
+            </span>
+            <span class="text-foreground">{{ item.label }}</span>
+            <span v-if="item.note" class="text-muted-foreground text-xs">- {{ item.note }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card space-y-4">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div class="space-y-1">
+            <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('producer.peerIssueSummaryHeading') }}</h3>
+            <p class="text-xs text-muted-foreground">{{ t('producer.peerIssueSummaryHint') }}</p>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-xs sm:min-w-[220px]">
+            <div class="border border-border bg-background px-3 py-2 space-y-1">
+              <div class="font-mono text-lg text-error">{{ peerOpenCount }}</div>
+              <div class="text-muted-foreground">{{ t('producer.open') }}</div>
+            </div>
+            <div class="border border-border bg-background px-3 py-2 space-y-1">
+              <div class="font-mono text-lg text-success">{{ peerResolvedCount }}</div>
+              <div class="text-muted-foreground">{{ t('producer.resolved') }}</div>
+            </div>
+            <div class="border border-border bg-background px-3 py-2 space-y-1">
+              <div class="font-mono text-lg text-warning">{{ peerDisagreedCount }}</div>
+              <div class="text-muted-foreground">{{ t('producer.disagreed') }}</div>
+            </div>
+            <div class="border border-border bg-background px-3 py-2 space-y-1">
+              <div class="font-mono text-lg text-info">{{ peerDiscussedCount }}</div>
+              <div class="text-muted-foreground">{{ t('producer.activeDiscussions') }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="peerIssues.length" class="space-y-3">
+          <button
+            v-for="issue in peerIssues"
+            :key="issue.id"
+            type="button"
+            class="peer-issue-card w-full border border-border bg-background p-4 text-left transition-colors hover:border-muted-foreground/60 hover:bg-card"
+            @click="openPeerIssue(issue)"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 space-y-2">
+                <div class="flex flex-wrap items-center gap-2">
+                  <StatusBadge :status="issue.severity" type="severity" />
+                  <StatusBadge :status="issue.status" type="issue" />
+                  <span class="text-xs font-mono text-muted-foreground">{{ peerIssueMarkerSummary(issue) }}</span>
+                </div>
+                <div>
+                  <div class="text-sm font-medium text-foreground">{{ issue.title }}</div>
+                  <p class="mt-1 text-sm text-muted-foreground">{{ issue.description }}</p>
+                </div>
+              </div>
+              <span class="text-xs font-mono text-muted-foreground whitespace-nowrap">{{ fmtDate(issue.updated_at) }}</span>
+            </div>
+
+            <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <span class="rounded-full border border-border px-2.5 py-1 text-muted-foreground">
+                {{ t('issueDetail.commentsHeading', { count: issue.comment_count ?? 0 }) }}
+              </span>
+              <span
+                v-if="(issue.comment_count ?? 0) > 0"
+                class="rounded-full bg-info-bg px-2.5 py-1 text-info"
+              >
+                {{ t('producer.hasDiscussion') }}
+              </span>
+              <span class="text-primary">{{ t('producer.viewConversation') }}</span>
+            </div>
+          </button>
+        </div>
+
+        <div v-else class="text-sm text-muted-foreground">{{ t('producer.noPeerIssues') }}</div>
+
+        <IssueDetailPanel
+          :issue="selectedPeerIssue"
+          :track="track"
+          @close="closePeerIssue"
+          @updated="onPeerIssueUpdated"
+        />
+      </div>
+    </div>
+
+    <WorkflowActionBar
+      :actions="classicActions"
+      :hint="t('producer.gateHint')"
+      layout="grouped"
+      :group-label="t('producer.decisionGroupLabel')"
+    />
+  </div>
+
+  <div v-else-if="activeVariant === 'mastering'" class="max-w-4xl mx-auto min-h-full flex flex-col">
+    <div class="space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('mastering.heading', { title: track.title }) }}</h1>
+          <p class="text-sm sm:text-base text-muted-foreground">{{ t('mastering.subheading') }}</p>
+        </div>
+        <button @click="goBack" class="btn-secondary text-sm flex-shrink-0 self-start">
+          {{ t('common.backToTrack') }}
+        </button>
+      </div>
+
+      <div v-if="error" class="card border border-error/40 bg-error-bg text-sm text-error">
+        {{ error }}
+      </div>
+
+      <div v-if="audioUrl">
+        <div class="flex items-start justify-between gap-3 mb-2">
+          <p class="text-xs text-muted-foreground leading-relaxed">{{ t('mastering.waveformHint') }}</p>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              v-if="olderSourceVersions.length > 0"
+              @click="toggleSourceCompare"
+              class="btn-secondary text-xs px-3 py-1"
+            >
+              {{ t('compare.title') }}
+            </button>
+            <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="mb-3 space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+            <CustomSelect
+              v-model="selectedCompareSourceVersionId"
+              :options="sourceCompareOptions"
+              :placeholder="`-- ${t('compare.selectVersion')} --`"
+              size="sm"
+            />
+            <button
+              v-if="selectedCompareSourceVersionId"
+              @click="selectedCompareSourceVersionId = null"
+              class="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {{ t('compare.clear') }}
+            </button>
+          </div>
+          <p v-if="isSourceCompareActive" class="text-xs text-warning">
+            {{ t('workflowStep.sourceCompareReadonlyHint') }}
+          </p>
+        </div>
+        <WaveformPlayer
+          ref="waveformRef"
+          :audio-url="audioUrl"
+          :issues="waveformIssues"
+          :track-id="trackId"
+          :compare-version-id="selectedCompareSourceVersionId"
+          :selectable="true"
+          :mode="waveformMode"
+          :selected-range="issueFormRef?.selectedRange ?? null"
+          :draft-markers="issueFormRef?.markers ?? []"
+          :draft-range-anchor="issueFormRef?.rangeAnchor ?? null"
+          :hovered-issue-id="hoveredIssueId"
+          @click="(time: number) => issueFormRef?.handleClick(time)"
+          @regionClick="onIssueSelect"
+          @rangeSelect="(start: number, end: number) => issueFormRef?.handleRangeSelect(start, end)"
+          @issueHover="handleIssueHover"
+          @issueLeave="handleIssueLeave"
+          @requestModeChange="onRequestWaveformMode"
+        />
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="space-y-4">
+          <IssueCreatePanel
+            ref="issueFormRef"
+            :track-id="trackId"
+            phase="mastering"
+            @created="onIssueCreated"
+            @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
+          >
+            <template #heading>
+              <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('mastering.issuesHeading', { count: fallbackWaveformIssues.length }) }}</h3>
+            </template>
+          </IssueCreatePanel>
+
+          <IssueMarkerList
+            :issues="fallbackWaveformIssues"
+            :current-source-version-number="displayedSourceVersionNumber"
+            :hovered-issue-id="hoveredIssueId"
+            @select="onIssueSelect"
+            @hover="handleIssueHover"
+            @leave="handleIssueLeave"
+          />
+        </div>
+
+        <div class="card space-y-4">
+          <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('mastering.actionsHeading') }}</h3>
+          <div class="text-sm text-muted-foreground">{{ t('mastering.uploadReady') }}</div>
+          <input type="file" accept="audio/*" @change="onFileChange" class="input-field w-full" />
+          <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
+            <div class="space-y-1">
+              <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.deliveryPreviewHeading') }}</h4>
+              <p class="text-sm text-muted-foreground">{{ t('workflowStep.deliveryPreviewNotice') }}</p>
+            </div>
+            <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" />
+            <div class="flex flex-wrap gap-2">
+              <button
+                @click="handleUpload('delivery')"
+                :disabled="uploading"
+                class="btn-primary text-sm h-10 inline-flex items-center justify-center"
+              >
+                <Upload class="w-4 h-4 mr-2" />
+                {{ uploading ? t('workflowStep.uploading') : t('workflowStep.confirmUploadDelivery') }}
+              </button>
+              <button
+                @click="uploadFile = null; resetDeliveryPreview()"
+                :disabled="uploading"
+                class="btn-secondary text-sm"
+              >
+                {{ t('workflowStep.clearSelectedDelivery') }}
+              </button>
+            </div>
+          </div>
+          <div v-if="uploading" class="space-y-1">
+            <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
+              <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
+            </div>
+            <p class="text-xs text-muted-foreground text-right">{{ uploadProgress }}%</p>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="masterAudioUrl" class="card space-y-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('workflowStep.currentDelivery') }}</h3>
+            <p class="text-xs text-muted-foreground mt-1">
+              {{ masterDelivery?.confirmed_at ? t('workflowStep.deliveryConfirmed') : t('workflowStep.deliveryPendingConfirmation') }}
+            </p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              v-if="olderMasterDeliveries.length > 0"
+              @click="toggleMasterCompare"
+              class="btn-secondary text-xs px-3 py-1"
+            >
+              {{ t('compare.title') }}
+            </button>
+            <button @click="handleMasterDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="showMasterCompare && olderMasterDeliveries.length > 0" class="flex items-center gap-2">
+          <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+          <CustomSelect
+            v-model="selectedCompareMasterDeliveryId"
+            :options="masterCompareOptions"
+            :placeholder="`-- ${t('compare.selectVersion')} --`"
+            size="sm"
+          />
+          <button
+            v-if="selectedCompareMasterDeliveryId"
+            @click="selectedCompareMasterDeliveryId = null"
+            class="text-xs text-muted-foreground hover:text-foreground"
+          >
+            {{ t('compare.clear') }}
+          </button>
+        </div>
+        <WaveformPlayer :audio-url="masterAudioUrl" :issues="[]" :compare-audio-url="selectedCompareMasterAudioUrl" />
+      </div>
+
+      <div v-if="sortedMasterDeliveries.length > 0" class="card space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('workflowStep.masterVersionHistory') }}</h3>
+          <span class="text-xs text-muted-foreground">{{ sortedMasterDeliveries.length }}</span>
+        </div>
+        <div class="space-y-2">
+          <div
+            v-for="delivery in sortedMasterDeliveries"
+            :key="delivery.id"
+            class="flex flex-col gap-3 border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div class="space-y-1 min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-sm font-mono font-semibold text-foreground">{{ masterDeliveryOptionLabel(delivery) }}</span>
+                <span v-if="delivery.id === masterDelivery?.id" class="bg-border text-foreground px-2 py-1 rounded-full text-[11px] font-mono">
+                  {{ t('compare.currentVersion') }}
+                </span>
+              </div>
+              <p class="text-xs text-muted-foreground">
+                {{ delivery.confirmed_at ? t('workflowStep.deliveryConfirmed') : t('workflowStep.deliveryPendingConfirmation') }}
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                v-if="delivery.id !== masterDelivery?.id"
+                @click="compareWithMasterDelivery(delivery.id)"
+                class="btn-secondary text-xs px-3 py-1"
+              >
+                {{ t('compare.title') }}
+              </button>
+              <button @click="handleMasterVersionDownload(delivery)" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+                {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+      <WorkflowActionBar :actions="deliveryActions" :hint="t('mastering.actionHint')" />
+  </div>
+
+  <div v-else-if="activeVariant === 'final_review'" class="max-w-4xl mx-auto min-h-full flex flex-col">
+    <div class="space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('finalReview.heading', { title: track.title }) }}</h1>
+          <p class="text-sm sm:text-base text-muted-foreground">{{ t('finalReview.subheading') }}</p>
+        </div>
+        <button @click="goBack" class="btn-secondary text-sm flex-shrink-0 self-start">
+          {{ t('common.backToTrack') }}
+        </button>
+      </div>
+
+      <div v-if="error" class="card border border-error/40 bg-error-bg text-sm text-error">
+        {{ error }}
+      </div>
+
+      <div v-if="masterAudioUrl">
+        <div class="flex items-start justify-between gap-3 mb-2">
+          <p class="text-xs text-muted-foreground leading-relaxed">{{ t('finalReview.waveformHint') }}</p>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              v-if="olderMasterDeliveries.length > 0"
+              @click="toggleMasterCompare"
+              class="btn-secondary text-xs px-3 py-1"
+            >
+              {{ t('compare.title') }}
+            </button>
+            <button @click="handleMasterDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="showMasterCompare && olderMasterDeliveries.length > 0" class="flex items-center gap-2 mb-3">
+          <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+          <CustomSelect
+            v-model="selectedCompareMasterDeliveryId"
+            :options="masterCompareOptions"
+            :placeholder="`-- ${t('compare.selectVersion')} --`"
+            size="sm"
+          />
+          <button
+            v-if="selectedCompareMasterDeliveryId"
+            @click="selectedCompareMasterDeliveryId = null"
+            class="text-xs text-muted-foreground hover:text-foreground"
+          >
+            {{ t('compare.clear') }}
+          </button>
+        </div>
+        <WaveformPlayer
+          ref="waveformRef"
+          :audio-url="masterAudioUrl"
+          :compare-audio-url="selectedCompareMasterAudioUrl"
+          :issues="finalReviewIssues"
+          :selectable="true"
+          :mode="waveformMode"
+          :selected-range="issueFormRef?.selectedRange ?? null"
+          :draft-markers="issueFormRef?.markers ?? []"
+          :draft-range-anchor="issueFormRef?.rangeAnchor ?? null"
+          :hovered-issue-id="hoveredIssueId"
+          @click="(time: number) => issueFormRef?.handleClick(time)"
+          @regionClick="onIssueSelect"
+          @rangeSelect="(start: number, end: number) => issueFormRef?.handleRangeSelect(start, end)"
+          @issueHover="handleIssueHover"
+          @issueLeave="handleIssueLeave"
+          @requestModeChange="onRequestWaveformMode"
+        />
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="space-y-4">
+          <IssueCreatePanel
+            ref="issueFormRef"
+            :track-id="trackId"
+            phase="final_review"
+            :master-delivery-id="masterDelivery?.id ?? null"
+            @created="onIssueCreated"
+            @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
+          >
+            <template #heading>
+              <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('finalReview.issuesHeading', { count: finalReviewIssues.length }) }}</h3>
+            </template>
+          </IssueCreatePanel>
+
+          <IssueMarkerList
+            :issues="finalReviewIssues"
+            :hovered-issue-id="hoveredIssueId"
+            @select="onIssueSelect"
+            @hover="handleIssueHover"
+            @leave="handleIssueLeave"
+          />
+        </div>
+
+        <div class="card space-y-4">
+          <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('finalReview.approvalStatus') }}</h3>
+          <div class="flex items-center justify-between text-sm">
+            <span>{{ t('finalReview.producer') }}</span>
+            <span :class="masterDelivery?.producer_approved_at ? 'text-success' : 'text-muted-foreground'">
+              {{ masterDelivery?.producer_approved_at ? t('common.approved') : t('common.pending') }}
+            </span>
+          </div>
+          <div class="flex items-center justify-between text-sm">
+            <span>{{ t('finalReview.submitter') }}</span>
+            <span :class="masterDelivery?.submitter_approved_at ? 'text-success' : 'text-muted-foreground'">
+              {{ masterDelivery?.submitter_approved_at ? t('common.approved') : t('common.pending') }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="sortedMasterDeliveries.length > 0" class="card space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('workflowStep.masterVersionHistory') }}</h3>
+          <span class="text-xs text-muted-foreground">{{ sortedMasterDeliveries.length }}</span>
+        </div>
+        <div class="space-y-2">
+          <div
+            v-for="delivery in sortedMasterDeliveries"
+            :key="delivery.id"
+            class="flex flex-col gap-3 border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div class="space-y-1 min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-sm font-mono font-semibold text-foreground">{{ masterDeliveryOptionLabel(delivery) }}</span>
+                <span v-if="delivery.id === masterDelivery?.id" class="bg-border text-foreground px-2 py-1 rounded-full text-[11px] font-mono">
+                  {{ t('compare.currentVersion') }}
+                </span>
+              </div>
+              <p class="text-xs text-muted-foreground">
+                {{ delivery.confirmed_at ? t('workflowStep.deliveryConfirmed') : t('workflowStep.deliveryPendingConfirmation') }}
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                v-if="delivery.id !== masterDelivery?.id"
+                @click="compareWithMasterDelivery(delivery.id)"
+                class="btn-secondary text-xs px-3 py-1"
+              >
+                {{ t('compare.title') }}
+              </button>
+              <button @click="handleMasterVersionDownload(delivery)" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+                {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <WorkflowActionBar :actions="finalReviewActions" :hint="t('finalReview.actionHint')" />
+  </div>
+
   <div v-else class="max-w-4xl mx-auto space-y-6">
-    <!-- Header -->
     <div class="flex items-center gap-3">
       <button @click="goBack" class="btn-secondary !px-3 !py-2">
         <ChevronLeft class="w-4 h-4" />
@@ -113,88 +1528,192 @@ function goBack() {
       <div class="min-w-0 flex-1">
         <h1 class="text-2xl font-mono font-bold truncate">{{ track.title }}</h1>
         <p class="text-sm text-muted-foreground mt-0.5">
-          {{ currentStep.label }} &middot; {{ track.artist }}
+          {{ translateStepLabel(currentStep, t) }} · <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
         </p>
       </div>
-      <StatusBadge :status="track.status" type="track" />
+      <StatusBadge :status="track.status" type="track" :label="currentStep?.label ?? null" />
     </div>
 
-    <!-- Workflow progress -->
+    <div v-if="error" class="card border border-error/40 bg-error-bg text-sm text-error">
+      {{ error }}
+    </div>
+
     <div class="card">
       <WorkflowProgress :status="track.status" :workflow-config="workflowConfig" />
     </div>
 
-    <!-- Gate step: show issues + decision buttons -->
-    <template v-if="currentStep.type === 'gate'">
-      <div v-if="audioUrl" class="card">
-        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" />
-      </div>
-
-      <div v-if="issues.length" class="card space-y-3">
-        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: issues.length }) }}</h3>
-        <IssueMarkerList :issues="waveformIssues" @select="(i) => router.push(`/issues/${i.id}`)" />
-      </div>
-
-      <div class="card space-y-4">
-        <h3 class="text-sm font-mono font-semibold">{{ t('common.actions') }}</h3>
-        <div class="flex flex-wrap gap-3">
+    <template v-if="isApprovalStep">
+      <div v-if="audioUrl" class="card space-y-3">
+        <div class="flex items-center justify-end gap-2">
           <button
-            v-for="tr in transitions"
-            :key="tr.decision"
-            @click="executeTransition(tr.decision)"
-            :disabled="acting"
-            :class="[
-              'btn-primary',
-              tr.decision.includes('reject') ? '!bg-error hover:!bg-error/80' : '',
-            ]"
+            v-if="olderSourceVersions.length > 0"
+            @click="toggleSourceCompare"
+            class="btn-secondary text-xs px-3 py-1"
           >
-            {{ tr.label }}
+            {{ t('compare.title') }}
+          </button>
+          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
           </button>
         </div>
+        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+            <CustomSelect
+              v-model="selectedCompareSourceVersionId"
+              :options="sourceCompareOptions"
+              :placeholder="`-- ${t('compare.selectVersion')} --`"
+              size="sm"
+            />
+            <button
+              v-if="selectedCompareSourceVersionId"
+              @click="selectedCompareSourceVersionId = null"
+              class="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {{ t('compare.clear') }}
+            </button>
+          </div>
+          <p v-if="isSourceCompareActive" class="text-xs text-warning">
+            {{ t('workflowStep.sourceCompareReadonlyHint') }}
+          </p>
+        </div>
+        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" :track-id="trackId" :compare-version-id="selectedCompareSourceVersionId" />
       </div>
-    </template>
 
-    <!-- Review step: show issues, create issues, decision -->
-    <template v-if="currentStep.type === 'review'">
-      <div v-if="audioUrl" class="card">
-        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" />
-      </div>
-
-      <div class="card space-y-3">
-        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: stepIssues.length }) }}</h3>
-        <IssueMarkerList :issues="waveformIssues" @select="(i) => router.push(`/issues/${i.id}`)" />
+      <div v-if="fallbackStepIssues.length" class="card space-y-3">
+        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: fallbackWaveformIssues.length }) }}</h3>
+        <IssueMarkerList :issues="fallbackWaveformIssues" :current-source-version-number="displayedSourceVersionNumber" @select="onIssueSelect" />
       </div>
 
       <div class="card space-y-4">
         <IssueCreatePanel
           :track-id="trackId"
           :phase="currentStep.id"
-          @created="loadPage"
+          @created="onIssueCreated"
         />
       </div>
 
-      <div class="card space-y-4">
-        <h3 class="text-sm font-mono font-semibold">{{ t('common.actions') }}</h3>
-        <div class="flex flex-wrap gap-3">
-          <button
-            v-for="tr in transitions"
-            :key="tr.decision"
-            @click="executeTransition(tr.decision)"
-            :disabled="acting"
-            :class="[
-              tr.decision === 'return' || tr.decision.includes('revision') ? 'btn-secondary' : 'btn-primary',
-            ]"
-          >
-            {{ tr.label }}
-          </button>
-        </div>
-      </div>
+      <WorkflowActionBar :actions="genericApprovalActions" :hint="t('common.actions')" />
     </template>
 
-    <!-- Revision step: upload new source version -->
-    <template v-if="currentStep.type === 'revision'">
+    <template v-if="currentStep.type === 'review'">
+      <div v-if="audioUrl" class="card space-y-3">
+        <div class="flex items-center justify-end gap-2">
+          <button
+            v-if="olderSourceVersions.length > 0"
+            @click="toggleSourceCompare"
+            class="btn-secondary text-xs px-3 py-1"
+          >
+            {{ t('compare.title') }}
+          </button>
+          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+          </button>
+        </div>
+        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+            <CustomSelect
+              v-model="selectedCompareSourceVersionId"
+              :options="sourceCompareOptions"
+              :placeholder="`-- ${t('compare.selectVersion')} --`"
+              size="sm"
+            />
+            <button
+              v-if="selectedCompareSourceVersionId"
+              @click="selectedCompareSourceVersionId = null"
+              class="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {{ t('compare.clear') }}
+            </button>
+          </div>
+          <p v-if="isSourceCompareActive" class="text-xs text-warning">
+            {{ t('workflowStep.sourceCompareReadonlyHint') }}
+          </p>
+        </div>
+        <WaveformPlayer :audio-url="audioUrl" :issues="fallbackWaveformIssues" :track-id="trackId" :compare-version-id="selectedCompareSourceVersionId" />
+      </div>
+
+      <div class="card space-y-3">
+        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: fallbackWaveformIssues.length }) }}</h3>
+        <IssueMarkerList :issues="fallbackWaveformIssues" :current-source-version-number="displayedSourceVersionNumber" @select="onIssueSelect" />
+      </div>
+
       <div class="card space-y-4">
-        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.uploadRevisedSource') }}</h3>
+        <IssueCreatePanel
+          :track-id="trackId"
+          :phase="currentStep.id"
+          @created="onIssueCreated"
+        />
+      </div>
+
+      <WorkflowActionBar :actions="genericReviewActions" :hint="t('common.actions')" />
+    </template>
+
+    <template v-if="currentStep.type === 'revision'">
+      <!-- 1. Waveform with hover interaction -->
+      <div v-if="audioUrl" class="card space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.currentAudio') }}</h3>
+          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+          </button>
+        </div>
+        <WaveformPlayer
+          :audio-url="audioUrl"
+          :issues="revisionWaveformIssues"
+          :hovered-issue-id="hoveredIssueId"
+          @issueHover="handleIssueHover"
+          @issueLeave="handleIssueLeave"
+        />
+      </div>
+
+      <!-- 2. Issue summary + marker list (merged) -->
+      <div class="card space-y-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="space-y-1">
+            <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('producer.issueSummaryHeading') }}</h3>
+            <p
+              class="text-sm"
+              :class="revisionOpenIssues.length > 0 ? 'text-warning' : 'text-success'"
+            >
+              {{ revisionOpenIssues.length > 0
+                ? t('revision.openIssuesReminder', { count: revisionOpenIssues.length })
+                : t('revision.allIssuesHandled') }}
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-2 text-xs sm:justify-end">
+            <div class="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-muted-foreground">
+              <span class="font-mono text-sm text-foreground">{{ revisionSnapshotIssues.length }}</span>
+              <span>{{ t('producer.cycleIssues') }}</span>
+            </div>
+            <div class="inline-flex items-center gap-2 rounded-full bg-warning-bg px-3 py-1.5 text-warning">
+              <span class="font-mono text-sm text-foreground">{{ revisionOpenIssues.length }}</span>
+              <span>{{ t('producer.open') }}</span>
+            </div>
+            <div class="inline-flex items-center gap-2 rounded-full bg-success-bg px-3 py-1.5 text-success">
+              <span class="font-mono text-sm text-foreground">{{ revisionResolvedIssues.length }}</span>
+              <span>{{ t('producer.resolved') }}</span>
+            </div>
+          </div>
+        </div>
+        <IssueMarkerList
+          v-if="revisionSnapshotIssues.length"
+          :issues="revisionSnapshotIssues"
+          :current-source-version-number="track.version"
+          :hovered-issue-id="hoveredIssueId"
+          @select="onIssueSelect"
+          @hover="handleIssueHover"
+          @leave="handleIssueLeave"
+        />
+        <div v-else class="border border-success/20 bg-success-bg px-4 py-3 text-sm text-success">
+          {{ t('producer.noIssues') }}
+        </div>
+      </div>
+
+      <!-- 3a. Upload card (assignee only, at bottom) -->
+      <div v-if="isRevisionAssignee" class="card space-y-4">
+        <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.uploadRevisedSource') }}</h3>
         <p class="text-sm text-muted-foreground">{{ t('workflowStep.uploadRevisedSourceDesc') }}</p>
         <input
           type="file"
@@ -202,32 +1721,86 @@ function goBack() {
           @change="onFileChange"
           class="input-field"
         />
-        <button
-          @click="handleUpload('revision')"
-          :disabled="!uploadFile || uploading"
-          class="btn-primary"
-        >
-          <Upload class="w-4 h-4 mr-2" />
-          {{ uploading ? t('workflowStep.uploading') : t('workflowStep.uploadRevision') }}
-        </button>
+        <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
+          <div class="space-y-1">
+            <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.revisedPreviewHeading') }}</h4>
+            <p class="text-sm text-muted-foreground">{{ t('workflowStep.revisedPreviewNotice') }}</p>
+          </div>
+          <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" />
+          <div class="flex flex-wrap gap-2">
+            <button
+              @click="handleUpload('revision')"
+              :disabled="uploading"
+              class="btn-primary text-sm h-10 inline-flex items-center justify-center"
+            >
+              <Upload class="w-4 h-4 mr-2" />
+              {{ uploading ? t('workflowStep.uploading') : t('workflowStep.uploadRevision') }}
+            </button>
+            <button
+              @click="uploadFile = null; resetDeliveryPreview()"
+              :disabled="uploading"
+              class="btn-secondary text-sm"
+            >
+              {{ t('workflowStep.clearRevision') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="uploading" class="space-y-1">
+          <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
+            <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
+          </div>
+          <p class="text-xs text-muted-foreground text-right">{{ uploadProgress }}%</p>
+        </div>
       </div>
 
-      <div v-if="audioUrl" class="card">
-        <h3 class="text-sm font-mono font-semibold mb-3">{{ t('workflowStep.currentAudio') }}</h3>
-        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" />
-      </div>
-
-      <div v-if="stepIssues.length" class="card space-y-3">
-        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issuesToAddress', { count: stepIssues.length }) }}</h3>
-        <IssueMarkerList :issues="waveformIssues" @select="(i) => router.push(`/issues/${i.id}`)" />
+      <!-- 3b. Waiting card (non-assignee) -->
+      <div v-else class="card space-y-2">
+        <h3 class="text-sm font-mono font-semibold">
+          {{ t('workflowStep.waitingForRevision', { assignee: revisionAssigneeRoleLabel }) }}
+        </h3>
+        <p class="text-sm text-muted-foreground">{{ t('workflowStep.waitingForRevisionDesc') }}</p>
       </div>
     </template>
 
-    <!-- Delivery step: upload master + transition buttons -->
     <template v-if="currentStep.type === 'delivery'">
-      <div v-if="audioUrl" class="card">
-        <h3 class="text-sm font-mono font-semibold mb-3">{{ t('workflowStep.sourceAudio') }}</h3>
-        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" />
+      <div v-if="audioUrl" class="card space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.sourceAudio') }}</h3>
+          <div class="flex items-center gap-2">
+            <button
+              v-if="olderSourceVersions.length > 0"
+              @click="toggleSourceCompare"
+              class="btn-secondary text-xs px-3 py-1"
+            >
+              {{ t('compare.title') }}
+            </button>
+            <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+            <CustomSelect
+              v-model="selectedCompareSourceVersionId"
+              :options="sourceCompareOptions"
+              :placeholder="`-- ${t('compare.selectVersion')} --`"
+              size="sm"
+            />
+            <button
+              v-if="selectedCompareSourceVersionId"
+              @click="selectedCompareSourceVersionId = null"
+              class="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {{ t('compare.clear') }}
+            </button>
+          </div>
+          <p v-if="isSourceCompareActive" class="text-xs text-warning">
+            {{ t('workflowStep.sourceCompareReadonlyHint') }}
+          </p>
+        </div>
+        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" :track-id="trackId" :compare-version-id="selectedCompareSourceVersionId" />
       </div>
 
       <div class="card space-y-4">
@@ -238,30 +1811,46 @@ function goBack() {
           @change="onFileChange"
           class="input-field"
         />
-        <button
-          @click="handleUpload('delivery')"
-          :disabled="!uploadFile || uploading"
-          class="btn-primary"
-        >
-          <Upload class="w-4 h-4 mr-2" />
-          {{ uploading ? t('workflowStep.uploading') : t('workflowStep.uploadAndDeliver') }}
-        </button>
-      </div>
-
-      <div v-if="transitions.length" class="card space-y-4">
-        <h3 class="text-sm font-mono font-semibold">{{ t('common.actions') }}</h3>
-        <div class="flex flex-wrap gap-3">
-          <button
-            v-for="tr in transitions"
-            :key="tr.decision"
-            @click="executeTransition(tr.decision)"
-            :disabled="acting"
-            class="btn-secondary"
-          >
-            {{ tr.label }}
-          </button>
+        <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
+          <div class="space-y-1">
+            <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.deliveryPreviewHeading') }}</h4>
+            <p class="text-sm text-muted-foreground">{{ t('workflowStep.deliveryPreviewNotice') }}</p>
+          </div>
+          <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" />
+          <div class="flex flex-wrap gap-2">
+            <button
+              @click="handleUpload('delivery')"
+              :disabled="uploading"
+              class="btn-primary text-sm h-10 inline-flex items-center justify-center"
+            >
+              <Upload class="w-4 h-4 mr-2" />
+              {{ uploading ? t('workflowStep.uploading') : t('workflowStep.confirmUploadDelivery') }}
+            </button>
+            <button
+              @click="uploadFile = null; resetDeliveryPreview()"
+              :disabled="uploading"
+              class="btn-secondary text-sm"
+            >
+              {{ t('workflowStep.clearSelectedDelivery') }}
+            </button>
+          </div>
         </div>
       </div>
+
+      <div v-if="masterAudioUrl" class="card space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.currentDelivery') }}</h3>
+          <button @click="handleMasterDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+          </button>
+        </div>
+        <p class="text-xs text-muted-foreground">
+          {{ masterDelivery?.confirmed_at ? t('workflowStep.deliveryConfirmed') : t('workflowStep.deliveryPendingConfirmation') }}
+        </p>
+        <WaveformPlayer :audio-url="masterAudioUrl" :issues="[]" />
+      </div>
+
+      <WorkflowActionBar v-if="deliveryActions.length" :actions="deliveryActions" :hint="t('common.actions')" />
     </template>
   </div>
 </template>

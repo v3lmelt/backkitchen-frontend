@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, reactive, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Camera, Trash2 } from 'lucide-vue-next'
 import { authApi } from '@/api'
@@ -7,7 +8,32 @@ import { useAppStore } from '@/stores/app'
 import { parseUTC } from '@/utils/time'
 
 const { t, locale } = useI18n()
+const router = useRouter()
 const appStore = useAppStore()
+
+// Account deletion state
+const showDeleteConfirm = ref(false)
+const deletePassword = ref('')
+const deletingAccount = ref(false)
+const deleteError = ref('')
+
+async function deleteAccount() {
+  deleteError.value = ''
+  if (!deletePassword.value) {
+    deleteError.value = t('profile.danger.errorPasswordRequired')
+    return
+  }
+  deletingAccount.value = true
+  try {
+    await authApi.deleteAccount(deletePassword.value)
+    appStore.logout()
+    router.push('/login')
+  } catch (e: any) {
+    deleteError.value = e.message || t('profile.danger.errorGeneric')
+  } finally {
+    deletingAccount.value = false
+  }
+}
 
 type Tab = 'profile' | 'security' | 'preferences'
 const activeTab = ref<Tab>('profile')
@@ -305,6 +331,53 @@ async function changePassword() {
           <button @click="changePassword" :disabled="passwordSaving" class="btn-primary text-sm">
             {{ passwordSaving ? t('profile.saving') : t('profile.changePasswordBtn') }}
           </button>
+        </div>
+      </section>
+
+      <!-- Danger Zone -->
+      <section class="card max-w-lg space-y-4 border-error/40">
+        <div>
+          <h2 class="text-base font-mono font-semibold text-error">{{ t('profile.danger.title') }}</h2>
+          <p class="text-xs text-muted-foreground mt-0.5">{{ t('profile.danger.desc') }}</p>
+        </div>
+
+        <button
+          v-if="!showDeleteConfirm"
+          @click="showDeleteConfirm = true"
+          class="btn-destructive"
+        >
+          {{ t('profile.danger.deleteButton') }}
+        </button>
+
+        <div v-else class="space-y-3">
+          <p class="text-xs text-error">{{ t('profile.danger.confirmMessage') }}</p>
+          <div>
+            <label class="block text-xs text-muted-foreground mb-1">{{ t('profile.danger.passwordLabel') }}</label>
+            <input
+              v-model="deletePassword"
+              type="password"
+              class="input-field w-full"
+              :placeholder="t('profile.danger.passwordPlaceholder')"
+              autocomplete="current-password"
+            />
+          </div>
+          <div v-if="deleteError" class="text-xs text-error">{{ deleteError }}</div>
+          <div class="flex gap-2">
+            <button
+              @click="deleteAccount"
+              :disabled="deletingAccount"
+              class="btn-destructive"
+            >
+              {{ deletingAccount ? t('common.loading') : t('profile.danger.confirmButton') }}
+            </button>
+            <button
+              @click="showDeleteConfirm = false; deletePassword = ''; deleteError = ''"
+              :disabled="deletingAccount"
+              class="btn-secondary text-sm"
+            >
+              {{ t('common.cancel') }}
+            </button>
+          </div>
         </div>
       </section>
     </template>

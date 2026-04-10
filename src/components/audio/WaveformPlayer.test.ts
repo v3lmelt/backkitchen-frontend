@@ -105,7 +105,7 @@ describe('WaveformPlayer', () => {
       props: {
         audioUrl: '/api/tracks/1/audio',
         selectable: true,
-        issues: [{ id: 1, issue_type: 'point', severity: 'major', time_start: 3, time_end: null }],
+        issues: [{ id: 1, severity: 'major', markers: [{ id: 1, issue_id: 1, marker_type: 'point', time_start: 3, time_end: null }] }],
       },
     })
 
@@ -123,8 +123,8 @@ describe('WaveformPlayer', () => {
       props: {
         audioUrl: '/api/tracks/1/audio',
         issues: [
-          { id: 1, issue_type: 'point', severity: 'major', time_start: 3.4, time_end: null },
-          { id: 2, issue_type: 'range', severity: 'critical', time_start: 8.2, time_end: 9.1 },
+          { id: 1, severity: 'major', markers: [{ id: 1, issue_id: 1, marker_type: 'point', time_start: 3.4, time_end: null }] },
+          { id: 2, severity: 'critical', markers: [{ id: 2, issue_id: 2, marker_type: 'range', time_start: 8.2, time_end: 9.1 }] },
         ],
       },
     })
