@@ -7,6 +7,8 @@ import { useAppStore } from '@/stores/app'
 import type { Album } from '@/types'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { Music, Archive } from 'lucide-vue-next'
+import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -89,17 +91,20 @@ function roleBadgeClass(album: Album): string {
       </button>
     </div>
 
-    <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
-
-    <div v-else-if="myAlbums.length === 0" class="flex flex-col items-center justify-center py-20 text-center">
-      <div class="w-16 h-16 bg-card border border-border flex items-center justify-center mb-4">
-        <component :is="activeTab === 'archived' ? Archive : Music" class="w-8 h-8 text-muted-foreground" :stroke-width="1.5" />
+    <div v-if="loading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div v-for="i in 6" :key="i" class="card space-y-3">
+        <div class="h-32 bg-border animate-pulse rounded-none -mx-4 -mt-4 mb-2"></div>
+        <div class="h-4 bg-border rounded animate-pulse w-3/4"></div>
+        <div class="h-3 bg-border rounded animate-pulse w-1/2"></div>
       </div>
-      <p class="text-base font-mono font-semibold text-foreground">
-        {{ activeTab === 'archived' ? t('albums.archivedEmpty') : t('albums.noAlbums') }}
-      </p>
-      <p v-if="activeTab === 'active'" class="text-sm text-muted-foreground mt-1">{{ t('albums.noAlbumsHint') }}</p>
     </div>
+
+    <EmptyState
+      v-else-if="myAlbums.length === 0"
+      :icon="activeTab === 'archived' ? Archive : Music"
+      :title="activeTab === 'archived' ? t('albums.archivedEmpty') : t('albums.noAlbums')"
+      :hint="activeTab === 'active' ? t('albums.noAlbumsHint') : undefined"
+    />
 
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <div

@@ -6,10 +6,13 @@ import { trackApi, albumApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Album, AlbumStats, Track, TrackStatus, WorkflowEvent } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
+import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import { formatRelativeTime, parseUTC } from '@/utils/time'
 import { TRACK_STATUS_COLORS } from '@/utils/status'
 import { translateStepLabel } from '@/utils/workflow'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
+import { Music } from 'lucide-vue-next'
 
 const ALBUM_STATS_TTL = 5 * 60 * 1000
 const albumStatsCache = new Map<number, { stats: AlbumStats; ts: number }>()
@@ -361,9 +364,11 @@ function openAlbumSettings(albumId: number) {
         </button>
       </div>
 
-      <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
-      <div v-else-if="filteredTracks.length === 0" class="text-center text-muted-foreground py-12">
-        {{ t('dashboard.noTracks') }}
+      <div v-if="loading">
+        <SkeletonLoader :rows="5" :card="true" />
+      </div>
+      <div v-else-if="filteredTracks.length === 0">
+        <EmptyState :icon="Music" :title="t('dashboard.noTracks')" />
       </div>
       <div v-else class="space-y-5">
         <div v-for="group in groupedTracks" :key="group.albumId">
