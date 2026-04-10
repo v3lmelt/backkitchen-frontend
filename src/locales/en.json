@@ -728,7 +728,8 @@
     "uploadSuccess": "Track submitted successfully",
     "albumRequired": "Please select an album before submitting",
     "titleRequired": "Please enter a track title",
-    "artistRequired": "Please enter an artist name"
+    "artistRequired": "Please enter an artist name",
+    "fileTooLarge": "File too large, maximum allowed is {max}"
   },
   "settings": {
     "heading": "Album Settings",

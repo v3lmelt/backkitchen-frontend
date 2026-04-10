@@ -10,6 +10,7 @@ import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatTimestamp, formatDuration, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import type { TimeReference, TimestampTarget } from '@/utils/timestamps'
+import { useToast } from '@/composables/useToast'
 import { X, Music, ImageIcon, Pencil, Trash2 } from 'lucide-vue-next'
 
 const props = defineProps<{ issue: Issue | null; track?: import('@/types').Track | null }>()
@@ -20,7 +21,11 @@ const emit = defineEmits<{
 }>()
 
 const { t, locale } = useI18n()
+const { error: toastError } = useToast()
 const appStore = useAppStore()
+
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024  // 10 MB
+const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
 
 const fullIssue = ref<Issue | null>(null)
 const loading = ref(false)
@@ -147,6 +152,10 @@ function onAudioSelect(event: Event) {
   if (!input.files) return
   for (const file of Array.from(input.files)) {
     if (selectedAudios.value.length >= MAX_AUDIOS) break
+    if (file.size > MAX_AUDIO_SIZE) {
+      toastError(t('upload.fileTooLarge', { max: '200 MB' }))
+      continue
+    }
     selectedAudios.value.push(file)
   }
   input.value = ''
@@ -254,6 +263,10 @@ function onFileSelect(event: Event) {
   const input = event.target as HTMLInputElement
   if (!input.files) return
   for (const file of Array.from(input.files)) {
+    if (file.size > MAX_IMAGE_SIZE) {
+      toastError(t('upload.fileTooLarge', { max: '10 MB' }))
+      continue
+    }
     selectedImages.value.push(file)
     imagePreviewUrls.value.push(URL.createObjectURL(file))
   }

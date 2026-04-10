@@ -728,7 +728,8 @@
     "uploadSuccess": "曲目提交成功",
     "albumRequired": "请先选择专辑再提交",
     "titleRequired": "请输入曲目标题",
-    "artistRequired": "请输入艺术家名称"
+    "artistRequired": "请输入艺术家名称",
+    "fileTooLarge": "文件过大，最大允许 {max}"
   },
   "settings": {
     "heading": "专辑设置",

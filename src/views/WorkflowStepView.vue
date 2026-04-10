@@ -30,7 +30,9 @@ import { hashId } from '@/utils/hash'
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
-const { success: toastSuccess } = useToast()
+const { success: toastSuccess, error: toastError } = useToast()
+
+const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
 const appStore = useAppStore()
 const trackId = computed(() => Number(route.params.id))
 
@@ -389,7 +391,13 @@ async function approveFinal() {
 function onFileChange(event: Event) {
   const input = event.target as HTMLInputElement
   resetDeliveryPreview()
-  uploadFile.value = input.files?.[0] ?? null
+  const file = input.files?.[0] ?? null
+  if (file && file.size > MAX_AUDIO_SIZE) {
+    toastError(t('upload.fileTooLarge', { max: '200 MB' }))
+    input.value = ''
+    return
+  }
+  uploadFile.value = file
   if (uploadFile.value) {
     localDeliveryPreviewUrl.value = URL.createObjectURL(uploadFile.value)
   }

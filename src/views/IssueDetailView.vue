@@ -10,13 +10,18 @@ import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import TimestampText from '@/components/common/TimestampText.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
+import { useToast } from '@/composables/useToast'
 import { formatTimestamp, formatTimestampShort, formatLocaleDate, formatDuration } from '@/utils/time'
 import type { MarkerIndexReference, TimeReference, TimestampTarget } from '@/utils/timestamps'
 import { ChevronLeft, ChevronRight, Music, ImageIcon, Pencil, Trash2 } from 'lucide-vue-next'
 
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024  // 10 MB
+const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
+
 const route = useRoute()
 const router = useRouter()
 const { t, locale } = useI18n()
+const { error: toastError } = useToast()
 const appStore = useAppStore()
 const issueId = computed(() => Number(route.params.id))
 
@@ -194,6 +199,10 @@ function onFileSelect(event: Event) {
   const input = event.target as HTMLInputElement
   if (!input.files) return
   for (const file of Array.from(input.files)) {
+    if (file.size > MAX_IMAGE_SIZE) {
+      toastError(t('upload.fileTooLarge', { max: '10 MB' }))
+      continue
+    }
     selectedImages.value.push(file)
     imagePreviewUrls.value.push(URL.createObjectURL(file))
   }
@@ -213,6 +222,10 @@ function onAudioSelect(event: Event) {
   if (!input.files) return
   for (const file of Array.from(input.files)) {
     if (selectedAudios.value.length >= MAX_AUDIOS) break
+    if (file.size > MAX_AUDIO_SIZE) {
+      toastError(t('upload.fileTooLarge', { max: '200 MB' }))
+      continue
+    }
     selectedAudios.value.push(file)
   }
   input.value = ''

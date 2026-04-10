@@ -13,6 +13,8 @@ import type { SelectOption } from '@/components/common/CustomSelect.vue'
 
 const router = useRouter()
 const { t } = useI18n()
+
+const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
 const appStore = useAppStore()
 const { error: toastError, success: toastSuccess } = useToast()
 const albums = ref<Album[]>([])
@@ -66,9 +68,18 @@ onMounted(async () => {
   }
 })
 
+function validateFileSize(file: File): boolean {
+  if (file.size > MAX_AUDIO_SIZE) {
+    toastError(t('upload.fileTooLarge', { max: '200 MB' }))
+    return false
+  }
+  return true
+}
+
 function onFileSelect(e: Event) {
   const input = e.target as HTMLInputElement
   if (input.files?.[0]) {
+    if (!validateFileSize(input.files[0])) { input.value = ''; return }
     selectedFile.value = input.files[0]
     if (!form.value.title) {
       form.value.title = input.files[0].name.replace(/\.[^/.]+$/, '')
@@ -80,6 +91,7 @@ function onFileSelect(e: Event) {
 function onDrop(e: DragEvent) {
   dragOver.value = false
   if (e.dataTransfer?.files?.[0]) {
+    if (!validateFileSize(e.dataTransfer.files[0])) return
     selectedFile.value = e.dataTransfer.files[0]
     if (!form.value.title) {
       form.value.title = e.dataTransfer.files[0].name.replace(/\.[^/.]+$/, '')
