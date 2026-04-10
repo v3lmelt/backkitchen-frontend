@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { checklistApi, trackApi, API_ORIGIN } from '@/api'
+import { checklistApi, trackApi, r2Api, uploadToR2, API_ORIGIN } from '@/api'
 import type {
   ChecklistItem,
   ChecklistTemplateItem,
@@ -32,6 +32,7 @@ import { useAppStore } from '@/stores/app'
 import { useTrackStore } from '@/stores/tracks'
 import { translateStepLabel } from '@/utils/workflow'
 import { hashId } from '@/utils/hash'
+import { extractAudioDuration } from '@/utils/audio'
 
 const route = useRoute()
 const router = useRouter()
@@ -516,10 +517,32 @@ async function handleUpload(kind: 'revision' | 'delivery') {
   uploadProgress.value = 0
   error.value = ''
   try {
-    const fn = kind === 'revision' ? trackApi.uploadSourceVersion : trackApi.uploadMasterDelivery
-    await fn(trackId.value, uploadFile.value, (percent) => {
-      uploadProgress.value = percent
-    })
+    const file = uploadFile.value
+    if (appStore.r2Enabled) {
+      const requestFn = kind === 'revision' ? r2Api.requestSourceVersionUpload : r2Api.requestMasterDeliveryUpload
+      const confirmFn = kind === 'revision' ? r2Api.confirmSourceVersionUpload : r2Api.confirmMasterDeliveryUpload
+      const [presigned, duration] = await Promise.all([
+        requestFn(trackId.value, {
+          filename: file.name,
+          content_type: file.type || 'application/octet-stream',
+          file_size: file.size,
+        }),
+        extractAudioDuration(file).catch(() => null),
+      ])
+      await uploadToR2(presigned.upload_url, file, file.type || 'application/octet-stream', (p) => {
+        uploadProgress.value = p
+      })
+      await confirmFn(trackId.value, {
+        upload_id: presigned.upload_id,
+        object_key: presigned.object_key,
+        duration,
+      })
+    } else {
+      const fn = kind === 'revision' ? trackApi.uploadSourceVersion : trackApi.uploadMasterDelivery
+      await fn(trackId.value, file, (percent) => {
+        uploadProgress.value = percent
+      })
+    }
     if (kind === 'delivery') {
       uploadFile.value = null
       resetDeliveryPreview()
