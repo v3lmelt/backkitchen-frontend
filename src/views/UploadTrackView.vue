@@ -27,6 +27,7 @@ const form = ref({
   bpm: '',
 })
 const selectedFile = ref<File | null>(null)
+const audioDuration = ref<number | null>(null)
 const titleError = ref('')
 const artistError = ref('')
 
@@ -35,6 +36,23 @@ function validateTitle() {
 }
 function validateArtist() {
   artistError.value = form.value.artist.trim() ? '' : t('upload.artistRequired')
+}
+
+function formatDurationFull(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = Math.floor(seconds % 60)
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+async function extractFileMeta(file: File) {
+  audioDuration.value = null
+  try {
+    audioDuration.value = await extractAudioDuration(file)
+  } catch {
+    // Not all formats support browser-side extraction
+  }
 }
 
 const albumOptions = computed<SelectOption[]>(() =>
@@ -55,6 +73,7 @@ function onFileSelect(e: Event) {
     if (!form.value.title) {
       form.value.title = input.files[0].name.replace(/\.[^/.]+$/, '')
     }
+    extractFileMeta(input.files[0])
   }
 }
 
@@ -65,6 +84,7 @@ function onDrop(e: DragEvent) {
     if (!form.value.title) {
       form.value.title = e.dataTransfer.files[0].name.replace(/\.[^/.]+$/, '')
     }
+    extractFileMeta(e.dataTransfer.files[0])
   }
 }
 
@@ -158,7 +178,13 @@ function formatFileSize(bytes: number): string {
       </p>
       <div v-else class="text-foreground">
         <p class="font-medium">{{ selectedFile.name }}</p>
-        <p class="text-sm text-muted-foreground">{{ formatFileSize(selectedFile.size) }}</p>
+        <div class="flex items-center justify-center gap-3 text-sm text-muted-foreground mt-1">
+          <span>{{ formatFileSize(selectedFile.size) }}</span>
+          <template v-if="audioDuration !== null">
+            <span class="text-border">·</span>
+            <span class="font-mono text-info">{{ formatDurationFull(audioDuration) }}</span>
+          </template>
+        </div>
       </div>
     </div>
 
