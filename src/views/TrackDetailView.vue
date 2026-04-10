@@ -123,6 +123,7 @@ const events = ref<WorkflowEvent[]>([])
 const sourceVersions = ref<TrackSourceVersion[]>([])
 const workflowConfig = ref<WorkflowConfig | null>(null)
 const loading = ref(true)
+const loadError = ref(false)
 const timelineExpanded = ref(false)
 const timelineFilter = ref<'all' | 'transitions' | 'issues' | 'uploads'>('all')
 const TIMELINE_PREVIEW_COUNT = 5
@@ -166,6 +167,7 @@ watch(wsConnected, (val) => {
 
 async function loadTrack() {
   loading.value = true
+  loadError.value = false
   try {
     const detail = await trackApi.get(trackId.value)
     track.value = detail.track
@@ -174,6 +176,8 @@ async function loadTrack() {
     events.value = detail.events
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
     workflowConfig.value = detail.workflow_config ?? null
+  } catch {
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -394,6 +398,10 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
 
 <template>
   <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
+  <div v-else-if="loadError" class="card max-w-md mx-auto mt-12 text-center space-y-3">
+    <p class="text-sm text-error">{{ t('common.loadFailed') }}</p>
+    <button @click="loadTrack" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
+  </div>
   <div v-else-if="track" class="max-w-7xl mx-auto">
     <div class="space-y-6">
       <!-- WebSocket disconnect banner -->

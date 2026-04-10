@@ -29,6 +29,7 @@ const tracks = ref<Track[]>([])
 const albums = ref<Album[]>([])
 const albumStatsMap = ref<Record<number, AlbumStats>>({})
 const loading = ref(true)
+const loadError = ref(false)
 const filterStatus = ref<TrackStatus | ''>('')
 const exportingAlbum = ref<number | null>(null)
 
@@ -54,7 +55,9 @@ const albumNonZeroStatuses = computed(() => {
   return result
 })
 
-onMounted(async () => {
+async function loadDashboard() {
+  loading.value = true
+  loadError.value = false
   try {
     const [loadedTracks, loadedAlbums] = await Promise.all([trackApi.list(), albumApi.list()])
     tracks.value = loadedTracks
@@ -69,10 +72,14 @@ onMounted(async () => {
         albumStatsMap.value[result.value.id] = result.value.stats
       }
     }
+  } catch {
+    loadError.value = true
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(loadDashboard)
 
 const filteredTracks = computed(() => {
   if (!filterStatus.value) return tracks.value
@@ -183,6 +190,10 @@ function openAlbumSettings(albumId: number) {
 
 <template>
   <div class="space-y-6">
+    <div v-if="loadError" class="card flex items-center justify-between gap-4">
+      <p class="text-sm text-error">{{ t('common.loadFailed') }}</p>
+      <button @click="loadDashboard" class="btn-secondary text-sm flex-shrink-0">{{ t('common.retry') }}</button>
+    </div>
     <div v-if="appStore.pendingInvitations.length > 0" class="card border-primary/30 bg-primary/5">
       <h2 class="text-lg font-mono font-semibold text-foreground mb-3">{{ t('invitations.title') }}</h2>
       <div class="space-y-3">

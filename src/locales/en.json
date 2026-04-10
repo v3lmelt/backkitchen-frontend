@@ -102,6 +102,7 @@
     "downloadAudio": "Download Audio",
     "downloadFailed": "Download failed",
     "loadFailed": "Failed to load, please try again later",
+    "retry": "Retry",
     "actions": "Actions",
     "delete": "Delete",
     "moveUp": "Move up",

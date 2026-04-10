@@ -21,10 +21,8 @@ const users = ref<User[]>([])
 
 const form = ref({ title: '', description: '' })
 const titleError = ref('')
-const titleTouched = ref(false)
 
 function validateTitle() {
-  titleTouched.value = true
   titleError.value = form.value.title.trim() ? '' : t('albumNew.titleRequired')
 }
 
