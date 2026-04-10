@@ -19,22 +19,17 @@ const _CACHE_TTL = 50 * 60 * 1000
 /**
  * Resolve an audio URL that may point to R2 storage.
  *
- * When R2 is enabled, calls the backend with ``?resolve=json`` to obtain
- * the presigned R2 URL, avoiding cross-origin 307 redirects that
- * wavesurfer.js ``fetch`` cannot follow.  Results are cached for 50 min.
- *
- * When R2 is disabled (local storage), returns the token-authed URL
- * directly without any extra network call.
+ * Always calls the backend with ``?resolve=json`` to obtain the presigned
+ * R2 URL, avoiding cross-origin 307 redirects that wavesurfer.js ``fetch``
+ * cannot follow.  When the backend uses local storage it returns
+ * ``{ url: null }`` and we fall back to the token-authed URL.
+ * Results are cached for 50 min.
  */
 export async function resolveAudioUrl(url: string): Promise<string> {
   // Blob URLs are local object URLs — no auth token needed and query params break them
   if (url.startsWith('blob:')) return url
 
   const authedUrl = withAuthToken(url)
-
-  // Skip resolve call when R2 is not enabled — no redirect to worry about
-  const { useAppStore } = await import('@/stores/app')
-  if (!useAppStore().r2Enabled) return authedUrl
 
   const cached = _urlCache.get(url)
   if (cached && cached.expiry > Date.now()) return cached.resolved
