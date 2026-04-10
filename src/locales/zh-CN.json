@@ -449,6 +449,7 @@
     "tracksCount": "{n} 首曲目",
     "tracks": "首曲目",
     "tracksHeading": "曲目",
+    "searchPlaceholder": "搜索曲目、专辑、作者…",
     "filtered": "已筛选：{status}",
     "clearFilter": "清除",
     "submitTrack": "+ 提交曲目",

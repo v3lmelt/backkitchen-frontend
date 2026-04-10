@@ -12,7 +12,7 @@ import { formatRelativeTime, parseUTC } from '@/utils/time'
 import { TRACK_STATUS_COLORS } from '@/utils/status'
 import { translateStepLabel } from '@/utils/workflow'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
-import { Music } from 'lucide-vue-next'
+import { Music, Search } from 'lucide-vue-next'
 
 const ALBUM_STATS_TTL = 5 * 60 * 1000
 const albumStatsCache = new Map<number, { stats: AlbumStats; ts: number }>()
@@ -34,6 +34,7 @@ const albumStatsMap = ref<Record<number, AlbumStats>>({})
 const loading = ref(true)
 const loadError = ref(false)
 const filterStatus = ref<TrackStatus | ''>('')
+const searchQuery = ref('')
 const exportingAlbum = ref<number | null>(null)
 
 function statusColor(status: string): string {
@@ -85,8 +86,19 @@ async function loadDashboard() {
 onMounted(loadDashboard)
 
 const filteredTracks = computed(() => {
-  if (!filterStatus.value) return tracks.value
-  return tracks.value.filter(track => track.status === filterStatus.value)
+  let result = tracks.value
+  if (filterStatus.value) {
+    result = result.filter(track => track.status === filterStatus.value)
+  }
+  if (searchQuery.value.trim()) {
+    const q = searchQuery.value.trim().toLowerCase()
+    result = result.filter(track =>
+      track.title.toLowerCase().includes(q) ||
+      (track.album_title && track.album_title.toLowerCase().includes(q)) ||
+      track.submitter?.display_name?.toLowerCase().includes(q)
+    )
+  }
+  return result
 })
 
 const trackStats = computed(() => {
@@ -359,9 +371,20 @@ function openAlbumSettings(albumId: number) {
             <button @click="filterStatus = ''" class="text-primary hover:underline ml-1">{{ t('dashboard.clearFilter') }}</button>
           </span>
         </h2>
-        <button @click="router.push('/upload')" class="btn-primary text-sm self-start sm:self-auto flex-shrink-0">
-          {{ t('dashboard.submitTrack') }}
-        </button>
+        <div class="flex items-center gap-2 self-start sm:self-auto">
+          <div class="relative">
+            <Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" :stroke-width="2" />
+            <input
+              v-model="searchQuery"
+              type="text"
+              :placeholder="t('dashboard.searchPlaceholder')"
+              class="input-field pl-9 pr-3 py-2 text-sm w-48 sm:w-56"
+            />
+          </div>
+          <button @click="router.push('/upload')" class="btn-primary text-sm flex-shrink-0">
+            {{ t('dashboard.submitTrack') }}
+          </button>
+        </div>
       </div>
 
       <div v-if="loading">

@@ -449,6 +449,7 @@
     "tracksCount": "{n} tracks",
     "tracks": "tracks",
     "tracksHeading": "Tracks",
+    "searchPlaceholder": "Search tracks, albums, authors…",
     "filtered": "filtered: {status}",
     "clearFilter": "clear",
     "submitTrack": "+ Submit Track",
