@@ -7,7 +7,7 @@ import type WaveSurfer from 'wavesurfer.js'
 import type RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
 import { resolveAssetUrl } from '@/api'
 import { formatTimestamp, formatTimestampShort, roundToMilliseconds } from '@/utils/time'
-import { resolveAudioUrl } from '@/utils/url'
+import { loadAudioCached } from '@/utils/audioCache'
 
 type InteractionMode = 'seek' | 'annotate'
 
@@ -715,12 +715,9 @@ onMounted(async () => {
   loadedAudioUrl = props.audioUrl
   isPrimaryLoading.value = true
   primaryLoadProgress.value = 0
-  resolveAudioUrl(props.audioUrl)
-    .then(resolved => ws.load(resolved))
+  loadAudioCached(props.audioUrl, (p) => updatePrimaryLoading(p))
+    .then(blobUrl => ws.load(blobUrl))
     .catch((err) => {
-      // Clear the bookkeeping so a subsequent prop change (or retry) can
-      // re-attempt the load instead of being short-circuited by the
-      // de-dup check in the watcher below.
       loadedAudioUrl = ''
       isPrimaryLoading.value = false
       console.warn('WaveformPlayer: failed to load audio', err)
@@ -739,12 +736,9 @@ watch(() => props.audioUrl, async (newUrl) => {
   isPrimaryLoading.value = true
   primaryLoadProgress.value = 0
   try {
-    const resolved = await resolveAudioUrl(newUrl)
-    await wavesurfer.value.load(resolved)
+    const blobUrl = await loadAudioCached(newUrl, (p) => updatePrimaryLoading(p))
+    await wavesurfer.value.load(blobUrl)
   } catch (err) {
-    // A transient failure (stale token, network hiccup, 4xx) must not
-    // permanently poison the component: clear loadedAudioUrl so the next
-    // identical prop still triggers a retry.
     loadedAudioUrl = ''
     isPrimaryLoading.value = false
     console.warn('WaveformPlayer: failed to reload audio', err)
@@ -865,8 +859,8 @@ watch(compareSourceUrl, async (newCompareUrl) => {
   compareWaveSurfer.value = ws
   applyCompareMode(abMode.value)
 
-  resolveAudioUrl(newCompareUrl)
-    .then(url => ws.load(url))
+  loadAudioCached(newCompareUrl, (p) => updateCompareLoading(p))
+    .then(blobUrl => ws.load(blobUrl))
     .catch((err) => {
       isCompareLoading.value = false
       isCompareReady.value = false
