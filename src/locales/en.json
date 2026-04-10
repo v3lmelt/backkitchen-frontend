@@ -629,7 +629,8 @@
     "staleIssuesHeading": "Prior Version Issues (reference only)",
     "actionHint": "Upload a revised source file to return to the review workflow",
     "returnedBy": "Revision requested by {name}",
-    "openIssuesReminder": "{count} open issue(s) still need a response"
+    "openIssuesReminder": "{count} open issue(s) still need to be reviewed and addressed",
+    "allIssuesHandled": "All issues in this round are handled. You can upload the next source version."
   },
   "mastering": {
     "heading": "Mastering: {title}",

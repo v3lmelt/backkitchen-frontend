@@ -629,7 +629,8 @@
     "staleIssuesHeading": "旧版本问题（仅供参考）",
     "actionHint": "上传修订后的源文件以回到审核流程",
     "returnedBy": "由 {name} 发起修订",
-    "openIssuesReminder": "还有 {count} 个待处理问题需要响应"
+    "openIssuesReminder": "还有 {count} 个待处理问题需要逐项确认并处理",
+    "allIssuesHandled": "当前轮次的问题已全部处理，可以直接上传新版本。"
   },
   "mastering": {
     "heading": "母带制作：{title}",

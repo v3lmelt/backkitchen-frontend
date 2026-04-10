@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi, discussionApi, API_ORIGIN, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Track, Issue, Discussion, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember } from '@/types'
+import type { Track, Issue, Discussion, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember, MasterDelivery } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
@@ -124,6 +124,7 @@ const issues = ref<Issue[]>([])
 const discussions = ref<Discussion[]>([])
 const events = ref<WorkflowEvent[]>([])
 const sourceVersions = ref<TrackSourceVersion[]>([])
+const masterDeliveries = ref<MasterDelivery[]>([])
 const workflowConfig = ref<WorkflowConfig | null>(null)
 const loading = ref(true)
 const loadError = ref(false)
@@ -147,6 +148,8 @@ const discussionImages = ref<File[]>([])
 const discussionImagePreviews = computed(() => discussionImages.value.map(f => URL.createObjectURL(f)))
 const showVersionCompare = ref(false)
 const selectedCompareVersionId = ref<number | null>(null)
+const showMasterCompare = ref(false)
+const selectedCompareMasterDeliveryId = ref<number | null>(null)
 const canPostDiscussion = computed(() =>
   !postingDiscussion.value && (!!newDiscussionContent.value.trim() || discussionImages.value.length > 0)
 )
@@ -179,6 +182,7 @@ async function loadTrack() {
     discussions.value = detail.discussions ?? []
     events.value = detail.events
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
+    masterDeliveries.value = detail.master_deliveries ?? []
     workflowConfig.value = detail.workflow_config ?? null
   } catch {
     trackStore.setCurrentTrack(null)
@@ -197,6 +201,30 @@ const masterAudioUrl = computed(() => {
   const d = track.value?.current_master_delivery
   if (!d) return ''
   return `${API_ORIGIN}/api/tracks/${trackId.value}/master-audio?v=${d.delivery_number}&c=${d.workflow_cycle ?? 1}`
+})
+const sortedMasterDeliveries = computed(() =>
+  [...masterDeliveries.value].sort((a, b) => {
+    if (a.workflow_cycle !== b.workflow_cycle) return b.workflow_cycle - a.workflow_cycle
+    return b.delivery_number - a.delivery_number
+  }),
+)
+const olderMasterDeliveries = computed(() => {
+  const currentId = track.value?.current_master_delivery?.id ?? null
+  return sortedMasterDeliveries.value.filter(delivery => delivery.id !== currentId)
+})
+const masterCompareOptions = computed<SelectOption[]>(() =>
+  olderMasterDeliveries.value.map((delivery) => ({
+    value: delivery.id,
+    label: masterDeliveryOptionLabel(delivery),
+  })),
+)
+const selectedCompareMasterDelivery = computed(() =>
+  olderMasterDeliveries.value.find(delivery => delivery.id === selectedCompareMasterDeliveryId.value) ?? null,
+)
+const selectedCompareMasterAudioUrl = computed(() => {
+  const delivery = selectedCompareMasterDelivery.value
+  if (!delivery) return ''
+  return `${API_ORIGIN}/api/tracks/${trackId.value}/master-deliveries/${delivery.id}/audio?v=${delivery.delivery_number}&c=${delivery.workflow_cycle}`
 })
 const { downloading, downloadProgress, downloadTrackAudio } = useAudioDownload()
 const handleDownload = () => downloadTrackAudio(audioUrl, track)
@@ -300,6 +328,21 @@ const versionOptions = computed<SelectOption[]>(() =>
     label: `V${v.version_number} · ${fmtDate(v.created_at)}`,
   }))
 )
+
+function masterDeliveryOptionLabel(delivery: MasterDelivery): string {
+  const version = `v${delivery.delivery_number}`
+  const cycle = track.value && delivery.workflow_cycle !== track.value.workflow_cycle
+    ? ` · C${delivery.workflow_cycle}`
+    : ''
+  return `${version}${cycle} · ${fmtDate(delivery.created_at)}`
+}
+
+function toggleMasterCompare() {
+  showMasterCompare.value = !showMasterCompare.value
+  if (!showMasterCompare.value) {
+    selectedCompareMasterDeliveryId.value = null
+  }
+}
 
 const isProducer = computed(() => track.value?.producer_id === appStore.currentUser?.id)
 const archiving = ref(false)
@@ -451,6 +494,16 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
     selectedCompareVersionId.value = parsed
   }
 })
+
+watch(olderMasterDeliveries, (deliveries) => {
+  if (deliveries.length > 0) return
+  showMasterCompare.value = false
+  selectedCompareMasterDeliveryId.value = null
+})
+
+watch(selectedCompareMasterDelivery, (delivery) => {
+  if (!delivery) selectedCompareMasterDeliveryId.value = null
+})
 </script>
 
 <template>
@@ -550,11 +603,35 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
                 {{ t('trackDetail.masterAudio') }}
                 <span v-if="track.current_master_delivery" class="text-xs text-muted-foreground ml-1">v{{ track.current_master_delivery.delivery_number }}</span>
               </h3>
+              <button
+                v-if="olderMasterDeliveries.length > 0"
+                @click="toggleMasterCompare"
+                class="text-xs btn-secondary px-3 py-1"
+              >
+                {{ t('compare.title') }}
+              </button>
+            </div>
+            <div v-if="showMasterCompare && olderMasterDeliveries.length > 0" class="flex items-center gap-2 mb-3">
+              <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+              <CustomSelect
+                v-model="selectedCompareMasterDeliveryId"
+                :options="masterCompareOptions"
+                :placeholder="`-- ${t('compare.selectVersion')} --`"
+                size="sm"
+              />
+              <button
+                v-if="selectedCompareMasterDeliveryId"
+                @click="selectedCompareMasterDeliveryId = null"
+                class="text-xs text-muted-foreground hover:text-foreground"
+              >
+                {{ t('compare.clear') }}
+              </button>
             </div>
             <WaveformPlayer
               :audio-url="masterAudioUrl"
               :issues="[]"
               :track-id="trackId"
+              :compare-audio-url="selectedCompareMasterAudioUrl"
             />
           </div>
 

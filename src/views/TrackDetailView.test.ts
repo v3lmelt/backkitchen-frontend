@@ -35,8 +35,8 @@ vi.mock('@/stores/app', () => ({
 
 vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
   default: {
-    props: ['compareVersionId'],
-    template: '<div class="waveform">compare:{{ compareVersionId ?? "none" }}</div>',
+    props: ['audioUrl', 'compareVersionId', 'compareAudioUrl'],
+    template: '<div class="waveform">audio:{{ audioUrl ?? "none" }} compare:{{ compareVersionId ?? "none" }} compareAudio:{{ compareAudioUrl ?? "none" }}</div>',
   },
 }))
 
@@ -59,7 +59,21 @@ vi.mock('@/components/workflow/StatusBadge.vue', () => ({
 
 vi.mock('@/components/common/CustomSelect.vue', () => ({
   default: {
-    template: '<div class="compare-select"></div>',
+    props: ['modelValue', 'options'],
+    emits: ['update:modelValue'],
+    template: `
+      <div class="compare-select">
+        <button
+          v-for="option in options"
+          :key="option.value"
+          type="button"
+          class="compare-option"
+          @click="$emit('update:modelValue', option.value)"
+        >
+          {{ option.label }}
+        </button>
+      </div>
+    `,
   },
 }))
 
@@ -139,6 +153,76 @@ describe('TrackDetailView', () => {
     await flushPromises()
 
     expect(wrapper.find('.waveform').text()).toContain('compare:201')
+  })
+
+  it('wires master compare audio into the master waveform', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 7,
+        album_id: 5,
+        status: 'mastering',
+        title: 'Track 7',
+        artist: 'Nova',
+        version: 3,
+        workflow_cycle: 2,
+        file_path: '/audio.wav',
+        submitter_id: 2,
+        producer_id: 8,
+        allowed_actions: [],
+        open_issue_count: 0,
+        submitter: { display_name: 'Nova' },
+        current_source_version: { id: 301 },
+        current_master_delivery: {
+          id: 21,
+          delivery_number: 4,
+          workflow_cycle: 2,
+          file_path: 'master-v4.wav',
+          created_at: '2024-01-04T00:00:00Z',
+          producer_approved_at: null,
+          submitter_approved_at: null,
+        },
+      },
+      issues: [],
+      discussions: [],
+      events: [],
+      source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
+      master_deliveries: [
+        {
+          id: 21,
+          delivery_number: 4,
+          workflow_cycle: 2,
+          file_path: 'master-v4.wav',
+          created_at: '2024-01-04T00:00:00Z',
+          producer_approved_at: null,
+          submitter_approved_at: null,
+        },
+        {
+          id: 20,
+          delivery_number: 3,
+          workflow_cycle: 2,
+          file_path: 'master-v3.wav',
+          created_at: '2024-01-03T00:00:00Z',
+          producer_approved_at: null,
+          submitter_approved_at: null,
+        },
+      ],
+    })
+
+    const wrapper = mountWithPlugins(TrackDetailView)
+    await flushPromises()
+
+    const compareButtons = wrapper.findAll('button').filter(button => button.text().includes('Compare'))
+    expect(compareButtons).toHaveLength(1)
+
+    await compareButtons[0].trigger('click')
+    await flushPromises()
+
+    await wrapper.find('.compare-option').trigger('click')
+    await flushPromises()
+
+    const waveforms = wrapper.findAll('.waveform')
+    expect(waveforms).toHaveLength(2)
+    expect(waveforms[1].text()).toContain('compareAudio:/api/tracks/7/master-deliveries/20/audio?v=3&c=2')
   })
 
   it('shows a single step CTA for custom workflows', async () => {

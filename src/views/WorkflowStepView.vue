@@ -1669,20 +1669,32 @@ function handleIssueLeave() {
       </div>
 
       <!-- 2. Issue summary + marker list (merged) -->
-      <div class="card space-y-3">
-        <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('producer.issueSummaryHeading') }}</h3>
-        <div class="grid grid-cols-3 gap-3">
-          <div class="bg-background border border-border px-3 py-2 text-center space-y-1">
-            <div class="text-lg font-bold text-foreground">{{ revisionSnapshotIssues.length }}</div>
-            <div class="text-xs text-muted-foreground">{{ t('producer.cycleIssues') }}</div>
+      <div class="card space-y-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="space-y-1">
+            <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('producer.issueSummaryHeading') }}</h3>
+            <p
+              class="text-sm"
+              :class="revisionOpenIssues.length > 0 ? 'text-warning' : 'text-success'"
+            >
+              {{ revisionOpenIssues.length > 0
+                ? t('revision.openIssuesReminder', { count: revisionOpenIssues.length })
+                : t('revision.allIssuesHandled') }}
+            </p>
           </div>
-          <div class="bg-background border border-border px-3 py-2 text-center space-y-1">
-            <div class="text-lg font-bold text-error">{{ revisionOpenIssues.length }}</div>
-            <div class="text-xs text-muted-foreground">{{ t('producer.open') }}</div>
-          </div>
-          <div class="bg-background border border-border px-3 py-2 text-center space-y-1">
-            <div class="text-lg font-bold text-success">{{ revisionResolvedIssues.length }}</div>
-            <div class="text-xs text-muted-foreground">{{ t('producer.resolved') }}</div>
+          <div class="flex flex-wrap gap-2 text-xs sm:justify-end">
+            <div class="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-muted-foreground">
+              <span class="font-mono text-sm text-foreground">{{ revisionSnapshotIssues.length }}</span>
+              <span>{{ t('producer.cycleIssues') }}</span>
+            </div>
+            <div class="inline-flex items-center gap-2 rounded-full bg-warning-bg px-3 py-1.5 text-warning">
+              <span class="font-mono text-sm text-foreground">{{ revisionOpenIssues.length }}</span>
+              <span>{{ t('producer.open') }}</span>
+            </div>
+            <div class="inline-flex items-center gap-2 rounded-full bg-success-bg px-3 py-1.5 text-success">
+              <span class="font-mono text-sm text-foreground">{{ revisionResolvedIssues.length }}</span>
+              <span>{{ t('producer.resolved') }}</span>
+            </div>
           </div>
         </div>
         <IssueMarkerList
@@ -1694,7 +1706,9 @@ function handleIssueLeave() {
           @hover="handleIssueHover"
           @leave="handleIssueLeave"
         />
-        <div v-else class="text-sm text-muted-foreground">{{ t('producer.noIssues') }}</div>
+        <div v-else class="border border-success/20 bg-success-bg px-4 py-3 text-sm text-success">
+          {{ t('producer.noIssues') }}
+        </div>
       </div>
 
       <!-- 3a. Upload card (assignee only, at bottom) -->
