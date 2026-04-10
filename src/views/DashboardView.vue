@@ -395,7 +395,11 @@ function openAlbumSettings(albumId: number) {
                     />
                   </td>
                   <td class="px-4 py-3 text-sm text-muted-foreground">
-                    <span v-if="track.open_issue_count" class="text-error">{{ t('dashboard.openCount', { count: track.open_issue_count }) }}</span>
+                    <button
+                      v-if="track.open_issue_count"
+                      @click.stop="router.push(`/tracks/${track.id}#issues`)"
+                      class="text-error hover:underline cursor-pointer"
+                    >{{ t('dashboard.openCount', { count: track.open_issue_count }) }}</button>
                     <span v-else>--</span>
                   </td>
                   <td class="px-4 py-3 text-sm text-muted-foreground">v{{ track.version }}</td>

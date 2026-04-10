@@ -192,7 +192,7 @@
 
         <!-- Template list -->
         <template v-if="!showNewTemplate">
-          <div v-if="isProducer" class="flex justify-end">
+          <div v-if="isOwner" class="flex justify-end">
             <button @click="startNewTemplate" class="btn-primary text-xs">
               <Plus class="w-3.5 h-3.5 mr-1" /> {{ t('workflowTemplate.createTemplate') }}
             </button>
@@ -215,7 +215,7 @@
               <span>{{ tpl.workflow_config.steps.length }} steps</span>
               <span v-if="tpl.created_by_user">{{ t('workflowTemplate.createdBy', { name: tpl.created_by_user.display_name }) }}</span>
             </div>
-            <div v-if="isProducer" class="flex gap-2 pt-1">
+            <div v-if="isOwner" class="flex gap-2 pt-1">
               <button @click="startEditTemplate(tpl)" class="btn-secondary text-xs">
                 <Pencil class="w-3 h-3 mr-1" /> {{ t('workflowTemplate.editTemplate') }}
               </button>
@@ -357,7 +357,6 @@ const currentUserId = computed(() => appStore.currentUser?.id)
 const isOwner = computed(() =>
   circle.value ? circle.value.created_by === currentUserId.value : false
 )
-const isProducer = computed(() => appStore.currentUser?.role === 'producer')
 
 const tabs = computed(() => {
   const base = [

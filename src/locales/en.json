@@ -532,6 +532,13 @@
     "timelineCollapse": "Collapse",
     "live": "Live",
     "liveConnected": "Connected to real-time collaboration",
+    "liveDisconnected": "Real-time connection lost, reconnecting…",
+    "timelineFilter": {
+      "all": "All",
+      "transitions": "Transitions",
+      "issues": "Issues",
+      "uploads": "Uploads"
+    },
     "archive": "Archive Track",
     "archiveConfirm": "Archive this track? It can be restored within 14 days. After that, it will be permanently deleted.",
     "system": "System",

@@ -532,6 +532,13 @@
     "timelineCollapse": "收起",
     "live": "实时",
     "liveConnected": "已连接实时协作",
+    "liveDisconnected": "实时连接已断开，正在重连…",
+    "timelineFilter": {
+      "all": "全部",
+      "transitions": "状态变更",
+      "issues": "问题",
+      "uploads": "上传"
+    },
     "archive": "归档曲目",
     "archiveConfirm": "确认归档此曲目？归档后 14 天内可恢复，超期将被永久删除。",
     "system": "系统",

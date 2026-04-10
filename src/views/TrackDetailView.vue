@@ -124,7 +124,19 @@ const sourceVersions = ref<TrackSourceVersion[]>([])
 const workflowConfig = ref<WorkflowConfig | null>(null)
 const loading = ref(true)
 const timelineExpanded = ref(false)
+const timelineFilter = ref<'all' | 'transitions' | 'issues' | 'uploads'>('all')
 const TIMELINE_PREVIEW_COUNT = 5
+
+const filteredEvents = computed(() => {
+  if (timelineFilter.value === 'all') return events.value
+  if (timelineFilter.value === 'transitions')
+    return events.value.filter(e => e.from_status && e.to_status && e.from_status !== e.to_status)
+  if (timelineFilter.value === 'issues')
+    return events.value.filter(e => e.event_type.startsWith('issue'))
+  if (timelineFilter.value === 'uploads')
+    return events.value.filter(e => e.event_type.includes('upload') || e.event_type.includes('deliver'))
+  return events.value
+})
 const newDiscussionContent = ref('')
 const postingDiscussion = ref(false)
 const discussionImages = ref<File[]>([])
@@ -139,12 +151,17 @@ onMounted(loadTrack)
 
 // Real-time: reload track data whenever another collaborator changes it
 const wsReloading = ref(false)
+const wsHadConnection = ref(false)
 const { connected: wsConnected } = useTrackWebSocket(trackId.value, async () => {
   if (wsReloading.value) return
   wsReloading.value = true
   await nextTick()
   await loadTrack()
   wsReloading.value = false
+})
+
+watch(wsConnected, (val) => {
+  if (val) wsHadConnection.value = true
 })
 
 async function loadTrack() {
@@ -379,6 +396,14 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
   <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
   <div v-else-if="track" class="max-w-7xl mx-auto">
     <div class="space-y-6">
+      <!-- WebSocket disconnect banner -->
+      <div
+        v-if="wsHadConnection && !wsConnected"
+        class="flex items-center gap-2 px-4 py-2.5 bg-warning-bg border border-warning/30 text-warning text-sm font-mono"
+      >
+        <span class="w-2 h-2 rounded-full bg-warning animate-pulse flex-shrink-0"></span>
+        {{ t('trackDetail.liveDisconnected') }}
+      </div>
       <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
         <div class="min-w-0">
           <div class="flex items-center gap-2 mb-2 flex-wrap">
@@ -468,7 +493,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             />
           </div>
 
-          <div>
+          <div id="issues">
             <h3 class="text-sm font-sans font-semibold text-foreground mb-3">
               {{ t('trackDetail.issuesHeading', { count: currentCycleIssues.length }) }}
             </h3>
@@ -626,17 +651,29 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
           <div class="flex items-center justify-between">
             <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('trackDetail.timeline') }}</h3>
             <button
-              v-if="events.length > TIMELINE_PREVIEW_COUNT"
+              v-if="filteredEvents.length > TIMELINE_PREVIEW_COUNT"
               @click="timelineExpanded = !timelineExpanded"
               class="text-xs text-muted-foreground hover:text-primary transition-colors font-mono"
             >
-              {{ timelineExpanded ? t('trackDetail.timelineCollapse') : t('trackDetail.timelineExpand', { count: events.length }) }}
+              {{ timelineExpanded ? t('trackDetail.timelineCollapse') : t('trackDetail.timelineExpand', { count: filteredEvents.length }) }}
             </button>
           </div>
-          <div v-if="events.length === 0" class="text-sm text-muted-foreground">{{ t('trackDetail.noEvents') }}</div>
-          <div v-else class="space-y-0 -mx-1 px-1 lg:flex-1" :class="!timelineExpanded && events.length > TIMELINE_PREVIEW_COUNT ? 'max-h-72 overflow-hidden' : 'overflow-y-auto max-h-[32rem] lg:max-h-none'">
+          <!-- Filter chips -->
+          <div class="flex gap-1.5 flex-wrap">
+            <button
+              v-for="f in (['all', 'transitions', 'issues', 'uploads'] as const)"
+              :key="f"
+              @click="timelineFilter = f; timelineExpanded = false"
+              class="px-2.5 py-1 rounded-full text-xs font-mono transition-colors"
+              :class="timelineFilter === f ? 'bg-primary text-background' : 'bg-border text-muted-foreground hover:text-foreground'"
+            >
+              {{ t(`trackDetail.timelineFilter.${f}`) }}
+            </button>
+          </div>
+          <div v-if="filteredEvents.length === 0" class="text-sm text-muted-foreground">{{ t('trackDetail.noEvents') }}</div>
+          <div v-else class="space-y-0 -mx-1 px-1 lg:flex-1" :class="!timelineExpanded && filteredEvents.length > TIMELINE_PREVIEW_COUNT ? 'max-h-72 overflow-hidden' : 'overflow-y-auto max-h-[32rem] lg:max-h-none'">
             <div
-              v-for="event in (timelineExpanded ? events : events.slice(0, TIMELINE_PREVIEW_COUNT))"
+              v-for="event in (timelineExpanded ? filteredEvents : filteredEvents.slice(0, TIMELINE_PREVIEW_COUNT))"
               :key="event.id"
               class="flex gap-2.5 border-b border-border last:border-0 py-3 first:pt-0"
             >
@@ -651,7 +688,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             </div>
             <!-- Fade overlay when collapsed and there are more events -->
             <div
-              v-if="!timelineExpanded && events.length > TIMELINE_PREVIEW_COUNT"
+              v-if="!timelineExpanded && filteredEvents.length > TIMELINE_PREVIEW_COUNT"
               class="h-8 bg-gradient-to-t from-card to-transparent -mt-8 pointer-events-none"
             ></div>
           </div>
