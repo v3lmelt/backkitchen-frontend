@@ -696,7 +696,7 @@ const deliveryActions = computed<WorkflowAction[]>(() => {
 
 const finalReviewActions = computed<WorkflowAction[]>(() => {
   const actions = transitions.value
-    .filter(tr => tr.decision !== 'approve')
+    .filter(tr => tr.decision !== 'approve' && tr.decision !== 'reject_final' && tr.decision !== 'reject_resubmittable')
     .map((tr) => ({
     label: tr.decision === 'reject_to_mastering' ? t('finalReview.requestRemastering') : transitionLabel(tr.decision, tr.label),
     type: actionTypeForTransition(tr.decision),

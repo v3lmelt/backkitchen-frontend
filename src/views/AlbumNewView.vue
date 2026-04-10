@@ -58,7 +58,9 @@ const userOptions = computed<SelectOption[]>(() =>
 )
 
 const circleOptions = computed<SelectOption[]>(() =>
-  circles.value.map((c) => ({ value: c.id, label: c.name }))
+  circles.value
+    .filter((c) => c.created_by === appStore.currentUser?.id)
+    .map((c) => ({ value: c.id, label: c.name }))
 )
 
 const workflowMemberOptions = computed<SelectOption[]>(() => {
