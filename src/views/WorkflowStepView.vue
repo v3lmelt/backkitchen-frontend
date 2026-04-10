@@ -472,9 +472,9 @@ const finalReviewActions = computed<WorkflowAction[]>(() => {
   const actions = transitions.value
     .filter(tr => tr.decision !== 'approve')
     .map((tr) => ({
-    label: transitionLabel(tr.decision, tr.label),
+    label: tr.decision === 'reject_to_mastering' ? t('finalReview.requestRemastering') : transitionLabel(tr.decision, tr.label),
     type: actionTypeForTransition(tr.decision),
-    disabled: acting.value || (tr.decision.includes('reject') && finalReviewIssues.value.length === 0),
+    disabled: acting.value,
     handler: () => executeTransition(tr.decision),
     }))
   actions.unshift({

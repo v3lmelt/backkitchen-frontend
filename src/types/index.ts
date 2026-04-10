@@ -50,6 +50,8 @@ export interface WorkflowStepDef {
   assignee_user_id?: number | null
   // Delivery-specific
   require_confirmation?: boolean | null
+  // Additional roles that may act on this step
+  actor_roles?: string[] | null
 }
 
 export interface WorkflowConfig {

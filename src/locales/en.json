@@ -678,6 +678,7 @@
     "submitter": "Submitter",
     "approveMaster": "Approve Current Master",
     "returnToMastering": "Return to Mastering",
+    "requestRemastering": "Request Re-mastering",
     "actionHint": "Both producer and submitter must approve to complete the final review"
   },
   "issueDetail": {

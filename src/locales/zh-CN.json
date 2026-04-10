@@ -678,6 +678,7 @@
     "submitter": "提交者",
     "approveMaster": "批准当前母带",
     "returnToMastering": "退回母带制作",
+    "requestRemastering": "要求重新做母带",
     "actionHint": "制作人和提交者都需要批准才能完成终审"
   },
   "issueDetail": {
