@@ -442,6 +442,17 @@ export const discussionApi = {
     }
     return request<Discussion>(`/tracks/${trackId}/discussions`, { method: 'POST', body: form })
   },
+  update: (id: number, content: string) =>
+    request<Discussion>(`/discussions/${id}`, { method: 'PATCH', body: JSON.stringify({ content }) }),
+  delete: (id: number) =>
+    request<void>(`/discussions/${id}`, { method: 'DELETE' }),
+}
+
+export const commentApi = {
+  update: (id: number, content: string) =>
+    request<Comment>(`/comments/${id}`, { method: 'PATCH', body: JSON.stringify({ content }) }),
+  delete: (id: number) =>
+    request<void>(`/comments/${id}`, { method: 'DELETE' }),
 }
 
 export const userApi = {

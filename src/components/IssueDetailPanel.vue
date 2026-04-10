@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { issueApi, r2Api, uploadToR2, resolveAssetUrl } from '@/api'
+import { issueApi, commentApi, r2Api, uploadToR2, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Comment, Issue, IssueStatus } from '@/types'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
@@ -10,7 +10,7 @@ import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatTimestamp, formatDuration, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import type { TimeReference, TimestampTarget } from '@/utils/timestamps'
-import { X, Music, ImageIcon } from 'lucide-vue-next'
+import { X, Music, ImageIcon, Pencil, Trash2 } from 'lucide-vue-next'
 
 const props = defineProps<{ issue: Issue | null; track?: import('@/types').Track | null }>()
 
@@ -221,6 +221,34 @@ async function addComment() {
   }
 }
 
+// Comment edit/delete
+const editingCommentId = ref<number | null>(null)
+const editingCommentContent = ref('')
+
+function startEditComment(comment: Comment) {
+  editingCommentId.value = comment.id
+  editingCommentContent.value = comment.content
+}
+
+async function saveEditComment(comment: Comment) {
+  const content = editingCommentContent.value.trim()
+  if (!content || !fullIssue.value?.comments) return
+  try {
+    const updated = await commentApi.update(comment.id, content)
+    const idx = fullIssue.value.comments.findIndex(c => c.id === comment.id)
+    if (idx !== -1) fullIssue.value.comments[idx] = updated
+    editingCommentId.value = null
+  } catch { /* handled by request wrapper */ }
+}
+
+async function deleteComment(comment: Comment) {
+  if (!fullIssue.value?.comments) return
+  try {
+    await commentApi.delete(comment.id)
+    fullIssue.value.comments = fullIssue.value.comments.filter(c => c.id !== comment.id)
+  } catch { /* handled by request wrapper */ }
+}
+
 function onFileSelect(event: Event) {
   if (submittingComment.value) return
   const input = event.target as HTMLInputElement
@@ -392,8 +420,30 @@ onBeforeUnmount(() => {
                     {{ comment.author?.display_name ?? t('issueDetail.unknown') }}
                   </span>
                   <span class="text-xs text-muted-foreground">{{ formatDate(comment.created_at) }}</span>
+                  <template v-if="comment.author_id === appStore.currentUser?.id && !comment.is_status_note">
+                    <button @click="startEditComment(comment)" class="text-muted-foreground hover:text-foreground transition-colors ml-auto">
+                      <Pencil class="w-3 h-3" :stroke-width="2" />
+                    </button>
+                    <button @click="deleteComment(comment)" class="text-muted-foreground hover:text-error transition-colors">
+                      <Trash2 class="w-3 h-3" :stroke-width="2" />
+                    </button>
+                  </template>
                 </div>
+                <template v-if="editingCommentId === comment.id">
+                  <textarea
+                    v-model="editingCommentContent"
+                    class="textarea-field w-full text-sm"
+                    rows="3"
+                    @keydown.ctrl.enter="saveEditComment(comment)"
+                    @keydown.meta.enter="saveEditComment(comment)"
+                  />
+                  <div class="flex gap-2 mt-1">
+                    <button @click="saveEditComment(comment)" class="btn-primary text-xs">{{ t('common.save') }}</button>
+                    <button @click="editingCommentId = null" class="btn-secondary text-xs">{{ t('common.cancel') }}</button>
+                  </div>
+                </template>
                 <TimestampText
+                  v-else
                   :text="comment.content"
                   class="text-sm text-foreground"
                   :default-target="comment.audios?.length ? 'attachment' : 'track'"

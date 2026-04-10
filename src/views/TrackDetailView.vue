@@ -11,7 +11,7 @@ import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
-import { Archive, ChevronRight, UserRoundCog, ImageIcon, X } from 'lucide-vue-next'
+import { Archive, ChevronRight, UserRoundCog, ImageIcon, X, Pencil, Trash2 } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
@@ -247,6 +247,33 @@ function removeDiscussionImage(index: number) {
 
 function openImage(url: string) {
   window.open(resolveAssetUrl(url), '_blank')
+}
+
+// Discussion edit/delete
+const editingDiscussionId = ref<number | null>(null)
+const editingDiscussionContent = ref('')
+
+function startEditDiscussion(d: Discussion) {
+  editingDiscussionId.value = d.id
+  editingDiscussionContent.value = d.content
+}
+
+async function saveEditDiscussion(d: Discussion) {
+  const content = editingDiscussionContent.value.trim()
+  if (!content) return
+  try {
+    const updated = await discussionApi.update(d.id, content)
+    const idx = discussions.value.findIndex(x => x.id === d.id)
+    if (idx !== -1) discussions.value[idx] = updated
+    editingDiscussionId.value = null
+  } catch { toastError(t('common.error')) }
+}
+
+async function deleteDiscussion(d: Discussion) {
+  try {
+    await discussionApi.delete(d.id)
+    discussions.value = discussions.value.filter(x => x.id !== d.id)
+  } catch { toastError(t('common.error')) }
 }
 
 const currentVersionId = computed(() => track.value?.current_source_version?.id ?? null)
@@ -545,8 +572,31 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
                   <div class="flex items-center gap-2">
                     <span class="text-sm font-medium text-foreground">{{ d.author?.display_name || '?' }}</span>
                     <span class="text-xs text-muted-foreground">{{ fmtDate(d.created_at) }}</span>
+                    <template v-if="d.author_id === appStore.currentUser?.id">
+                      <button @click="startEditDiscussion(d)" class="text-muted-foreground hover:text-foreground transition-colors ml-auto">
+                        <Pencil class="w-3.5 h-3.5" :stroke-width="2" />
+                      </button>
+                      <button @click="deleteDiscussion(d)" class="text-muted-foreground hover:text-error transition-colors">
+                        <Trash2 class="w-3.5 h-3.5" :stroke-width="2" />
+                      </button>
+                    </template>
                   </div>
-                  <p class="text-sm text-foreground mt-1 whitespace-pre-wrap">{{ d.content }}</p>
+                  <template v-if="editingDiscussionId === d.id">
+                    <textarea
+                      v-model="editingDiscussionContent"
+                      class="textarea-field w-full text-sm mt-1"
+                      rows="3"
+                      @keydown.ctrl.enter="saveEditDiscussion(d)"
+                      @keydown.meta.enter="saveEditDiscussion(d)"
+                    />
+                    <div class="flex gap-2 mt-1">
+                      <button @click="saveEditDiscussion(d)" class="btn-primary text-xs">{{ t('common.save') }}</button>
+                      <button @click="editingDiscussionId = null" class="btn-secondary text-xs">{{ t('common.cancel') }}</button>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <p class="text-sm text-foreground mt-1 whitespace-pre-wrap">{{ d.content }}</p>
+                  </template>
                   <div v-if="d.images?.length" class="flex gap-2 mt-2">
                     <img
                       v-for="img in d.images"

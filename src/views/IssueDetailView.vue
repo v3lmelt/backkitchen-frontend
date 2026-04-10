@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { issueApi, r2Api, uploadToR2, trackApi, API_ORIGIN, resolveAssetUrl } from '@/api'
+import { issueApi, commentApi, r2Api, uploadToR2, trackApi, API_ORIGIN, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Comment, Issue, IssueStatus } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
@@ -11,7 +11,7 @@ import TimestampText from '@/components/common/TimestampText.vue'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
 import { formatTimestamp, formatTimestampShort, formatLocaleDate, formatDuration } from '@/utils/time'
 import type { MarkerIndexReference, TimeReference, TimestampTarget } from '@/utils/timestamps'
-import { ChevronLeft, ChevronRight, Music, ImageIcon } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight, Music, ImageIcon, Pencil, Trash2 } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -323,6 +323,34 @@ async function addComment() {
   }
 }
 
+// Comment edit/delete
+const editingCommentId = ref<number | null>(null)
+const editingCommentContent = ref('')
+
+function startEditComment(comment: Comment) {
+  editingCommentId.value = comment.id
+  editingCommentContent.value = comment.content
+}
+
+async function saveEditComment(comment: Comment) {
+  const content = editingCommentContent.value.trim()
+  if (!content || !issue.value?.comments) return
+  try {
+    const updated = await commentApi.update(comment.id, content)
+    const idx = issue.value.comments.findIndex(c => c.id === comment.id)
+    if (idx !== -1) issue.value.comments[idx] = updated
+    editingCommentId.value = null
+  } catch { /* handled by request wrapper */ }
+}
+
+async function deleteComment(comment: Comment) {
+  if (!issue.value?.comments) return
+  try {
+    await commentApi.delete(comment.id)
+    issue.value.comments = issue.value.comments.filter(c => c.id !== comment.id)
+  } catch { /* handled by request wrapper */ }
+}
+
 function selectStatus(status: IssueStatus) {
   pendingStatus.value = status
   statusNote.value = ''
@@ -601,8 +629,30 @@ function openVersionCompare() {
                   {{ comment.author?.display_name || t('issueDetail.unknown') }}
                 </span>
                 <span class="text-xs text-muted-foreground">{{ fmtDate(comment.created_at) }}</span>
+                <template v-if="comment.author_id === appStore.currentUser?.id && !comment.is_status_note">
+                  <button @click="startEditComment(comment)" class="text-muted-foreground hover:text-foreground transition-colors ml-auto">
+                    <Pencil class="w-3.5 h-3.5" :stroke-width="2" />
+                  </button>
+                  <button @click="deleteComment(comment)" class="text-muted-foreground hover:text-error transition-colors">
+                    <Trash2 class="w-3.5 h-3.5" :stroke-width="2" />
+                  </button>
+                </template>
               </div>
+              <template v-if="editingCommentId === comment.id">
+                <textarea
+                  v-model="editingCommentContent"
+                  class="textarea-field w-full text-sm"
+                  rows="3"
+                  @keydown.ctrl.enter="saveEditComment(comment)"
+                  @keydown.meta.enter="saveEditComment(comment)"
+                />
+                <div class="flex gap-2 mt-1">
+                  <button @click="saveEditComment(comment)" class="btn-primary text-xs">{{ t('common.save') }}</button>
+                  <button @click="editingCommentId = null" class="btn-secondary text-xs">{{ t('common.cancel') }}</button>
+                </div>
+              </template>
               <TimestampText
+                v-else
                 :text="comment.content"
                 class="text-sm text-foreground"
                 :default-target="comment.audios?.length ? 'attachment' : 'track'"
