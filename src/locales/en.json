@@ -1119,5 +1119,23 @@
     "updateSuccess": "User updated",
     "deleteSuccess": "User deleted",
     "noAccess": "No access to admin panel"
+  },
+  "shortcuts": {
+    "title": "Keyboard Shortcuts",
+    "sectionWaveform": "Waveform & Annotation",
+    "sectionNavigation": "Navigation",
+    "playPause": "Play / Pause",
+    "setRangeStart": "Set range start",
+    "setRangeEnd": "Confirm range end",
+    "undoMarker": "Undo last marker",
+    "clearAnchor": "Clear range anchor",
+    "seek": "Seek ±5 seconds",
+    "prevIssue": "Previous issue",
+    "nextIssue": "Next issue",
+    "showHelp": "Show this help",
+    "hint": "Shortcuts are disabled when an input is focused",
+    "keys": {
+      "space": "Space"
+    }
   }
 }

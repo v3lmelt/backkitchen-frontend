@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import Sidebar from './Sidebar.vue'
 import AppHeader from './AppHeader.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
+import ShortcutsModal from '@/components/common/ShortcutsModal.vue'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
@@ -22,4 +23,5 @@ const layoutStyle = computed(() => ({
     </div>
   </div>
   <ToastContainer />
+  <ShortcutsModal />
 </template>
