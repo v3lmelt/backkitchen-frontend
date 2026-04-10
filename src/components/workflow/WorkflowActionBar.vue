@@ -179,22 +179,23 @@ function confirmPending() {
 
 <style scoped>
 .workflow-action-bar {
-  position: fixed;
+  position: sticky;
   bottom: 0;
-  left: 0;
-  right: 0;
   z-index: 40;
+  margin-left: -1rem;
+  margin-right: -1rem;
 }
 
 @media (min-width: 768px) {
   .workflow-action-bar {
-    left: var(--sidebar-w, 15rem);
+    margin-left: -1.5rem;
+    margin-right: -1.5rem;
   }
 }
 
 .bar-surface {
   background: #111111;
-  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
 }
 
 /* ── Pulsing status dot ── */
