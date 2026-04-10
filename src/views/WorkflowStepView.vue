@@ -798,7 +798,7 @@ function handleIssueLeave() {
     <div class="card text-muted-foreground">{{ t('common.loading') }}</div>
   </div>
 
-  <div v-else-if="activeVariant === 'intake'" class="max-w-4xl mx-auto min-h-full flex flex-col pb-24">
+  <div v-else-if="activeVariant === 'intake'" class="max-w-4xl mx-auto min-h-full flex flex-col">
     <div class="space-y-6">
       <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div class="min-w-0">
@@ -854,7 +854,7 @@ function handleIssueLeave() {
     <WorkflowActionBar :actions="classicActions" :hint="t('producer.intakeHint')" />
   </div>
 
-  <div v-else-if="activeVariant === 'peer_review'" class="max-w-4xl mx-auto min-h-full flex flex-col pb-24">
+  <div v-else-if="activeVariant === 'peer_review'" class="max-w-4xl mx-auto min-h-full flex flex-col">
     <div class="space-y-6">
       <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div class="min-w-0">
@@ -979,7 +979,7 @@ function handleIssueLeave() {
     <WorkflowActionBar :actions="classicActions.map(action => ({ ...action, disabled: action.disabled || !checklistSaved }))" :hint="t('peerReview.actionHint')" />
   </div>
 
-  <div v-else-if="activeVariant === 'producer_gate'" class="max-w-4xl mx-auto min-h-full flex flex-col pb-24">
+  <div v-else-if="activeVariant === 'producer_gate'" class="max-w-4xl mx-auto min-h-full flex flex-col">
     <div class="space-y-6">
       <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div class="min-w-0">
@@ -1229,7 +1229,7 @@ function handleIssueLeave() {
     />
   </div>
 
-  <div v-else-if="activeVariant === 'mastering'" class="max-w-4xl mx-auto min-h-full flex flex-col pb-24">
+  <div v-else-if="activeVariant === 'mastering'" class="max-w-4xl mx-auto min-h-full flex flex-col">
     <div class="space-y-6">
       <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div class="min-w-0">
@@ -1446,7 +1446,7 @@ function handleIssueLeave() {
       <WorkflowActionBar :actions="deliveryActions" :hint="t('mastering.actionHint')" />
   </div>
 
-  <div v-else-if="activeVariant === 'final_review'" class="max-w-4xl mx-auto min-h-full flex flex-col pb-24">
+  <div v-else-if="activeVariant === 'final_review'" class="max-w-4xl mx-auto min-h-full flex flex-col">
     <div class="space-y-6">
       <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div class="min-w-0">
@@ -1597,7 +1597,7 @@ function handleIssueLeave() {
     <WorkflowActionBar :actions="finalReviewActions" :hint="t('finalReview.actionHint')" />
   </div>
 
-  <div v-else class="max-w-4xl mx-auto space-y-6 pb-24">
+  <div v-else class="max-w-4xl mx-auto space-y-6">
     <div class="flex items-center gap-3">
       <button @click="goBack" class="btn-secondary !px-3 !py-2">
         <ChevronLeft class="w-4 h-4" />

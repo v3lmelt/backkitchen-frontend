@@ -512,7 +512,7 @@ watch(selectedCompareMasterDelivery, (delivery) => {
     <p class="text-sm text-error">{{ t('common.loadFailed') }}</p>
     <button @click="loadTrack" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
   </div>
-  <div v-else-if="track" class="max-w-7xl mx-auto pb-24 lg:pb-0">
+  <div v-else-if="track" class="max-w-7xl mx-auto">
     <div class="space-y-6">
       <!-- WebSocket disconnect banner -->
       <div
@@ -974,7 +974,7 @@ watch(selectedCompareMasterDelivery, (delivery) => {
     <!-- Mobile sticky CTA -->
     <div
       v-if="primaryActions.length"
-      class="mobile-cta-bar lg:hidden border-t border-border bg-[#111111] px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center justify-end"
+      class="mobile-cta-bar lg:hidden border-t border-border bg-[#111111] px-4 md:px-6 py-3 flex items-center justify-end"
     >
       <button
         v-for="action in primaryActions"
@@ -1001,15 +1001,16 @@ watch(selectedCompareMasterDelivery, (delivery) => {
 }
 
 .mobile-cta-bar {
-  position: fixed;
+  position: sticky;
   bottom: 0;
-  left: 0;
-  right: 0;
   z-index: 30;
+  margin-left: -1rem;
+  margin-right: -1rem;
 }
 @media (min-width: 768px) {
   .mobile-cta-bar {
-    left: var(--sidebar-w, 15rem);
+    margin-left: -1.5rem;
+    margin-right: -1.5rem;
   }
 }
 </style>
