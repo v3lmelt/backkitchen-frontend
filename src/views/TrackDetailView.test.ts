@@ -177,7 +177,7 @@ describe('TrackDetailView', () => {
     expect(buttons.every(button => button.text().includes('Open Intake'))).toBe(true)
 
     await buttons[0].trigger('click')
-    expect(mocks.pushMock).toHaveBeenCalledWith('/tracks/7/step/intake')
+    expect(mocks.pushMock).toHaveBeenCalledWith({ path: '/tracks/7/step/intake', query: undefined })
   })
 
   it('prioritizes remaster reopen targets and labels them clearly', async () => {

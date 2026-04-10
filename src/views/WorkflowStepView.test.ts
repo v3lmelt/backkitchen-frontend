@@ -151,7 +151,10 @@ describe('WorkflowStepView', () => {
     await flushPromises()
 
     expect(mocks.workflowTransitionMock).toHaveBeenCalledWith(9, 'accept')
-    expect(mocks.pushMock).toHaveBeenCalledWith('/tracks/9')
+    expect(mocks.pushMock).toHaveBeenCalledWith({
+      path: '/tracks/9',
+      query: { returnTo: undefined },
+    })
   })
 
   it('keeps only the dedicated final-review approval action', async () => {
@@ -290,7 +293,7 @@ describe('WorkflowStepView', () => {
     const downloadButtons = wrapper.findAll('button').filter(button => button.text().includes('Download Audio'))
     expect(downloadButtons.length).toBeGreaterThan(1)
 
-    await downloadButtons[1].trigger('click')
+    await downloadButtons[downloadButtons.length - 1].trigger('click')
     expect(mocks.downloadAudioAssetMock).toHaveBeenCalledWith(
       '/api/tracks/9/master-deliveries/21/audio?v=2&c=1',
       'Master Track_master_v2_cycle1',
