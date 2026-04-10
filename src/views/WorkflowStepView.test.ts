@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
+import { ref } from 'vue'
 
 import { mountWithPlugins } from '@/tests/utils'
 
@@ -72,8 +73,8 @@ vi.mock('@/components/common/CustomSelect.vue', () => ({
 
 vi.mock('@/composables/useAudioDownload', () => ({
   useAudioDownload: () => ({
-    downloading: { value: false },
-    downloadProgress: { value: 0 },
+    downloading: ref(false),
+    downloadProgress: ref(0),
     downloadTrackAudio: mocks.downloadTrackAudioMock,
     downloadAudioAsset: mocks.downloadAudioAssetMock,
   }),
@@ -140,10 +141,10 @@ describe('WorkflowStepView', () => {
     await flushPromises()
 
     expect(wrapper.find('.workflow-progress').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Accept')
     expect(wrapper.text()).toContain('Return to Peer Review')
+    expect(wrapper.text()).toContain('Send to Peer Review')
 
-    const approveButton = wrapper.findAll('button').find(button => button.text() === 'Accept')
+    const approveButton = wrapper.findAll('button').find(button => button.text() === 'Send to Peer Review')
     expect(approveButton).toBeTruthy()
 
     await approveButton!.trigger('click')
@@ -206,7 +207,7 @@ describe('WorkflowStepView', () => {
     const buttons = wrapper.findAll('button')
     expect(buttons.filter(button => button.text() === 'Approve').length).toBe(0)
     expect(buttons.some(button => button.text() === 'Approve Current Master')).toBe(true)
-    expect(buttons.some(button => button.text() === 'Return to Mastering')).toBe(true)
+    expect(buttons.some(button => button.text() === 'Request Re-mastering')).toBe(true)
   })
 
   it('shows master delivery history with compare and per-version download actions', async () => {
