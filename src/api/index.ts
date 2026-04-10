@@ -215,6 +215,8 @@ export const albumApi = {
     }),
   testWebhook: (id: number) =>
     request<{ success: boolean }>(`/albums/${id}/webhook/test`, { method: 'POST' }),
+  getWebhookDeliveries: (id: number) =>
+    request<WebhookDelivery[]>(`/albums/${id}/webhook/deliveries`),
   getWorkflow: (id: number) =>
     request<WorkflowConfig>(`/albums/${id}/workflow`),
   updateWorkflow: (id: number, config: WorkflowConfig) =>

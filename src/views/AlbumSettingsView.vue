@@ -7,7 +7,7 @@ import { albumApi, trackApi, checklistApi, invitationApi, userApi, circleApi, AP
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
-import type { Album, ChecklistTemplateItem, Invitation, Track, User, WorkflowConfig } from '@/types'
+import type { Album, ChecklistTemplateItem, Invitation, Track, User, WebhookDelivery, WorkflowConfig } from '@/types'
 import { Archive, RotateCcw, Upload } from 'lucide-vue-next'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
@@ -95,6 +95,8 @@ const webhookState = reactive({ url: '', enabled: false, events: [] as string[] 
 const savingWebhook = ref(false)
 const testingWebhook = ref(false)
 const webhookTestResult = ref<boolean | null>(null)
+const webhookDeliveries = ref<WebhookDelivery[]>([])
+const loadingDeliveries = ref(false)
 
 const WEBHOOK_EVENT_TYPES = [
   'track_status_changed', 'new_issue', 'issue_status_changed', 'new_comment', 'new_discussion',
@@ -284,6 +286,7 @@ onMounted(async () => {
           webhookState.enabled = false
           webhookState.events = []
         }),
+        albumApi.getWebhookDeliveries(albumData.id).then(d => { webhookDeliveries.value = d }).catch(() => {}),
       )
     } else if (albumData.members.some(m => m.user_id === userId)) {
       loadTasks.push(
@@ -598,6 +601,18 @@ async function testWebhook() {
     webhookTestResult.value = false
   } finally {
     testingWebhook.value = false
+    // Refresh delivery history after test
+    albumApi.getWebhookDeliveries(album.value.id).then(d => { webhookDeliveries.value = d }).catch(() => {})
+  }
+}
+
+async function refreshDeliveries() {
+  if (!album.value) return
+  loadingDeliveries.value = true
+  try {
+    webhookDeliveries.value = await albumApi.getWebhookDeliveries(album.value.id)
+  } finally {
+    loadingDeliveries.value = false
   }
 }
 </script>
@@ -1205,6 +1220,36 @@ async function testWebhook() {
           </button>
           <span v-if="webhookTestResult === true" class="text-xs text-success">✓</span>
           <span v-if="webhookTestResult === false" class="text-xs text-error">✗</span>
+        </div>
+
+        <!-- Delivery history -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-mono font-semibold text-foreground">{{ t('settings.webhookDeliveries') }}</span>
+            <button @click="refreshDeliveries" :disabled="loadingDeliveries" class="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              {{ loadingDeliveries ? t('common.loading') : t('common.refresh') }}
+            </button>
+          </div>
+          <div v-if="webhookDeliveries.length === 0" class="text-xs text-muted-foreground py-3 text-center">
+            {{ t('settings.webhookNoDeliveries') }}
+          </div>
+          <div v-else class="space-y-1.5">
+            <div
+              v-for="d in webhookDeliveries"
+              :key="d.id"
+              class="flex items-start gap-3 text-xs py-2 px-3 bg-background border border-border rounded-none"
+            >
+              <span
+                class="shrink-0 font-mono px-2 py-0.5 rounded-full text-[11px]"
+                :class="d.success ? 'bg-success-bg text-success' : 'bg-error-bg text-error'"
+              >
+                {{ d.success ? (d.status_code ?? 'OK') : (d.status_code ?? t('common.error')) }}
+              </span>
+              <span class="font-mono text-muted-foreground shrink-0">{{ d.event_type }}</span>
+              <span v-if="d.error_detail" class="text-error truncate flex-1" :title="d.error_detail">{{ d.error_detail }}</span>
+              <span class="text-muted-foreground ml-auto shrink-0">{{ new Date(d.created_at).toLocaleString() }}</span>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -399,6 +399,16 @@ export interface WebhookConfig {
   events: string[]
 }
 
+export interface WebhookDelivery {
+  id: number
+  event_type: string
+  success: boolean
+  status_code: number | null
+  target_url: string
+  error_detail: string | null
+  created_at: string
+}
+
 export interface AlbumStats {
   total_tracks: number
   by_status: Partial<Record<TrackStatus, number>>
