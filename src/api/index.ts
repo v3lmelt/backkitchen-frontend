@@ -366,6 +366,17 @@ export const trackApi = {
       method: 'PATCH',
       body: JSON.stringify({ is_public: isPublic }),
     }),
+  updateMetadata: (trackId: number, data: {
+    title?: string
+    artist?: string
+    bpm?: string | null
+    original_title?: string | null
+    original_artist?: string | null
+  }) =>
+    request<Track>(`/tracks/${trackId}/metadata`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 }
 
 export const issueApi = {
@@ -554,7 +565,9 @@ export const r2Api = {
     album_id: number
     title: string
     artist: string
-    bpm?: number | null
+    bpm?: string | null
+    original_title?: string | null
+    original_artist?: string | null
   }) => request<PresignedUploadResponse>('/tracks/request-upload', { method: 'POST', body: JSON.stringify(params) }),
 
   confirmTrackUpload: (params: {
@@ -564,7 +577,9 @@ export const r2Api = {
     album_id: number
     title: string
     artist: string
-    bpm?: number | null
+    bpm?: string | null
+    original_title?: string | null
+    original_artist?: string | null
   }) => request<Track>('/tracks/confirm-upload', { method: 'POST', body: JSON.stringify(params) }),
 
   // Source version

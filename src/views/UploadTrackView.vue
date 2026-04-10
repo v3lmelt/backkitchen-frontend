@@ -28,6 +28,8 @@ const form = ref({
   artist: '',
   album_id: null as number | null,
   bpm: '',
+  original_title: '',
+  original_artist: '',
 })
 const selectedFile = ref<File | null>(null)
 const audioDuration = ref<number | null>(null)
@@ -125,7 +127,9 @@ async function upload() {
           album_id: form.value.album_id,
           title: form.value.title,
           artist: form.value.artist,
-          bpm: form.value.bpm ? Number(form.value.bpm) : null,
+          bpm: form.value.bpm || null,
+          original_title: form.value.original_title || null,
+          original_artist: form.value.original_artist || null,
         }),
         extractAudioDuration(file).catch(() => null),
       ])
@@ -139,7 +143,9 @@ async function upload() {
         album_id: form.value.album_id,
         title: form.value.title,
         artist: form.value.artist,
-        bpm: form.value.bpm ? Number(form.value.bpm) : null,
+        bpm: form.value.bpm || null,
+        original_title: form.value.original_title || null,
+        original_artist: form.value.original_artist || null,
       })
     } else {
       // Legacy FormData upload
@@ -148,7 +154,9 @@ async function upload() {
       formData.append('title', form.value.title)
       formData.append('artist', form.value.artist)
       formData.append('album_id', String(form.value.album_id))
-      if (form.value.bpm) formData.append('bpm', String(form.value.bpm))
+      if (form.value.bpm) formData.append('bpm', form.value.bpm)
+      if (form.value.original_title) formData.append('original_title', form.value.original_title)
+      if (form.value.original_artist) formData.append('original_artist', form.value.original_artist)
       track = await uploadWithProgress<Track>(
         '/tracks', formData, (p) => { uploadProgress.value = p }
       )
@@ -220,7 +228,17 @@ function formatFileSize(bytes: number): string {
         </div>
         <div>
           <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.bpm') }}</label>
-          <input v-model="form.bpm" type="number" class="input-field w-full" :placeholder="t('upload.bpmPlaceholder')" />
+          <input v-model="form.bpm" type="text" class="input-field w-full" :placeholder="t('upload.bpmPlaceholder')" />
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.originalTitle') }}</label>
+          <input v-model="form.original_title" type="text" class="input-field w-full" :placeholder="t('upload.originalTitlePlaceholder')" />
+        </div>
+        <div>
+          <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.originalArtist') }}</label>
+          <input v-model="form.original_artist" type="text" class="input-field w-full" :placeholder="t('upload.originalArtistPlaceholder')" />
         </div>
       </div>
 

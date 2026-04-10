@@ -12,7 +12,7 @@ import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
-import { Archive, ChevronRight, UserRoundCog, ImageIcon, X, Pencil, Trash2 } from 'lucide-vue-next'
+import { Archive, Check, ChevronRight, UserRoundCog, ImageIcon, X, Pencil, Trash2 } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
@@ -350,6 +350,59 @@ const archiving = ref(false)
 const showArchiveConfirm = ref(false)
 const togglingVisibility = ref(false)
 
+// ── Edit metadata ─────────────────────────────────────────────────────────
+const canEditMetadata = computed(() => {
+  if (!track.value || !appStore.currentUser) return false
+  return appStore.currentUser.id === track.value.submitter_id || isProducer.value
+})
+const editingMetadata = ref(false)
+const metadataForm = ref({ title: '', artist: '', bpm: '', original_title: '', original_artist: '' })
+const savingMetadata = ref(false)
+
+function startEditMetadata() {
+  if (!track.value) return
+  metadataForm.value = {
+    title: track.value.title,
+    artist: track.value.artist ?? '',
+    bpm: track.value.bpm ?? '',
+    original_title: track.value.original_title ?? '',
+    original_artist: track.value.original_artist ?? '',
+  }
+  editingMetadata.value = true
+}
+
+async function saveMetadata() {
+  if (!track.value) return
+  savingMetadata.value = true
+  try {
+    const data: Record<string, string | null> = {}
+    if (metadataForm.value.title && metadataForm.value.title !== track.value.title)
+      data.title = metadataForm.value.title
+    if (metadataForm.value.artist && metadataForm.value.artist !== (track.value.artist ?? ''))
+      data.artist = metadataForm.value.artist
+    const newBpm = metadataForm.value.bpm || null
+    if (newBpm !== (track.value.bpm ?? null)) data.bpm = newBpm
+    const newOT = metadataForm.value.original_title || null
+    if (newOT !== (track.value.original_title ?? null)) data.original_title = newOT
+    const newOA = metadataForm.value.original_artist || null
+    if (newOA !== (track.value.original_artist ?? null)) data.original_artist = newOA
+
+    if (Object.keys(data).length === 0) {
+      editingMetadata.value = false
+      return
+    }
+    const updated = await trackApi.updateMetadata(track.value.id, data)
+    track.value = { ...track.value, ...updated }
+    editingMetadata.value = false
+    toastSuccess(t('trackDetail.metadataSaved'))
+    await loadTrack()
+  } catch {
+    toastError(t('trackDetail.metadataSaveFailed'))
+  } finally {
+    savingMetadata.value = false
+  }
+}
+
 async function toggleVisibility() {
   if (!track.value) return
   togglingVisibility.value = true
@@ -524,7 +577,7 @@ watch(selectedCompareMasterDelivery, (delivery) => {
         {{ t('trackDetail.liveDisconnected') }}
       </div>
       <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
-        <div class="min-w-0">
+        <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2 mb-2 flex-wrap">
             <StatusBadge
               :status="track.status"
@@ -545,13 +598,73 @@ watch(selectedCompareMasterDelivery, (delivery) => {
               {{ t('trackDetail.live') }}
             </span>
           </div>
-          <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">
-            <span v-if="track.track_number" class="text-muted-foreground font-mono">#{{ track.track_number }}</span>
-            {{ track.title }}
-          </h1>
-          <p class="text-sm sm:text-base text-muted-foreground">
-            <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span> · source v{{ track.version }} · cycle {{ track.workflow_cycle }}
-          </p>
+
+          <!-- Editing metadata inline -->
+          <template v-if="editingMetadata">
+            <div class="card space-y-3">
+              <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('trackDetail.editMetadataTitle') }}</h3>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('upload.trackTitle') }}</label>
+                  <input v-model="metadataForm.title" class="input-field w-full" />
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('upload.artist') }}</label>
+                  <input v-model="metadataForm.artist" class="input-field w-full" />
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('upload.bpm') }}</label>
+                  <input v-model="metadataForm.bpm" type="text" class="input-field w-full" :placeholder="t('upload.bpmPlaceholder')" />
+                </div>
+                <div></div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('upload.originalTitle') }}</label>
+                  <input v-model="metadataForm.original_title" type="text" class="input-field w-full" :placeholder="t('upload.originalTitlePlaceholder')" />
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('upload.originalArtist') }}</label>
+                  <input v-model="metadataForm.original_artist" type="text" class="input-field w-full" :placeholder="t('upload.originalArtistPlaceholder')" />
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <button @click="saveMetadata" :disabled="savingMetadata || !metadataForm.title || !metadataForm.artist" class="btn-primary text-sm disabled:opacity-50">
+                  <span class="flex items-center gap-1.5">
+                    <Check class="w-4 h-4" :stroke-width="2" />
+                    {{ savingMetadata ? t('common.loading') : t('common.save') }}
+                  </span>
+                </button>
+                <button @click="editingMetadata = false" class="btn-secondary text-sm">{{ t('common.cancel') }}</button>
+              </div>
+            </div>
+          </template>
+
+          <!-- Normal display -->
+          <template v-else>
+            <div class="flex items-start gap-2">
+              <div class="min-w-0">
+                <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">
+                  <span v-if="track.track_number" class="text-muted-foreground font-mono">#{{ track.track_number }}</span>
+                  {{ track.title }}
+                </h1>
+                <p class="text-sm sm:text-base text-muted-foreground">
+                  <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span> · source v{{ track.version }} · cycle {{ track.workflow_cycle }}
+                </p>
+                <div v-if="track.bpm || track.original_title || track.original_artist" class="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
+                  <span v-if="track.bpm" class="font-mono">BPM {{ track.bpm }}</span>
+                  <span v-if="track.original_title">{{ t('upload.originalTitle') }}: {{ track.original_title }}</span>
+                  <span v-if="track.original_artist">{{ t('upload.originalArtist') }}: {{ track.original_artist }}</span>
+                </div>
+              </div>
+              <button
+                v-if="canEditMetadata"
+                @click="startEditMetadata"
+                class="shrink-0 mt-1 p-1.5 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                :title="t('trackDetail.editMetadata')"
+              >
+                <Pencil class="w-4 h-4" :stroke-width="2" />
+              </button>
+            </div>
+          </template>
         </div>
       </div>
 

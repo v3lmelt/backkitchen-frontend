@@ -305,7 +305,9 @@ export interface Track {
   album_title?: string
   file_path: string | null
   duration: number | null
-  bpm: number | null
+  bpm: string | null
+  original_title: string | null
+  original_artist: string | null
   track_number?: number | null
   status: TrackStatus
   rejection_mode: RejectionMode | null
