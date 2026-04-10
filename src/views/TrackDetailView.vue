@@ -480,7 +480,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             {{ track.title }}
           </h1>
           <p class="text-sm sm:text-base text-muted-foreground">
-            {{ track.artist ?? t('trackDetail.anonymizedArtist') }} · source v{{ track.version }} · cycle {{ track.workflow_cycle }}
+            <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span> · source v{{ track.version }} · cycle {{ track.workflow_cycle }}
           </p>
         </div>
       </div>
@@ -674,7 +674,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
           <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('trackDetail.trackSummary') }}</h3>
           <div class="flex justify-between">
             <span class="text-muted-foreground">{{ t('trackDetail.submitter') }}</span>
-            <span class="text-foreground">{{ track.submitter?.display_name ?? t('trackDetail.anonymizedSubmitter') }}</span>
+            <span class="text-foreground" :class="{ 'font-mono': !track.submitter && track.submitter_id }">{{ track.submitter?.display_name ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
           </div>
           <div class="flex justify-between items-center gap-2">
             <span class="text-muted-foreground shrink-0">{{ t('trackDetail.peerReviewer') }}</span>

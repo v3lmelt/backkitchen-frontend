@@ -9,6 +9,7 @@ import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { formatRelativeTime, parseUTC } from '@/utils/time'
+import { hashId } from '@/utils/hash'
 import { TRACK_STATUS_COLORS } from '@/utils/status'
 import { translateStepLabel } from '@/utils/workflow'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
@@ -423,7 +424,7 @@ function openAlbumSettings(albumId: number) {
                 >
                   <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ track.track_number || '—' }}</td>
                   <td class="px-4 py-3 text-sm font-medium text-foreground">{{ track.title }}</td>
-                  <td class="px-4 py-3 text-sm text-muted-foreground">{{ track.artist ?? t('trackDetail.anonymizedArtist') }}</td>
+                  <td class="px-4 py-3 text-sm text-muted-foreground" :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</td>
                   <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ formatDuration(track.duration) }}</td>
                   <td class="px-4 py-3">
                     <StatusBadge
@@ -467,7 +468,7 @@ function openAlbumSettings(albumId: number) {
                 />
               </div>
               <div class="flex items-center gap-3 text-xs text-muted-foreground">
-                <span>{{ track.artist ?? t('trackDetail.anonymizedArtist') }}</span>
+                <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
                 <span class="font-mono">{{ formatDuration(track.duration) }}</span>
                 <span class="font-mono">v{{ track.version }}</span>
                 <span v-if="track.open_issue_count" class="text-error">{{ t('dashboard.openCount', { count: track.open_issue_count }) }}</span>

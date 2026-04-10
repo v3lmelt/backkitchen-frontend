@@ -25,6 +25,7 @@ import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useToast } from '@/composables/useToast'
 import { useAppStore } from '@/stores/app'
 import { translateStepLabel } from '@/utils/workflow'
+import { hashId } from '@/utils/hash'
 
 const route = useRoute()
 const router = useRouter()
@@ -1056,7 +1057,7 @@ function handleIssueLeave() {
       <div class="min-w-0 flex-1">
         <h1 class="text-2xl font-mono font-bold truncate">{{ track.title }}</h1>
         <p class="text-sm text-muted-foreground mt-0.5">
-          {{ translateStepLabel(currentStep, t) }} · {{ track.artist ?? t('trackDetail.anonymizedArtist') }}
+          {{ translateStepLabel(currentStep, t) }} · <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
         </p>
       </div>
       <StatusBadge :status="track.status" type="track" :label="currentStep?.label ?? null" />
