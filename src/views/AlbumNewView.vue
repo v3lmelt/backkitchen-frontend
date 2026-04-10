@@ -9,6 +9,7 @@ import type { CircleSummary, User, WorkflowConfig, WorkflowTemplate } from '@/ty
 import { ChevronLeft, Upload, ChevronDown, ChevronRight, HelpCircle, BookTemplate, Save } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
+import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 
 const { t } = useI18n()
@@ -211,7 +212,7 @@ async function create() {
       <h1 class="text-2xl font-mono font-bold text-foreground">{{ t('albumNew.heading') }}</h1>
     </div>
 
-    <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
+    <div v-if="loading"><SkeletonLoader :rows="4" :card="true" /></div>
 
     <template v-else>
       <!-- 基本信息 -->

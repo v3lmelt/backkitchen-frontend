@@ -8,6 +8,7 @@ import type { Comment, Issue, IssueStatus } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import TimestampText from '@/components/common/TimestampText.vue'
+import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
 import { formatTimestamp, formatTimestampShort, formatLocaleDate, formatDuration } from '@/utils/time'
 import type { MarkerIndexReference, TimeReference, TimestampTarget } from '@/utils/timestamps'
@@ -409,7 +410,7 @@ function openVersionCompare() {
 </script>
 
 <template>
-  <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
+  <div v-if="loading" class="max-w-4xl mx-auto"><SkeletonLoader :rows="5" :card="true" /></div>
     <div v-else-if="issue" class="max-w-7xl mx-auto space-y-6">
     <div
       v-if="issueIsOutdated"

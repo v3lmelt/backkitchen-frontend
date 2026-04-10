@@ -13,6 +13,7 @@ import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
+import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -618,7 +619,7 @@ async function refreshDeliveries() {
 </script>
 
 <template>
-  <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
+  <div v-if="loading" class="max-w-4xl mx-auto"><SkeletonLoader :rows="5" :card="true" /></div>
 
   <div v-else-if="album" class="max-w-4xl mx-auto space-y-6">
     <!-- Album header -->

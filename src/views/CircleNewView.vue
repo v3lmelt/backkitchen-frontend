@@ -8,7 +8,7 @@
       <h1 class="text-2xl font-mono font-bold text-foreground">{{ t('circleNew.heading') }}</h1>
     </div>
 
-    <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
+    <div v-if="loading"><SkeletonLoader :rows="3" :card="true" /></div>
 
     <template v-else>
       <!-- logo -->
@@ -81,6 +81,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { circleApi } from '@/api'
 import { ChevronLeft, Smile, Upload } from 'lucide-vue-next'
+import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 
 const { t } = useI18n()
 const router = useRouter()

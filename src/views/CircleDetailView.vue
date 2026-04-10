@@ -1,8 +1,8 @@
 <template>
   <div class="max-w-4xl mx-auto space-y-6">
     <!-- loading -->
-    <div v-if="loading" class="flex items-center justify-center py-24">
-      <div class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <div v-if="loading">
+      <SkeletonLoader :rows="4" :card="true" />
     </div>
 
     <template v-else-if="circle">
@@ -319,6 +319,7 @@ import type { Circle, InviteCode, WorkflowConfig, WorkflowTemplate } from '@/typ
 import { useToast } from '@/composables/useToast'
 import { parseUTC } from '@/utils/time'
 import { Smile, Upload, Plus, Pencil, Trash2 } from 'lucide-vue-next'
+import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 

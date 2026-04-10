@@ -10,6 +10,7 @@ import { hashId } from '@/utils/hash'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
+import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { Archive, ChevronRight, UserRoundCog, ImageIcon, X, Pencil, Trash2 } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
@@ -438,7 +439,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
 </script>
 
 <template>
-  <div v-if="loading" class="text-center text-muted-foreground py-12">{{ t('common.loading') }}</div>
+  <div v-if="loading" class="max-w-4xl mx-auto"><SkeletonLoader :rows="5" :card="true" /></div>
   <div v-else-if="loadError" class="card max-w-md mx-auto mt-12 text-center space-y-3">
     <p class="text-sm text-error">{{ t('common.loadFailed') }}</p>
     <button @click="loadTrack" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
