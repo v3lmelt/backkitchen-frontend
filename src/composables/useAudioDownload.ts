@@ -63,14 +63,22 @@ export function useAudioDownload() {
     URL.revokeObjectURL(objectUrl)
   }
 
+  function extensionFromPath(filePath?: string | null): string {
+    return filePath?.split('.').pop() || 'wav'
+  }
+
+  function downloadAudioAsset(audioUrl: string, filenameStem: string, filePath?: string | null): void {
+    if (!audioUrl) return
+    void downloadAudio(audioUrl, `${filenameStem}.${extensionFromPath(filePath)}`)
+  }
+
   function downloadTrackAudio(audioUrl: Ref<string>, track: Ref<Track | null>, suffix = ''): void {
     if (!audioUrl.value || !track.value) return
     const filePath = suffix === '_master'
       ? track.value.current_master_delivery?.file_path
       : track.value.file_path
-    const ext = filePath?.split('.').pop() || 'wav'
-    downloadAudio(audioUrl.value, `${track.value.title}${suffix}.${ext}`)
+    downloadAudioAsset(audioUrl.value, `${track.value.title}${suffix}`, filePath)
   }
 
-  return { downloading, downloadProgress, downloadTrackAudio }
+  return { downloading, downloadProgress, downloadTrackAudio, downloadAudioAsset }
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { checklistApi, trackApi, API_ORIGIN } from '@/api'
@@ -13,6 +13,7 @@ import type {
   WorkflowStepDef,
   WorkflowTransitionOption,
 } from '@/types'
+import { formatLocaleDate } from '@/utils/time'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
@@ -20,6 +21,8 @@ import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import WorkflowActionBar from '@/components/workflow/WorkflowActionBar.vue'
 import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue'
+import CustomSelect from '@/components/common/CustomSelect.vue'
+import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { ChevronLeft, Upload } from 'lucide-vue-next'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useToast } from '@/composables/useToast'
@@ -29,8 +32,9 @@ import { hashId } from '@/utils/hash'
 
 const route = useRoute()
 const router = useRouter()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { success: toastSuccess, error: toastError } = useToast()
+const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
 
 const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
 const appStore = useAppStore()
@@ -38,6 +42,7 @@ const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
+const masterDeliveries = ref<MasterDelivery[]>([])
 const workflowConfig = ref<WorkflowConfig | null>(null)
 const checklistItems = ref<ChecklistItem[]>([])
 const templateItems = ref<ChecklistTemplateItem[]>([])
@@ -106,7 +111,10 @@ const audioUrl = computed(() =>
   track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio?v=${track.value.version ?? 0}` : '',
 )
 
-const { downloading, downloadProgress, downloadTrackAudio } = useAudioDownload()
+const showMasterCompare = ref(false)
+const selectedCompareMasterDeliveryId = ref<number | null>(null)
+
+const { downloading, downloadProgress, downloadTrackAudio, downloadAudioAsset } = useAudioDownload()
 const handleDownload = () => downloadTrackAudio(audioUrl, track)
 const handleMasterDownload = () => downloadTrackAudio(masterAudioUrl, track, '_master')
 
@@ -196,6 +204,31 @@ const masterAudioUrl = computed(() => {
   const d = masterDelivery.value
   if (!d) return ''
   return `${API_ORIGIN}/api/tracks/${trackId.value}/master-audio?v=${d.delivery_number}&c=${d.workflow_cycle ?? 1}`
+})
+const sortedMasterDeliveries = computed(() =>
+  [...masterDeliveries.value].sort((a, b) => {
+    if (a.workflow_cycle !== b.workflow_cycle) return b.workflow_cycle - a.workflow_cycle
+    return b.delivery_number - a.delivery_number
+  }),
+)
+const olderMasterDeliveries = computed(() => {
+  const currentId = masterDelivery.value?.id ?? null
+  return sortedMasterDeliveries.value
+    .filter(delivery => delivery.id !== currentId)
+})
+const masterCompareOptions = computed<SelectOption[]>(() =>
+  olderMasterDeliveries.value.map((delivery) => ({
+    value: delivery.id,
+    label: masterDeliveryOptionLabel(delivery),
+  })),
+)
+const selectedCompareMasterDelivery = computed(() =>
+  olderMasterDeliveries.value.find(delivery => delivery.id === selectedCompareMasterDeliveryId.value) ?? null,
+)
+const selectedCompareMasterAudioUrl = computed(() => {
+  const delivery = selectedCompareMasterDelivery.value
+  if (!delivery) return ''
+  return `${API_ORIGIN}/api/tracks/${trackId.value}/master-deliveries/${delivery.id}/audio?v=${delivery.delivery_number}&c=${delivery.workflow_cycle}`
 })
 const finalReviewIssues = computed(() => {
   const deliveryId = masterDelivery.value?.id ?? null
@@ -290,6 +323,7 @@ async function loadPage() {
   try {
     const detail = await trackApi.get(trackId.value)
     track.value = detail.track
+    masterDeliveries.value = detail.master_deliveries ?? []
     workflowConfig.value = detail.workflow_config ?? null
     issues.value = detail.issues.filter(
       issue => issue.workflow_cycle === detail.track.workflow_cycle,
@@ -307,6 +341,43 @@ async function loadPage() {
   }
 }
 
+watch(olderMasterDeliveries, (deliveries) => {
+  if (!deliveries.some(delivery => delivery.id === selectedCompareMasterDeliveryId.value)) {
+    selectedCompareMasterDeliveryId.value = null
+  }
+  if (deliveries.length === 0) {
+    showMasterCompare.value = false
+  }
+})
+
+function masterDeliveryOptionLabel(delivery: MasterDelivery): string {
+  const version = `v${delivery.delivery_number}`
+  const cycle = track.value && delivery.workflow_cycle !== track.value.workflow_cycle
+    ? ` · C${delivery.workflow_cycle}`
+    : ''
+  return `${version}${cycle} · ${fmtDate(delivery.created_at)}`
+}
+
+function toggleMasterCompare() {
+  showMasterCompare.value = !showMasterCompare.value
+  if (!showMasterCompare.value) {
+    selectedCompareMasterDeliveryId.value = null
+  }
+}
+
+function compareWithMasterDelivery(deliveryId: number) {
+  showMasterCompare.value = true
+  selectedCompareMasterDeliveryId.value = deliveryId
+}
+
+function handleMasterVersionDownload(delivery: MasterDelivery) {
+  const cycleSuffix = track.value && delivery.workflow_cycle !== track.value.workflow_cycle
+    ? `_cycle${delivery.workflow_cycle}`
+    : ''
+  const url = `${API_ORIGIN}/api/tracks/${trackId.value}/master-deliveries/${delivery.id}/audio?v=${delivery.delivery_number}&c=${delivery.workflow_cycle}`
+  downloadAudioAsset(url, `${track.value?.title ?? 'track'}_master_v${delivery.delivery_number}${cycleSuffix}`, delivery.file_path)
+}
+
 
 function onIssueSelect(issue: Issue) {
   router.push(`/issues/${issue.id}`)
@@ -314,6 +385,17 @@ function onIssueSelect(issue: Issue) {
 
 function onIssueCreated(issue: Issue) {
   issues.value.push(issue)
+}
+
+function trackDetailQuery() {
+  const returnTo = Array.isArray(route.query.returnTo) ? route.query.returnTo[0] : route.query.returnTo
+  return typeof returnTo === 'string' && returnTo.length > 0
+    ? { returnTo }
+    : { returnTo: route.fullPath }
+}
+
+function pushToTrackDetail() {
+  router.push({ path: `/tracks/${trackId.value}`, query: trackDetailQuery() })
 }
 
 async function executeTransition(decision: string) {
@@ -326,7 +408,7 @@ async function executeTransition(decision: string) {
   error.value = ''
   try {
     await trackApi.workflowTransition(trackId.value, decision)
-    router.push(`/tracks/${trackId.value}`)
+    pushToTrackDetail()
   } catch (err: any) {
     error.value = err.message || t('workflowStep.transitionFailed')
   } finally {
@@ -351,7 +433,7 @@ async function handleUpload(kind: 'revision' | 'delivery') {
       toastSuccess(t('workflowStep.deliveryUploaded'))
       return
     }
-    router.push(`/tracks/${trackId.value}`)
+    pushToTrackDetail()
   } catch (err: any) {
     error.value = err.message || t('workflowStep.uploadFailed')
   } finally {
@@ -487,7 +569,7 @@ const finalReviewActions = computed<WorkflowAction[]>(() => {
 })
 
 function goBack() {
-  router.push(`/tracks/${trackId.value}`)
+  pushToTrackDetail()
 }
 
 const genericReviewActions = computed<WorkflowAction[]>(() =>
@@ -959,11 +1041,74 @@ function handleIssueLeave() {
               {{ masterDelivery?.confirmed_at ? t('workflowStep.deliveryConfirmed') : t('workflowStep.deliveryPendingConfirmation') }}
             </p>
           </div>
-          <button @click="handleMasterDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1 shrink-0">
-            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              v-if="olderMasterDeliveries.length > 0"
+              @click="toggleMasterCompare"
+              class="btn-secondary text-xs px-3 py-1"
+            >
+              {{ t('compare.title') }}
+            </button>
+            <button @click="handleMasterDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="showMasterCompare && olderMasterDeliveries.length > 0" class="flex items-center gap-2">
+          <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+          <CustomSelect
+            v-model="selectedCompareMasterDeliveryId"
+            :options="masterCompareOptions"
+            :placeholder="`-- ${t('compare.selectVersion')} --`"
+            size="sm"
+          />
+          <button
+            v-if="selectedCompareMasterDeliveryId"
+            @click="selectedCompareMasterDeliveryId = null"
+            class="text-xs text-muted-foreground hover:text-foreground"
+          >
+            {{ t('compare.clear') }}
           </button>
         </div>
-        <WaveformPlayer :audio-url="masterAudioUrl" :issues="[]" />
+        <WaveformPlayer :audio-url="masterAudioUrl" :issues="[]" :compare-audio-url="selectedCompareMasterAudioUrl" />
+      </div>
+
+      <div v-if="sortedMasterDeliveries.length > 0" class="card space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('workflowStep.masterVersionHistory') }}</h3>
+          <span class="text-xs text-muted-foreground">{{ sortedMasterDeliveries.length }}</span>
+        </div>
+        <div class="space-y-2">
+          <div
+            v-for="delivery in sortedMasterDeliveries"
+            :key="delivery.id"
+            class="flex flex-col gap-3 border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div class="space-y-1 min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-sm font-mono font-semibold text-foreground">{{ masterDeliveryOptionLabel(delivery) }}</span>
+                <span v-if="delivery.id === masterDelivery?.id" class="bg-border text-foreground px-2 py-1 rounded-full text-[11px] font-mono">
+                  {{ t('compare.currentVersion') }}
+                </span>
+              </div>
+              <p class="text-xs text-muted-foreground">
+                {{ delivery.confirmed_at ? t('workflowStep.deliveryConfirmed') : t('workflowStep.deliveryPendingConfirmation') }}
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                v-if="delivery.id !== masterDelivery?.id"
+                @click="compareWithMasterDelivery(delivery.id)"
+                class="btn-secondary text-xs px-3 py-1"
+              >
+                {{ t('compare.title') }}
+              </button>
+              <button @click="handleMasterVersionDownload(delivery)" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+                {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -989,13 +1134,39 @@ function handleIssueLeave() {
       <div v-if="masterAudioUrl">
         <div class="flex items-start justify-between gap-3 mb-2">
           <p class="text-xs text-muted-foreground leading-relaxed">{{ t('finalReview.waveformHint') }}</p>
-          <button @click="handleMasterDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1 shrink-0">
-            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              v-if="olderMasterDeliveries.length > 0"
+              @click="toggleMasterCompare"
+              class="btn-secondary text-xs px-3 py-1"
+            >
+              {{ t('compare.title') }}
+            </button>
+            <button @click="handleMasterDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="showMasterCompare && olderMasterDeliveries.length > 0" class="flex items-center gap-2 mb-3">
+          <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+          <CustomSelect
+            v-model="selectedCompareMasterDeliveryId"
+            :options="masterCompareOptions"
+            :placeholder="`-- ${t('compare.selectVersion')} --`"
+            size="sm"
+          />
+          <button
+            v-if="selectedCompareMasterDeliveryId"
+            @click="selectedCompareMasterDeliveryId = null"
+            class="text-xs text-muted-foreground hover:text-foreground"
+          >
+            {{ t('compare.clear') }}
           </button>
         </div>
         <WaveformPlayer
           ref="waveformRef"
           :audio-url="masterAudioUrl"
+          :compare-audio-url="selectedCompareMasterAudioUrl"
           :issues="finalReviewIssues"
           :selectable="true"
           :mode="waveformMode"
@@ -1049,6 +1220,44 @@ function handleIssueLeave() {
             <span :class="masterDelivery?.submitter_approved_at ? 'text-success' : 'text-muted-foreground'">
               {{ masterDelivery?.submitter_approved_at ? t('common.approved') : t('common.pending') }}
             </span>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="sortedMasterDeliveries.length > 0" class="card space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('workflowStep.masterVersionHistory') }}</h3>
+          <span class="text-xs text-muted-foreground">{{ sortedMasterDeliveries.length }}</span>
+        </div>
+        <div class="space-y-2">
+          <div
+            v-for="delivery in sortedMasterDeliveries"
+            :key="delivery.id"
+            class="flex flex-col gap-3 border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div class="space-y-1 min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-sm font-mono font-semibold text-foreground">{{ masterDeliveryOptionLabel(delivery) }}</span>
+                <span v-if="delivery.id === masterDelivery?.id" class="bg-border text-foreground px-2 py-1 rounded-full text-[11px] font-mono">
+                  {{ t('compare.currentVersion') }}
+                </span>
+              </div>
+              <p class="text-xs text-muted-foreground">
+                {{ delivery.confirmed_at ? t('workflowStep.deliveryConfirmed') : t('workflowStep.deliveryPendingConfirmation') }}
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                v-if="delivery.id !== masterDelivery?.id"
+                @click="compareWithMasterDelivery(delivery.id)"
+                class="btn-secondary text-xs px-3 py-1"
+              >
+                {{ t('compare.title') }}
+              </button>
+              <button @click="handleMasterVersionDownload(delivery)" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+                {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+              </button>
+            </div>
           </div>
         </div>
       </div>

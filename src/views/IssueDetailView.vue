@@ -394,7 +394,10 @@ function cancelStatusChange() {
 
 function goBackToTrack() {
   if (!issue.value) return
-  router.push(`/tracks/${issue.value.track_id}`)
+  router.push({
+    path: `/tracks/${issue.value.track_id}`,
+    query: { returnTo: route.fullPath },
+  })
 }
 
 function handleKeydown(e: KeyboardEvent) {
@@ -422,7 +425,10 @@ function openVersionCompare() {
   if (!issue.value?.track_id || !issue.value.source_version_id) return
   router.push({
     path: `/tracks/${issue.value.track_id}`,
-    query: { compareVersion: String(issue.value.source_version_id) },
+    query: {
+      compareVersion: String(issue.value.source_version_id),
+      returnTo: route.fullPath,
+    },
   })
 }
 </script>

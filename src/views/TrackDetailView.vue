@@ -210,12 +210,18 @@ const customWorkflowActionLabel = computed(() => {
 })
 
 function onIssueSelect(issue: Issue) {
-  router.push(`/issues/${issue.id}`)
+  router.push({
+    path: `/issues/${issue.id}`,
+    query: route.query.returnTo ? { returnTo: String(route.query.returnTo) } : undefined,
+  })
 }
 
 function openPrimaryAction(_action: string) {
   if (!track.value?.workflow_step) return
-  router.push(`/tracks/${trackId.value}/step/${track.value.workflow_step.id}`)
+  router.push({
+    path: `/tracks/${trackId.value}/step/${track.value.workflow_step.id}`,
+    query: route.query.returnTo ? { returnTo: String(route.query.returnTo) } : undefined,
+  })
 }
 
 
@@ -314,7 +320,12 @@ async function archiveTrack() {
   archiving.value = true
   try {
     await trackApi.archive(track.value.id)
-    router.push(`/albums/${track.value.album_id}`)
+    toastSuccess(t('trackDetail.archiveDone'))
+    const returnTo = Array.isArray(route.query.returnTo) ? route.query.returnTo[0] : route.query.returnTo
+    const fallback = `/albums/${track.value.album_id}/settings`
+    await router.push(typeof returnTo === 'string' && returnTo.startsWith('/') ? returnTo : fallback)
+  } catch {
+    toastError(t('common.error'))
   } finally {
     archiving.value = false
     showArchiveConfirm.value = false

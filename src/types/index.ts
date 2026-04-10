@@ -338,6 +338,7 @@ export interface TrackDetailResponse {
   checklist_items: ChecklistItem[]
   events: WorkflowEvent[]
   source_versions?: TrackSourceVersion[]
+  master_deliveries?: MasterDelivery[]
   discussions?: Discussion[]
   workflow_config?: WorkflowConfig | null
 }

@@ -407,7 +407,8 @@
     "deliveryUploaded": "母带交付物已上传",
     "currentDelivery": "当前交付物",
     "deliveryPendingConfirmation": "待制作人确认",
-    "deliveryConfirmed": "已确认"
+    "deliveryConfirmed": "已确认",
+    "masterVersionHistory": "母带版本历史"
   },
   "workflowSteps": {
     "intake": "接收审核",
@@ -545,6 +546,7 @@
     },
     "archive": "归档曲目",
     "archiveConfirm": "确认归档此曲目？归档后 14 天内可恢复，超期将被永久删除。",
+    "archiveDone": "曲目已归档",
     "system": "系统",
     "rejectionMode": "拒绝模式：{mode}",
     "masterAudio": "母带音频",

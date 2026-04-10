@@ -17,7 +17,7 @@ const layoutStyle = computed(() => ({
     <Sidebar />
     <div class="flex flex-col flex-1 overflow-hidden">
       <AppHeader />
-      <main class="flex-1 overflow-y-auto pt-4 px-4 pb-24 md:pt-6 md:px-6 md:pb-6 lg:pb-6">
+      <main class="flex-1 overflow-y-auto pt-4 px-4 pb-32 md:pt-6 md:px-6 md:pb-32 lg:pb-32">
         <slot />
       </main>
     </div>

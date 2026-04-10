@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { albumApi, r2Api, uploadToR2, uploadWithProgress } from '@/api'
 import type { Album, Track } from '@/types'
@@ -12,6 +12,7 @@ import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 
 const router = useRouter()
+const route = useRoute()
 const { t } = useI18n()
 
 const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
@@ -153,7 +154,7 @@ async function upload() {
       )
     }
     toastSuccess(t('upload.uploadSuccess'))
-    router.push(`/tracks/${track.id}`)
+    router.push({ path: `/tracks/${track.id}`, query: { returnTo: route.fullPath } })
   } catch (err: any) {
     toastError(err.message || t('upload.uploadFailed'))
   } finally {

@@ -407,7 +407,8 @@
     "deliveryUploaded": "Mastering delivery uploaded",
     "currentDelivery": "Current Delivery",
     "deliveryPendingConfirmation": "Pending Producer Confirmation",
-    "deliveryConfirmed": "Confirmed"
+    "deliveryConfirmed": "Confirmed",
+    "masterVersionHistory": "Master Delivery History"
   },
   "workflowSteps": {
     "intake": "Intake",
@@ -545,6 +546,7 @@
     },
     "archive": "Archive Track",
     "archiveConfirm": "Archive this track? It can be restored within 14 days. After that, it will be permanently deleted.",
+    "archiveDone": "Track archived",
     "system": "System",
     "rejectionMode": "rejection mode: {mode}",
     "masterAudio": "Master Audio",

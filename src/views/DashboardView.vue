@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
@@ -27,6 +27,7 @@ async function fetchAlbumStats(albumId: number): Promise<AlbumStats> {
 }
 
 const router = useRouter()
+const route = useRoute()
 const { t, te, locale } = useI18n()
 const appStore = useAppStore()
 const tracks = ref<Track[]>([])
@@ -394,65 +395,76 @@ function openAlbumSettings(albumId: number) {
       <div v-else-if="filteredTracks.length === 0">
         <EmptyState :icon="Music" :title="t('dashboard.noTracks')" />
       </div>
-      <div v-else class="space-y-5">
+      <!-- Desktop unified table -->
+      <div v-else class="bg-card border border-border rounded-none overflow-hidden hidden md:block">
+        <table class="w-full">
+          <thead>
+            <tr class="border-b border-border text-left text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider">
+              <th class="px-4 py-3 w-16">{{ t('dashboard.colNumber') }}</th>
+              <th class="px-4 py-3">{{ t('dashboard.colTitle') }}</th>
+              <th class="px-4 py-3">{{ t('dashboard.colArtist') }}</th>
+              <th class="px-4 py-3 w-20">{{ t('dashboard.colDuration') }}</th>
+              <th class="px-4 py-3">{{ t('dashboard.colStatus') }}</th>
+              <th class="px-4 py-3">{{ t('dashboard.colOpenIssues') }}</th>
+              <th class="px-4 py-3 w-16">{{ t('dashboard.colVersion') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template v-for="group in groupedTracks" :key="group.albumId">
+              <!-- Album separator row -->
+              <tr class="bg-background">
+                <td colspan="7" class="px-4 py-2">
+                  <div class="flex items-center gap-3">
+                    <span class="text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider flex-shrink-0">{{ group.albumTitle }}</span>
+                    <div class="flex-1 h-px bg-border"></div>
+                  </div>
+                </td>
+              </tr>
+              <!-- Track rows -->
+              <tr
+                v-for="track in group.tracks"
+                :key="track.id"
+                @click="router.push({ path: `/tracks/${track.id}`, query: { returnTo: route.fullPath } })"
+                class="border-b border-border last:border-0 hover:bg-white/5 cursor-pointer transition-colors"
+              >
+                <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ track.track_number || '—' }}</td>
+                <td class="px-4 py-3 text-sm font-medium text-foreground">{{ track.title }}</td>
+                <td class="px-4 py-3 text-sm text-muted-foreground" :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</td>
+                <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ formatDuration(track.duration) }}</td>
+                <td class="px-4 py-3">
+                  <StatusBadge
+                    :status="track.status"
+                    type="track"
+                    :variant="track.workflow_variant"
+                    :label="track.workflow_step?.label ?? null"
+                  />
+                </td>
+                <td class="px-4 py-3 text-sm text-muted-foreground">
+                  <button
+                    v-if="track.open_issue_count"
+                    @click.stop="router.push({ path: `/tracks/${track.id}`, hash: '#issues', query: { returnTo: route.fullPath } })"
+                    class="text-error hover:underline cursor-pointer"
+                  >{{ t('dashboard.openCount', { count: track.open_issue_count }) }}</button>
+                  <span v-else>--</span>
+                </td>
+                <td class="px-4 py-3 text-sm text-muted-foreground">v{{ track.version }}</td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+      <!-- Mobile card list -->
+      <div v-if="!loading && filteredTracks.length > 0" class="space-y-5 md:hidden">
         <div v-for="group in groupedTracks" :key="group.albumId">
-          <!-- Album section header -->
           <div class="flex items-center gap-3 mb-2">
             <span class="text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider flex-shrink-0">{{ group.albumTitle }}</span>
             <div class="flex-1 h-px bg-border"></div>
           </div>
-          <!-- Desktop table -->
-          <div class="bg-card border border-border rounded-none overflow-hidden hidden md:block">
-            <table class="w-full">
-              <thead>
-                <tr class="border-b border-border text-left text-xs font-mono font-semibold text-muted-foreground uppercase tracking-wider">
-                  <th class="px-4 py-3">{{ t('dashboard.colNumber') }}</th>
-                  <th class="px-4 py-3">{{ t('dashboard.colTitle') }}</th>
-                  <th class="px-4 py-3">{{ t('dashboard.colArtist') }}</th>
-                  <th class="px-4 py-3">{{ t('dashboard.colDuration') }}</th>
-                  <th class="px-4 py-3">{{ t('dashboard.colStatus') }}</th>
-                  <th class="px-4 py-3">{{ t('dashboard.colOpenIssues') }}</th>
-                  <th class="px-4 py-3">{{ t('dashboard.colVersion') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="track in group.tracks"
-                  :key="track.id"
-                  @click="router.push(`/tracks/${track.id}`)"
-                  class="border-b border-border last:border-0 hover:bg-white/5 cursor-pointer transition-colors"
-                >
-                  <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ track.track_number || '—' }}</td>
-                  <td class="px-4 py-3 text-sm font-medium text-foreground">{{ track.title }}</td>
-                  <td class="px-4 py-3 text-sm text-muted-foreground" :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</td>
-                  <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ formatDuration(track.duration) }}</td>
-                  <td class="px-4 py-3">
-                    <StatusBadge
-                      :status="track.status"
-                      type="track"
-                      :variant="track.workflow_variant"
-                      :label="track.workflow_step?.label ?? null"
-                    />
-                  </td>
-                  <td class="px-4 py-3 text-sm text-muted-foreground">
-                    <button
-                      v-if="track.open_issue_count"
-                      @click.stop="router.push(`/tracks/${track.id}#issues`)"
-                      class="text-error hover:underline cursor-pointer"
-                    >{{ t('dashboard.openCount', { count: track.open_issue_count }) }}</button>
-                    <span v-else>--</span>
-                  </td>
-                  <td class="px-4 py-3 text-sm text-muted-foreground">v{{ track.version }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <!-- Mobile card list -->
-          <div class="space-y-2 md:hidden">
+          <div class="space-y-2">
             <div
               v-for="track in group.tracks"
               :key="track.id"
-              @click="router.push(`/tracks/${track.id}`)"
+               @click="router.push({ path: `/tracks/${track.id}`, query: { returnTo: route.fullPath } })"
               class="bg-card border border-border p-3 cursor-pointer active:bg-white/5 transition-colors"
             >
               <div class="flex items-center justify-between gap-2 mb-1.5">

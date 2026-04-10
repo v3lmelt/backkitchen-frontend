@@ -19,6 +19,7 @@ const props = withDefaults(defineProps<{
   mode?: InteractionMode
   selectedRange?: { start: number; end: number } | null
   compareVersionId?: number | null
+  compareAudioUrl?: string
   trackId?: number
   draftMarkers?: { marker_type: 'point' | 'range'; time_start: number; time_end: number | null }[]
   draftRangeAnchor?: number | null
@@ -60,7 +61,14 @@ const activePointGroupKey = ref<string | null>(null)
 const abMode = ref<'A' | 'B'>('A')
 const hoverTime = ref<number | null>(null)
 const hoverLeft = ref<number>(0)
-const isCompareMode = computed(() => !!props.compareVersionId)
+const compareSourceUrl = computed(() => {
+  if (props.compareAudioUrl) return props.compareAudioUrl
+  if (props.compareVersionId && props.trackId) {
+    return resolveAssetUrl(`/api/tracks/${props.trackId}/source-versions/${props.compareVersionId}/audio`)
+  }
+  return ''
+})
+const isCompareMode = computed(() => !!compareSourceUrl.value)
 const isCompareLoading = ref(false)
 const compareLoadProgress = ref(0)
 const isCompareReady = ref(false)
@@ -786,7 +794,7 @@ watch([() => props.mode, () => props.selectable], () => {
   applyDragSelection()
 })
 
-watch(() => props.compareVersionId, async (newId) => {
+watch(compareSourceUrl, async (newCompareUrl) => {
   if (compareWaveSurfer.value) {
     compareWaveSurfer.value.destroy()
     compareWaveSurfer.value = null
@@ -795,7 +803,7 @@ watch(() => props.compareVersionId, async (newId) => {
   }
   isCompareLoading.value = false
   isCompareReady.value = false
-  if (!newId || !props.trackId) {
+  if (!newCompareUrl) {
     abMode.value = 'A'
     applyCompareMode('A')
     return
@@ -850,11 +858,10 @@ watch(() => props.compareVersionId, async (newId) => {
     }
   })
 
-  const compareUrl = resolveAssetUrl(`/api/tracks/${props.trackId}/source-versions/${newId}/audio`)
   compareWaveSurfer.value = ws
   applyCompareMode(abMode.value)
 
-  resolveAudioUrl(compareUrl)
+  resolveAudioUrl(newCompareUrl)
     .then(url => ws.load(url))
     .catch((err) => {
       isCompareLoading.value = false
