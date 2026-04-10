@@ -133,14 +133,15 @@ const timelineFilter = ref<'all' | 'transitions' | 'issues' | 'uploads'>('all')
 const TIMELINE_PREVIEW_COUNT = 5
 
 const filteredEvents = computed(() => {
-  if (timelineFilter.value === 'all') return events.value
+  const sorted = [...events.value].reverse()
+  if (timelineFilter.value === 'all') return sorted
   if (timelineFilter.value === 'transitions')
-    return events.value.filter(e => e.from_status && e.to_status && e.from_status !== e.to_status)
+    return sorted.filter(e => e.from_status && e.to_status && e.from_status !== e.to_status)
   if (timelineFilter.value === 'issues')
-    return events.value.filter(e => e.event_type.startsWith('issue'))
+    return sorted.filter(e => e.event_type.startsWith('issue'))
   if (timelineFilter.value === 'uploads')
-    return events.value.filter(e => e.event_type.includes('upload') || e.event_type.includes('deliver'))
-  return events.value
+    return sorted.filter(e => e.event_type.includes('upload') || e.event_type.includes('deliver'))
+  return sorted
 })
 const newDiscussionContent = ref('')
 const postingDiscussion = ref(false)
