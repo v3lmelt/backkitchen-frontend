@@ -115,13 +115,30 @@ function selectStatus(status: IssueStatus) {
 
 async function confirmStatusChange() {
   if (!fullIssue.value || !pendingStatus.value) return
-  fullIssue.value = await issueApi.update(fullIssue.value.id, {
-    status: pendingStatus.value,
-    status_note: statusNote.value || undefined,
-  })
+  const previousStatus = fullIssue.value.status
+  const targetStatus = pendingStatus.value
+  const note = statusNote.value
+
+  // Optimistic update
+  fullIssue.value = { ...fullIssue.value, status: targetStatus }
   emit('updated', fullIssue.value)
   pendingStatus.value = null
   statusNote.value = ''
+
+  try {
+    const updated = await issueApi.update(fullIssue.value.id, {
+      status: targetStatus,
+      status_note: note || undefined,
+    })
+    fullIssue.value = updated
+    emit('updated', updated)
+  } catch {
+    // Revert on failure
+    if (fullIssue.value) {
+      fullIssue.value = { ...fullIssue.value, status: previousStatus }
+      emit('updated', fullIssue.value)
+    }
+  }
 }
 
 function onAudioSelect(event: Event) {
