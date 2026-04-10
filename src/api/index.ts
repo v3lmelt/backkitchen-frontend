@@ -16,6 +16,7 @@ import type {
   ReopenRequest,
   StageAssignment,
   WebhookConfig,
+  WebhookDelivery,
   WorkflowConfig,
   WorkflowTemplate,
   Issue,
@@ -359,6 +360,11 @@ export const trackApi = {
     request<ReopenRequest>(`/tracks/reopen-requests/${requestId}/decide`, {
       method: 'POST',
       body: JSON.stringify({ decision }),
+    }),
+  setVisibility: (trackId: number, isPublic: boolean) =>
+    request<Track>(`/tracks/${trackId}/visibility`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_public: isPublic }),
     }),
 }
 

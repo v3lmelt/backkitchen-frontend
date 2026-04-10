@@ -1056,7 +1056,7 @@ function handleIssueLeave() {
       <div class="min-w-0 flex-1">
         <h1 class="text-2xl font-mono font-bold truncate">{{ track.title }}</h1>
         <p class="text-sm text-muted-foreground mt-0.5">
-          {{ translateStepLabel(currentStep, t) }} · {{ track.artist }}
+          {{ translateStepLabel(currentStep, t) }} · {{ track.artist ?? t('trackDetail.anonymizedArtist') }}
         </p>
       </div>
       <StatusBadge :status="track.status" type="track" :label="currentStep?.label ?? null" />

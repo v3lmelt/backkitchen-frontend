@@ -266,6 +266,20 @@ const versionOptions = computed<SelectOption[]>(() =>
 const isProducer = computed(() => track.value?.producer_id === appStore.currentUser?.id)
 const archiving = ref(false)
 const showArchiveConfirm = ref(false)
+const togglingVisibility = ref(false)
+
+async function toggleVisibility() {
+  if (!track.value) return
+  togglingVisibility.value = true
+  try {
+    const updated = await trackApi.setVisibility(track.value.id, !track.value.is_public)
+    track.value = { ...track.value, is_public: updated.is_public }
+  } catch {
+    toastError(t('common.error'))
+  } finally {
+    togglingVisibility.value = false
+  }
+}
 
 async function archiveTrack() {
   if (!track.value) return
@@ -439,7 +453,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             {{ track.title }}
           </h1>
           <p class="text-sm sm:text-base text-muted-foreground">
-            {{ track.artist }} · source v{{ track.version }} · cycle {{ track.workflow_cycle }}
+            {{ track.artist ?? t('trackDetail.anonymizedArtist') }} · source v{{ track.version }} · cycle {{ track.workflow_cycle }}
           </p>
         </div>
       </div>
@@ -610,7 +624,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
           <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('trackDetail.trackSummary') }}</h3>
           <div class="flex justify-between">
             <span class="text-muted-foreground">{{ t('trackDetail.submitter') }}</span>
-            <span class="text-foreground">{{ track.submitter?.display_name || '--' }}</span>
+            <span class="text-foreground">{{ track.submitter?.display_name ?? t('trackDetail.anonymizedSubmitter') }}</span>
           </div>
           <div class="flex justify-between items-center gap-2">
             <span class="text-muted-foreground shrink-0">{{ t('trackDetail.peerReviewer') }}</span>
@@ -769,6 +783,21 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             </button>
             <button @click="showReassignModal = false" class="flex-1 btn-secondary h-9 text-sm">
               {{ t('common.cancel') }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Visibility toggle (producer only, non-archived) -->
+        <div v-if="isProducer && !track.archived_at" class="pt-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-muted-foreground">{{ t('trackDetail.visibility') }}</span>
+            <button
+              @click="toggleVisibility"
+              :disabled="togglingVisibility"
+              class="text-xs font-mono transition-colors disabled:opacity-50"
+              :class="track.is_public ? 'text-success hover:text-success/70' : 'text-muted-foreground hover:text-foreground'"
+            >
+              {{ track.is_public ? t('trackDetail.visibilityPublic') : t('trackDetail.visibilityPrivate') }}
             </button>
           </div>
         </div>

@@ -564,6 +564,13 @@
     "reupload": "Re-upload",
     "deliveryPreview": "Preview and confirm the uploaded master file",
     "openWorkflowStep": "Open {step}",
+    "anonymizedArtist": "(hidden)",
+    "anonymizedSubmitter": "(hidden)",
+    "visibility": "Visibility",
+    "visibilityPublic": "Visible to all members",
+    "visibilityPrivate": "Visible to participants only",
+    "setPublic": "Make visible to all members",
+    "setPrivate": "Restrict to participants only",
     "actions": {
       "intake": "Open Intake",
       "accept": "Send to Peer Review",

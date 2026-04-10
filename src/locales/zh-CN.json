@@ -564,6 +564,13 @@
     "reupload": "重新上传",
     "deliveryPreview": "请试听并确认上传的母带文件",
     "openWorkflowStep": "进入「{step}」",
+    "anonymizedArtist": "（已隐名）",
+    "anonymizedSubmitter": "（已隐名）",
+    "visibility": "可见性",
+    "visibilityPublic": "所有成员可见",
+    "visibilityPrivate": "仅相关人员可见",
+    "setPublic": "设为所有成员可见",
+    "setPrivate": "恢复仅相关人员可见",
     "actions": {
       "intake": "接收审批",
       "accept": "送同行评审",

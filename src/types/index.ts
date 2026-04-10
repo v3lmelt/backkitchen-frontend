@@ -298,7 +298,7 @@ export interface WorkflowEvent {
 export interface Track {
   id: number
   title: string
-  artist: string
+  artist: string | null
   album_id: number
   album_title?: string
   file_path: string | null
@@ -327,6 +327,7 @@ export interface Track {
   workflow_step?: WorkflowStepDef | null
   workflow_transitions?: WorkflowTransitionOption[] | null
   source_versions?: TrackSourceVersion[]
+  is_public: boolean
 }
 
 export interface TrackDetailResponse {
