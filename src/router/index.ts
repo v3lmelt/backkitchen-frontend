@@ -42,34 +42,9 @@ const router = createRouter({
       component: () => import('@/views/TrackDetailView.vue'),
     },
     {
-      path: '/tracks/:id/review',
-      name: 'peer-review',
-      component: () => import('@/views/PeerReviewView.vue'),
-    },
-    {
       path: '/issues/:id',
       name: 'issue-detail',
       component: () => import('@/views/IssueDetailView.vue'),
-    },
-    {
-      path: '/tracks/:id/revision',
-      name: 'author-revision',
-      component: () => import('@/views/AuthorRevisionView.vue'),
-    },
-    {
-      path: '/tracks/:id/producer',
-      name: 'producer-decision',
-      component: () => import('@/views/ProducerDecisionView.vue'),
-    },
-    {
-      path: '/tracks/:id/mastering',
-      name: 'mastering-review',
-      component: () => import('@/views/MasteringReviewView.vue'),
-    },
-    {
-      path: '/tracks/:id/final-review',
-      name: 'final-review',
-      component: () => import('@/views/FinalReviewView.vue'),
     },
     {
       path: '/tracks/:id/step/:stepId',

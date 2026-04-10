@@ -179,11 +179,6 @@ const currentWaveformIssues = computed(() => {
   return currentCycleIssues.value.filter(issue => issue.source_version_number == null || issue.source_version_number === currentVersion)
 })
 
-const actionLabel = (action: string) => {
-  const key = `trackDetail.actions.${action}`
-  return t(key, action.replaceAll('_', ' '))
-}
-
 const customWorkflowActionLabel = computed(() => {
   const step = track.value?.workflow_step
   if (!step) return ''
@@ -194,18 +189,9 @@ function onIssueSelect(issue: Issue) {
   router.push(`/issues/${issue.id}`)
 }
 
-function openPrimaryAction(action: string) {
-  // Custom workflow: route to generic step view
-  if (track.value?.workflow_step) {
-    router.push(`/tracks/${trackId.value}/step/${track.value.workflow_step.id}`)
-    return
-  }
-  // Legacy workflow action routing
-  if (action === 'peer_review') router.push(`/tracks/${trackId.value}/review`)
-  if (action === 'upload_revision' || action === 'resubmit') router.push(`/tracks/${trackId.value}/revision`)
-  if (action === 'producer_gate' || action === 'intake') router.push(`/tracks/${trackId.value}/producer`)
-  if (action === 'mastering') router.push(`/tracks/${trackId.value}/mastering`)
-  if (action === 'final_review') router.push(`/tracks/${trackId.value}/final-review`)
+function openPrimaryAction(_action: string) {
+  if (!track.value?.workflow_step) return
+  router.push(`/tracks/${trackId.value}/step/${track.value.workflow_step.id}`)
 }
 
 
@@ -311,20 +297,12 @@ async function doReassign(userId?: number) {
 
 const primaryActions = computed(() => {
   if (!track.value?.allowed_actions?.length) return []
-
-  if (track.value.workflow_step) {
-    return [{
-      key: 'open-step',
-      label: customWorkflowActionLabel.value,
-      handler: () => openPrimaryAction('open-step'),
-    }]
-  }
-
-  return track.value.allowed_actions.map(action => ({
-    key: action,
-    label: actionLabel(action),
-    handler: () => openPrimaryAction(action),
-  }))
+  if (!track.value.workflow_step) return []
+  return [{
+    key: 'open-step',
+    label: customWorkflowActionLabel.value,
+    handler: () => openPrimaryAction('open-step'),
+  }]
 })
 
 // Reopen logic

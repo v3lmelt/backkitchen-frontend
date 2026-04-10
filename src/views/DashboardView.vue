@@ -69,41 +69,12 @@ interface BatchAction {
   run: () => Promise<void>
 }
 
-const batchActions = computed<BatchAction[]>(() => {
-  const status = batchCommonStatus.value
-  if (!status) return []
-  const actions: BatchAction[] = []
-  const selectedTracks = tracks.value.filter(tr => selectedTrackIds.value.has(tr.id))
-  const isAllProducer = selectedTracks.every(tr => tr.producer_id === appStore.currentUser?.id)
-  if (!isAllProducer) return []
-
-  if (status === 'submitted') {
-    actions.push({
-      label: t('dashboard.batchAcceptPeerReview'),
-      run: async () => {
-        await Promise.all([...selectedTrackIds.value].map(id => trackApi.intakeDecision(id, 'accept')))
-        await reloadTracks()
-      },
-    })
-    actions.push({
-      label: t('dashboard.batchAcceptProducerDirect'),
-      run: async () => {
-        await Promise.all([...selectedTrackIds.value].map(id => trackApi.intakeDecision(id, 'accept_producer_direct')))
-        await reloadTracks()
-      },
-    })
-  }
-  if (status === 'producer_mastering_gate') {
-    actions.push({
-      label: t('dashboard.batchSendToMastering'),
-      run: async () => {
-        await Promise.all([...selectedTrackIds.value].map(id => trackApi.producerGate(id, 'send_to_mastering')))
-        await reloadTracks()
-      },
-    })
-  }
-  return actions
-})
+// Batch actions are not yet supported on the custom workflow engine.
+// The legacy actions (hardcoded intake/producer_gate endpoints) were
+// removed together with the rest of the legacy workflow. Re-introducing
+// them on top of the generic workflow_transition endpoint will require
+// per-step, per-album-aware decision labels.
+const batchActions = computed<BatchAction[]>(() => [])
 
 async function reloadTracks() {
   const loaded = await trackApi.list()

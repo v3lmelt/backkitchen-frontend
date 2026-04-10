@@ -132,16 +132,13 @@ describe('TrackDetailView', () => {
     expect(wrapper.text()).toContain('Fresh discussion')
   })
 
-  it('opens compare mode from the route query and navigates workflow actions', async () => {
+  it('opens compare mode from the route query', async () => {
     mocks.route = { params: { id: '7' }, query: { compareVersion: '201' } }
 
     const wrapper = mountWithPlugins(TrackDetailView)
     await flushPromises()
 
     expect(wrapper.find('.waveform').text()).toContain('compare:201')
-
-    await wrapper.find('button.workflow-cta-btn').trigger('click')
-    expect(mocks.pushMock).toHaveBeenCalledWith('/tracks/7/review')
   })
 
   it('shows a single step CTA for custom workflows', async () => {
