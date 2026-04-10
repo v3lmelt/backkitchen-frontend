@@ -422,7 +422,8 @@
     "final_revision": "Final Revision"
   },
   "issueMarker": {
-    "noIssues": "No issues found"
+    "noIssues": "No issues found",
+    "updatedAt": "Updated {date}"
   },
   "waveform": {
     "modeTabs": "Waveform interaction mode",
@@ -677,6 +678,8 @@
     "hasDiscussion": "Has replies",
     "viewConversation": "Open full issue thread",
     "noPeerIssues": "No peer-review issues in this cycle.",
+    "producerFollowupHeading": "Producer Follow-up",
+    "producerFollowupHint": "Review whether producer-raised issues were addressed, and adjust their status without leaving this page.",
     "decisionGroupLabel": "Next Decision"
   },
   "finalReview": {

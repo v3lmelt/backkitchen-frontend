@@ -422,7 +422,8 @@
     "final_revision": "终审修订"
   },
   "issueMarker": {
-    "noIssues": "暂无问题"
+    "noIssues": "暂无问题",
+    "updatedAt": "最近更新 {date}"
   },
   "waveform": {
     "modeTabs": "波形交互模式",
@@ -677,6 +678,8 @@
     "hasDiscussion": "已有回复",
     "viewConversation": "查看完整问题与回复",
     "noPeerIssues": "当前轮次没有同行评审问题。",
+    "producerFollowupHeading": "制作人问题跟进",
+    "producerFollowupHint": "查看制作人提出的问题是否已获回复，并可直接调整问题状态。",
     "decisionGroupLabel": "下一步决策"
   },
   "finalReview": {

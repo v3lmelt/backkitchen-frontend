@@ -7,6 +7,7 @@ import { mountWithPlugins } from '@/tests/utils'
 const mocks = vi.hoisted(() => ({
   pushMock: vi.fn(),
   trackGetMock: vi.fn(),
+  issueUpdateMock: vi.fn(),
   workflowTransitionMock: vi.fn(),
   approveFinalReviewMock: vi.fn(),
   confirmDeliveryMock: vi.fn(),
@@ -29,6 +30,9 @@ vi.mock('@/api', () => ({
   checklistApi: {
     getTemplate: mocks.checklistGetTemplateMock,
     submit: mocks.checklistSubmitMock,
+  },
+  issueApi: {
+    update: mocks.issueUpdateMock,
   },
   trackApi: {
     get: mocks.trackGetMock,
@@ -60,7 +64,28 @@ vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
 vi.mock('@/components/audio/IssueMarkerList.vue', () => ({
   default: {
     props: ['issues'],
-    template: '<div class="issue-list">{{ issues.length }}</div>',
+    emits: ['select', 'status-change'],
+    template: `
+      <div>
+        <div class="issue-list">{{ issues.length }}</div>
+        <button
+          v-for="issue in issues"
+          :key="issue.id"
+          class="issue-list-item"
+          @click="$emit('select', issue)"
+        >
+          {{ issue.title }}
+        </button>
+        <button
+          v-for="issue in issues"
+          :key="'resolve-' + issue.id"
+          class="issue-quick-resolve"
+          @click="$emit('status-change', { issue, status: 'resolved' })"
+        >
+          resolve {{ issue.id }}
+        </button>
+      </div>
+    `,
   },
 }))
 
@@ -74,7 +99,7 @@ vi.mock('@/components/IssueDetailPanel.vue', () => ({
   default: {
     props: ['issue'],
     emits: ['close', 'updated'],
-    template: '<div v-if="issue" class="peer-issue-drawer">{{ issue.title }}</div>',
+    template: '<div v-if="issue" class="peer-issue-drawer">{{ issue.title }}|{{ issue.status }}</div>',
   },
 }))
 
@@ -107,6 +132,7 @@ describe('WorkflowStepView', () => {
   beforeEach(() => {
     mocks.pushMock.mockReset()
     mocks.trackGetMock.mockReset()
+    mocks.issueUpdateMock.mockReset()
     mocks.workflowTransitionMock.mockReset()
     mocks.approveFinalReviewMock.mockReset()
     mocks.confirmDeliveryMock.mockReset()
@@ -115,6 +141,7 @@ describe('WorkflowStepView', () => {
     mocks.downloadTrackAudioMock.mockReset()
     mocks.downloadAudioAssetMock.mockReset()
     mocks.workflowTransitionMock.mockResolvedValue({})
+    mocks.issueUpdateMock.mockImplementation(async (id: number, data: { status?: string }) => ({ id, status: data.status ?? 'open' }))
     mocks.approveFinalReviewMock.mockResolvedValue({})
     mocks.confirmDeliveryMock.mockResolvedValue({})
     mocks.checklistSubmitMock.mockResolvedValue([])
@@ -596,6 +623,7 @@ describe('WorkflowStepView', () => {
     expect(wrapper.find('.decision-group').exists()).toBe(true)
     expect(wrapper.text()).toContain('Next Decision')
     expect(wrapper.text()).toContain('Send to Mastering')
+    expect(wrapper.text()).toContain('Producer Follow-up')
     expect(wrapper.findAll('.peer-issue-card')).toHaveLength(1)
     expect(wrapper.text()).toContain('Peer balance note')
 
@@ -604,5 +632,96 @@ describe('WorkflowStepView', () => {
 
     expect(mocks.pushMock).not.toHaveBeenCalled()
     expect(wrapper.find('.peer-issue-drawer').text()).toContain('Peer balance note')
+  })
+
+  it('lets revision snapshots open a drawer and quick-update issue status inline', async () => {
+    mocks.issueUpdateMock.mockResolvedValueOnce({
+      id: 41,
+      track_id: 9,
+      author_id: 8,
+      phase: 'producer',
+      workflow_cycle: 2,
+      source_version_id: 301,
+      source_version_number: 2,
+      master_delivery_id: null,
+      title: 'Fix the chorus lift',
+      description: 'Need more energy in the chorus.',
+      severity: 'major',
+      status: 'resolved',
+      markers: [],
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-03T00:00:00Z',
+      comment_count: 1,
+    })
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Revision Track',
+        artist: 'Nova',
+        status: 'producer_revision',
+        file_path: '/audio.wav',
+        version: 3,
+        workflow_cycle: 2,
+        submitter_id: 1,
+        producer_id: 8,
+        current_source_version: { id: 401 },
+        workflow_step: {
+          id: 'producer_revision',
+          label: 'Producer Revision',
+          type: 'revision',
+          assignee_role: 'submitter',
+          order: 3,
+          return_to: 'producer_gate',
+          transitions: {},
+        },
+        workflow_transitions: [],
+      },
+      issues: [
+        {
+          id: 41,
+          track_id: 9,
+          author_id: 8,
+          phase: 'producer',
+          workflow_cycle: 2,
+          source_version_id: 301,
+          source_version_number: 2,
+          master_delivery_id: null,
+          title: 'Fix the chorus lift',
+          description: 'Need more energy in the chorus.',
+          severity: 'major',
+          status: 'open',
+          markers: [],
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-02T00:00:00Z',
+          comment_count: 1,
+        },
+      ],
+      checklist_items: [],
+      source_versions: [
+        { id: 401, version_number: 3, created_at: '2024-01-03T00:00:00Z' },
+        { id: 301, version_number: 2, created_at: '2024-01-02T00:00:00Z' },
+      ],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'producer_gate', label: 'Producer Gate', type: 'gate', ui_variant: 'producer_gate', assignee_role: 'producer', order: 2, transitions: {} },
+          { id: 'producer_revision', label: 'Producer Revision', type: 'revision', assignee_role: 'submitter', order: 3, return_to: 'producer_gate', transitions: {} },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    await wrapper.find('.issue-list-item').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.peer-issue-drawer').text()).toContain('Fix the chorus lift|open')
+
+    await wrapper.find('.issue-quick-resolve').trigger('click')
+    await flushPromises()
+
+    expect(mocks.issueUpdateMock).toHaveBeenCalledWith(41, { status: 'resolved' })
+    expect(wrapper.find('.peer-issue-drawer').text()).toContain('Fix the chorus lift|resolved')
   })
 })

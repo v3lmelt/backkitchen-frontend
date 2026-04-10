@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { checklistApi, trackApi, r2Api, uploadToR2, API_ORIGIN } from '@/api'
+import { checklistApi, issueApi, trackApi, r2Api, uploadToR2, API_ORIGIN } from '@/api'
 import type {
   ChecklistItem,
   ChecklistTemplateItem,
@@ -63,7 +63,7 @@ const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 const uploadProgress = ref(0)
 const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
 const hoveredIssueId = ref<number | null>(null)
-const selectedPeerIssue = ref<Issue | null>(null)
+const selectedIssue = ref<Issue | null>(null)
 const isIssueFormOpen = ref(false)
 const waveformMode = computed<'seek' | 'annotate'>(() => (isIssueFormOpen.value ? 'annotate' : 'seek'))
 const showSourceCompare = ref(false)
@@ -177,9 +177,13 @@ const fallbackWaveformIssues = computed(() => {
 const producerIssues = computed(() =>
   issues.value.filter(i => i.phase === 'producer'),
 )
+const producerSnapshotIssues = computed(() => producerIssues.value)
 const producerWaveformIssues = computed(() => {
   return filterIssuesForDisplayedSourceVersion(producerIssues.value)
 })
+const producerOpenCount = computed(() => producerSnapshotIssues.value.filter(issue => issue.status === 'open').length)
+const producerResolvedCount = computed(() => producerSnapshotIssues.value.filter(issue => issue.status === 'resolved').length)
+const producerDisagreedCount = computed(() => producerSnapshotIssues.value.filter(issue => issue.status === 'disagreed').length)
 const peerIssues = computed(() =>
   issues.value.filter(i => i.phase === 'peer' || i.phase === 'peer_review'),
 )
@@ -370,8 +374,8 @@ async function loadPage() {
     issues.value = detail.issues.filter(
       issue => issue.workflow_cycle === detail.track.workflow_cycle,
     )
-    if (selectedPeerIssue.value) {
-      selectedPeerIssue.value = issues.value.find(issue => issue.id === selectedPeerIssue.value?.id) ?? null
+    if (selectedIssue.value) {
+      selectedIssue.value = issues.value.find(issue => issue.id === selectedIssue.value?.id) ?? null
     }
     checklistItems.value = detail.checklist_items
 
@@ -453,17 +457,31 @@ function onIssueSelect(issue: Issue) {
   router.push(`/issues/${issue.id}`)
 }
 
-function openPeerIssue(issue: Issue) {
-  selectedPeerIssue.value = issue
+function openIssueDrawer(issue: Issue) {
+  selectedIssue.value = issue
 }
 
-function closePeerIssue() {
-  selectedPeerIssue.value = null
+function closeIssueDrawer() {
+  selectedIssue.value = null
 }
 
-function onPeerIssueUpdated(updatedIssue: Issue) {
+function onIssueUpdated(updatedIssue: Issue) {
   issues.value = issues.value.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue)
-  selectedPeerIssue.value = updatedIssue
+  if (selectedIssue.value?.id === updatedIssue.id) {
+    selectedIssue.value = updatedIssue
+  }
+}
+
+async function onQuickIssueStatusChange({ issue, status }: { issue: Issue; status: 'open' | 'resolved' | 'disagreed' }) {
+  const previousIssue = { ...issue }
+  onIssueUpdated({ ...issue, status })
+  try {
+    const updatedIssue = await issueApi.update(issue.id, { status })
+    onIssueUpdated(updatedIssue)
+  } catch (err: any) {
+    onIssueUpdated(previousIssue)
+    toastError(err.message || t('workflowStep.transitionFailed'))
+  }
 }
 
 function peerIssueMarkerSummary(issue: Issue): string {
@@ -1124,7 +1142,7 @@ function handleIssueLeave() {
             :key="issue.id"
             type="button"
             class="peer-issue-card w-full border border-border bg-background p-4 text-left transition-colors hover:border-muted-foreground/60 hover:bg-card"
-            @click="openPeerIssue(issue)"
+                @click="openIssueDrawer(issue)"
           >
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0 space-y-2">
@@ -1159,10 +1177,46 @@ function handleIssueLeave() {
         <div v-else class="text-sm text-muted-foreground">{{ t('producer.noPeerIssues') }}</div>
 
         <IssueDetailPanel
-          :issue="selectedPeerIssue"
+          :issue="selectedIssue"
           :track="track"
-          @close="closePeerIssue"
-          @updated="onPeerIssueUpdated"
+          @close="closeIssueDrawer"
+          @updated="onIssueUpdated"
+        />
+      </div>
+
+      <div class="card space-y-4">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div class="space-y-1">
+            <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('producer.producerFollowupHeading') }}</h3>
+            <p class="text-xs text-muted-foreground">{{ t('producer.producerFollowupHint') }}</p>
+          </div>
+          <div class="grid grid-cols-3 gap-2 text-xs sm:min-w-[220px]">
+            <div class="border border-border bg-background px-3 py-2 space-y-1">
+              <div class="font-mono text-lg text-error">{{ producerOpenCount }}</div>
+              <div class="text-muted-foreground">{{ t('producer.open') }}</div>
+            </div>
+            <div class="border border-border bg-background px-3 py-2 space-y-1">
+              <div class="font-mono text-lg text-success">{{ producerResolvedCount }}</div>
+              <div class="text-muted-foreground">{{ t('producer.resolved') }}</div>
+            </div>
+            <div class="border border-border bg-background px-3 py-2 space-y-1">
+              <div class="font-mono text-lg text-info">{{ producerDisagreedCount }}</div>
+              <div class="text-muted-foreground">{{ t('producer.disagreed') }}</div>
+            </div>
+          </div>
+        </div>
+
+        <IssueMarkerList
+          :issues="producerSnapshotIssues"
+          :track="track"
+          :current-source-version-number="track.version"
+          :hovered-issue-id="hoveredIssueId"
+          :show-activity="true"
+          :enable-quick-actions="true"
+          @select="openIssueDrawer"
+          @hover="handleIssueHover"
+          @leave="handleIssueLeave"
+          @status-change="onQuickIssueStatusChange"
         />
       </div>
     </div>
@@ -1723,11 +1777,15 @@ function handleIssueLeave() {
         <IssueMarkerList
           v-if="revisionSnapshotIssues.length"
           :issues="revisionSnapshotIssues"
+          :track="track"
           :current-source-version-number="track.version"
           :hovered-issue-id="hoveredIssueId"
-          @select="onIssueSelect"
+          :show-activity="true"
+          :enable-quick-actions="true"
+          @select="openIssueDrawer"
           @hover="handleIssueHover"
           @leave="handleIssueLeave"
+          @status-change="onQuickIssueStatusChange"
         />
         <div v-else class="border border-success/20 bg-success-bg px-4 py-3 text-sm text-success">
           {{ t('producer.noIssues') }}
@@ -1783,6 +1841,13 @@ function handleIssueLeave() {
         </h3>
         <p class="text-sm text-muted-foreground">{{ t('workflowStep.waitingForRevisionDesc') }}</p>
       </div>
+
+      <IssueDetailPanel
+        :issue="selectedIssue"
+        :track="track"
+        @close="closeIssueDrawer"
+        @updated="onIssueUpdated"
+      />
     </template>
 
     <template v-if="currentStep.type === 'delivery'">
