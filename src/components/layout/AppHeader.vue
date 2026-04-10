@@ -150,7 +150,7 @@ function handleMenuToggle() {
           </div>
           <!-- Expanded middle crumbs (hidden on mobile by default) -->
           <template v-if="breadcrumbExpanded">
-            <template v-for="(crumb, i) in breadcrumbs.slice(1, -1)" :key="crumb.path">
+            <template v-for="crumb in breadcrumbs.slice(1, -1)" :key="crumb.path">
               <RouterLink :to="crumb.path" class="text-muted-foreground hover:text-foreground truncate flex-shrink-0">
                 {{ crumb.label }}
               </RouterLink>
