@@ -7,7 +7,6 @@ import { useAppStore } from '@/stores/app'
 import type { Album } from '@/types'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { Music, Archive } from 'lucide-vue-next'
-import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 
 const { t } = useI18n()
