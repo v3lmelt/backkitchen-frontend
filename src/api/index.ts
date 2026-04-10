@@ -304,15 +304,15 @@ export const trackApi = {
   },
   get: (id: number) => request<TrackDetailResponse>(`/tracks/${id}`),
   upload: (formData: FormData) => request<Track>('/tracks', { method: 'POST', body: formData }),
-  uploadSourceVersion: (id: number, file: File) => {
+  uploadSourceVersion: (id: number, file: File, onProgress?: (percent: number) => void) => {
     const form = new FormData()
     form.append('file', file)
-    return request<Track>(`/tracks/${id}/source-versions`, { method: 'POST', body: form })
+    return uploadWithProgress<Track>(`/tracks/${id}/source-versions`, form, onProgress)
   },
-  uploadMasterDelivery: (id: number, file: File) => {
+  uploadMasterDelivery: (id: number, file: File, onProgress?: (percent: number) => void) => {
     const form = new FormData()
     form.append('file', file)
-    return request<Track>(`/tracks/${id}/master-deliveries`, { method: 'POST', body: form })
+    return uploadWithProgress<Track>(`/tracks/${id}/master-deliveries`, form, onProgress)
   },
   // Final-review approve is retained: the custom workflow engine delegates
   // to this endpoint for the producer+submitter dual-confirmation step.

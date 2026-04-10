@@ -304,13 +304,6 @@ async function loadPage() {
   }
 }
 
-watch(uploading, (value) => {
-  if (value) {
-    uploadProgress.value = 30
-    return
-  }
-  uploadProgress.value = 0
-})
 
 function onIssueSelect(issue: Issue) {
   router.push(`/issues/${issue.id}`)
@@ -345,7 +338,9 @@ async function handleUpload(kind: 'revision' | 'delivery') {
   error.value = ''
   try {
     const fn = kind === 'revision' ? trackApi.uploadSourceVersion : trackApi.uploadMasterDelivery
-    await fn(trackId.value, uploadFile.value)
+    await fn(trackId.value, uploadFile.value, (percent) => {
+      uploadProgress.value = percent
+    })
     if (kind === 'delivery') {
       uploadFile.value = null
       resetDeliveryPreview()
@@ -1128,31 +1123,7 @@ function handleIssueLeave() {
     </template>
 
     <template v-if="currentStep.type === 'revision'">
-      <div v-if="isRevisionAssignee" class="card space-y-4">
-        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.uploadRevisedSource') }}</h3>
-        <p class="text-sm text-muted-foreground">{{ t('workflowStep.uploadRevisedSourceDesc') }}</p>
-        <input
-          type="file"
-          accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"
-          @change="onFileChange"
-          class="input-field"
-        />
-        <button
-          @click="handleUpload('revision')"
-          :disabled="!uploadFile || uploading"
-          class="btn-primary text-sm h-10 inline-flex items-center justify-center"
-        >
-          <Upload class="w-4 h-4 mr-2" />
-          {{ uploading ? t('workflowStep.uploading') : t('workflowStep.uploadRevision') }}
-        </button>
-      </div>
-      <div v-else class="card space-y-2">
-        <h3 class="text-sm font-mono font-semibold">
-          {{ t('workflowStep.waitingForRevision', { assignee: revisionAssigneeRoleLabel }) }}
-        </h3>
-        <p class="text-sm text-muted-foreground">{{ t('workflowStep.waitingForRevisionDesc') }}</p>
-      </div>
-
+      <!-- 1. Waveform with hover interaction -->
       <div v-if="audioUrl" class="card space-y-3">
         <div class="flex items-center justify-between">
           <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.currentAudio') }}</h3>
@@ -1160,11 +1131,18 @@ function handleIssueLeave() {
             {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
           </button>
         </div>
-        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" />
+        <WaveformPlayer
+          :audio-url="audioUrl"
+          :issues="revisionWaveformIssues"
+          :hovered-issue-id="hoveredIssueId"
+          @issueHover="handleIssueHover"
+          @issueLeave="handleIssueLeave"
+        />
       </div>
 
+      <!-- 2. Issue summary + marker list (merged) -->
       <div class="card space-y-3">
-        <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('producer.issueSummaryHeading') }}</h3>
+        <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('producer.issueSummaryHeading') }}</h3>
         <div class="grid grid-cols-3 gap-3">
           <div class="bg-background border border-border px-3 py-2 text-center space-y-1">
             <div class="text-lg font-bold text-foreground">{{ revisionSnapshotIssues.length }}</div>
@@ -1179,27 +1157,66 @@ function handleIssueLeave() {
             <div class="text-xs text-muted-foreground">{{ t('producer.resolved') }}</div>
           </div>
         </div>
+        <IssueMarkerList
+          v-if="revisionSnapshotIssues.length"
+          :issues="revisionSnapshotIssues"
+          :current-source-version-number="track.version"
+          :hovered-issue-id="hoveredIssueId"
+          @select="onIssueSelect"
+          @hover="handleIssueHover"
+          @leave="handleIssueLeave"
+        />
+        <div v-else class="text-sm text-muted-foreground">{{ t('producer.noIssues') }}</div>
+      </div>
 
-        <div class="space-y-2">
-          <div
-            v-for="issue in revisionSnapshotIssues"
-            :key="issue.id"
-            class="flex items-center justify-between gap-2 flex-wrap py-1"
-          >
-            <div class="flex items-center gap-2 min-w-0 flex-wrap">
-              <StatusBadge :status="issue.phase" type="phase" />
-              <StatusBadge :status="issue.severity" type="severity" />
-              <span class="text-sm text-foreground truncate">{{ issue.title }}</span>
-            </div>
-            <StatusBadge :status="issue.status" type="issue" />
+      <!-- 3a. Upload card (assignee only, at bottom) -->
+      <div v-if="isRevisionAssignee" class="card space-y-4">
+        <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.uploadRevisedSource') }}</h3>
+        <p class="text-sm text-muted-foreground">{{ t('workflowStep.uploadRevisedSourceDesc') }}</p>
+        <input
+          type="file"
+          accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"
+          @change="onFileChange"
+          class="input-field"
+        />
+        <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
+          <div class="space-y-1">
+            <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.revisedPreviewHeading') }}</h4>
+            <p class="text-sm text-muted-foreground">{{ t('workflowStep.revisedPreviewNotice') }}</p>
           </div>
-          <div v-if="revisionSnapshotIssues.length === 0" class="text-sm text-muted-foreground">{{ t('producer.noIssues') }}</div>
+          <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" />
+          <div class="flex flex-wrap gap-2">
+            <button
+              @click="handleUpload('revision')"
+              :disabled="uploading"
+              class="btn-primary text-sm h-10 inline-flex items-center justify-center"
+            >
+              <Upload class="w-4 h-4 mr-2" />
+              {{ uploading ? t('workflowStep.uploading') : t('workflowStep.uploadRevision') }}
+            </button>
+            <button
+              @click="uploadFile = null; resetDeliveryPreview()"
+              :disabled="uploading"
+              class="btn-secondary text-sm"
+            >
+              {{ t('workflowStep.clearRevision') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="uploading" class="space-y-1">
+          <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
+            <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
+          </div>
+          <p class="text-xs text-muted-foreground text-right">{{ uploadProgress }}%</p>
         </div>
       </div>
 
-      <div v-if="revisionOpenIssues.length" class="card space-y-3">
-        <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('workflowStep.issuesToAddress', { count: revisionOpenIssues.length }) }}</h3>
-        <IssueMarkerList :issues="revisionWaveformIssues" @select="onIssueSelect" />
+      <!-- 3b. Waiting card (non-assignee) -->
+      <div v-else class="card space-y-2">
+        <h3 class="text-sm font-mono font-semibold">
+          {{ t('workflowStep.waitingForRevision', { assignee: revisionAssigneeRoleLabel }) }}
+        </h3>
+        <p class="text-sm text-muted-foreground">{{ t('workflowStep.waitingForRevisionDesc') }}</p>
       </div>
     </template>
 
