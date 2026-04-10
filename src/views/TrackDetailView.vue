@@ -512,7 +512,7 @@ watch(selectedCompareMasterDelivery, (delivery) => {
     <p class="text-sm text-error">{{ t('common.loadFailed') }}</p>
     <button @click="loadTrack" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
   </div>
-  <div v-else-if="track" class="max-w-7xl mx-auto">
+  <div v-else-if="track" class="max-w-7xl mx-auto pb-24 lg:pb-0">
     <div class="space-y-6">
       <!-- WebSocket disconnect banner -->
       <div
