@@ -336,6 +336,7 @@
       "completed": "已完成"
     },
     "validation": {
+      "reviewerPoolRequired": "阶段「{label}」设置了自动分配，但未选择任何候选审核人。",
       "reviewerPoolTooSmall": "阶段「{label}」的自动分配候选人数少于所需审阅人数。",
       "rejectTargetMustBeEarlier": "阶段「{label}」存在无效打回目标：只能打回到当前阶段之前的阶段。",
       "directProducerTargetMissing": "阶段「{label}」启用了制作人直接审核，但后面没有可跳转的制作人审批阶段。"
@@ -516,6 +517,7 @@
     "reassignReviewerManual": "为该阶段选择新的审稿人：",
     "reassigning": "分配中…",
     "reassignDone": "已重新分配审稿人",
+    "reassignNoPool": "自动分配失败：当前阶段无可用审核人",
     "openIssues": "未解决问题",
     "currentMaster": "当前母带",
     "finalApprovals": "终审批准",

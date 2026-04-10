@@ -463,8 +463,12 @@ const validationErrors = computed<string[]>(() => {
       seenRevisionIds.add(stage.revision_id)
     }
 
-    if (stage.kind === 'peer_review' && stage.assignment_mode === 'auto' && stage.reviewer_pool.length > 0) {
-      if (stage.required_reviewer_count > stage.reviewer_pool.length) {
+    if (stage.kind === 'peer_review' && stage.assignment_mode === 'auto') {
+      if (stage.reviewer_pool.length === 0) {
+        errors.push(t('workflowEditor.validation.reviewerPoolRequired', {
+          label: stage.label || stage.id,
+        }))
+      } else if (stage.required_reviewer_count > stage.reviewer_pool.length) {
         errors.push(t('workflowEditor.validation.reviewerPoolTooSmall', {
           label: stage.label || stage.id,
         }))

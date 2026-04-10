@@ -336,6 +336,7 @@
       "completed": "Completed"
     },
     "validation": {
+      "reviewerPoolRequired": "Stage \"{label}\" uses auto-assignment but has no reviewer candidates selected.",
       "reviewerPoolTooSmall": "Stage \"{label}\" has fewer auto-assignment candidates than required reviewers.",
       "rejectTargetMustBeEarlier": "Stage \"{label}\" has invalid reject targets: it can only reject to earlier stages.",
       "directProducerTargetMissing": "Stage \"{label}\" has direct producer review enabled, but there is no later producer review stage to jump to."
@@ -516,6 +517,7 @@
     "reassignReviewerManual": "Select a new reviewer for this stage:",
     "reassigning": "Assigning…",
     "reassignDone": "Reviewer reassigned successfully",
+    "reassignNoPool": "Auto-assignment failed: no eligible reviewers for this stage",
     "openIssues": "Open Issues",
     "currentMaster": "Current Master",
     "finalApprovals": "Final approvals",
