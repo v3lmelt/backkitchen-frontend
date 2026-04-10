@@ -19,10 +19,12 @@ import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useToast } from '@/composables/useToast'
 import { translateStepLabel } from '@/utils/workflow'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
+import { useTrackStore } from '@/stores/tracks'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
+const trackStore = useTrackStore()
 const { t, te, locale } = useI18n()
 const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
 const { success: toastSuccess, error: toastError } = useToast()
@@ -172,12 +174,14 @@ async function loadTrack() {
   try {
     const detail = await trackApi.get(trackId.value)
     track.value = detail.track
+    trackStore.setCurrentTrack(detail.track)
     issues.value = detail.issues
     discussions.value = detail.discussions ?? []
     events.value = detail.events
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
     workflowConfig.value = detail.workflow_config ?? null
   } catch {
+    trackStore.setCurrentTrack(null)
     loadError.value = true
   } finally {
     loading.value = false

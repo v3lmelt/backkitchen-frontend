@@ -632,8 +632,8 @@
     "openIssuesReminder": "{count} open issue(s) still need a response"
   },
   "mastering": {
-    "heading": "Mastering Review: {title}",
-    "subheading": "Review the current source audio, request revisions, or deliver mastered audio.",
+    "heading": "Mastering: {title}",
+    "subheading": "Check the current source audio, request a source revision when needed, then upload the mastered delivery.",
     "waveformHint": "Clicks only move the play head. Switch to Annotate mode to add mastering issues.",
     "issuesHeading": "Mastering Issues ({count})",
     "actionsHeading": "Mastering Actions",
@@ -641,7 +641,7 @@
     "uploadReady": "Upload mastered delivery when ready.",
     "uploading": "Uploading...",
     "uploadMaster": "Upload Master Delivery",
-    "actionHint": "Upload the mastered audio, or request the author to revise the source"
+    "actionHint": "Upload the mastered delivery, or request the author to revise the source"
   },
   "producer": {
     "heading": "Producer Workspace: {title}",
@@ -665,11 +665,18 @@
     "noIssues": "No issues raised.",
     "waveformHint": "Clicks only move the play head. Switch to Annotate mode to add producer notes.",
     "producerIssuesHeading": "Producer Notes ({count})",
-    "peerIssueSummaryHeading": "Peer Review Issue Summary",
+    "peerIssueSummaryHeading": "Peer Review Handoff",
+    "peerIssueSummaryHint": "Review the exact issues, current status, and reply thread before deciding the next step.",
     "sendToMastering": "Send to Mastering",
     "requestRevision": "Request Another Source Revision",
     "intakeHint": "Review the submission and decide whether to accept it into the workflow",
-    "gateHint": "Review peer feedback and decide the next step for this track"
+    "gateHint": "Review peer feedback and decide the next step for this track",
+    "disagreed": "Disagreed",
+    "activeDiscussions": "Discussed",
+    "hasDiscussion": "Has replies",
+    "viewConversation": "Open full issue thread",
+    "noPeerIssues": "No peer-review issues in this cycle.",
+    "decisionGroupLabel": "Next Decision"
   },
   "finalReview": {
     "heading": "Final Review: {title}",

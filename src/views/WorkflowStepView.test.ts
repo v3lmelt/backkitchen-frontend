@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   workflowTransitionMock: vi.fn(),
   approveFinalReviewMock: vi.fn(),
   confirmDeliveryMock: vi.fn(),
+  checklistGetTemplateMock: vi.fn(),
+  checklistSubmitMock: vi.fn(),
   downloadTrackAudioMock: vi.fn(),
   downloadAudioAssetMock: vi.fn(),
   appStore: {
@@ -25,8 +27,8 @@ vi.mock('vue-router', () => ({
 vi.mock('@/api', () => ({
   API_ORIGIN: '',
   checklistApi: {
-    getTemplate: vi.fn(),
-    submit: vi.fn(),
+    getTemplate: mocks.checklistGetTemplateMock,
+    submit: mocks.checklistSubmitMock,
   },
   trackApi: {
     get: mocks.trackGetMock,
@@ -68,6 +70,14 @@ vi.mock('@/components/IssueCreatePanel.vue', () => ({
   },
 }))
 
+vi.mock('@/components/IssueDetailPanel.vue', () => ({
+  default: {
+    props: ['issue'],
+    emits: ['close', 'updated'],
+    template: '<div v-if="issue" class="peer-issue-drawer">{{ issue.title }}</div>',
+  },
+}))
+
 vi.mock('@/components/common/CustomSelect.vue', () => ({
   default: {
     props: ['modelValue', 'options'],
@@ -100,11 +110,14 @@ describe('WorkflowStepView', () => {
     mocks.workflowTransitionMock.mockReset()
     mocks.approveFinalReviewMock.mockReset()
     mocks.confirmDeliveryMock.mockReset()
+    mocks.checklistGetTemplateMock.mockReset()
+    mocks.checklistSubmitMock.mockReset()
     mocks.downloadTrackAudioMock.mockReset()
     mocks.downloadAudioAssetMock.mockReset()
     mocks.workflowTransitionMock.mockResolvedValue({})
     mocks.approveFinalReviewMock.mockResolvedValue({})
     mocks.confirmDeliveryMock.mockResolvedValue({})
+    mocks.checklistSubmitMock.mockResolvedValue([])
   })
 
   it('renders approval step actions and routes transitions through the generic endpoint', async () => {
@@ -306,6 +319,88 @@ describe('WorkflowStepView', () => {
     )
   })
 
+  it('auto-saves peer review notes before transitioning', async () => {
+    mocks.checklistGetTemplateMock.mockResolvedValue({
+      items: [{ label: 'Balance', required: true, sort_order: 0 }],
+      is_default: false,
+    })
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Peer Track',
+        artist: 'Nova',
+        album_id: 3,
+        status: 'peer_review',
+        file_path: '/audio.wav',
+        version: 1,
+        workflow_cycle: 1,
+        workflow_step: {
+          id: 'peer_review',
+          label: 'Peer Review',
+          type: 'review',
+          ui_variant: 'peer_review',
+          assignee_role: 'peer_reviewer',
+          order: 1,
+          transitions: { pass: 'producer_gate' },
+        },
+        workflow_transitions: [
+          { decision: 'pass', label: 'Pass' },
+        ],
+      },
+      issues: [],
+      checklist_items: [
+        {
+          id: 41,
+          track_id: 9,
+          reviewer_id: 1,
+          source_version_id: 101,
+          workflow_cycle: 1,
+          label: 'Balance',
+          passed: true,
+          note: 'old note',
+          created_at: '2024-01-01T00:00:00Z',
+        },
+      ],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'peer_review', label: 'Peer Review', type: 'review', ui_variant: 'peer_review', assignee_role: 'peer_reviewer', order: 1, transitions: { pass: 'producer_gate' } },
+          { id: 'producer_gate', label: 'Producer Gate', type: 'gate', ui_variant: 'producer_gate', assignee_role: 'producer', order: 2, transitions: {} },
+        ],
+      },
+    })
+    mocks.checklistSubmitMock.mockResolvedValueOnce([
+      {
+        id: 41,
+        track_id: 9,
+        reviewer_id: 1,
+        source_version_id: 101,
+        workflow_cycle: 1,
+        label: 'Balance',
+        passed: true,
+        note: 'updated note',
+        created_at: '2024-01-01T00:00:00Z',
+      },
+    ])
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    await wrapper.find('input.input-field').setValue('updated note')
+    await flushPromises()
+
+    const passButton = wrapper.findAll('button').find(button => button.text().includes('Pass'))
+    expect(passButton).toBeTruthy()
+
+    await passButton!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.checklistSubmitMock).toHaveBeenCalledWith(9, [
+      { label: 'Balance', passed: true, note: 'updated note' },
+    ])
+    expect(mocks.workflowTransitionMock).toHaveBeenCalledWith(9, 'pass')
+  })
+
   it('supports read-only source compare during peer review', async () => {
     mocks.trackGetMock.mockResolvedValueOnce({
       track: {
@@ -415,5 +510,99 @@ describe('WorkflowStepView', () => {
 
     expect(wrapper.find('.waveform').text()).toContain('compare:301')
     expect(wrapper.find('.issue-list').text()).toBe('1')
+  })
+
+  it('shows peer-only handoff issues in a drawer and groups producer gate decisions together', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Producer Track',
+        artist: 'Nova',
+        status: 'producer_gate',
+        file_path: '/audio.wav',
+        version: 2,
+        workflow_cycle: 1,
+        current_source_version: { id: 201 },
+        workflow_step: {
+          id: 'producer_gate',
+          label: 'Producer Gate',
+          type: 'approval',
+          ui_variant: 'producer_gate',
+          assignee_role: 'producer',
+          order: 2,
+          transitions: { approve: 'mastering', reject: 'producer_revision', reject_to_peer_review: 'peer_review' },
+        },
+        workflow_transitions: [
+          { decision: 'approve', label: 'Approve' },
+          { decision: 'reject', label: 'Reject' },
+          { decision: 'reject_to_peer_review', label: 'Return to Peer Review' },
+        ],
+      },
+      issues: [
+        {
+          id: 10,
+          track_id: 9,
+          author_id: 4,
+          phase: 'peer',
+          workflow_cycle: 1,
+          source_version_id: 201,
+          source_version_number: 2,
+          master_delivery_id: null,
+          title: 'Peer balance note',
+          description: 'Kick is still too loud in the chorus.',
+          severity: 'major',
+          status: 'open',
+          markers: [],
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-02T00:00:00Z',
+          comment_count: 2,
+        },
+        {
+          id: 11,
+          track_id: 9,
+          author_id: 1,
+          phase: 'producer',
+          workflow_cycle: 1,
+          source_version_id: 201,
+          source_version_number: 2,
+          master_delivery_id: null,
+          title: 'Producer-only note',
+          description: 'Internal producer note',
+          severity: 'minor',
+          status: 'open',
+          markers: [],
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-02T00:00:00Z',
+          comment_count: 0,
+        },
+      ],
+      checklist_items: [],
+      source_versions: [
+        { id: 201, version_number: 2, created_at: '2024-01-02T00:00:00Z' },
+      ],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'peer_review', label: 'Peer Review', type: 'review', assignee_role: 'peer_reviewer', order: 1, transitions: {} },
+          { id: 'producer_gate', label: 'Producer Gate', type: 'approval', ui_variant: 'producer_gate', assignee_role: 'producer', order: 2, transitions: { approve: 'mastering', reject: 'producer_revision', reject_to_peer_review: 'peer_review' } },
+          { id: 'mastering', label: 'Mastering', type: 'delivery', assignee_role: 'mastering_engineer', order: 3, transitions: {} },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    expect(wrapper.find('.decision-group').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Next Decision')
+    expect(wrapper.text()).toContain('Send to Mastering')
+    expect(wrapper.findAll('.peer-issue-card')).toHaveLength(1)
+    expect(wrapper.text()).toContain('Peer balance note')
+
+    await wrapper.find('.peer-issue-card').trigger('click')
+    await flushPromises()
+
+    expect(mocks.pushMock).not.toHaveBeenCalled()
+    expect(wrapper.find('.peer-issue-drawer').text()).toContain('Peer balance note')
   })
 })

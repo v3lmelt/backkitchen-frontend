@@ -3,13 +3,16 @@ import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
+import { useTrackStore } from '@/stores/tracks'
 import type { Notification } from '@/types'
 import { formatRelativeTime } from '@/utils/time'
+import { translateStepLabel } from '@/utils/workflow'
 import { Menu, Bell } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
+const trackStore = useTrackStore()
 const { t, locale } = useI18n()
 
 const LOCALE_KEY = 'backkitchen_locale'
@@ -43,6 +46,31 @@ async function handleNotificationClick(notif: Notification) {
   }
 }
 
+const currentTrack = computed(() => {
+  const routeTrackId = Number(route.params.id)
+  if (!Number.isFinite(routeTrackId)) return null
+  if (trackStore.currentTrack?.id !== routeTrackId) return null
+  return trackStore.currentTrack
+})
+
+const currentTrackLabel = computed(() => {
+  const title = currentTrack.value?.title?.trim()
+  if (title) return title
+  if (route.params.id) return `Track #${route.params.id}`
+  return t('header.pages.trackDetail')
+})
+
+const currentWorkflowStepLabel = computed(() => {
+  if (route.name !== 'workflow-step') return ''
+
+  const step = currentTrack.value?.workflow_step
+  if (step) return translateStepLabel(step, t)
+
+  const stepId = typeof route.params.stepId === 'string' ? route.params.stepId : ''
+  if (!stepId) return ''
+  return translateStepLabel({ id: stepId, label: stepId }, t)
+})
+
 const pageTitle = computed(() => {
   const name = route.name as string
   const map: Record<string, string> = {
@@ -63,6 +91,7 @@ const pageTitle = computed(() => {
     'circle-new': t('header.pages.circleNew'),
     'circle-detail': t('header.pages.circles'),
     profile: t('header.pages.profile'),
+    'workflow-step': currentWorkflowStepLabel.value || t('header.pages.default'),
   }
   return map[name] || t('header.pages.default')
 })
@@ -81,10 +110,10 @@ const breadcrumbs = computed(() => {
   } else if (route.name === 'circle-detail') {
     crumbs.push({ label: t('header.pages.circles'), path: '/circles' })
   } else if (route.name === 'track-detail') {
-    crumbs.push({ label: `Track #${route.params.id}`, path: route.path })
+    crumbs.push({ label: currentTrackLabel.value, path: route.path })
   } else if (route.name === 'workflow-step') {
-    crumbs.push({ label: `Track #${route.params.id}`, path: `/tracks/${route.params.id}` })
-    crumbs.push({ label: pageTitle.value, path: route.path })
+    crumbs.push({ label: currentTrackLabel.value, path: `/tracks/${route.params.id}` })
+    crumbs.push({ label: currentWorkflowStepLabel.value || pageTitle.value, path: route.path })
   } else if (route.name === 'issue-detail') {
     crumbs.push({ label: `Issue #${route.params.id}`, path: route.path })
   } else {

@@ -20,11 +20,17 @@ export interface WorkflowAction {
   confirm?: WorkflowActionConfirm
 }
 
-defineProps<{
+const props = withDefaults(defineProps<{
   actions: WorkflowAction[]
   /** Optional one-line hint shown above buttons */
   hint?: string
-}>()
+  /** Use grouped layout when decisions should sit in one cluster. */
+  layout?: 'split' | 'grouped'
+  /** Optional label above grouped decision buttons. */
+  groupLabel?: string
+}>(), {
+  layout: 'split',
+})
 
 const { t } = useI18n()
 const pendingAction = ref<WorkflowAction | null>(null)
@@ -75,16 +81,55 @@ function confirmPending() {
       <div class="flex flex-col sm:flex-row sm:items-center gap-4">
 
         <!-- Left: hint -->
-        <div v-if="hint" class="inline-flex max-w-full items-center gap-3 self-start rounded-full border border-warning/30 bg-warning-bg px-3 py-2 sm:flex-none">
+        <div v-if="props.hint" class="inline-flex max-w-full items-center gap-3 self-start rounded-full border border-warning/30 bg-warning-bg px-3 py-2 sm:flex-none">
           <span class="pulse-dot flex-shrink-0"></span>
-          <p class="text-sm font-mono font-medium text-warning tracking-wide leading-none">{{ hint }}</p>
+          <p class="text-sm font-mono font-medium text-warning tracking-wide leading-none">{{ props.hint }}</p>
         </div>
 
         <!-- Right: actions -->
-        <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
+        <div v-if="props.layout === 'grouped'" class="w-full sm:ml-auto sm:w-auto">
+          <div class="grouped-action-wrap">
+            <p v-if="props.groupLabel" class="grouped-action-label">{{ props.groupLabel }}</p>
+            <div class="decision-group">
+              <button
+                v-for="action in props.actions"
+                :key="action.label"
+                :disabled="action.disabled"
+                @click="handleClick(action)"
+                :class="[
+                  'grouped-btn group flex items-center justify-center gap-2 rounded-full font-mono text-sm px-4 h-10 transition-all duration-200 whitespace-nowrap disabled:opacity-30 disabled:cursor-not-allowed',
+                  action.type === 'advance'
+                    ? 'grouped-btn-advance'
+                    : action.type === 'reject'
+                      ? 'grouped-btn-reject'
+                      : 'grouped-btn-return',
+                ]"
+              >
+                <RotateCcw
+                  v-if="action.type === 'return'"
+                  class="w-3.5 h-3.5 flex-shrink-0 transition-transform duration-300 group-hover:-rotate-90"
+                  :stroke-width="2"
+                />
+                <X
+                  v-else-if="action.type === 'reject'"
+                  class="w-3.5 h-3.5 flex-shrink-0"
+                  :stroke-width="2"
+                />
+                <ChevronRight
+                  v-else
+                  class="w-4 h-4 flex-shrink-0 transition-transform duration-200 group-hover:translate-x-0.5"
+                  :stroke-width="2.5"
+                />
+                {{ action.label }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="flex flex-wrap items-center gap-2 sm:ml-auto">
           <!-- Secondary: return / reject -->
           <button
-            v-for="action in actions.filter(a => a.type !== 'advance')"
+            v-for="action in props.actions.filter(a => a.type !== 'advance')"
             :key="action.label"
             :disabled="action.disabled"
             @click="handleClick(action)"
@@ -111,7 +156,7 @@ function confirmPending() {
 
           <!-- Primary: advance -->
           <button
-            v-for="action in actions.filter(a => a.type === 'advance')"
+            v-for="action in props.actions.filter(a => a.type === 'advance')"
             :key="action.label"
             :disabled="action.disabled"
             @click="handleClick(action)"
@@ -170,6 +215,84 @@ function confirmPending() {
 /* ── Ghost secondary button ── */
 .ghost-btn {
   background: transparent;
+}
+
+.grouped-action-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.grouped-action-label {
+  margin: 0;
+  text-align: right;
+  font-family: var(--font-mono, inherit);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #B8B9B6;
+}
+
+.decision-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  justify-content: flex-end;
+  width: 100%;
+  padding: 0.25rem;
+  border: 1px solid #2E2E2E;
+  border-radius: 9999px;
+  background: #1A1A1A;
+}
+
+.grouped-btn {
+  flex: 1 1 10rem;
+  min-width: 0;
+  border: 1px solid transparent;
+}
+
+.grouped-btn-return {
+  background: transparent;
+  color: #FFFFFF;
+}
+
+.grouped-btn-return:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.grouped-btn-reject {
+  background: transparent;
+  color: #FF5C33;
+  border-color: rgba(255, 92, 51, 0.22);
+}
+
+.grouped-btn-reject:hover:not(:disabled) {
+  background: rgba(255, 92, 51, 0.1);
+}
+
+.grouped-btn-advance {
+  background: #FF8400;
+  color: #111111;
+  font-weight: 600;
+}
+
+.grouped-btn-advance:hover:not(:disabled) {
+  background: #CC6A00;
+}
+
+@media (min-width: 640px) {
+  .grouped-action-wrap {
+    width: auto;
+  }
+
+  .decision-group {
+    width: auto;
+  }
+
+  .grouped-btn {
+    flex: 0 0 auto;
+  }
 }
 
 /* ── Primary advance button ── */

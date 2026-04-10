@@ -14,12 +14,13 @@ import type {
   WorkflowStepDef,
   WorkflowTransitionOption,
 } from '@/types'
-import { formatLocaleDate } from '@/utils/time'
+import { formatLocaleDate, formatTimestampShort } from '@/utils/time'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
+import IssueDetailPanel from '@/components/IssueDetailPanel.vue'
 import WorkflowActionBar from '@/components/workflow/WorkflowActionBar.vue'
 import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
@@ -28,6 +29,7 @@ import { ChevronLeft, Upload } from 'lucide-vue-next'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useToast } from '@/composables/useToast'
 import { useAppStore } from '@/stores/app'
+import { useTrackStore } from '@/stores/tracks'
 import { translateStepLabel } from '@/utils/workflow'
 import { hashId } from '@/utils/hash'
 
@@ -39,6 +41,7 @@ const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
 
 const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
 const appStore = useAppStore()
+const trackStore = useTrackStore()
 const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
@@ -59,6 +62,7 @@ const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 const uploadProgress = ref(0)
 const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
 const hoveredIssueId = ref<number | null>(null)
+const selectedPeerIssue = ref<Issue | null>(null)
 const isIssueFormOpen = ref(false)
 const waveformMode = computed<'seek' | 'annotate'>(() => (isIssueFormOpen.value ? 'annotate' : 'seek'))
 const showSourceCompare = ref(false)
@@ -176,8 +180,12 @@ const producerWaveformIssues = computed(() => {
   return filterIssuesForDisplayedSourceVersion(producerIssues.value)
 })
 const peerIssues = computed(() =>
-  issues.value.filter(i => i.phase !== currentStep.value?.id),
+  issues.value.filter(i => i.phase === 'peer' || i.phase === 'peer_review'),
 )
+const peerOpenCount = computed(() => peerIssues.value.filter(issue => issue.status === 'open').length)
+const peerResolvedCount = computed(() => peerIssues.value.filter(issue => issue.status === 'resolved').length)
+const peerDisagreedCount = computed(() => peerIssues.value.filter(issue => issue.status === 'disagreed').length)
+const peerDiscussedCount = computed(() => peerIssues.value.filter(issue => (issue.comment_count ?? 0) > 0).length)
 const revisionSnapshotIssues = computed(() => {
   if (currentStep.value?.type !== 'revision') return []
 
@@ -258,12 +266,23 @@ const finalReviewIssues = computed(() => {
   )
 })
 const canConfirmDelivery = computed(() => {
-  if (activeVariant.value !== 'mastering' || !track.value || !masterDelivery.value) return false
+  if (currentStep.value?.type !== 'delivery' || !track.value || !masterDelivery.value) return false
   const userId = appStore.currentUser?.id
   if (!userId) return false
   if (masterDelivery.value.confirmed_at) return false
   if (currentStep.value?.assignee_user_id) return currentStep.value.assignee_user_id === userId
-  return track.value.mastering_engineer_id === userId
+  switch (currentStep.value?.assignee_role) {
+    case 'submitter':
+      return track.value.submitter_id === userId
+    case 'producer':
+      return track.value.producer_id === userId
+    case 'peer_reviewer':
+      return track.value.peer_reviewer_id === userId
+    case 'mastering_engineer':
+      return track.value.mastering_engineer_id === userId
+    default:
+      return false
+  }
 })
 const canApproveFinal = computed(() => {
   if (!track.value || !masterDelivery.value) return false
@@ -343,12 +362,16 @@ async function loadPage() {
   try {
     const detail = await trackApi.get(trackId.value)
     track.value = detail.track
+    trackStore.setCurrentTrack(detail.track)
     sourceVersions.value = detail.source_versions ?? []
     masterDeliveries.value = detail.master_deliveries ?? []
     workflowConfig.value = detail.workflow_config ?? null
     issues.value = detail.issues.filter(
       issue => issue.workflow_cycle === detail.track.workflow_cycle,
     )
+    if (selectedPeerIssue.value) {
+      selectedPeerIssue.value = issues.value.find(issue => issue.id === selectedPeerIssue.value?.id) ?? null
+    }
     checklistItems.value = detail.checklist_items
 
     if (inferClassicVariant(detail.track.workflow_step ?? null) === 'peer_review') {
@@ -357,6 +380,9 @@ async function loadPage() {
       templateItems.value = []
       checklistDraft.value = []
     }
+  } catch (err) {
+    trackStore.setCurrentTrack(null)
+    throw err
   } finally {
     loading.value = false
   }
@@ -426,6 +452,28 @@ function onIssueSelect(issue: Issue) {
   router.push(`/issues/${issue.id}`)
 }
 
+function openPeerIssue(issue: Issue) {
+  selectedPeerIssue.value = issue
+}
+
+function closePeerIssue() {
+  selectedPeerIssue.value = null
+}
+
+function onPeerIssueUpdated(updatedIssue: Issue) {
+  issues.value = issues.value.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue)
+  selectedPeerIssue.value = updatedIssue
+}
+
+function peerIssueMarkerSummary(issue: Issue): string {
+  if (!issue.markers.length) return t('issue.generalIssue')
+  return issue.markers
+    .map(marker => marker.time_end == null
+      ? formatTimestampShort(marker.time_start)
+      : `${formatTimestampShort(marker.time_start)} - ${formatTimestampShort(marker.time_end)}`)
+    .join(' · ')
+}
+
 function onIssueCreated(issue: Issue) {
   issues.value.push(issue)
 }
@@ -450,6 +498,9 @@ async function executeTransition(decision: string) {
   acting.value = true
   error.value = ''
   try {
+    if (activeVariant.value === 'peer_review' && checklistDraft.value.length > 0) {
+      await persistChecklist()
+    }
     await trackApi.workflowTransition(trackId.value, decision)
     pushToTrackDetail()
   } catch (err: any) {
@@ -529,6 +580,9 @@ function onFileChange(event: Event) {
 }
 
 function transitionLabel(decision: string, fallbackLabel: string) {
+  if (activeVariant.value === 'producer_gate' && decision === 'approve') {
+    return t('producer.sendToMastering')
+  }
   if (decision.startsWith('reject_to_')) {
     const targetStepId = decision.slice('reject_to_'.length)
     const targetStep = workflowConfig.value?.steps.find(step => step.id === targetStepId)
@@ -543,18 +597,24 @@ function translateChecklistLabel(label: string): string {
   return key ? t(`checklistLabels.${key}`) : label
 }
 
-async function submitChecklist() {
+async function persistChecklist(showToast = false) {
   error.value = ''
-  try {
-    checklistItems.value = await checklistApi.submit(
-      trackId.value,
-      checklistDraft.value.map(item => ({
-        label: item.label,
-        passed: item.passed,
-        note: item.note || undefined,
-      })),
-    )
+  checklistItems.value = await checklistApi.submit(
+    trackId.value,
+    checklistDraft.value.map(item => ({
+      label: item.label,
+      passed: item.passed,
+      note: item.note || undefined,
+    })),
+  )
+  if (showToast) {
     toastSuccess(t('peerReview.checklistSubmitted'))
+  }
+}
+
+async function submitChecklist() {
+  try {
+    await persistChecklist(true)
   } catch (err: any) {
     error.value = err.message || t('common.requestFailed')
   }
@@ -575,7 +635,7 @@ const classicActions = computed<WorkflowAction[]>(() =>
   })),
 )
 
-const masteringActions = computed<WorkflowAction[]>(() => {
+const deliveryActions = computed<WorkflowAction[]>(() => {
   const actions = transitions.value.map((tr) => ({
     label: transitionLabel(tr.decision, tr.label),
     type: actionTypeForTransition(tr.decision),
@@ -628,15 +688,6 @@ const genericApprovalActions = computed<WorkflowAction[]>(() =>
   transitions.value.map((tr) => ({
     label: transitionLabel(tr.decision, tr.label),
     type: actionTypeForTransition(tr.decision),
-    disabled: acting.value,
-    handler: () => executeTransition(tr.decision),
-  })),
-)
-
-const genericDeliveryActions = computed<WorkflowAction[]>(() =>
-  transitions.value.map((tr) => ({
-    label: transitionLabel(tr.decision, tr.label),
-    type: 'return',
     disabled: acting.value,
     handler: () => executeTransition(tr.decision),
   })),
@@ -1018,23 +1069,87 @@ function handleIssueLeave() {
         </div>
       </div>
 
-      <div class="card">
-        <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('producer.peerIssueSummaryHeading') }}</h3>
-        <div class="space-y-2">
-          <div v-for="issue in peerIssues" :key="issue.id" class="flex items-center justify-between gap-2 flex-wrap py-1">
-            <div class="flex items-center gap-2 min-w-0 flex-wrap">
-              <StatusBadge :status="issue.phase" type="phase" />
-              <StatusBadge :status="issue.severity" type="severity" />
-              <span class="text-sm text-foreground truncate">{{ issue.title }}</span>
-            </div>
-            <StatusBadge :status="issue.status" type="issue" />
+      <div class="card space-y-4">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div class="space-y-1">
+            <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('producer.peerIssueSummaryHeading') }}</h3>
+            <p class="text-xs text-muted-foreground">{{ t('producer.peerIssueSummaryHint') }}</p>
           </div>
-          <div v-if="peerIssues.length === 0" class="text-sm text-muted-foreground">{{ t('producer.noIssues') }}</div>
+          <div class="grid grid-cols-2 gap-2 text-xs sm:min-w-[220px]">
+            <div class="border border-border bg-background px-3 py-2 space-y-1">
+              <div class="font-mono text-lg text-error">{{ peerOpenCount }}</div>
+              <div class="text-muted-foreground">{{ t('producer.open') }}</div>
+            </div>
+            <div class="border border-border bg-background px-3 py-2 space-y-1">
+              <div class="font-mono text-lg text-success">{{ peerResolvedCount }}</div>
+              <div class="text-muted-foreground">{{ t('producer.resolved') }}</div>
+            </div>
+            <div class="border border-border bg-background px-3 py-2 space-y-1">
+              <div class="font-mono text-lg text-warning">{{ peerDisagreedCount }}</div>
+              <div class="text-muted-foreground">{{ t('producer.disagreed') }}</div>
+            </div>
+            <div class="border border-border bg-background px-3 py-2 space-y-1">
+              <div class="font-mono text-lg text-info">{{ peerDiscussedCount }}</div>
+              <div class="text-muted-foreground">{{ t('producer.activeDiscussions') }}</div>
+            </div>
+          </div>
         </div>
+
+        <div v-if="peerIssues.length" class="space-y-3">
+          <button
+            v-for="issue in peerIssues"
+            :key="issue.id"
+            type="button"
+            class="peer-issue-card w-full border border-border bg-background p-4 text-left transition-colors hover:border-muted-foreground/60 hover:bg-card"
+            @click="openPeerIssue(issue)"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 space-y-2">
+                <div class="flex flex-wrap items-center gap-2">
+                  <StatusBadge :status="issue.severity" type="severity" />
+                  <StatusBadge :status="issue.status" type="issue" />
+                  <span class="text-xs font-mono text-muted-foreground">{{ peerIssueMarkerSummary(issue) }}</span>
+                </div>
+                <div>
+                  <div class="text-sm font-medium text-foreground">{{ issue.title }}</div>
+                  <p class="mt-1 text-sm text-muted-foreground">{{ issue.description }}</p>
+                </div>
+              </div>
+              <span class="text-xs font-mono text-muted-foreground whitespace-nowrap">{{ fmtDate(issue.updated_at) }}</span>
+            </div>
+
+            <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <span class="rounded-full border border-border px-2.5 py-1 text-muted-foreground">
+                {{ t('issueDetail.commentsHeading', { count: issue.comment_count ?? 0 }) }}
+              </span>
+              <span
+                v-if="(issue.comment_count ?? 0) > 0"
+                class="rounded-full bg-info-bg px-2.5 py-1 text-info"
+              >
+                {{ t('producer.hasDiscussion') }}
+              </span>
+              <span class="text-primary">{{ t('producer.viewConversation') }}</span>
+            </div>
+          </button>
+        </div>
+
+        <div v-else class="text-sm text-muted-foreground">{{ t('producer.noPeerIssues') }}</div>
+
+        <IssueDetailPanel
+          :issue="selectedPeerIssue"
+          :track="track"
+          @close="closePeerIssue"
+          @updated="onPeerIssueUpdated"
+        />
       </div>
     </div>
 
-    <WorkflowActionBar :actions="classicActions" :hint="t('producer.gateHint')" />
+    <WorkflowActionBar
+      :actions="classicActions"
+      :hint="t('producer.gateHint')"
+      layout="grouped"
+      :group-label="t('producer.decisionGroupLabel')"
+    />
   </div>
 
   <div v-else-if="activeVariant === 'mastering'" class="max-w-4xl mx-auto min-h-full flex flex-col">
@@ -1251,7 +1366,7 @@ function handleIssueLeave() {
       </div>
     </div>
 
-    <WorkflowActionBar :actions="masteringActions" :hint="t('mastering.actionHint')" />
+      <WorkflowActionBar :actions="deliveryActions" :hint="t('mastering.actionHint')" />
   </div>
 
   <div v-else-if="activeVariant === 'final_review'" class="max-w-4xl mx-auto min-h-full flex flex-col">
@@ -1721,7 +1836,7 @@ function handleIssueLeave() {
         <WaveformPlayer :audio-url="masterAudioUrl" :issues="[]" />
       </div>
 
-      <WorkflowActionBar v-if="transitions.length" :actions="genericDeliveryActions" :hint="t('common.actions')" />
+      <WorkflowActionBar v-if="deliveryActions.length" :actions="deliveryActions" :hint="t('common.actions')" />
     </template>
   </div>
 </template>
