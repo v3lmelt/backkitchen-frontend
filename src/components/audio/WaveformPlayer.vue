@@ -33,7 +33,7 @@ const emit = defineEmits<{
   timeupdate: [time: number]
   click: [time: number]
   regionClick: [issue: Issue]
-  rangeSelect: [start: number, end: number]
+  rangeSelect: [start: number, end: number, isUpdate: boolean]
   issueHover: [issue: Issue]
   issueLeave: []
   requestModeChange: [mode: InteractionMode]
@@ -524,7 +524,7 @@ function emitPointGroupHover(group: PointMarkerGroup) {
   }
 }
 
-function syncSelectedRange(region: { id: string; start: number; end: number; remove?: () => void }) {
+function syncSelectedRange(region: { id: string; start: number; end: number; remove?: () => void }, isUpdate = false) {
   const start = roundToMilliseconds(Math.min(region.start, region.end))
   const end = roundToMilliseconds(Math.max(region.start, region.end))
 
@@ -548,7 +548,7 @@ function syncSelectedRange(region: { id: string; start: number; end: number; rem
 
   lastEmittedSelection.value = { id: region.id, start, end }
   lastSelectionAt.value = Date.now()
-  emit('rangeSelect', start, end)
+  emit('rangeSelect', start, end, isUpdate)
 }
 
 function renderSelectionRegion() {
@@ -702,12 +702,12 @@ onMounted(async () => {
 
   regions.on('region-created', (region: any) => {
     if (isRenderingRegions.value) return
-    syncSelectedRange(region)
+    syncSelectedRange(region, false)
   })
 
   regions.on('region-updated', (region: any) => {
     if (selectionRegionId.value !== region.id) return
-    syncSelectedRange(region)
+    syncSelectedRange(region, true)
   })
 
   applyDragSelection()

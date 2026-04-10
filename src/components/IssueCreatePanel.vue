@@ -31,8 +31,12 @@ const severity = ref<'critical' | 'major' | 'minor' | 'suggestion'>('major')
 const markers = ref<{ marker_type: 'point' | 'range'; time_start: number; time_end: number | null }[]>([])
 const rangeAnchor = ref<number | null>(null)
 const markerHint = ref('')
+// Index of the range marker tied to the current waveform drag selection.
+// Used to update the marker in-place when the user resizes the selection.
+const lastDragRangeIdx = ref(-1)
 
 const POINT_NEAR_THRESHOLD_SECONDS = 0.05
+const MIN_RANGE_DURATION_SECONDS = 0.05
 const ISSUE_DRAFT_STORAGE_PREFIX = 'backkitchen_issue_draft'
 
 const draftStorageKey = computed(() => {
@@ -140,9 +144,14 @@ function handleRangeSelect(start: number, end: number) {
   const normalizedEnd = roundToMilliseconds(Math.max(start, end))
   if (normalizedEnd <= normalizedStart) return
 
+  // Ignore accidental micro-drags (< 50ms duration)
+  if (normalizedEnd - normalizedStart < MIN_RANGE_DURATION_SECONDS) return
+
   const sameRangeIndex = markers.value.findIndex(marker => markerEqualsRange(marker, normalizedStart, normalizedEnd))
   if (sameRangeIndex !== -1) {
     markers.value.splice(sameRangeIndex, 1)
+    if (lastDragRangeIdx.value === sameRangeIndex) lastDragRangeIdx.value = -1
+    else if (lastDragRangeIdx.value > sameRangeIndex) lastDragRangeIdx.value--
     rangeAnchor.value = null
     issueMode.value = 'timed'
     showForm.value = true
@@ -158,17 +167,34 @@ function handleRangeSelect(start: number, end: number) {
     time_start: normalizedStart,
     time_end: normalizedEnd,
   })
+  lastDragRangeIdx.value = markers.value.length - 1
   rangeAnchor.value = null
   issueMode.value = 'timed'
   showForm.value = true
 }
 
+function handleRangeUpdate(start: number, end: number) {
+  const normalizedStart = roundToMilliseconds(Math.min(start, end))
+  const normalizedEnd = roundToMilliseconds(Math.max(start, end))
+  if (normalizedEnd <= normalizedStart) return
+  if (normalizedEnd - normalizedStart < MIN_RANGE_DURATION_SECONDS) return
+
+  const idx = lastDragRangeIdx.value
+  if (idx >= 0 && idx < markers.value.length && markers.value[idx].marker_type === 'range') {
+    markers.value[idx].time_start = normalizedStart
+    markers.value[idx].time_end = normalizedEnd
+  }
+}
+
 function removeMarker(index: number) {
   markers.value.splice(index, 1)
+  if (lastDragRangeIdx.value === index) lastDragRangeIdx.value = -1
+  else if (lastDragRangeIdx.value > index) lastDragRangeIdx.value--
 }
 
 function removeLastMarker() {
   if (!markers.value.length) return
+  if (lastDragRangeIdx.value === markers.value.length - 1) lastDragRangeIdx.value = -1
   const removed = markers.value.pop()
   if (!removed) return
   showForm.value = true
@@ -180,6 +206,7 @@ function clearMarkers() {
   if (!markers.value.length) return
   markers.value = []
   rangeAnchor.value = null
+  lastDragRangeIdx.value = -1
   issueMode.value = 'timed'
   showForm.value = true
   setMarkerHint(t('issue.markersCleared'))
@@ -221,6 +248,7 @@ function resetForm() {
   severity.value = 'major'
   markers.value = []
   rangeAnchor.value = null
+  lastDragRangeIdx.value = -1
   markerHint.value = ''
   issueMode.value = 'timed'
 }
@@ -390,6 +418,7 @@ onBeforeUnmount(() => {
 defineExpose({
   handleClick,
   handleRangeSelect,
+  handleRangeUpdate,
   selectedRange,
   showForm,
   markers,
