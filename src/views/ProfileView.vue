@@ -344,7 +344,7 @@ async function changePassword() {
         <button
           v-if="!showDeleteConfirm"
           @click="showDeleteConfirm = true"
-          class="text-sm font-mono px-4 h-10 rounded-full bg-error hover:opacity-90 text-white transition-opacity"
+          class="btn-destructive"
         >
           {{ t('profile.danger.deleteButton') }}
         </button>
@@ -366,7 +366,7 @@ async function changePassword() {
             <button
               @click="deleteAccount"
               :disabled="deletingAccount"
-              class="text-sm font-mono px-4 h-10 rounded-full bg-error hover:opacity-90 text-white transition-opacity disabled:opacity-50"
+              class="btn-destructive"
             >
               {{ deletingAccount ? t('common.loading') : t('profile.danger.confirmButton') }}
             </button>

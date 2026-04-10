@@ -78,6 +78,8 @@ const templateItems = ref<ChecklistTemplateItem[]>([])
 const templateIsDefault = ref(false)
 const savingTemplate = ref(false)
 const templateError = ref('')
+const savedTemplateSnapshot = ref('')
+const templateDirty = computed(() => JSON.stringify(templateItems.value) !== savedTemplateSnapshot.value)
 
 // Track order state
 const tracks = ref<Track[]>([])
@@ -268,6 +270,7 @@ onMounted(async () => {
         checklistApi.getTemplate(albumData.id).then(tpl => {
           templateItems.value = tpl.items.map(item => ({ ...item }))
           templateIsDefault.value = tpl.is_default
+          savedTemplateSnapshot.value = JSON.stringify(templateItems.value)
         }).catch(() => { console.warn('[AlbumSettings] Failed to load checklist template') }),
         albumApi.tracks(albumData.id).then(ts => { tracks.value = ts }),
         albumApi.archivedTracks(albumData.id).then(ts => { archivedTracks.value = ts }).catch(() => {}),
@@ -287,6 +290,7 @@ onMounted(async () => {
         checklistApi.getTemplate(albumData.id).then(tpl => {
           templateItems.value = tpl.items.map(item => ({ ...item }))
           templateIsDefault.value = tpl.is_default
+          savedTemplateSnapshot.value = JSON.stringify(templateItems.value)
         }).catch(() => { console.warn('[AlbumSettings] Failed to load checklist template') }),
       )
     }
@@ -368,14 +372,6 @@ async function saveMetadata() {
   }
 }
 
-// Team actions
-function toggleMember(userId: number) {
-  if (teamState.member_ids.includes(userId)) {
-    teamState.member_ids = teamState.member_ids.filter(id => id !== userId)
-  } else {
-    teamState.member_ids = [...teamState.member_ids, userId]
-  }
-}
 
 async function saveTeam() {
   if (!album.value) return
@@ -503,6 +499,7 @@ async function saveTemplate() {
     )
     templateItems.value = result.items.map(item => ({ ...item }))
     templateIsDefault.value = false
+    savedTemplateSnapshot.value = JSON.stringify(templateItems.value)
     toastSuccess(t('settings.templateSaved'))
   } catch (err: any) {
     templateError.value = err.message || t('settings.templateSaveFailed')
@@ -520,6 +517,7 @@ async function resetTemplate() {
     const tpl = await checklistApi.getTemplate(album.value.id)
     templateItems.value = tpl.items.map(item => ({ ...item }))
     templateIsDefault.value = true
+    savedTemplateSnapshot.value = JSON.stringify(templateItems.value)
     toastSuccess(t('settings.templateReset'))
   } catch (err: any) {
     templateError.value = err.message || t('settings.templateSaveFailed')
@@ -1024,6 +1022,7 @@ async function testWebhook() {
             <button @click="saveTemplate" :disabled="savingTemplate" class="btn-primary text-xs px-3 py-1.5">
               {{ savingTemplate ? t('settings.saving') : t('settings.saveTemplate') }}
             </button>
+            <span v-if="templateDirty" class="text-xs text-warning font-mono">{{ t('settings.unsavedChanges') }}</span>
             <button
               @click="resetTemplate"
               :disabled="savingTemplate || templateIsDefault"

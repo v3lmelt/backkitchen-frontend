@@ -15,6 +15,7 @@ import { Archive, ChevronRight, UserRoundCog, ImageIcon, X } from 'lucide-vue-ne
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
+import { useToast } from '@/composables/useToast'
 import { translateStepLabel } from '@/utils/workflow'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 
@@ -23,6 +24,7 @@ const router = useRouter()
 const appStore = useAppStore()
 const { t, te, locale } = useI18n()
 const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
+const { success: toastSuccess } = useToast()
 
 /** Map event_type to a dot color class for visual categorisation */
 function timelineDotColor(event: WorkflowEvent): string {
@@ -290,6 +292,7 @@ async function doReassign(userId?: number) {
     track.value = updated
     showReassignModal.value = false
     reassignSelectedUserId.value = null
+    toastSuccess(t('trackDetail.reassignDone'))
   } finally {
     reassigning.value = false
   }

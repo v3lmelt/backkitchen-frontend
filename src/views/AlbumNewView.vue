@@ -455,9 +455,14 @@ async function create() {
         </template>
       </div>
 
-      <button @click="create" :disabled="creating" class="btn-primary text-sm w-full">
-        {{ creating ? t('albumNew.creating') : t('albumNew.createButton') }}
-      </button>
+      <div class="flex gap-3">
+        <button @click="router.back()" :disabled="creating" class="btn-secondary text-sm flex-1">
+          {{ t('common.cancel') }}
+        </button>
+        <button @click="create" :disabled="creating" class="btn-primary text-sm flex-1">
+          {{ creating ? t('albumNew.creating') : t('albumNew.createButton') }}
+        </button>
+      </div>
     </template>
   </div>
 </template>

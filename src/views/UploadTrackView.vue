@@ -171,18 +171,23 @@ function formatFileSize(bytes: number): string {
         </div>
       </div>
 
-      <button
-        @click="upload"
-        :disabled="uploading || !selectedFile || !form.title || !form.artist"
-        :class="[
-          'w-full text-sm font-medium px-4 py-3 rounded-full transition-colors',
-          uploading || !selectedFile || !form.title || !form.artist
-            ? 'bg-border text-muted-foreground cursor-not-allowed'
-            : 'btn-primary'
-        ]"
-      >
-        {{ uploading ? t('upload.uploading') : t('upload.submit') }}
-      </button>
+      <div class="flex gap-3">
+        <button @click="router.back()" :disabled="uploading" class="btn-secondary text-sm flex-1">
+          {{ t('common.cancel') }}
+        </button>
+        <button
+          @click="upload"
+          :disabled="uploading || !selectedFile || !form.title || !form.artist"
+          :class="[
+            'flex-1 text-sm font-medium px-4 py-3 rounded-full transition-colors',
+            uploading || !selectedFile || !form.title || !form.artist
+              ? 'bg-border text-muted-foreground cursor-not-allowed'
+              : 'btn-primary'
+          ]"
+        >
+          {{ uploading ? t('upload.uploading') : t('upload.submit') }}
+        </button>
+      </div>
       <div v-if="uploading" class="space-y-1">
         <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
           <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>

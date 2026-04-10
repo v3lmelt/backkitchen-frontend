@@ -52,7 +52,7 @@
               v-model="editForm.name"
               type="text"
               :disabled="!isOwner"
-              class="w-full bg-transparent border border-border rounded-full px-4 py-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary outline-none disabled:opacity-60"
+              class="input-field w-full disabled:opacity-60"
             />
           </div>
           <div>
@@ -61,7 +61,7 @@
               v-model="editForm.description"
               rows="3"
               :disabled="!isOwner"
-              class="w-full bg-transparent border border-border rounded-2xl px-4 py-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary outline-none resize-none disabled:opacity-60"
+              class="textarea-field w-full disabled:opacity-60"
             />
           </div>
           <div>
@@ -70,7 +70,7 @@
               v-model="editForm.website"
               type="text"
               :disabled="!isOwner"
-              class="w-full bg-transparent border border-border rounded-full px-4 py-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary outline-none disabled:opacity-60"
+              class="input-field w-full disabled:opacity-60"
             />
           </div>
           <div v-if="isOwner" class="flex justify-end">
@@ -127,7 +127,7 @@
                 type="number"
                 min="1"
                 max="30"
-                class="w-full bg-transparent border border-border rounded-full px-4 py-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                class="input-field w-full"
               />
             </div>
             <button class="btn-primary shrink-0" :disabled="creatingCode" @click="createInviteCode">
@@ -241,7 +241,7 @@
             <button
               v-if="!showDeleteConfirm"
               @click="showDeleteConfirm = true"
-              class="text-sm font-mono px-4 h-10 rounded-full bg-error hover:opacity-90 text-white transition-opacity"
+              class="btn-destructive"
             >
               {{ t('circleDetail.danger.deleteButton') }}
             </button>
@@ -253,7 +253,7 @@
                 <button
                   @click="deleteCircle"
                   :disabled="deletingCircle"
-                  class="text-sm font-mono px-4 h-10 rounded-full bg-error hover:opacity-90 text-white transition-opacity disabled:opacity-50"
+                  class="btn-destructive"
                 >
                   {{ deletingCircle ? t('common.loading') : t('common.confirm') }}
                 </button>
@@ -277,7 +277,7 @@
             <button
               v-if="!showLeaveConfirm"
               @click="showLeaveConfirm = true"
-              class="text-sm font-mono px-4 h-10 rounded-full bg-error hover:opacity-90 text-white transition-opacity"
+              class="btn-destructive"
             >
               {{ t('circleDetail.danger.leaveButton') }}
             </button>
@@ -289,7 +289,7 @@
                 <button
                   @click="leaveCircle"
                   :disabled="leavingCircle"
-                  class="text-sm font-mono px-4 h-10 rounded-full bg-error hover:opacity-90 text-white transition-opacity disabled:opacity-50"
+                  class="btn-destructive"
                 >
                   {{ leavingCircle ? t('common.loading') : t('common.confirm') }}
                 </button>

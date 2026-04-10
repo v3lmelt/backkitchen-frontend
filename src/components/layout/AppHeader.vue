@@ -77,6 +77,13 @@ const breadcrumbs = computed(() => {
     crumbs.push({ label: t('header.pages.circleNew'), path: '/circles/new' })
   } else if (route.name === 'circle-detail') {
     crumbs.push({ label: t('header.pages.circles'), path: '/circles' })
+  } else if (route.name === 'track-detail') {
+    crumbs.push({ label: `Track #${route.params.id}`, path: route.path })
+  } else if (route.name === 'workflow-step') {
+    crumbs.push({ label: `Track #${route.params.id}`, path: `/tracks/${route.params.id}` })
+    crumbs.push({ label: pageTitle.value, path: route.path })
+  } else if (route.name === 'issue-detail') {
+    crumbs.push({ label: `Issue #${route.params.id}`, path: route.path })
   } else {
     crumbs.push({ label: pageTitle.value, path: route.path })
   }
