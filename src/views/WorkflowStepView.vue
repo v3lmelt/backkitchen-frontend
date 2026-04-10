@@ -8,6 +8,7 @@ import type {
   ChecklistTemplateItem,
   Issue,
   Track,
+  TrackSourceVersion,
   WorkflowConfig,
   MasterDelivery,
   WorkflowStepDef,
@@ -42,6 +43,7 @@ const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
+const sourceVersions = ref<TrackSourceVersion[]>([])
 const masterDeliveries = ref<MasterDelivery[]>([])
 const workflowConfig = ref<WorkflowConfig | null>(null)
 const checklistItems = ref<ChecklistItem[]>([])
@@ -59,10 +61,13 @@ const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
 const hoveredIssueId = ref<number | null>(null)
 const isIssueFormOpen = ref(false)
 const waveformMode = computed<'seek' | 'annotate'>(() => (isIssueFormOpen.value ? 'annotate' : 'seek'))
+const showSourceCompare = ref(false)
+const selectedCompareSourceVersionId = ref<number | null>(null)
 
 function onRequestWaveformMode(next: 'seek' | 'annotate') {
-  if (next === 'annotate') issueFormRef.value?.openForm()
-  else issueFormRef.value?.closeForm()
+  if (next === 'annotate' && isSourceCompareActive.value) return
+  if (next === 'annotate') issueFormRef.value?.openForm?.()
+  else issueFormRef.value?.closeForm?.()
 }
 
 const defaultChecklistLabelKeyMap: Record<string, string> = {
@@ -110,6 +115,25 @@ const isApprovalStep = computed(() => currentStep.value?.type === 'approval' || 
 const audioUrl = computed(() =>
   track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio?v=${track.value.version ?? 0}` : '',
 )
+const currentSourceVersionId = computed(() => track.value?.current_source_version?.id ?? null)
+const olderSourceVersions = computed(() =>
+  sourceVersions.value
+    .filter(version => version.id !== currentSourceVersionId.value)
+    .sort((a, b) => b.version_number - a.version_number),
+)
+const sourceCompareOptions = computed<SelectOption[]>(() =>
+  olderSourceVersions.value.map((version) => ({
+    value: version.id,
+    label: `v${version.version_number} · ${fmtDate(version.created_at)}`,
+  })),
+)
+const selectedCompareSourceVersion = computed(() =>
+  olderSourceVersions.value.find(version => version.id === selectedCompareSourceVersionId.value) ?? null,
+)
+const isSourceCompareActive = computed(() => selectedCompareSourceVersion.value !== null)
+const displayedSourceVersionNumber = computed(() =>
+  selectedCompareSourceVersion.value?.version_number ?? track.value?.version ?? null,
+)
 
 const showMasterCompare = ref(false)
 const selectedCompareMasterDeliveryId = ref<number | null>(null)
@@ -134,26 +158,22 @@ const fallbackStepIssues = computed(() => {
   const fallbackPhases = ['peer', 'producer', 'mastering', 'final_review']
   return issues.value.filter(i => fallbackPhases.includes(i.phase))
 })
+function filterIssuesForDisplayedSourceVersion(list: Issue[]): Issue[] {
+  const version = displayedSourceVersionNumber.value
+  if (version == null) return list
+  return list.filter(issue => issue.source_version_number == null || issue.source_version_number === version)
+}
 const waveformIssues = computed(() => {
-  if (currentVersion.value == null) return stepIssues.value
-  return stepIssues.value.filter(
-    issue => issue.source_version_number == null || issue.source_version_number === currentVersion.value,
-  )
+  return filterIssuesForDisplayedSourceVersion(stepIssues.value)
 })
 const fallbackWaveformIssues = computed(() => {
-  if (currentVersion.value == null) return fallbackStepIssues.value
-  return fallbackStepIssues.value.filter(
-    issue => issue.source_version_number == null || issue.source_version_number === currentVersion.value,
-  )
+  return filterIssuesForDisplayedSourceVersion(fallbackStepIssues.value)
 })
 const producerIssues = computed(() =>
   issues.value.filter(i => i.phase === 'producer'),
 )
 const producerWaveformIssues = computed(() => {
-  if (currentVersion.value == null) return producerIssues.value
-  return producerIssues.value.filter(
-    issue => issue.source_version_number == null || issue.source_version_number === currentVersion.value,
-  )
+  return filterIssuesForDisplayedSourceVersion(producerIssues.value)
 })
 const peerIssues = computed(() =>
   issues.value.filter(i => i.phase !== currentStep.value?.id),
@@ -323,6 +343,7 @@ async function loadPage() {
   try {
     const detail = await trackApi.get(trackId.value)
     track.value = detail.track
+    sourceVersions.value = detail.source_versions ?? []
     masterDeliveries.value = detail.master_deliveries ?? []
     workflowConfig.value = detail.workflow_config ?? null
     issues.value = detail.issues.filter(
@@ -338,6 +359,28 @@ async function loadPage() {
     }
   } finally {
     loading.value = false
+  }
+}
+
+watch(olderSourceVersions, (versions) => {
+  if (!versions.some(version => version.id === selectedCompareSourceVersionId.value)) {
+    selectedCompareSourceVersionId.value = null
+  }
+  if (versions.length === 0) {
+    showSourceCompare.value = false
+  }
+})
+
+watch(isSourceCompareActive, (active) => {
+  if (!active) return
+  issueFormRef.value?.closeForm?.()
+  hoveredIssueId.value = null
+})
+
+function toggleSourceCompare() {
+  showSourceCompare.value = !showSourceCompare.value
+  if (!showSourceCompare.value) {
+    selectedCompareSourceVersionId.value = null
   }
 }
 
@@ -738,14 +781,46 @@ function handleIssueLeave() {
       <div v-if="audioUrl">
         <div class="flex items-start justify-between gap-3 mb-2">
           <p class="text-xs text-muted-foreground leading-relaxed">{{ t('peerReview.waveformHint') }}</p>
-          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1 shrink-0">
-            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
-          </button>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              v-if="olderSourceVersions.length > 0"
+              @click="toggleSourceCompare"
+              class="btn-secondary text-xs px-3 py-1"
+            >
+              {{ t('compare.title') }}
+            </button>
+            <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="mb-3 space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+            <CustomSelect
+              v-model="selectedCompareSourceVersionId"
+              :options="sourceCompareOptions"
+              :placeholder="`-- ${t('compare.selectVersion')} --`"
+              size="sm"
+            />
+            <button
+              v-if="selectedCompareSourceVersionId"
+              @click="selectedCompareSourceVersionId = null"
+              class="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {{ t('compare.clear') }}
+            </button>
+          </div>
+          <p v-if="isSourceCompareActive" class="text-xs text-warning">
+            {{ t('workflowStep.sourceCompareReadonlyHint') }}
+          </p>
         </div>
         <WaveformPlayer
           ref="waveformRef"
           :audio-url="audioUrl"
           :issues="waveformIssues"
+          :track-id="trackId"
+          :compare-version-id="selectedCompareSourceVersionId"
           :selectable="true"
           :mode="waveformMode"
           :selected-range="issueFormRef?.selectedRange ?? null"
@@ -771,13 +846,13 @@ function handleIssueLeave() {
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
             <template #heading>
-              <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('peerReview.issuesHeading', { count: stepIssues.length }) }}</h3>
+              <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('peerReview.issuesHeading', { count: fallbackWaveformIssues.length }) }}</h3>
             </template>
           </IssueCreatePanel>
 
           <IssueMarkerList
-            :issues="fallbackStepIssues"
-            :current-source-version-number="track.version"
+            :issues="fallbackWaveformIssues"
+            :current-source-version-number="displayedSourceVersionNumber"
             :hovered-issue-id="hoveredIssueId"
             @select="onIssueSelect"
             @hover="handleIssueHover"
@@ -852,14 +927,46 @@ function handleIssueLeave() {
       <div v-if="audioUrl">
         <div class="flex items-start justify-between gap-3 mb-2">
           <p class="text-xs text-muted-foreground leading-relaxed">{{ t('producer.waveformHint') }}</p>
-          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1 shrink-0">
-            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
-          </button>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              v-if="olderSourceVersions.length > 0"
+              @click="toggleSourceCompare"
+              class="btn-secondary text-xs px-3 py-1"
+            >
+              {{ t('compare.title') }}
+            </button>
+            <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="mb-3 space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+            <CustomSelect
+              v-model="selectedCompareSourceVersionId"
+              :options="sourceCompareOptions"
+              :placeholder="`-- ${t('compare.selectVersion')} --`"
+              size="sm"
+            />
+            <button
+              v-if="selectedCompareSourceVersionId"
+              @click="selectedCompareSourceVersionId = null"
+              class="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {{ t('compare.clear') }}
+            </button>
+          </div>
+          <p v-if="isSourceCompareActive" class="text-xs text-warning">
+            {{ t('workflowStep.sourceCompareReadonlyHint') }}
+          </p>
         </div>
         <WaveformPlayer
           ref="waveformRef"
           :audio-url="audioUrl"
           :issues="producerWaveformIssues"
+          :track-id="trackId"
+          :compare-version-id="selectedCompareSourceVersionId"
           :selectable="true"
           :mode="waveformMode"
           :selected-range="issueFormRef?.selectedRange ?? null"
@@ -884,14 +991,14 @@ function handleIssueLeave() {
       >
         <template #heading>
           <h3 class="text-sm font-sans font-semibold text-foreground">
-            {{ t('producer.producerIssuesHeading', { count: producerIssues.length }) }}
+            {{ t('producer.producerIssuesHeading', { count: producerWaveformIssues.length }) }}
           </h3>
         </template>
       </IssueCreatePanel>
 
       <IssueMarkerList
-        :issues="producerIssues"
-        :current-source-version-number="track.version"
+        :issues="producerWaveformIssues"
+        :current-source-version-number="displayedSourceVersionNumber"
         :hovered-issue-id="hoveredIssueId"
         @select="onIssueSelect"
         @hover="handleIssueHover"
@@ -949,14 +1056,46 @@ function handleIssueLeave() {
       <div v-if="audioUrl">
         <div class="flex items-start justify-between gap-3 mb-2">
           <p class="text-xs text-muted-foreground leading-relaxed">{{ t('mastering.waveformHint') }}</p>
-          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1 shrink-0">
-            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
-          </button>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              v-if="olderSourceVersions.length > 0"
+              @click="toggleSourceCompare"
+              class="btn-secondary text-xs px-3 py-1"
+            >
+              {{ t('compare.title') }}
+            </button>
+            <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="mb-3 space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+            <CustomSelect
+              v-model="selectedCompareSourceVersionId"
+              :options="sourceCompareOptions"
+              :placeholder="`-- ${t('compare.selectVersion')} --`"
+              size="sm"
+            />
+            <button
+              v-if="selectedCompareSourceVersionId"
+              @click="selectedCompareSourceVersionId = null"
+              class="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {{ t('compare.clear') }}
+            </button>
+          </div>
+          <p v-if="isSourceCompareActive" class="text-xs text-warning">
+            {{ t('workflowStep.sourceCompareReadonlyHint') }}
+          </p>
         </div>
         <WaveformPlayer
           ref="waveformRef"
           :audio-url="audioUrl"
           :issues="waveformIssues"
+          :track-id="trackId"
+          :compare-version-id="selectedCompareSourceVersionId"
           :selectable="true"
           :mode="waveformMode"
           :selected-range="issueFormRef?.selectedRange ?? null"
@@ -982,13 +1121,13 @@ function handleIssueLeave() {
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
             <template #heading>
-              <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('mastering.issuesHeading', { count: stepIssues.length }) }}</h3>
+              <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('mastering.issuesHeading', { count: fallbackWaveformIssues.length }) }}</h3>
             </template>
           </IssueCreatePanel>
 
           <IssueMarkerList
-            :issues="fallbackStepIssues"
-            :current-source-version-number="track.version"
+            :issues="fallbackWaveformIssues"
+            :current-source-version-number="displayedSourceVersionNumber"
             :hovered-issue-id="hoveredIssueId"
             @select="onIssueSelect"
             @hover="handleIssueHover"
@@ -1290,17 +1429,45 @@ function handleIssueLeave() {
 
     <template v-if="isApprovalStep">
       <div v-if="audioUrl" class="card space-y-3">
-        <div class="flex items-center justify-end">
+        <div class="flex items-center justify-end gap-2">
+          <button
+            v-if="olderSourceVersions.length > 0"
+            @click="toggleSourceCompare"
+            class="btn-secondary text-xs px-3 py-1"
+          >
+            {{ t('compare.title') }}
+          </button>
           <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
             {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
           </button>
         </div>
-        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" />
+        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+            <CustomSelect
+              v-model="selectedCompareSourceVersionId"
+              :options="sourceCompareOptions"
+              :placeholder="`-- ${t('compare.selectVersion')} --`"
+              size="sm"
+            />
+            <button
+              v-if="selectedCompareSourceVersionId"
+              @click="selectedCompareSourceVersionId = null"
+              class="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {{ t('compare.clear') }}
+            </button>
+          </div>
+          <p v-if="isSourceCompareActive" class="text-xs text-warning">
+            {{ t('workflowStep.sourceCompareReadonlyHint') }}
+          </p>
+        </div>
+        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" :track-id="trackId" :compare-version-id="selectedCompareSourceVersionId" />
       </div>
 
       <div v-if="fallbackStepIssues.length" class="card space-y-3">
-        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: fallbackStepIssues.length }) }}</h3>
-        <IssueMarkerList :issues="fallbackWaveformIssues" @select="onIssueSelect" />
+        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: fallbackWaveformIssues.length }) }}</h3>
+        <IssueMarkerList :issues="fallbackWaveformIssues" :current-source-version-number="displayedSourceVersionNumber" @select="onIssueSelect" />
       </div>
 
       <div class="card space-y-4">
@@ -1316,17 +1483,45 @@ function handleIssueLeave() {
 
     <template v-if="currentStep.type === 'review'">
       <div v-if="audioUrl" class="card space-y-3">
-        <div class="flex items-center justify-end">
+        <div class="flex items-center justify-end gap-2">
+          <button
+            v-if="olderSourceVersions.length > 0"
+            @click="toggleSourceCompare"
+            class="btn-secondary text-xs px-3 py-1"
+          >
+            {{ t('compare.title') }}
+          </button>
           <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
             {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
           </button>
         </div>
-        <WaveformPlayer :audio-url="audioUrl" :issues="fallbackWaveformIssues" />
+        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+            <CustomSelect
+              v-model="selectedCompareSourceVersionId"
+              :options="sourceCompareOptions"
+              :placeholder="`-- ${t('compare.selectVersion')} --`"
+              size="sm"
+            />
+            <button
+              v-if="selectedCompareSourceVersionId"
+              @click="selectedCompareSourceVersionId = null"
+              class="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {{ t('compare.clear') }}
+            </button>
+          </div>
+          <p v-if="isSourceCompareActive" class="text-xs text-warning">
+            {{ t('workflowStep.sourceCompareReadonlyHint') }}
+          </p>
+        </div>
+        <WaveformPlayer :audio-url="audioUrl" :issues="fallbackWaveformIssues" :track-id="trackId" :compare-version-id="selectedCompareSourceVersionId" />
       </div>
 
       <div class="card space-y-3">
-        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: fallbackStepIssues.length }) }}</h3>
-        <IssueMarkerList :issues="fallbackWaveformIssues" @select="onIssueSelect" />
+        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: fallbackWaveformIssues.length }) }}</h3>
+        <IssueMarkerList :issues="fallbackWaveformIssues" :current-source-version-number="displayedSourceVersionNumber" @select="onIssueSelect" />
       </div>
 
       <div class="card space-y-4">
@@ -1442,11 +1637,41 @@ function handleIssueLeave() {
       <div v-if="audioUrl" class="card space-y-3">
         <div class="flex items-center justify-between">
           <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.sourceAudio') }}</h3>
-          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
-            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              v-if="olderSourceVersions.length > 0"
+              @click="toggleSourceCompare"
+              class="btn-secondary text-xs px-3 py-1"
+            >
+              {{ t('compare.title') }}
+            </button>
+            <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+            </button>
+          </div>
         </div>
-        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" />
+        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+            <CustomSelect
+              v-model="selectedCompareSourceVersionId"
+              :options="sourceCompareOptions"
+              :placeholder="`-- ${t('compare.selectVersion')} --`"
+              size="sm"
+            />
+            <button
+              v-if="selectedCompareSourceVersionId"
+              @click="selectedCompareSourceVersionId = null"
+              class="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {{ t('compare.clear') }}
+            </button>
+          </div>
+          <p v-if="isSourceCompareActive" class="text-xs text-warning">
+            {{ t('workflowStep.sourceCompareReadonlyHint') }}
+          </p>
+        </div>
+        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" :track-id="trackId" :compare-version-id="selectedCompareSourceVersionId" />
       </div>
 
       <div class="card space-y-4">

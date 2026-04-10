@@ -566,6 +566,7 @@
     "confirmDelivery": "Confirm Delivery",
     "reupload": "Re-upload",
     "deliveryPreview": "Preview and confirm the uploaded master file",
+    "sourceCompareReadonlyHint": "Older source-version compare is read-only. Switch back to the current version before adding new issues.",
     "openWorkflowStep": "Open {step}",
     "anonymizedArtist": "(hidden)",
     "anonymizedSubmitter": "(hidden)",

@@ -566,6 +566,7 @@
     "confirmDelivery": "确认提交",
     "reupload": "重新上传",
     "deliveryPreview": "请试听并确认上传的母带文件",
+    "sourceCompareReadonlyHint": "旧源版本对比为只读模式；如需新增问题，请切回当前版本。",
     "openWorkflowStep": "进入「{step}」",
     "anonymizedArtist": "（已隐名）",
     "anonymizedSubmitter": "（已隐名）",

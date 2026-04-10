@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: '9', stepId: 'intake' } }),
+  useRoute: () => ({ params: { id: '9', stepId: 'intake' }, query: {}, fullPath: '/tracks/9/step/intake' }),
   useRouter: () => ({ push: mocks.pushMock }),
 }))
 
@@ -49,7 +49,10 @@ vi.mock('@/components/workflow/WorkflowProgress.vue', () => ({
 }))
 
 vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
-  default: { template: '<div class="waveform" />' },
+  default: {
+    props: ['compareVersionId'],
+    template: '<div class="waveform">compare:{{ compareVersionId ?? "none" }}</div>',
+  },
 }))
 
 vi.mock('@/components/audio/IssueMarkerList.vue', () => ({
@@ -67,7 +70,9 @@ vi.mock('@/components/IssueCreatePanel.vue', () => ({
 
 vi.mock('@/components/common/CustomSelect.vue', () => ({
   default: {
-    template: '<div class="compare-select" />',
+    props: ['modelValue', 'options'],
+    emits: ['update:modelValue'],
+    template: '<button class="compare-select" @click="$emit(\'update:modelValue\', options?.[0]?.value ?? null)">{{ modelValue ?? "none" }}</button>',
   },
 }))
 
@@ -153,7 +158,7 @@ describe('WorkflowStepView', () => {
     expect(mocks.workflowTransitionMock).toHaveBeenCalledWith(9, 'accept')
     expect(mocks.pushMock).toHaveBeenCalledWith({
       path: '/tracks/9',
-      query: { returnTo: undefined },
+      query: { returnTo: '/tracks/9/step/intake' },
     })
   })
 
@@ -299,5 +304,116 @@ describe('WorkflowStepView', () => {
       'Master Track_master_v2_cycle1',
       '/master-v2.wav',
     )
+  })
+
+  it('supports read-only source compare during peer review', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Peer Track',
+        artist: 'Nova',
+        status: 'peer_review',
+        file_path: '/audio.wav',
+        version: 3,
+        workflow_cycle: 2,
+        current_source_version: { id: 301 },
+        workflow_step: {
+          id: 'peer_review',
+          label: 'Peer Review',
+          type: 'review',
+          ui_variant: 'peer_review',
+          assignee_role: 'peer_reviewer',
+          order: 1,
+          transitions: { pass: 'producer_gate' },
+        },
+        workflow_transitions: [
+          { decision: 'pass', label: 'Pass' },
+        ],
+      },
+      issues: [
+        { id: 1, phase: 'peer', workflow_cycle: 2, source_version_number: 3, title: 'Current peer issue' },
+        { id: 2, phase: 'peer', workflow_cycle: 2, source_version_number: 2, title: 'Older peer issue' },
+      ],
+      checklist_items: [],
+      source_versions: [
+        { id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' },
+        { id: 201, version_number: 2, created_at: '2024-01-02T00:00:00Z' },
+      ],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'peer_review', label: 'Peer Review', type: 'review', ui_variant: 'peer_review', assignee_role: 'peer_reviewer', order: 1, transitions: { pass: 'producer_gate' } },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    const compareButton = wrapper.findAll('button').find(button => button.text().includes('Compare'))
+    expect(compareButton).toBeTruthy()
+
+    await compareButton!.trigger('click')
+    await flushPromises()
+
+    await wrapper.find('.compare-select').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('workflowStep.sourceCompareReadonlyHint')
+    expect(wrapper.find('.waveform').text()).toContain('compare:201')
+    expect(wrapper.find('.issue-list').text()).toBe('1')
+  })
+
+  it('enables source compare on producer gate too', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Producer Track',
+        artist: 'Nova',
+        status: 'producer_gate',
+        file_path: '/audio.wav',
+        version: 4,
+        workflow_cycle: 2,
+        current_source_version: { id: 401 },
+        workflow_step: {
+          id: 'producer_gate',
+          label: 'Producer Gate',
+          type: 'gate',
+          ui_variant: 'producer_gate',
+          assignee_role: 'producer',
+          order: 2,
+          transitions: { send_to_mastering: 'mastering' },
+        },
+        workflow_transitions: [
+          { decision: 'send_to_mastering', label: 'Send to Mastering' },
+        ],
+      },
+      issues: [
+        { id: 10, phase: 'producer', workflow_cycle: 2, source_version_number: 4, title: 'Current producer issue' },
+        { id: 11, phase: 'producer', workflow_cycle: 2, source_version_number: 3, title: 'Older producer issue' },
+      ],
+      checklist_items: [],
+      source_versions: [
+        { id: 401, version_number: 4, created_at: '2024-01-04T00:00:00Z' },
+        { id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' },
+      ],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'producer_gate', label: 'Producer Gate', type: 'gate', ui_variant: 'producer_gate', assignee_role: 'producer', order: 2, transitions: { send_to_mastering: 'mastering' } },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    await wrapper.findAll('button').find(button => button.text().includes('Compare'))!.trigger('click')
+    await flushPromises()
+    await wrapper.find('.compare-select').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.waveform').text()).toContain('compare:301')
+    expect(wrapper.find('.issue-list').text()).toBe('1')
   })
 })

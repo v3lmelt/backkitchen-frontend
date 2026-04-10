@@ -76,6 +76,7 @@ const compareDuration = ref(0)
 const compareCurrentTime = ref(0)
 const activeDuration = computed(() => abMode.value === 'B' && compareDuration.value > 0 ? compareDuration.value : duration.value)
 const activeCurrentTime = computed(() => abMode.value === 'B' && compareDuration.value > 0 ? compareCurrentTime.value : currentTime.value)
+const markerTimelineDuration = computed(() => activeDuration.value)
 // Draft (currently-being-edited) markers use the primary orange with a dashed
 // edge — distinct from the solid "major" severity even though they share hue.
 const DRAFT_EDGE = '#FF8400'
@@ -152,13 +153,13 @@ function getMarkerStatus(issues: Issue[]): MarkerStatus {
 }
 
 function getMarkerPosition(time: number): string {
-  if (duration.value <= 0) return '0%'
-  return `${clampPercent((time / duration.value) * 100)}%`
+  if (markerTimelineDuration.value <= 0) return '0%'
+  return `${clampPercent((time / markerTimelineDuration.value) * 100)}%`
 }
 
 function getMarkerPercent(time: number): number {
-  if (duration.value <= 0) return 0
-  return clampPercent((time / duration.value) * 100)
+  if (markerTimelineDuration.value <= 0) return 0
+  return clampPercent((time / markerTimelineDuration.value) * 100)
 }
 
 function getPointMarkerAlign(percent: number): 'left' | 'center' | 'right' {
@@ -186,13 +187,13 @@ function popoverAnchorClass(align: 'left' | 'center' | 'right'): string {
 }
 
 function getRangeWidth(start: number, end: number): string {
-  if (duration.value <= 0) return '0%'
-  const width = ((Math.max(end, start) - start) / duration.value) * 100
+  if (markerTimelineDuration.value <= 0) return '0%'
+  const width = ((Math.max(end, start) - start) / markerTimelineDuration.value) * 100
   return `${Math.max(clampPercent(width), 0.35)}%`
 }
 
 const pointGroups = computed<PointMarkerGroup[]>(() => {
-  if (!props.issues?.length || duration.value <= 0) return []
+  if (!props.issues?.length || markerTimelineDuration.value <= 0) return []
 
   // Flatten: each point marker → its parent issue (an issue can appear in multiple groups)
   const grouped = new Map<number, Map<number, Issue>>()
@@ -261,7 +262,7 @@ const rangeLaneCount = computed(() =>
 )
 
 const draftPointList = computed(() => {
-  if (!props.draftMarkers?.length || duration.value <= 0) return []
+  if (!props.draftMarkers?.length || markerTimelineDuration.value <= 0) return []
   return props.draftMarkers
     .filter(m => m.marker_type === 'point')
     .map((m, i) => ({
@@ -272,7 +273,7 @@ const draftPointList = computed(() => {
 })
 
 const draftRangeList = computed(() => {
-  if (!props.draftMarkers?.length || duration.value <= 0) return []
+  if (!props.draftMarkers?.length || markerTimelineDuration.value <= 0) return []
   return props.draftMarkers
     .filter(m => m.marker_type === 'range' && m.time_end !== null)
     .map((m, i) => ({
@@ -283,7 +284,7 @@ const draftRangeList = computed(() => {
 })
 
 const draftRangeAnchorLeft = computed(() => {
-  if (props.draftRangeAnchor == null || duration.value <= 0) return null
+  if (props.draftRangeAnchor == null || markerTimelineDuration.value <= 0) return null
   return getMarkerPosition(props.draftRangeAnchor)
 })
 
@@ -370,12 +371,12 @@ function rangeLaneOffset(lane: number): string {
 }
 
 function onWaveformPointerMove(event: PointerEvent) {
-  if (duration.value <= 0) return
+  if (markerTimelineDuration.value <= 0) return
   const target = event.currentTarget as HTMLElement | null
   if (!target) return
   const rect = target.getBoundingClientRect()
   const x = Math.min(Math.max(event.clientX - rect.left, 0), rect.width)
-  hoverTime.value = (x / rect.width) * duration.value
+  hoverTime.value = (x / rect.width) * markerTimelineDuration.value
   hoverLeft.value = x
 }
 
@@ -790,6 +791,9 @@ watch(() => props.selectedRange, renderSelectionRegion, { deep: true })
 watch(duration, () => {
   activePointGroupKey.value = null
 })
+watch(markerTimelineDuration, () => {
+  activePointGroupKey.value = null
+})
 watch([() => props.mode, () => props.selectable], () => {
   applyDragSelection()
 })
@@ -1029,10 +1033,10 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
         </div>
       </div>
 
-      <div class="relative" :style="{ paddingTop: hasRangeIssues && duration > 0 ? `${rangeRulerHeight + 4}px` : '0' }">
+      <div class="relative" :style="{ paddingTop: hasRangeIssues && markerTimelineDuration > 0 ? `${rangeRulerHeight + 4}px` : '0' }">
         <!-- Range ruler bar above waveform -->
         <div
-          v-if="hasRangeIssues && duration > 0"
+          v-if="hasRangeIssues && markerTimelineDuration > 0"
           class="absolute inset-x-0 top-0 z-10"
           :style="{ height: `${rangeRulerHeight}px` }"
         >
@@ -1070,7 +1074,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
         />
         <!-- Draft marker overlays (pending markers being added to a new issue) -->
         <div
-          v-if="(draftPointList.length || draftRangeList.length || draftRangeAnchorLeft !== null) && duration > 0"
+          v-if="(draftPointList.length || draftRangeList.length || draftRangeAnchorLeft !== null) && markerTimelineDuration > 0"
           class="pointer-events-none absolute inset-0 z-10"
         >
           <!-- Draft range fills — primary orange with dashed outline -->
@@ -1114,7 +1118,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
         </div>
         <!-- Hover time tooltip -->
         <div
-          v-if="hoverTime !== null && duration > 0 && !isPrimaryLoading"
+          v-if="hoverTime !== null && markerTimelineDuration > 0 && !isPrimaryLoading"
           class="pointer-events-none absolute top-1 z-20 -translate-x-1/2 rounded-full border border-border bg-card/95 px-2 py-0.5 text-[10px] font-mono text-foreground shadow-sm backdrop-blur"
           :style="{ left: `${hoverLeft}px` }"
         >
