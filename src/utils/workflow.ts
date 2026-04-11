@@ -1,4 +1,5 @@
 import type { ComposerTranslation } from 'vue-i18n'
+import type { WorkflowEvent } from '@/types'
 
 /**
  * Step IDs that ship with the default workflow config and have matching
@@ -37,4 +38,26 @@ export function translateStepLabel(
     return t(`workflowSteps.${step.id}`, step.label)
   }
   return step.label
+}
+
+export function formatWorkflowEvent(
+  event: WorkflowEvent,
+  t: ComposerTranslation,
+): string {
+  const name = event.actor?.display_name ?? '?'
+  const key = `dashboard.events.${event.event_type}`
+  const translated = t(key, { name })
+  if (translated !== key) return translated
+  return event.actor
+    ? `${name}: ${event.event_type.replaceAll('_', ' ')}`
+    : event.event_type.replaceAll('_', ' ')
+}
+
+export function workflowEventDotColor(eventType: string): string {
+  if (eventType.includes('reject')) return 'bg-error'
+  if (eventType.includes('completed') || eventType.includes('approved')) return 'bg-success'
+  if (eventType.includes('issue')) return 'bg-warning'
+  if (eventType.includes('revision') || eventType.includes('returned')) return 'bg-warning'
+  if (eventType.includes('upload') || eventType.includes('deliver')) return 'bg-info'
+  return 'bg-muted-foreground'
 }

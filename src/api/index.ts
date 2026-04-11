@@ -10,6 +10,7 @@ import type {
   CircleSummary,
   Comment,
   Discussion,
+  EditHistory,
   Invitation,
   InviteCode,
   PresignedUploadResponse,
@@ -18,6 +19,7 @@ import type {
   WebhookConfig,
   WebhookDelivery,
   WorkflowConfig,
+  WorkflowEvent,
   WorkflowTemplate,
   Issue,
   IssueStatus,
@@ -177,10 +179,11 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const albumApi = {
-  list: (params?: { include_archived?: boolean; archived_only?: boolean }) => {
+  list: (params?: { include_archived?: boolean; archived_only?: boolean; search?: string }) => {
     const q = new URLSearchParams()
     if (params?.include_archived) q.set('include_archived', 'true')
     if (params?.archived_only) q.set('archived_only', 'true')
+    if (params?.search) q.set('search', params.search)
     const qs = q.toString()
     return request<Album[]>(`/albums${qs ? `?${qs}` : ''}`)
   },
@@ -245,6 +248,18 @@ export const albumApi = {
     form.append('file', file)
     return request<Album>(`/albums/${id}/cover`, { method: 'POST', body: form })
   },
+  removeMember: (albumId: number, userId: number) =>
+    request<void>(`/albums/${albumId}/members/${userId}`, { method: 'DELETE' }),
+  leaveAlbum: (albumId: number) =>
+    request<void>(`/albums/${albumId}/leave`, { method: 'POST' }),
+  activity: (id: number, params?: { event_type?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams()
+    if (params?.event_type) q.set('event_type', params.event_type)
+    if (params?.limit) q.set('limit', String(params.limit))
+    if (params?.offset) q.set('offset', String(params.offset))
+    const qs = q.toString()
+    return request<WorkflowEvent[]>(`/albums/${id}/activity${qs ? `?${qs}` : ''}`)
+  },
   export: async (id: number): Promise<Blob> => {
     const token = localStorage.getItem(TOKEN_KEY)
     const res = await fetch(`${BASE}/albums/${id}/export`, {
@@ -300,10 +315,11 @@ export const circleApi = {
 }
 
 export const trackApi = {
-  list: (params?: { status?: TrackStatus; album_id?: number }) => {
+  list: (params?: { status?: TrackStatus; album_id?: number; search?: string }) => {
     const q = new URLSearchParams()
     if (params?.status) q.set('status', params.status)
     if (params?.album_id) q.set('album_id', String(params.album_id))
+    if (params?.search) q.set('search', params.search)
     const qs = q.toString()
     return request<Track[]>(`/tracks${qs ? `?${qs}` : ''}`)
   },
@@ -496,6 +512,8 @@ export const discussionApi = {
     request<Discussion>(`/discussions/${id}`, { method: 'PATCH', body: JSON.stringify({ content }) }),
   delete: (id: number) =>
     request<void>(`/discussions/${id}`, { method: 'DELETE' }),
+  history: (id: number) =>
+    request<EditHistory[]>(`/discussions/${id}/history`),
 }
 
 export const commentApi = {
@@ -503,6 +521,8 @@ export const commentApi = {
     request<Comment>(`/comments/${id}`, { method: 'PATCH', body: JSON.stringify({ content }) }),
   delete: (id: number) =>
     request<void>(`/comments/${id}`, { method: 'DELETE' }),
+  history: (id: number) =>
+    request<EditHistory[]>(`/comments/${id}/history`),
 }
 
 export const userApi = {

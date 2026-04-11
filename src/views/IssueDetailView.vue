@@ -4,12 +4,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { issueApi, commentApi, r2Api, uploadToR2, trackApi, API_ORIGIN, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Comment, Issue, IssueStatus } from '@/types'
+import type { Comment, EditHistory, Issue, IssueStatus } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import TimestampText from '@/components/common/TimestampText.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
+import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
 import { useToast } from '@/composables/useToast'
 import { formatTimestamp, formatTimestampShort, formatLocaleDate, formatDuration } from '@/utils/time'
 import type { MarkerIndexReference, TimeReference, TimestampTarget } from '@/utils/timestamps'
@@ -375,6 +376,22 @@ async function deleteComment(comment: Comment) {
     await commentApi.delete(comment.id)
     issue.value.comments = issue.value.comments.filter(c => c.id !== comment.id)
   } catch { /* handled by request wrapper */ }
+}
+
+// Edit history
+const historyItems = ref<EditHistory[]>([])
+const showHistoryForCommentId = ref<number | null>(null)
+
+async function showCommentHistory(commentId: number) {
+  showHistoryForCommentId.value = commentId
+  try {
+    historyItems.value = await commentApi.history(commentId)
+  } catch { historyItems.value = [] }
+}
+
+function closeHistory() {
+  showHistoryForCommentId.value = null
+  historyItems.value = []
 }
 
 function selectStatus(status: IssueStatus) {
@@ -860,6 +877,13 @@ function openVersionCompare() {
                   {{ comment.author?.display_name || t('issueDetail.unknown') }}
                 </span>
                 <span class="text-xs text-muted-foreground">{{ fmtDate(comment.created_at) }}</span>
+                <button
+                  v-if="comment.edited_at"
+                  class="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  @click="showCommentHistory(comment.id)"
+                >
+                  ({{ t('editHistory.edited') }})
+                </button>
                 <template v-if="comment.author_id === appStore.currentUser?.id && !comment.is_status_note">
                   <button @click="startEditComment(comment)" class="text-muted-foreground hover:text-foreground transition-colors ml-auto">
                     <Pencil class="w-3.5 h-3.5" :stroke-width="2" />
@@ -1120,6 +1144,12 @@ function openVersionCompare() {
       </aside>
     </div>
   </div>
+
+  <EditHistoryModal
+    v-if="showHistoryForCommentId !== null"
+    :items="historyItems"
+    @close="closeHistory"
+  />
 </template>
 
 <style scoped>

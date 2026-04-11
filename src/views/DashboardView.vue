@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi, API_ORIGIN } from '@/api'
@@ -61,14 +61,22 @@ const albumNonZeroStatuses = computed(() => {
   return result
 })
 
+const searchAlbumResults = ref<Album[]>([])
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
 async function loadDashboard() {
   loading.value = true
   loadError.value = false
   try {
-    const [loadedTracks, loadedAlbums] = await Promise.all([trackApi.list(), albumApi.list()])
+    const query = searchQuery.value.trim() || undefined
+    const [loadedTracks, loadedAlbums] = await Promise.all([
+      trackApi.list({ search: query }),
+      albumApi.list({ search: query }),
+    ])
     tracks.value = loadedTracks
     albums.value = loadedAlbums
-    await appStore.loadPendingInvitations()
+    searchAlbumResults.value = query ? loadedAlbums : []
+    if (!query) await appStore.loadPendingInvitations()
 
     const statsResults = await Promise.allSettled(
       loadedAlbums.map(album => fetchAlbumStats(album.id).then(stats => ({ id: album.id, stats })))
@@ -87,18 +95,19 @@ async function loadDashboard() {
 
 onMounted(loadDashboard)
 
+watch(searchQuery, () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => loadDashboard(), 300)
+})
+
+onBeforeUnmount(() => {
+  if (searchTimer) clearTimeout(searchTimer)
+})
+
 const filteredTracks = computed(() => {
   let result = tracks.value
   if (filterStatus.value) {
     result = result.filter(track => track.status === filterStatus.value)
-  }
-  if (searchQuery.value.trim()) {
-    const q = searchQuery.value.trim().toLowerCase()
-    result = result.filter(track =>
-      track.title.toLowerCase().includes(q) ||
-      (track.album_title && track.album_title.toLowerCase().includes(q)) ||
-      track.submitter?.display_name?.toLowerCase().includes(q)
-    )
   }
   return result
 })
@@ -396,10 +405,26 @@ function openAlbumSettings(albumId: number) {
         </div>
       </div>
 
+      <!-- Album search results -->
+      <div v-if="searchAlbumResults.length > 0 && searchQuery.trim()" class="space-y-2 mb-4">
+        <h3 class="text-sm font-mono font-semibold text-muted-foreground">{{ t('dashboard.matchingAlbums') }}</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div
+            v-for="alb in searchAlbumResults"
+            :key="alb.id"
+            class="card cursor-pointer hover:border-primary transition-colors"
+            @click="router.push(`/albums/${alb.id}/settings`)"
+          >
+            <div class="text-sm font-mono font-semibold text-foreground truncate">{{ alb.title }}</div>
+            <div v-if="alb.description" class="text-xs text-muted-foreground mt-1 line-clamp-1">{{ alb.description }}</div>
+          </div>
+        </div>
+      </div>
+
       <div v-if="loading">
         <SkeletonLoader :rows="5" :card="true" />
       </div>
-      <div v-else-if="filteredTracks.length === 0">
+      <div v-else-if="filteredTracks.length === 0 && !searchAlbumResults.length">
         <EmptyState :icon="Music" :title="t('dashboard.noTracks')" />
       </div>
       <!-- Desktop unified table -->

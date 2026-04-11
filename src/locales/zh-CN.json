@@ -457,6 +457,7 @@
     "tracks": "首曲目",
     "tracksHeading": "曲目",
     "searchPlaceholder": "搜索曲目、专辑、作者…",
+    "matchingAlbums": "匹配的专辑",
     "filtered": "已筛选：{status}",
     "clearFilter": "清除",
     "submitTrack": "+ 提交曲目",
@@ -1024,7 +1025,8 @@
       "order": "曲目排序",
       "archive": "归档管理",
       "webhook": "Webhook",
-      "danger": "危险区域"
+      "danger": "危险区域",
+      "activity": "活动记录"
     },
     "info": {
       "coverHint": "点击更换封面图",
@@ -1042,7 +1044,12 @@
       "readOnlyNotice": "团队配置只能由制作人编辑",
       "addMember": "添加成员",
       "selectUserPlaceholder": "选择用户…",
-      "allAdded": "所有可选用户已添加"
+      "allAdded": "所有可选用户已添加",
+      "leaveAlbum": "退出专辑",
+      "leaveAlbumDesc": "退出后你将无法访问此专辑的内容。",
+      "leaveConfirm": "确认退出「{title}」？",
+      "left": "已退出专辑",
+      "leaveFailed": "退出失败"
     },
     "deadlines": {
       "readOnlyNotice": "截止日期由制作人设置",
@@ -1083,6 +1090,11 @@
       "restored": "专辑已恢复",
       "restoreFailed": "恢复失败",
       "archivedBanner": "此专辑已于 {date} 归档，将在剩余 {days} 天后被永久删除。"
+    },
+    "activity": {
+      "title": "活动记录",
+      "empty": "暂无活动记录",
+      "loadMore": "加载更多"
     }
   },
   "circles": {
@@ -1201,5 +1213,12 @@
     "keys": {
       "space": "Space"
     }
+  },
+  "editHistory": {
+    "edited": "已编辑",
+    "historyTitle": "编辑历史",
+    "version": "版本 {n}",
+    "editedBy": "{name} 编辑",
+    "noHistory": "暂无编辑记录"
   }
 }

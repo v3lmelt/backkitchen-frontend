@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import draggable from 'vuedraggable'
@@ -7,15 +7,17 @@ import { albumApi, trackApi, checklistApi, invitationApi, userApi, circleApi, AP
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
-import type { Album, ChecklistTemplateItem, Invitation, Track, User, WebhookDelivery, WorkflowConfig } from '@/types'
+import type { Album, ChecklistTemplateItem, Invitation, Track, User, WebhookDelivery, WorkflowConfig, WorkflowEvent } from '@/types'
 import { Archive, RotateCcw, Upload } from 'lucide-vue-next'
+import { formatRelativeTime } from '@/utils/time'
+import { formatWorkflowEvent, workflowEventDotColor } from '@/utils/workflow'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
@@ -70,9 +72,20 @@ const inviteSuccess = ref('')
 const invitingUser = ref(false)
 const addMemberUserId = ref<number | null>(null)
 
+// Leave album state
+const showLeaveConfirm = ref(false)
+const leavingAlbum = ref(false)
+
 // Deadline state
 const deadlineState = reactive({ deadline: '', peer_review: '', mastering: '', final_review: '' })
 const savingDeadlines = ref(false)
+
+// Activity state
+const activityEvents = ref<WorkflowEvent[]>([])
+const loadingActivity = ref(false)
+const activityOffset = ref(0)
+const activityHasMore = ref(true)
+const ACTIVITY_PAGE_SIZE = 30
 
 // Checklist state
 const templateItems = ref<ChecklistTemplateItem[]>([])
@@ -149,6 +162,7 @@ const availableTabs = computed(() => {
     { key: 'team', label: t('albumSettings.tabs.team') },
     { key: 'deadlines', label: t('albumSettings.tabs.deadlines') },
   ]
+  tabs.push({ key: 'activity', label: t('albumSettings.tabs.activity') })
   if (isProducerOfAlbum.value || isMemberOfAlbum.value) {
     tabs.push({ key: 'checklist', label: t('albumSettings.tabs.checklist') })
   }
@@ -312,6 +326,13 @@ onUnmounted(() => {
   if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value)
 })
 
+watch(activeTab, (tab) => {
+  if (tab === 'activity' && activityEvents.value.length === 0 && !loadingActivity.value) {
+    activityOffset.value = 0
+    loadActivity()
+  }
+})
+
 // Cover image actions
 function handleCoverSelect(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
@@ -459,6 +480,46 @@ async function cancelInvitation(invitationId: number) {
 function getUserDisplayName(userId: number): string {
   const user = users.value.find(u => u.id === userId)
   return user?.display_name || `User #${userId}`
+}
+
+async function handleLeaveAlbum() {
+  if (!album.value) return
+  leavingAlbum.value = true
+  try {
+    await albumApi.leaveAlbum(album.value.id)
+    toastSuccess(t('albumSettings.team.left'))
+    router.push('/albums')
+  } catch (e: any) {
+    toastError(e.message || t('albumSettings.team.leaveFailed'))
+  } finally {
+    leavingAlbum.value = false
+    showLeaveConfirm.value = false
+  }
+}
+
+// Activity actions
+async function loadActivity(append = false) {
+  if (!album.value) return
+  loadingActivity.value = true
+  try {
+    const events = await albumApi.activity(album.value.id, {
+      limit: ACTIVITY_PAGE_SIZE,
+      offset: activityOffset.value,
+    })
+    if (append) {
+      activityEvents.value.push(...events)
+    } else {
+      activityEvents.value = events
+    }
+    activityHasMore.value = events.length === ACTIVITY_PAGE_SIZE
+  } finally {
+    loadingActivity.value = false
+  }
+}
+
+function loadMoreActivity() {
+  activityOffset.value += ACTIVITY_PAGE_SIZE
+  loadActivity(true)
 }
 
 // Deadline actions
@@ -950,8 +1011,60 @@ async function refreshDeliveries() {
                 </span>
               </div>
             </div>
+            <!-- Leave album -->
+            <div class="border-t border-border pt-4">
+              <div v-if="!showLeaveConfirm">
+                <button class="btn-secondary text-sm font-mono" @click="showLeaveConfirm = true">
+                  {{ t('albumSettings.team.leaveAlbum') }}
+                </button>
+                <p class="text-xs text-muted-foreground mt-1">{{ t('albumSettings.team.leaveAlbumDesc') }}</p>
+              </div>
+              <div v-else class="space-y-2">
+                <p class="text-sm text-foreground">{{ t('albumSettings.team.leaveConfirm', { title: album.title }) }}</p>
+                <div class="flex gap-2">
+                  <button class="btn-primary text-sm font-mono" :disabled="leavingAlbum" @click="handleLeaveAlbum">
+                    {{ leavingAlbum ? '...' : t('albumSettings.team.leaveAlbum') }}
+                  </button>
+                  <button class="btn-secondary text-sm font-mono" @click="showLeaveConfirm = false">
+                    {{ t('common.cancel') }}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </template>
+      </div>
+
+      <!-- Activity tab -->
+      <div v-else-if="activeTab === 'activity'">
+        <div class="card space-y-4">
+          <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('albumSettings.activity.title') }}</h3>
+          <div v-if="loadingActivity && activityEvents.length === 0" class="text-sm text-muted-foreground py-4 text-center">...</div>
+          <div v-else-if="activityEvents.length === 0" class="text-sm text-muted-foreground py-4 text-center">
+            {{ t('albumSettings.activity.empty') }}
+          </div>
+          <div v-else class="space-y-0">
+            <div
+              v-for="event in activityEvents"
+              :key="event.id"
+              class="flex items-start gap-3 py-2.5 border-b border-border last:border-b-0"
+            >
+              <div class="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" :class="workflowEventDotColor(event.event_type)"></div>
+              <div class="flex-1 min-w-0">
+                <span class="text-sm text-foreground">{{ formatWorkflowEvent(event, t) }}</span>
+              </div>
+              <span class="text-xs text-muted-foreground flex-shrink-0">{{ formatRelativeTime(event.created_at, locale) }}</span>
+            </div>
+          </div>
+          <button
+            v-if="activityHasMore && activityEvents.length > 0"
+            class="btn-secondary text-sm font-mono w-full"
+            :disabled="loadingActivity"
+            @click="loadMoreActivity"
+          >
+            {{ loadingActivity ? '...' : t('albumSettings.activity.loadMore') }}
+          </button>
+        </div>
       </div>
 
       <!-- Deadlines tab -->
