@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi, discussionApi, API_ORIGIN, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Track, Issue, Discussion, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember, MasterDelivery } from '@/types'
+import type { Track, Issue, Discussion, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember, MasterDelivery, StageAssignment } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
@@ -161,6 +161,7 @@ const discussions = ref<Discussion[]>([])
 const events = ref<WorkflowEvent[]>([])
 const sourceVersions = ref<TrackSourceVersion[]>([])
 const masterDeliveries = ref<MasterDelivery[]>([])
+const reviewAssignments = ref<StageAssignment[]>([])
 const workflowConfig = ref<WorkflowConfig | null>(null)
 const loading = ref(true)
 const loadError = ref(false)
@@ -254,6 +255,12 @@ async function loadTrack() {
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
     masterDeliveries.value = detail.master_deliveries ?? []
     workflowConfig.value = detail.workflow_config ?? null
+    // Fetch review assignments for multi-reviewer progress display
+    try {
+      reviewAssignments.value = await trackApi.listAssignments(trackId.value)
+    } catch {
+      reviewAssignments.value = []
+    }
   } catch {
     trackStore.setCurrentTrack(null)
     loadError.value = true
@@ -304,6 +311,17 @@ const currentWaveformIssues = computed(() => {
   if (currentVersion == null) return currentCycleIssues.value
   return currentCycleIssues.value.filter(issue => issue.source_version_number == null || issue.source_version_number === currentVersion)
 })
+
+// Multi-reviewer: filter assignments to current review step
+const currentStepAssignments = computed(() => {
+  const step = track.value?.workflow_step
+  if (!step || step.type !== 'review') return []
+  return reviewAssignments.value.filter(a => a.stage_id === step.id && a.status !== 'cancelled')
+})
+
+const hasMultipleReviewers = computed(() => currentStepAssignments.value.length > 0)
+const completedReviewCount = computed(() => currentStepAssignments.value.filter(a => a.status === 'completed').length)
+const totalReviewCount = computed(() => currentStepAssignments.value.length)
 
 const customWorkflowActionLabel = computed(() => {
   const step = track.value?.workflow_step
@@ -968,7 +986,45 @@ watch(selectedCompareMasterDelivery, (delivery) => {
             <span class="text-muted-foreground">{{ t('trackDetail.submitter') }}</span>
             <span class="text-foreground" :class="{ 'font-mono': !track.submitter && track.submitter_id }">{{ track.submitter?.display_name ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
           </div>
-          <div class="flex justify-between items-center gap-2">
+          <!-- Multi-reviewer progress -->
+          <template v-if="hasMultipleReviewers">
+            <div class="space-y-1.5">
+              <div class="flex justify-between items-center">
+                <span class="text-muted-foreground">{{ t('trackDetail.reviewers') }}</span>
+                <span class="text-xs font-mono" :class="completedReviewCount === totalReviewCount ? 'text-success' : 'text-muted-foreground'">
+                  {{ completedReviewCount }}/{{ totalReviewCount }}
+                </span>
+              </div>
+              <div class="space-y-1">
+                <div
+                  v-for="assignment in currentStepAssignments"
+                  :key="assignment.id"
+                  class="flex items-center justify-between gap-2 text-xs"
+                >
+                  <span class="truncate" :class="shouldAnonymizePeer ? 'font-mono text-foreground' : 'text-foreground'">
+                    {{ shouldAnonymizePeer ? `#${hashId(assignment.user_id)}` : (assignment.user?.display_name ?? `#${hashId(assignment.user_id)}`) }}
+                  </span>
+                  <span
+                    class="shrink-0 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-mono"
+                    :class="assignment.status === 'completed' ? 'bg-success-bg text-success' : 'bg-border text-muted-foreground'"
+                  >
+                    {{ assignment.status === 'completed' ? t('trackDetail.reviewDone') : t('trackDetail.reviewPending') }}
+                  </span>
+                </div>
+              </div>
+              <button
+                v-if="canReassignReviewer"
+                @click="openReassignModal"
+                :disabled="reassigning"
+                class="flex items-center gap-1 text-xs text-primary hover:text-primary-hover disabled:opacity-50 font-mono mt-1"
+              >
+                <UserRoundCog class="w-3.5 h-3.5" />
+                {{ t('trackDetail.reassignReviewer') }}
+              </button>
+            </div>
+          </template>
+          <!-- Single reviewer fallback -->
+          <div v-else class="flex justify-between items-center gap-2">
             <span class="text-muted-foreground shrink-0">{{ t('trackDetail.peerReviewer') }}</span>
             <div class="flex items-center gap-2 min-w-0">
               <span class="text-foreground truncate" :class="{ 'font-mono': shouldAnonymizePeer }">{{ track.peer_reviewer ? (shouldAnonymizePeer ? `#${hashId(track.peer_reviewer.id)}` : track.peer_reviewer.display_name) : '--' }}</span>

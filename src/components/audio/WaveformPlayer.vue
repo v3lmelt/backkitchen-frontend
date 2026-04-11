@@ -75,6 +75,7 @@ const activeRangeIssueId = ref<number | null>(null)
 const lastSelectionAt = ref(0)
 const lastEmittedSelection = ref<{ id: string; start: number; end: number } | null>(null)
 const activePointGroupKey = ref<string | null>(null)
+const hoveredRangeKey = ref<string | null>(null)
 const abMode = ref<'A' | 'B'>('A')
 const hoverTime = ref<number | null>(null)
 const hoverLeft = ref<number>(0)
@@ -650,6 +651,16 @@ function emitIssueLeave() {
   emit('issueLeave')
 }
 
+function onRangeLaneMouseEnter(item: RangeLaneItem) {
+  hoveredRangeKey.value = `${item.issue.id}-${item.marker.id}`
+  emitIssueHover(item.issue)
+}
+
+function onRangeLaneMouseLeave() {
+  hoveredRangeKey.value = null
+  emitIssueLeave()
+}
+
 function emitPointGroupHover(group: PointMarkerGroup) {
   if (group.issues.length === 1) {
     emit('issueHover', group.issues[0])
@@ -696,15 +707,31 @@ function renderSelectionRegion() {
     return
   }
 
-  // Skip re-render if a region already exists — drag/resize events keep it in sync directly.
-  // Only proceed when there is no region yet and we need to create one from the prop.
-  if (selectionRegionId.value) return
-
   const start = roundToMilliseconds(Math.min(selectedRange.start, selectedRange.end))
   const end = roundToMilliseconds(Math.max(selectedRange.start, selectedRange.end))
 
+  // If a region already exists, keep it only when bounds still match (drag/resize
+  // events update it in-place). When the prop points to a *different* range
+  // (e.g. after a marker was deleted), remove the stale region and recreate.
+  if (selectionRegionId.value) {
+    if (lastEmittedSelection.value
+      && lastEmittedSelection.value.start === start
+      && lastEmittedSelection.value.end === end) {
+      return
+    }
+    _removeRegionById(selectionRegionId.value)
+    selectionRegionId.value = null
+    lastEmittedSelection.value = null
+  }
+
   if (end <= start) return
 
+  // Suppress region-created → syncSelectedRange during programmatic addRegion.
+  // Without this guard, syncSelectedRange would emit rangeSelect(start, end, false),
+  // which calls handleRangeSelect and accidentally toggle-removes the marker we
+  // are trying to highlight.
+  const prevRendering = isRenderingRegions.value
+  isRenderingRegions.value = true
   const region = regionsPlugin.value.addRegion({
     start,
     end,
@@ -713,6 +740,7 @@ function renderSelectionRegion() {
     color: selectionVisualColor,
     id: '__draft_range__',
   })
+  isRenderingRegions.value = prevRendering
 
   const element = (region as any).element as HTMLElement | undefined
   if (element) {
@@ -1216,7 +1244,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
             v-for="item in rangeLaneItems"
             :key="`${item.issue.id}-${item.marker.id}`"
             type="button"
-            class="group absolute min-w-[4px] cursor-pointer transition-all duration-150"
+            class="absolute min-w-[4px] cursor-pointer transition-all duration-150"
             :class="activeRangeIssueId === item.issue.id ? 'z-10' : 'z-[1]'"
             :style="{
               left: getMarkerPosition(item.marker.time_start),
@@ -1226,12 +1254,12 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
               ...rangeRulerBarStyle(item.issue),
             }"
             @click.stop="handleTimelineClick(item.issue)"
-            @mouseenter="emitIssueHover(item.issue)"
-            @mouseleave="emitIssueLeave"
+            @mouseenter="onRangeLaneMouseEnter(item)"
+            @mouseleave="onRangeLaneMouseLeave"
           >
             <span
-              class="pointer-events-none absolute left-1/2 top-full z-20 mt-1 min-w-max -translate-x-1/2 whitespace-nowrap rounded-full border bg-card px-2.5 py-1 text-[11px] font-mono text-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-              :class="activeRangeIssueId === item.issue.id || props.hoveredIssueId === item.issue.id ? 'opacity-100' : ''"
+              class="pointer-events-none absolute left-1/2 top-full z-20 mt-1 min-w-max -translate-x-1/2 whitespace-nowrap rounded-full border bg-card px-2.5 py-1 text-[11px] font-mono text-foreground opacity-0 transition-opacity duration-150"
+              :class="activeRangeIssueId === item.issue.id || props.hoveredIssueId === item.issue.id || hoveredRangeKey === `${item.issue.id}-${item.marker.id}` ? 'opacity-100' : ''"
               :style="rangeRulerTooltipStyle(item.issue)"
             >{{ formatTimeShort(item.marker.time_start) }} <span class="opacity-50 mx-0.5">→</span> {{ formatTimeShort(item.marker.time_end) }}</span>
           </button>
