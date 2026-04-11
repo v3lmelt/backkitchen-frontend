@@ -696,12 +696,22 @@ function renderSelectionRegion() {
     return
   }
 
-  // Skip re-render if a region already exists — drag/resize events keep it in sync directly.
-  // Only proceed when there is no region yet and we need to create one from the prop.
-  if (selectionRegionId.value) return
-
   const start = roundToMilliseconds(Math.min(selectedRange.start, selectedRange.end))
   const end = roundToMilliseconds(Math.max(selectedRange.start, selectedRange.end))
+
+  // If a region already exists, keep it only when bounds still match (drag/resize
+  // events update it in-place). When the prop points to a *different* range
+  // (e.g. after a marker was deleted), remove the stale region and recreate.
+  if (selectionRegionId.value) {
+    if (lastEmittedSelection.value
+      && lastEmittedSelection.value.start === start
+      && lastEmittedSelection.value.end === end) {
+      return
+    }
+    _removeRegionById(selectionRegionId.value)
+    selectionRegionId.value = null
+    lastEmittedSelection.value = null
+  }
 
   if (end <= start) return
 
