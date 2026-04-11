@@ -399,6 +399,7 @@ export const issueApi = {
     markers: { marker_type: string; time_start: number; time_end?: number | null }[]
     master_delivery_id?: number | null
     audios?: File[]
+    visibility?: string
   }, onProgress?: (percent: number) => void) => {
     const form = new FormData()
     form.append('title', data.title)
@@ -406,6 +407,9 @@ export const issueApi = {
     form.append('severity', data.severity)
     form.append('phase', data.phase)
     form.append('markers_json', JSON.stringify(data.markers))
+    if (data.visibility) {
+      form.append('visibility', data.visibility)
+    }
     if (data.master_delivery_id != null) {
       form.append('master_delivery_id', String(data.master_delivery_id))
     }
