@@ -416,6 +416,7 @@ export const issueApi = {
     markers: { marker_type: string; time_start: number; time_end?: number | null }[]
     master_delivery_id?: number | null
     audios?: File[]
+    images?: File[]
     visibility?: string
   }, onProgress?: (percent: number) => void) => {
     const form = new FormData()
@@ -432,6 +433,9 @@ export const issueApi = {
     }
     if (data.audios) {
       for (const audio of data.audios) form.append('audios', audio)
+    }
+    if (data.images) {
+      for (const image of data.images) form.append('images', image)
     }
     if (onProgress) {
       return uploadWithProgress<Issue>(`/tracks/${trackId}/issues`, form, onProgress)
