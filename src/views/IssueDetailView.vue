@@ -439,7 +439,7 @@ function goBackToTrack() {
   if (!issue.value) return
   router.push({
     path: `/tracks/${issue.value.track_id}`,
-    query: { returnTo: route.fullPath },
+    query: { returnTo: route.path },
   })
 }
 
@@ -470,7 +470,7 @@ function openVersionCompare() {
     path: `/tracks/${issue.value.track_id}`,
     query: {
       compareVersion: String(issue.value.source_version_id),
-      returnTo: route.fullPath,
+      returnTo: route.path,
     },
   })
 }

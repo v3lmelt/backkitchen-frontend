@@ -42,7 +42,7 @@ async function handleNotificationClick(notif: Notification) {
   if (notif.related_issue_id) {
     router.push(`/issues/${notif.related_issue_id}`)
   } else if (notif.related_track_id) {
-    router.push({ path: `/tracks/${notif.related_track_id}`, query: { returnTo: route.fullPath } })
+    router.push({ path: `/tracks/${notif.related_track_id}`, query: { returnTo: route.path } })
   }
 }
 

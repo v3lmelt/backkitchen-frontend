@@ -515,7 +515,7 @@ function trackDetailQuery() {
   const returnTo = Array.isArray(route.query.returnTo) ? route.query.returnTo[0] : route.query.returnTo
   return typeof returnTo === 'string' && returnTo.length > 0
     ? { returnTo }
-    : { returnTo: route.fullPath }
+    : { returnTo: route.path }
 }
 
 function pushToTrackDetail() {

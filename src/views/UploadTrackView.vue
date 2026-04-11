@@ -162,7 +162,7 @@ async function upload() {
       )
     }
     toastSuccess(t('upload.uploadSuccess'))
-    router.push({ path: `/tracks/${track.id}`, query: { returnTo: route.fullPath } })
+    router.push({ path: `/tracks/${track.id}`, query: { returnTo: route.path } })
   } catch (err: any) {
     toastError(err.message || t('upload.uploadFailed'))
   } finally {
