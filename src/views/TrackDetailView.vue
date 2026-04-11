@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi, discussionApi, API_ORIGIN, resolveAssetUrl } from '@/api'
@@ -131,6 +131,27 @@ const loadError = ref(false)
 const timelineExpanded = ref(false)
 const timelineFilter = ref<'all' | 'transitions' | 'issues' | 'uploads'>('all')
 const TIMELINE_PREVIEW_COUNT = 5
+const mobileCtaBarRef = ref<HTMLElement | null>(null)
+const mobileCtaBarHeight = ref(0)
+const mobileCtaSpacerStyle = computed(() => ({ '--fixed-bottom-bar-height': `${mobileCtaBarHeight.value}px` }))
+
+let mobileCtaResizeObserver: ResizeObserver | null = null
+
+function updateMobileCtaHeight() {
+  mobileCtaBarHeight.value = mobileCtaBarRef.value?.offsetHeight ?? 0
+}
+
+function observeMobileCtaBar() {
+  mobileCtaResizeObserver?.disconnect()
+  mobileCtaResizeObserver = null
+
+  if (typeof ResizeObserver === 'undefined' || !mobileCtaBarRef.value) return
+
+  mobileCtaResizeObserver = new ResizeObserver(() => {
+    updateMobileCtaHeight()
+  })
+  mobileCtaResizeObserver.observe(mobileCtaBarRef.value)
+}
 
 const filteredEvents = computed(() => {
   const sorted = [...events.value].reverse()
@@ -156,6 +177,18 @@ const canPostDiscussion = computed(() =>
 )
 
 onMounted(loadTrack)
+onMounted(async () => {
+  await nextTick()
+  updateMobileCtaHeight()
+  observeMobileCtaBar()
+
+  window.addEventListener('resize', updateMobileCtaHeight)
+})
+
+onBeforeUnmount(() => {
+  mobileCtaResizeObserver?.disconnect()
+  window.removeEventListener('resize', updateMobileCtaHeight)
+})
 
 // Real-time: reload track data whenever another collaborator changes it
 const wsReloading = ref(false)
@@ -485,6 +518,12 @@ const primaryActions = computed(() => {
     label: customWorkflowActionLabel.value,
     handler: () => openPrimaryAction('open-step'),
   }]
+})
+
+watch(() => primaryActions.value.length, async () => {
+  await nextTick()
+  updateMobileCtaHeight()
+  observeMobileCtaBar()
 })
 
 // Reopen logic
@@ -1086,9 +1125,9 @@ watch(selectedCompareMasterDelivery, (delivery) => {
     </div>
 
     <!-- Mobile fixed CTA -->
-    <div v-if="primaryActions.length" class="fixed-bottom-bar-spacer lg:hidden" aria-hidden="true"></div>
+    <div v-if="primaryActions.length" class="fixed-bottom-bar-spacer lg:hidden" :style="mobileCtaSpacerStyle" aria-hidden="true"></div>
 
-    <div v-if="primaryActions.length" class="fixed-bottom-bar lg:hidden">
+    <div v-if="primaryActions.length" ref="mobileCtaBarRef" class="fixed-bottom-bar lg:hidden">
       <div class="fixed-bottom-bar__surface flex items-center justify-end gap-2">
         <button
           v-for="action in primaryActions"

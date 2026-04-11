@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight, RotateCcw, X } from 'lucide-vue-next'
 import BaseModal from '@/components/common/BaseModal.vue'
@@ -34,6 +34,34 @@ const props = withDefaults(defineProps<{
 
 const { t } = useI18n()
 const pendingAction = ref<WorkflowAction | null>(null)
+const actionBarRef = ref<HTMLElement | null>(null)
+const actionBarHeight = ref(0)
+const spacerStyle = computed(() => ({ '--fixed-bottom-bar-height': `${actionBarHeight.value}px` }))
+
+let resizeObserver: ResizeObserver | null = null
+
+function updateActionBarHeight() {
+  actionBarHeight.value = actionBarRef.value?.offsetHeight ?? 0
+}
+
+onMounted(async () => {
+  await nextTick()
+  updateActionBarHeight()
+
+  if (typeof ResizeObserver !== 'undefined' && actionBarRef.value) {
+    resizeObserver = new ResizeObserver(() => {
+      updateActionBarHeight()
+    })
+    resizeObserver.observe(actionBarRef.value)
+  }
+
+  window.addEventListener('resize', updateActionBarHeight)
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  window.removeEventListener('resize', updateActionBarHeight)
+})
 
 function handleClick(action: WorkflowAction) {
   if (action.confirm) {
@@ -76,9 +104,9 @@ function confirmPending() {
     </div>
   </BaseModal>
 
-  <div class="fixed-bottom-bar-spacer" aria-hidden="true"></div>
+  <div class="fixed-bottom-bar-spacer" :style="spacerStyle" aria-hidden="true"></div>
 
-  <div class="workflow-action-bar fixed-bottom-bar">
+  <div ref="actionBarRef" class="workflow-action-bar fixed-bottom-bar">
     <div class="bar-surface fixed-bottom-bar__surface">
       <div class="flex flex-col sm:flex-row sm:items-center gap-4">
 

@@ -85,7 +85,7 @@
   }
 
   .fixed-bottom-bar-spacer {
-    height: calc(5rem + env(safe-area-inset-bottom, 0px));
+    height: var(--fixed-bottom-bar-height, calc(5rem + env(safe-area-inset-bottom, 0px)));
     flex-shrink: 0;
   }
 
