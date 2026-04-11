@@ -75,6 +75,7 @@ const activeRangeIssueId = ref<number | null>(null)
 const lastSelectionAt = ref(0)
 const lastEmittedSelection = ref<{ id: string; start: number; end: number } | null>(null)
 const activePointGroupKey = ref<string | null>(null)
+const hoveredRangeKey = ref<string | null>(null)
 const abMode = ref<'A' | 'B'>('A')
 const hoverTime = ref<number | null>(null)
 const hoverLeft = ref<number>(0)
@@ -648,6 +649,16 @@ function emitIssueHover(issue: Issue) {
 
 function emitIssueLeave() {
   emit('issueLeave')
+}
+
+function onRangeLaneMouseEnter(item: RangeLaneItem) {
+  hoveredRangeKey.value = `${item.issue.id}-${item.marker.id}`
+  emitIssueHover(item.issue)
+}
+
+function onRangeLaneMouseLeave() {
+  hoveredRangeKey.value = null
+  emitIssueLeave()
 }
 
 function emitPointGroupHover(group: PointMarkerGroup) {
@@ -1226,7 +1237,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
             v-for="item in rangeLaneItems"
             :key="`${item.issue.id}-${item.marker.id}`"
             type="button"
-            class="group absolute min-w-[4px] cursor-pointer transition-all duration-150"
+            class="absolute min-w-[4px] cursor-pointer transition-all duration-150"
             :class="activeRangeIssueId === item.issue.id ? 'z-10' : 'z-[1]'"
             :style="{
               left: getMarkerPosition(item.marker.time_start),
@@ -1236,12 +1247,12 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
               ...rangeRulerBarStyle(item.issue),
             }"
             @click.stop="handleTimelineClick(item.issue)"
-            @mouseenter="emitIssueHover(item.issue)"
-            @mouseleave="emitIssueLeave"
+            @mouseenter="onRangeLaneMouseEnter(item)"
+            @mouseleave="onRangeLaneMouseLeave"
           >
             <span
-              class="pointer-events-none absolute left-1/2 top-full z-20 mt-1 min-w-max -translate-x-1/2 whitespace-nowrap rounded-full border bg-card px-2.5 py-1 text-[11px] font-mono text-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-              :class="activeRangeIssueId === item.issue.id || props.hoveredIssueId === item.issue.id ? 'opacity-100' : ''"
+              class="pointer-events-none absolute left-1/2 top-full z-20 mt-1 min-w-max -translate-x-1/2 whitespace-nowrap rounded-full border bg-card px-2.5 py-1 text-[11px] font-mono text-foreground opacity-0 transition-opacity duration-150"
+              :class="activeRangeIssueId === item.issue.id || props.hoveredIssueId === item.issue.id || hoveredRangeKey === `${item.issue.id}-${item.marker.id}` ? 'opacity-100' : ''"
               :style="rangeRulerTooltipStyle(item.issue)"
             >{{ formatTimeShort(item.marker.time_start) }} <span class="opacity-50 mx-0.5">→</span> {{ formatTimeShort(item.marker.time_end) }}</span>
           </button>
