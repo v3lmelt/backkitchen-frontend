@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Eraser, EyeOff, Eye, Info, Music, RotateCcw, X } from 'lucide-vue-next'
+import { Eraser, EyeOff, Eye, ImageIcon, Info, Music, RotateCcw, X } from 'lucide-vue-next'
 import { issueApi } from '@/api'
 import type { Issue } from '@/types'
 import { useToast } from '@/composables/useToast'
@@ -45,6 +45,9 @@ const ISSUE_DRAFT_STORAGE_PREFIX = 'backkitchen_issue_draft'
 const MAX_AUDIO_SIZE = 200 * 1024 * 1024
 const MAX_AUDIOS = 3
 const AUDIO_ACCEPT = 'audio/mpeg,audio/wav,audio/flac,audio/aac,audio/ogg,.mp3,.wav,.flac,.aac,.ogg'
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024
+const MAX_IMAGES = 3
+const IMAGE_ACCEPT = 'image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp'
 
 const draftStorageKey = computed(() => {
   const delivery = props.masterDeliveryId == null ? 'none' : String(props.masterDeliveryId)
@@ -54,6 +57,8 @@ const draftStorageKey = computed(() => {
 let markerHintTimer: ReturnType<typeof setTimeout> | null = null
 const selectedAudios = ref<File[]>([])
 const audioInputRef = ref<HTMLInputElement | null>(null)
+const selectedImages = ref<File[]>([])
+const imageInputRef = ref<HTMLInputElement | null>(null)
 const submittingIssue = ref(false)
 const issueUploadProgress = ref(0)
 
@@ -281,6 +286,7 @@ function resetForm() {
   markerHint.value = ''
   issueMode.value = 'timed'
   selectedAudios.value = []
+  selectedImages.value = []
   issueUploadProgress.value = 0
 }
 
@@ -302,6 +308,26 @@ function onAudioSelect(event: Event) {
 function removeAudio(index: number) {
   if (submittingIssue.value) return
   selectedAudios.value.splice(index, 1)
+}
+
+function onImageSelect(event: Event) {
+  if (submittingIssue.value) return
+  const input = event.target as HTMLInputElement
+  if (!input.files) return
+  for (const file of Array.from(input.files)) {
+    if (selectedImages.value.length >= MAX_IMAGES) break
+    if (file.size > MAX_IMAGE_SIZE) {
+      toastError(t('upload.fileTooLarge', { max: '10 MB' }))
+      continue
+    }
+    selectedImages.value.push(file)
+  }
+  input.value = ''
+}
+
+function removeImage(index: number) {
+  if (submittingIssue.value) return
+  selectedImages.value.splice(index, 1)
 }
 
 function clearDraftStorage() {
@@ -396,6 +422,7 @@ async function submitIssue() {
       time_end: m.time_end,
     })),
     audios: selectedAudios.value.length ? selectedAudios.value : undefined,
+    images: selectedImages.value.length ? selectedImages.value : undefined,
   }
   if (props.masterDeliveryId != null) {
     payload.master_delivery_id = props.masterDeliveryId
@@ -650,16 +677,49 @@ defineExpose({
             >×</button>
           </div>
         </div>
-        <button
-          type="button"
-          @click="!submittingIssue && selectedAudios.length < MAX_AUDIOS && audioInputRef?.click()"
-          :disabled="submittingIssue || selectedAudios.length >= MAX_AUDIOS"
-          :title="selectedAudios.length >= MAX_AUDIOS ? t('issue.audioMaxReached', { max: MAX_AUDIOS }) : undefined"
-          class="btn-secondary inline-flex items-center gap-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Music class="w-3.5 h-3.5" :stroke-width="2" />
-          {{ t('issueDetail.audio') }}
-        </button>
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs font-mono text-muted-foreground">{{ t('issue.imageAttachments') }}</span>
+          <span class="text-[11px] text-muted-foreground">{{ selectedImages.length }}/{{ MAX_IMAGES }}</span>
+        </div>
+        <input ref="imageInputRef" type="file" :accept="IMAGE_ACCEPT" multiple class="hidden" @change="onImageSelect" />
+        <div v-if="selectedImages.length" class="flex flex-wrap gap-2">
+          <div
+            v-for="(file, index) in selectedImages"
+            :key="`img-${file.name}-${file.size}-${index}`"
+            class="flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1"
+          >
+            <ImageIcon class="w-3 h-3 text-primary flex-shrink-0" :stroke-width="2" />
+            <span class="max-w-[180px] truncate text-xs font-mono text-foreground">{{ file.name }}</span>
+            <button
+              type="button"
+              @click="removeImage(index)"
+              :disabled="submittingIssue"
+              class="text-xs leading-none text-muted-foreground transition-colors hover:text-error disabled:cursor-not-allowed disabled:opacity-50"
+            >×</button>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            @click="!submittingIssue && selectedAudios.length < MAX_AUDIOS && audioInputRef?.click()"
+            :disabled="submittingIssue || selectedAudios.length >= MAX_AUDIOS"
+            :title="selectedAudios.length >= MAX_AUDIOS ? t('issue.audioMaxReached', { max: MAX_AUDIOS }) : undefined"
+            class="btn-secondary inline-flex items-center gap-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Music class="w-3.5 h-3.5" :stroke-width="2" />
+            {{ t('issueDetail.audio') }}
+          </button>
+          <button
+            type="button"
+            @click="!submittingIssue && selectedImages.length < MAX_IMAGES && imageInputRef?.click()"
+            :disabled="submittingIssue || selectedImages.length >= MAX_IMAGES"
+            :title="selectedImages.length >= MAX_IMAGES ? t('issue.imageMaxReached', { max: MAX_IMAGES }) : undefined"
+            class="btn-secondary inline-flex items-center gap-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <ImageIcon class="w-3.5 h-3.5" :stroke-width="2" />
+            {{ t('issue.image') }}
+          </button>
+        </div>
       </div>
 
       <div v-if="hasDraftPreview" class="rounded-2xl border border-border bg-background px-3 py-2.5 space-y-2">
@@ -674,6 +734,7 @@ defineExpose({
           <span v-if="issueMode === 'timed'" class="text-muted-foreground">{{ t('issue.markersCount', { count: markers.length }) }}</span>
           <span v-else class="text-muted-foreground">{{ t('issue.generalIssue') }}</span>
           <span v-if="selectedAudios.length" class="text-muted-foreground">{{ t('issue.audioAttachments') }} {{ selectedAudios.length }}</span>
+          <span v-if="selectedImages.length" class="text-muted-foreground">{{ t('issue.imageAttachments') }} {{ selectedImages.length }}</span>
         </div>
 
         <div v-if="issueMode === 'timed' && markers.length" class="flex flex-wrap gap-1.5">
@@ -708,7 +769,7 @@ defineExpose({
         </div>
       </div>
 
-      <div v-if="submittingIssue && selectedAudios.length" class="space-y-1">
+      <div v-if="submittingIssue && (selectedAudios.length || selectedImages.length)" class="space-y-1">
         <div class="h-1.5 w-full overflow-hidden rounded-full bg-border">
           <div class="h-full rounded-full bg-primary transition-all duration-300" :style="{ width: issueUploadProgress + '%' }"></div>
         </div>

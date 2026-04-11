@@ -243,6 +243,13 @@ export interface IssueAudio {
   created_at: string
 }
 
+export interface IssueImage {
+  id: number
+  issue_id: number
+  image_url: string
+  created_at: string
+}
+
 export interface Issue {
   id: number
   track_id: number
@@ -259,6 +266,7 @@ export interface Issue {
   status: IssueStatus
   markers: IssueMarker[]
   audios?: IssueAudio[]
+  images?: IssueImage[]
   created_at: string
   updated_at: string
   comment_count?: number

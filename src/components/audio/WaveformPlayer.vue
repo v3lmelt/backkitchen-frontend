@@ -76,22 +76,13 @@ const lastSelectionAt = ref(0)
 const lastEmittedSelection = ref<{ id: string; start: number; end: number } | null>(null)
 const activePointGroupKey = ref<string | null>(null)
 const hoveredRangeKey = ref<string | null>(null)
-// Visible range tooltip keys — direct bar hover shows only that bar's tooltip;
-// external hover or active (clicked) issue shows tooltips for ALL its range markers.
-// Priority: direct bar hover > external hover (from issue list) > active issue.
+// Only show tooltip on direct bar hover (one at a time) to prevent overlap.
+// External hover / active issue just highlights bars visually — time info is
+// already visible in the waveform header and issue detail header.
 const visibleRangeTooltipKeys = computed<Set<string>>(() => {
   const keys = new Set<string>()
   if (hoveredRangeKey.value) {
     keys.add(hoveredRangeKey.value)
-    return keys
-  }
-  const targetId = props.hoveredIssueId ?? activeRangeIssueId.value
-  if (targetId != null) {
-    for (const item of rangeLaneItems.value) {
-      if (item.issue.id === targetId) {
-        keys.add(`${item.issue.id}-${item.marker.id}`)
-      }
-    }
   }
   return keys
 })
@@ -436,6 +427,13 @@ function rangeRulerTooltipStyle(issue: Issue) {
 
 function rangeLaneOffset(lane: number): string {
   return `${lane * 6}px`
+}
+
+function rangeTooltipAlignClass(item: RangeLaneItem): string {
+  const midPercent = getMarkerPercent((item.marker.time_start + item.marker.time_end) / 2)
+  if (midPercent <= 12) return 'left-0'
+  if (midPercent >= 88) return 'right-0'
+  return 'left-1/2 -translate-x-1/2'
 }
 
 function onWaveformPointerMove(event: PointerEvent) {
@@ -1291,8 +1289,8 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
             @mouseleave="onRangeLaneMouseLeave"
           >
             <span
-              class="pointer-events-none absolute left-1/2 top-full z-20 mt-1 min-w-max -translate-x-1/2 whitespace-nowrap rounded-full border bg-card px-2.5 py-1 text-[11px] font-mono text-foreground opacity-0 transition-opacity duration-150"
-              :class="visibleRangeTooltipKeys.has(`${item.issue.id}-${item.marker.id}`) ? 'opacity-100' : ''"
+              class="pointer-events-none absolute top-full z-20 mt-1 min-w-max whitespace-nowrap rounded-full border bg-card px-2.5 py-1 text-[11px] font-mono text-foreground opacity-0 transition-opacity duration-150"
+              :class="[rangeTooltipAlignClass(item), visibleRangeTooltipKeys.has(`${item.issue.id}-${item.marker.id}`) ? 'opacity-100' : '']"
               :style="rangeRulerTooltipStyle(item.issue)"
             >{{ formatTimeShort(item.marker.time_start) }} <span class="opacity-50 mx-0.5">→</span> {{ formatTimeShort(item.marker.time_end) }}</span>
           </button>
