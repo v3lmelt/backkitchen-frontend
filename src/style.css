@@ -76,6 +76,40 @@
     @apply bg-card border border-border rounded-none p-4 shadow-[0_1px_1.75px_rgba(0,0,0,0.05)];
   }
 
+  .fixed-bottom-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+  }
+
+  .fixed-bottom-bar-spacer {
+    height: calc(5rem + env(safe-area-inset-bottom, 0px));
+    flex-shrink: 0;
+  }
+
+  .fixed-bottom-bar__surface {
+    border-top: 1px solid #2E2E2E;
+    background: rgba(17, 17, 17, 0.96);
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    min-height: calc(5rem + env(safe-area-inset-bottom, 0px));
+    padding: 0.75rem 1rem max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  @media (min-width: 768px) {
+    .fixed-bottom-bar {
+      left: var(--sidebar-w, 0px);
+    }
+
+    .fixed-bottom-bar__surface {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+
   /* Custom checkbox */
   .checkbox {
     -webkit-appearance: none;

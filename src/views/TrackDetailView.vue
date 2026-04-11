@@ -1085,22 +1085,23 @@ watch(selectedCompareMasterDelivery, (delivery) => {
       </div>
     </div>
 
-    <!-- Mobile sticky CTA -->
-    <div
-      v-if="primaryActions.length"
-      class="mobile-cta-bar lg:hidden border-t border-border bg-[#111111] px-4 md:px-6 py-3 flex items-center justify-end"
-    >
-      <button
-        v-for="action in primaryActions"
-        :key="'m-' + action.key"
-        @click="action.handler()"
-        class="workflow-cta-btn group flex items-center gap-2 rounded-full font-mono font-semibold px-5 h-10 text-sm leading-none transition-all
-               bg-primary hover:bg-primary-hover text-black
-               shadow-[0_0_16px_rgba(255,132,0,0.25)] hover:shadow-[0_0_24px_rgba(255,132,0,0.45)]"
-      >
-        {{ action.label }}
-        <ChevronRight class="w-4 h-4 transition-transform group-hover:translate-x-0.5" :stroke-width="2.5" />
-      </button>
+    <!-- Mobile fixed CTA -->
+    <div v-if="primaryActions.length" class="fixed-bottom-bar-spacer lg:hidden" aria-hidden="true"></div>
+
+    <div v-if="primaryActions.length" class="fixed-bottom-bar lg:hidden">
+      <div class="fixed-bottom-bar__surface flex items-center justify-end gap-2">
+        <button
+          v-for="action in primaryActions"
+          :key="'m-' + action.key"
+          @click="action.handler()"
+          class="workflow-cta-btn group flex items-center gap-2 rounded-full font-mono font-semibold px-5 h-10 text-sm leading-none transition-all
+                 bg-primary hover:bg-primary-hover text-black
+                 shadow-[0_0_16px_rgba(255,132,0,0.25)] hover:shadow-[0_0_24px_rgba(255,132,0,0.45)]"
+        >
+          {{ action.label }}
+          <ChevronRight class="w-4 h-4 transition-transform group-hover:translate-x-0.5" :stroke-width="2.5" />
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -1112,19 +1113,5 @@ watch(selectedCompareMasterDelivery, (delivery) => {
 @keyframes cta-glow {
   0%, 100% { box-shadow: 0 0 16px rgba(255, 132, 0, 0.2); }
   50% { box-shadow: 0 0 28px rgba(255, 132, 0, 0.4); }
-}
-
-.mobile-cta-bar {
-  position: sticky;
-  bottom: 0;
-  z-index: 30;
-  margin-left: -1rem;
-  margin-right: -1rem;
-}
-@media (min-width: 768px) {
-  .mobile-cta-bar {
-    margin-left: -1.5rem;
-    margin-right: -1.5rem;
-  }
 }
 </style>

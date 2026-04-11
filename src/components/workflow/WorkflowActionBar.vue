@@ -76,8 +76,10 @@ function confirmPending() {
     </div>
   </BaseModal>
 
-  <div class="workflow-action-bar">
-    <div class="bar-surface border-t border-border px-4 md:px-8 py-3">
+  <div class="fixed-bottom-bar-spacer" aria-hidden="true"></div>
+
+  <div class="workflow-action-bar fixed-bottom-bar">
+    <div class="bar-surface fixed-bottom-bar__surface">
       <div class="flex flex-col sm:flex-row sm:items-center gap-4">
 
         <!-- Left: hint -->
@@ -178,24 +180,8 @@ function confirmPending() {
 </template>
 
 <style scoped>
-.workflow-action-bar {
-  position: sticky;
-  bottom: 0;
-  z-index: 40;
-  margin-left: -1rem;
-  margin-right: -1rem;
-}
-
-@media (min-width: 768px) {
-  .workflow-action-bar {
-    margin-left: -1.5rem;
-    margin-right: -1.5rem;
-  }
-}
-
 .bar-surface {
-  background: #111111;
-  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  background: transparent;
 }
 
 /* ── Pulsing status dot ── */
