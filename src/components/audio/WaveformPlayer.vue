@@ -726,6 +726,12 @@ function renderSelectionRegion() {
 
   if (end <= start) return
 
+  // Suppress region-created → syncSelectedRange during programmatic addRegion.
+  // Without this guard, syncSelectedRange would emit rangeSelect(start, end, false),
+  // which calls handleRangeSelect and accidentally toggle-removes the marker we
+  // are trying to highlight.
+  const prevRendering = isRenderingRegions.value
+  isRenderingRegions.value = true
   const region = regionsPlugin.value.addRegion({
     start,
     end,
@@ -734,6 +740,7 @@ function renderSelectionRegion() {
     color: selectionVisualColor,
     id: '__draft_range__',
   })
+  isRenderingRegions.value = prevRendering
 
   const element = (region as any).element as HTMLElement | undefined
   if (element) {
