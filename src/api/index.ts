@@ -10,6 +10,7 @@ import type {
   CircleSummary,
   Comment,
   Discussion,
+  EditHistory,
   Invitation,
   InviteCode,
   PresignedUploadResponse,
@@ -18,6 +19,7 @@ import type {
   WebhookConfig,
   WebhookDelivery,
   WorkflowConfig,
+  WorkflowEvent,
   WorkflowTemplate,
   Issue,
   IssueStatus,
@@ -120,10 +122,11 @@ export function uploadWithProgress<T>(
   url: string,
   body: FormData,
   onProgress?: (percent: number) => void,
+  method: string = 'POST',
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', `${BASE}${url}`)
+    xhr.open(method, `${BASE}${url}`)
     const token = localStorage.getItem(TOKEN_KEY)
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
 
@@ -177,10 +180,11 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const albumApi = {
-  list: (params?: { include_archived?: boolean; archived_only?: boolean }) => {
+  list: (params?: { include_archived?: boolean; archived_only?: boolean; search?: string }) => {
     const q = new URLSearchParams()
     if (params?.include_archived) q.set('include_archived', 'true')
     if (params?.archived_only) q.set('archived_only', 'true')
+    if (params?.search) q.set('search', params.search)
     const qs = q.toString()
     return request<Album[]>(`/albums${qs ? `?${qs}` : ''}`)
   },
@@ -245,6 +249,18 @@ export const albumApi = {
     form.append('file', file)
     return request<Album>(`/albums/${id}/cover`, { method: 'POST', body: form })
   },
+  removeMember: (albumId: number, userId: number) =>
+    request<void>(`/albums/${albumId}/members/${userId}`, { method: 'DELETE' }),
+  leaveAlbum: (albumId: number) =>
+    request<void>(`/albums/${albumId}/leave`, { method: 'POST' }),
+  activity: (id: number, params?: { event_type?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams()
+    if (params?.event_type) q.set('event_type', params.event_type)
+    if (params?.limit) q.set('limit', String(params.limit))
+    if (params?.offset) q.set('offset', String(params.offset))
+    const qs = q.toString()
+    return request<WorkflowEvent[]>(`/albums/${id}/activity${qs ? `?${qs}` : ''}`)
+  },
   export: async (id: number): Promise<Blob> => {
     const token = localStorage.getItem(TOKEN_KEY)
     const res = await fetch(`${BASE}/albums/${id}/export`, {
@@ -300,10 +316,11 @@ export const circleApi = {
 }
 
 export const trackApi = {
-  list: (params?: { status?: TrackStatus; album_id?: number }) => {
+  list: (params?: { status?: TrackStatus; album_id?: number; search?: string }) => {
     const q = new URLSearchParams()
     if (params?.status) q.set('status', params.status)
     if (params?.album_id) q.set('album_id', String(params.album_id))
+    if (params?.search) q.set('search', params.search)
     const qs = q.toString()
     return request<Track[]>(`/tracks${qs ? `?${qs}` : ''}`)
   },
@@ -421,7 +438,11 @@ export const issueApi = {
     }
     return request<Issue>(`/tracks/${trackId}/issues`, { method: 'POST', body: form })
   },
-  update: (id: number, data: Partial<Pick<Issue, 'status' | 'title' | 'description' | 'severity'>> & { status_note?: string; images?: File[]; audios?: File[] }) => {
+  update: (
+    id: number,
+    data: Partial<Pick<Issue, 'status' | 'title' | 'description' | 'severity'>> & { status_note?: string; images?: File[]; audios?: File[] },
+    onProgress?: (percent: number) => void,
+  ) => {
     const form = new FormData()
     if (data.status) form.append('status', data.status)
     if (data.title != null) form.append('title', data.title)
@@ -430,6 +451,9 @@ export const issueApi = {
     if (data.status_note) form.append('status_note', data.status_note)
     if (data.images) for (const img of data.images) form.append('images', img)
     if (data.audios) for (const audio of data.audios) form.append('audios', audio)
+    if (onProgress && (data.images?.length || data.audios?.length)) {
+      return uploadWithProgress<Issue>(`/issues/${id}`, form, onProgress, 'PATCH')
+    }
     return request<Issue>(`/issues/${id}`, { method: 'PATCH', body: form })
   },
   batchUpdate: (trackId: number, data: { issue_ids: number[]; status: IssueStatus; status_note?: string }) =>
@@ -484,11 +508,14 @@ export const checklistApi = {
 
 export const discussionApi = {
   list: (trackId: number) => request<Discussion[]>(`/tracks/${trackId}/discussions`),
-  create: (trackId: number, data: { content: string; images?: File[] }) => {
+  create: (trackId: number, data: { content: string; images?: File[] }, onProgress?: (percent: number) => void) => {
     const form = new FormData()
     form.append('content', data.content)
     if (data.images) {
       for (const img of data.images) form.append('images', img)
+    }
+    if (onProgress && data.images?.length) {
+      return uploadWithProgress<Discussion>(`/tracks/${trackId}/discussions`, form, onProgress)
     }
     return request<Discussion>(`/tracks/${trackId}/discussions`, { method: 'POST', body: form })
   },
@@ -496,6 +523,8 @@ export const discussionApi = {
     request<Discussion>(`/discussions/${id}`, { method: 'PATCH', body: JSON.stringify({ content }) }),
   delete: (id: number) =>
     request<void>(`/discussions/${id}`, { method: 'DELETE' }),
+  history: (id: number) =>
+    request<EditHistory[]>(`/discussions/${id}/history`),
 }
 
 export const commentApi = {
@@ -503,6 +532,8 @@ export const commentApi = {
     request<Comment>(`/comments/${id}`, { method: 'PATCH', body: JSON.stringify({ content }) }),
   delete: (id: number) =>
     request<void>(`/comments/${id}`, { method: 'DELETE' }),
+  history: (id: number) =>
+    request<EditHistory[]>(`/comments/${id}/history`),
 }
 
 export const userApi = {

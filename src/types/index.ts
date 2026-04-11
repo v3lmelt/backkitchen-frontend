@@ -291,6 +291,7 @@ export interface Comment {
   old_status?: IssueStatus | null
   new_status?: IssueStatus | null
   created_at: string
+  edited_at?: string | null
   images?: CommentImage[]
   audios?: CommentAudio[]
 }
@@ -370,11 +371,12 @@ export interface TrackDetailResponse {
 export interface Notification {
   id: number
   user_id: number
-  type: 'track_status_changed' | 'issue_created' | 'issue_status_changed' | 'comment_added' | 'track_assigned'
+  type: string
   title: string
   body: string
   related_track_id?: number
   related_issue_id?: number
+  related_album_id?: number
   is_read: boolean
   created_at: string
 }
@@ -404,8 +406,19 @@ export interface Discussion {
   author_id: number
   content: string
   created_at: string
+  edited_at?: string | null
   author?: User | null
   images?: DiscussionImage[]
+}
+
+export interface EditHistory {
+  id: number
+  entity_type: 'comment' | 'discussion'
+  entity_id: number
+  old_content: string
+  edited_by_id: number
+  created_at: string
+  editor?: User | null
 }
 
 export interface WorkflowTemplate {

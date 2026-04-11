@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi, discussionApi, API_ORIGIN, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Track, Issue, Discussion, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember, MasterDelivery, StageAssignment } from '@/types'
+import type { Track, Issue, Discussion, EditHistory, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember, MasterDelivery, StageAssignment } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
@@ -12,7 +12,9 @@ import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
-import { Archive, Check, ChevronRight, UserRoundCog, ImageIcon, X, Pencil, Trash2 } from 'lucide-vue-next'
+import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
+import CommentInput from '@/components/common/CommentInput.vue'
+import { Archive, Check, ChevronRight, UserRoundCog, Pencil, Trash2 } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
@@ -201,17 +203,13 @@ const filteredEvents = computed(() => {
     return sorted.filter(e => e.event_type.includes('upload') || e.event_type.includes('deliver'))
   return sorted
 })
-const newDiscussionContent = ref('')
 const postingDiscussion = ref(false)
-const discussionImages = ref<File[]>([])
-const discussionImagePreviews = computed(() => discussionImages.value.map(f => URL.createObjectURL(f)))
+const postingDiscussionProgress = ref(0)
+const discussionInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
 const showVersionCompare = ref(false)
 const selectedCompareVersionId = ref<number | null>(null)
 const showMasterCompare = ref(false)
 const selectedCompareMasterDeliveryId = ref<number | null>(null)
-const canPostDiscussion = computed(() =>
-  !postingDiscussion.value && (!!newDiscussionContent.value.trim() || discussionImages.value.length > 0)
-)
 
 onMounted(loadTrack)
 onMounted(async () => {
@@ -345,31 +343,19 @@ function openPrimaryAction(_action: string) {
 }
 
 
-async function postDiscussion() {
-  if (!newDiscussionContent.value.trim() && discussionImages.value.length === 0) return
+async function handleDiscussionSubmit(payload: { content: string; images: File[]; audios: File[] }) {
   postingDiscussion.value = true
+  postingDiscussionProgress.value = 0
   try {
     const d = await discussionApi.create(trackId.value, {
-      content: newDiscussionContent.value.trim(),
-      images: discussionImages.value.length ? discussionImages.value : undefined,
-    })
+      content: payload.content.trim(),
+      images: payload.images.length ? payload.images : undefined,
+    }, (p) => { postingDiscussionProgress.value = p })
     discussions.value.push(d)
-    newDiscussionContent.value = ''
-    discussionImages.value = []
+    discussionInputRef.value?.reset()
   } finally {
     postingDiscussion.value = false
   }
-}
-
-function addDiscussionImages(files: FileList | null) {
-  if (!files) return
-  for (const file of Array.from(files)) {
-    if (file.type.startsWith('image/')) discussionImages.value.push(file)
-  }
-}
-
-function removeDiscussionImage(index: number) {
-  discussionImages.value.splice(index, 1)
 }
 
 function openImage(url: string) {
@@ -401,6 +387,22 @@ async function deleteDiscussion(d: Discussion) {
     await discussionApi.delete(d.id)
     discussions.value = discussions.value.filter(x => x.id !== d.id)
   } catch { toastError(t('common.error')) }
+}
+
+// Discussion edit history
+const discussionHistoryItems = ref<EditHistory[]>([])
+const showHistoryForDiscussionId = ref<number | null>(null)
+
+async function showDiscussionHistory(discussionId: number) {
+  showHistoryForDiscussionId.value = discussionId
+  try {
+    discussionHistoryItems.value = await discussionApi.history(discussionId)
+  } catch { discussionHistoryItems.value = [] }
+}
+
+function closeDiscussionHistory() {
+  showHistoryForDiscussionId.value = null
+  discussionHistoryItems.value = []
 }
 
 const currentVersionId = computed(() => track.value?.current_source_version?.id ?? null)
@@ -563,6 +565,11 @@ async function doReassign(userIds?: number[]) {
     track.value = updated
     showReassignModal.value = false
     reassignSelectedUserIds.value = []
+    try {
+      reviewAssignments.value = await trackApi.listAssignments(track.value.id)
+    } catch {
+      reviewAssignments.value = []
+    }
     if (updated.peer_reviewer_id !== null) {
       toastSuccess(t('trackDetail.reassignDone'))
     } else {
@@ -882,6 +889,13 @@ watch(selectedCompareMasterDelivery, (delivery) => {
                   <div class="flex items-center gap-2">
                     <span class="text-sm font-medium text-foreground">{{ d.author?.display_name || '?' }}</span>
                     <span class="text-xs text-muted-foreground">{{ fmtDate(d.created_at) }}</span>
+                    <button
+                      v-if="d.edited_at"
+                      class="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                      @click="showDiscussionHistory(d.id)"
+                    >
+                      ({{ t('editHistory.edited') }})
+                    </button>
                     <template v-if="d.author_id === appStore.currentUser?.id">
                       <button @click="startEditDiscussion(d)" class="text-muted-foreground hover:text-foreground transition-colors ml-auto">
                         <Pencil class="w-3.5 h-3.5" :stroke-width="2" />
@@ -919,48 +933,15 @@ watch(selectedCompareMasterDelivery, (delivery) => {
                 </div>
               </div>
             </div>
-            <textarea
-              v-model="newDiscussionContent"
-              class="textarea-field w-full text-sm h-20"
+            <CommentInput
+              ref="discussionInputRef"
               :placeholder="t('trackDetail.discussionPlaceholder')"
-              @keydown.ctrl.enter="postDiscussion"
-              @keydown.meta.enter="postDiscussion"
+              :submit-label="t('trackDetail.postDiscussion')"
+              :submitting="postingDiscussion"
+              :upload-progress="postingDiscussionProgress"
+              :enable-audio="false"
+              @submit="handleDiscussionSubmit"
             />
-            <div v-if="discussionImagePreviews.length" class="flex flex-wrap gap-2">
-              <div
-                v-for="(preview, i) in discussionImagePreviews"
-                :key="i"
-                class="relative group"
-              >
-                <img :src="preview" class="h-20 rounded border border-border object-cover" />
-                <button
-                  type="button"
-                  @click="removeDiscussionImage(i)"
-                  class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-error transition-colors opacity-0 group-hover:opacity-100"
-                >
-                  <X class="w-3 h-3" :stroke-width="2.5" />
-                </button>
-              </div>
-            </div>
-            <div class="flex items-center gap-2">
-              <button
-                @click="postDiscussion"
-                :disabled="!canPostDiscussion"
-                class="btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {{ postingDiscussion ? t('common.loading') : t('trackDetail.postDiscussion') }}
-              </button>
-              <label class="inline-flex items-center justify-center w-9 h-9 rounded-full border border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground/40 cursor-pointer transition-colors">
-                <ImageIcon class="w-4 h-4" :stroke-width="2" />
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  class="sr-only"
-                  @change="addDiscussionImages(($event.target as HTMLInputElement).files)"
-                />
-              </label>
-            </div>
           </div>
         </div>
 
@@ -1250,6 +1231,12 @@ watch(selectedCompareMasterDelivery, (delivery) => {
       </div>
     </div>
   </div>
+
+  <EditHistoryModal
+    v-if="showHistoryForDiscussionId !== null"
+    :items="discussionHistoryItems"
+    @close="closeDiscussionHistory"
+  />
 </template>
 
 <style scoped>

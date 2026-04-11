@@ -70,26 +70,30 @@ const isPrimaryLoading = ref(false)
 const primaryLoadProgress = ref(0)
 const isRenderingRegions = ref(false)
 const selectionRegionId = ref<string | null>(null)
-const highlightRegionId = ref<string | null>(null)
+const highlightRegionIds = ref<string[]>([])
 const activeRangeIssueId = ref<number | null>(null)
 const lastSelectionAt = ref(0)
 const lastEmittedSelection = ref<{ id: string; start: number; end: number } | null>(null)
 const activePointGroupKey = ref<string | null>(null)
 const hoveredRangeKey = ref<string | null>(null)
-// Only one range tooltip is visible at a time to prevent overlapping labels
-// when range markers share time segments.  Priority: direct bar hover >
-// external hover (from issue list) > active (clicked) issue.
-const visibleRangeTooltipKey = computed<string | null>(() => {
-  if (hoveredRangeKey.value) return hoveredRangeKey.value
-  if (props.hoveredIssueId != null) {
-    const item = rangeLaneItems.value.find(i => i.issue.id === props.hoveredIssueId)
-    if (item) return `${item.issue.id}-${item.marker.id}`
+// Visible range tooltip keys — direct bar hover shows only that bar's tooltip;
+// external hover or active (clicked) issue shows tooltips for ALL its range markers.
+// Priority: direct bar hover > external hover (from issue list) > active issue.
+const visibleRangeTooltipKeys = computed<Set<string>>(() => {
+  const keys = new Set<string>()
+  if (hoveredRangeKey.value) {
+    keys.add(hoveredRangeKey.value)
+    return keys
   }
-  if (activeRangeIssueId.value != null) {
-    const item = rangeLaneItems.value.find(i => i.issue.id === activeRangeIssueId.value)
-    if (item) return `${item.issue.id}-${item.marker.id}`
+  const targetId = props.hoveredIssueId ?? activeRangeIssueId.value
+  if (targetId != null) {
+    for (const item of rangeLaneItems.value) {
+      if (item.issue.id === targetId) {
+        keys.add(`${item.issue.id}-${item.marker.id}`)
+      }
+    }
   }
-  return null
+  return keys
 })
 const abMode = ref<'A' | 'B'>('A')
 const hoverTime = ref<number | null>(null)
@@ -625,11 +629,11 @@ function _addHighlightRegion(issue: Issue, start: number, end: number) {
     color: tone.soft,
     drag: false,
     resize: false,
-    id: `__hl_${issue.id}__`,
+    id: `__hl_${issue.id}_${Math.round(start * 1000)}_${Math.round(end * 1000)}__`,
   })
   const el = (region as any).element as HTMLElement | undefined
   if (el) el.style.pointerEvents = 'none'
-  highlightRegionId.value = region.id
+  highlightRegionIds.value.push(region.id)
 }
 
 function highlightIssue(issue: Issue | null) {
@@ -637,16 +641,18 @@ function highlightIssue(issue: Issue | null) {
   const newId = hasRange ? issue!.id : null
   activeRangeIssueId.value = activeRangeIssueId.value === newId ? null : newId
 
-  if (highlightRegionId.value) {
-    _removeRegionById(highlightRegionId.value)
-    highlightRegionId.value = null
+  for (const id of highlightRegionIds.value) {
+    _removeRegionById(id)
   }
+  highlightRegionIds.value = []
+
   if (activeRangeIssueId.value !== null) {
     const target = props.issues?.find(i => i.id === activeRangeIssueId.value)
     if (target) {
-      const rangeMarker = target.markers.find(m => m.marker_type === 'range' && m.time_end !== null)
-      if (rangeMarker && rangeMarker.time_end !== null) {
-        _addHighlightRegion(target, rangeMarker.time_start, rangeMarker.time_end)
+      for (const m of target.markers) {
+        if (m.marker_type === 'range' && m.time_end !== null) {
+          _addHighlightRegion(target, m.time_start, m.time_end)
+        }
       }
     }
   }
@@ -707,6 +713,12 @@ function syncSelectedRange(region: { id: string; start: number; end: number; rem
   lastEmittedSelection.value = { id: region.id, start, end }
   lastSelectionAt.value = Date.now()
   emit('rangeSelect', start, end, isUpdate)
+
+  // After the parent processes the event, re-sync the selection region.
+  // This handles cases where the parent rejects the range (e.g. micro-drag
+  // below the minimum duration) or toggles off a non-last range marker,
+  // leaving selectedRange unchanged so the watcher never fires.
+  nextTick(renderSelectionRegion)
 }
 
 function renderSelectionRegion() {
@@ -960,16 +972,22 @@ function renderIssueRegions() {
   regionsPlugin.value.clearRegions()
   selectionRegionId.value = null
   lastEmittedSelection.value = null
-  highlightRegionId.value = null
+  highlightRegionIds.value = []
 
   renderSelectionRegion()
 
-  // Restore highlight if one was active
+  // Restore highlights for all range markers of the active issue
   if (activeRangeIssueId.value !== null) {
     const issue = props.issues?.find(i => i.id === activeRangeIssueId.value)
-    const rangeM = issue?.markers.find(m => m.marker_type === 'range' && m.time_end !== null)
-    if (issue && rangeM && rangeM.time_end !== null) {
-      _addHighlightRegion(issue, rangeM.time_start, rangeM.time_end!)
+    if (issue) {
+      const rangeMarkers = issue.markers.filter(m => m.marker_type === 'range' && m.time_end !== null)
+      if (rangeMarkers.length > 0) {
+        for (const m of rangeMarkers) {
+          _addHighlightRegion(issue, m.time_start, m.time_end!)
+        }
+      } else {
+        activeRangeIssueId.value = null
+      }
     } else {
       activeRangeIssueId.value = null
     }
@@ -984,10 +1002,10 @@ watch(() => props.issues, (issues) => {
   const hasRange = issue?.markers.some(m => m.marker_type === 'range' && m.time_end !== null)
   if (!issue || !hasRange) {
     activeRangeIssueId.value = null
-    if (highlightRegionId.value) {
-      _removeRegionById(highlightRegionId.value)
-      highlightRegionId.value = null
+    for (const id of highlightRegionIds.value) {
+      _removeRegionById(id)
     }
+    highlightRegionIds.value = []
   }
 })
 watch(() => props.selectedRange, renderSelectionRegion, { deep: true })
@@ -1274,7 +1292,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
           >
             <span
               class="pointer-events-none absolute left-1/2 top-full z-20 mt-1 min-w-max -translate-x-1/2 whitespace-nowrap rounded-full border bg-card px-2.5 py-1 text-[11px] font-mono text-foreground opacity-0 transition-opacity duration-150"
-              :class="visibleRangeTooltipKey === `${item.issue.id}-${item.marker.id}` ? 'opacity-100' : ''"
+              :class="visibleRangeTooltipKeys.has(`${item.issue.id}-${item.marker.id}`) ? 'opacity-100' : ''"
               :style="rangeRulerTooltipStyle(item.issue)"
             >{{ formatTimeShort(item.marker.time_start) }} <span class="opacity-50 mx-0.5">→</span> {{ formatTimeShort(item.marker.time_end) }}</span>
           </button>

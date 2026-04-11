@@ -457,6 +457,7 @@
     "tracks": "tracks",
     "tracksHeading": "Tracks",
     "searchPlaceholder": "Search tracks, albums, authors…",
+    "matchingAlbums": "Matching Albums",
     "filtered": "filtered: {status}",
     "clearFilter": "clear",
     "submitTrack": "+ Submit Track",
@@ -978,7 +979,8 @@
       "order": "Track Order",
       "archive": "Archive",
       "webhook": "Webhook",
-      "danger": "Danger Zone"
+      "danger": "Danger Zone",
+      "activity": "Activity"
     },
     "info": {
       "coverHint": "Click to change cover",
@@ -996,7 +998,12 @@
       "readOnlyNotice": "Team configuration can only be edited by the producer",
       "addMember": "Add Member",
       "selectUserPlaceholder": "Select a user…",
-      "allAdded": "All eligible users have been added"
+      "allAdded": "All eligible users have been added",
+      "leaveAlbum": "Leave Album",
+      "leaveAlbumDesc": "After leaving, you will no longer have access to this album.",
+      "leaveConfirm": "Are you sure you want to leave \"{title}\"?",
+      "left": "Left the album",
+      "leaveFailed": "Failed to leave"
     },
     "deadlines": {
       "readOnlyNotice": "Deadlines are set by the producer",
@@ -1037,6 +1044,11 @@
       "restored": "Album restored",
       "restoreFailed": "Restore failed",
       "archivedBanner": "This album was archived on {date} and will be permanently deleted in {days} days."
+    },
+    "activity": {
+      "title": "Activity Feed",
+      "empty": "No activity yet",
+      "loadMore": "Load More"
     }
   },
   "circles": {
@@ -1201,5 +1213,12 @@
     "keys": {
       "space": "Space"
     }
+  },
+  "editHistory": {
+    "edited": "edited",
+    "historyTitle": "Edit History",
+    "version": "Version {n}",
+    "editedBy": "Edited by {name}",
+    "noHistory": "No edit history"
   }
 }
