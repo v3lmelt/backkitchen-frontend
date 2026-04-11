@@ -104,6 +104,12 @@ const selectedAudios = ref<File[]>([])
 const audioInputRef = ref<HTMLInputElement | null>(null)
 const pendingStatus = ref<IssueStatus | null>(null)
 const statusNote = ref('')
+const statusNoteCursorPos = ref(0)
+const statusNoteImages = ref<File[]>([])
+const statusNoteImagePreviews = ref<string[]>([])
+const statusNoteAudios = ref<File[]>([])
+const statusNoteFileInputRef = ref<HTMLInputElement | null>(null)
+const statusNoteAudioInputRef = ref<HTMLInputElement | null>(null)
 
 const isSubmitter = computed(() => appStore.currentUser?.id === cachedTrack.value?.submitter_id)
 
@@ -374,6 +380,52 @@ async function deleteComment(comment: Comment) {
 function selectStatus(status: IssueStatus) {
   pendingStatus.value = status
   statusNote.value = ''
+  cleanupStatusNoteFiles()
+}
+
+function onStatusNoteFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files) return
+  for (const file of Array.from(input.files)) {
+    if (file.size > MAX_IMAGE_SIZE) {
+      toastError(t('upload.fileTooLarge', { max: '10 MB' }))
+      continue
+    }
+    statusNoteImages.value.push(file)
+    statusNoteImagePreviews.value.push(URL.createObjectURL(file))
+  }
+  input.value = ''
+}
+
+function removeStatusNoteImage(index: number) {
+  URL.revokeObjectURL(statusNoteImagePreviews.value[index])
+  statusNoteImages.value.splice(index, 1)
+  statusNoteImagePreviews.value.splice(index, 1)
+}
+
+function onStatusNoteAudioSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files) return
+  for (const file of Array.from(input.files)) {
+    if (statusNoteAudios.value.length >= MAX_AUDIOS) break
+    if (file.size > MAX_AUDIO_SIZE) {
+      toastError(t('upload.fileTooLarge', { max: '200 MB' }))
+      continue
+    }
+    statusNoteAudios.value.push(file)
+  }
+  input.value = ''
+}
+
+function removeStatusNoteAudio(index: number) {
+  statusNoteAudios.value.splice(index, 1)
+}
+
+function cleanupStatusNoteFiles() {
+  statusNoteImagePreviews.value.forEach(url => URL.revokeObjectURL(url))
+  statusNoteImages.value = []
+  statusNoteImagePreviews.value = []
+  statusNoteAudios.value = []
 }
 
 function availableStatusActions(currentStatus: IssueStatus): IssueStatus[] {
@@ -397,6 +449,9 @@ const statusActions = computed<IssueStatus[]>(() => {
 })
 
 function statusActionLabel(status: IssueStatus): string {
+  if (status === 'open' && issue.value?.status === 'pending_discussion') {
+    return t('issueDetail.publish')
+  }
   switch (status) {
     case 'resolved':
       return t('issueDetail.markFixed')
@@ -423,16 +478,20 @@ async function confirmStatusChange() {
   issue.value = await issueApi.update(issueId.value, {
     status: pendingStatus.value,
     status_note: statusNote.value || undefined,
+    images: statusNoteImages.value.length ? statusNoteImages.value : undefined,
+    audios: statusNoteAudios.value.length ? statusNoteAudios.value : undefined,
   })
   const idx = allTrackIssues.value.findIndex(i => i.id === issueId.value)
   if (idx !== -1 && issue.value) allTrackIssues.value[idx] = issue.value
   pendingStatus.value = null
   statusNote.value = ''
+  cleanupStatusNoteFiles()
 }
 
 function cancelStatusChange() {
   pendingStatus.value = null
   statusNote.value = ''
+  cleanupStatusNoteFiles()
 }
 
 function goBackToTrack() {
@@ -638,18 +697,86 @@ function openVersionCompare() {
             </button>
           </div>
           <div v-if="pendingStatus" class="space-y-2">
-            <textarea
-              v-model="statusNote"
-              :placeholder="t('issue.statusNotePlaceholder')"
-              class="textarea-field w-full"
-              rows="3"
-            ></textarea>
-            <div class="flex gap-2">
+            <div class="relative">
+              <textarea
+                v-model="statusNote"
+                :placeholder="t('issue.statusNotePlaceholder')"
+                class="textarea-field w-full pr-8"
+                rows="3"
+                @input="(e) => statusNoteCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
+                @click="(e) => statusNoteCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
+                @keyup="(e) => statusNoteCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
+              ></textarea>
+              <TimestampSyntaxPopover
+                :text="statusNote"
+                :cursor-pos="statusNoteCursorPos"
+                default-target="track"
+              />
+            </div>
+
+            <!-- Status note image previews -->
+            <div v-if="statusNoteImagePreviews.length" class="flex flex-wrap gap-2">
+              <div v-for="(url, i) in statusNoteImagePreviews" :key="i" class="relative">
+                <img :src="url" class="h-16 w-16 object-cover rounded border border-border" alt="preview" />
+                <button
+                  @click="removeStatusNoteImage(i)"
+                  class="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground rounded-full text-xs flex items-center justify-center leading-none"
+                >×</button>
+              </div>
+            </div>
+
+            <!-- Status note audio previews -->
+            <div v-if="statusNoteAudios.length" class="flex flex-wrap gap-2">
+              <div
+                v-for="(file, i) in statusNoteAudios"
+                :key="i"
+                class="flex items-center gap-1.5 bg-background border border-border rounded-full px-3 py-1"
+              >
+                <Music class="w-3.5 h-3.5 text-primary flex-shrink-0" :stroke-width="2" />
+                <span class="text-xs font-mono text-foreground max-w-[120px] truncate">{{ file.name }}</span>
+                <button @click="removeStatusNoteAudio(i)" class="text-muted-foreground hover:text-error transition-colors leading-none">×</button>
+              </div>
+            </div>
+
+            <input
+              ref="statusNoteFileInputRef"
+              type="file"
+              accept="image/*"
+              multiple
+              class="hidden"
+              @change="onStatusNoteFileSelect"
+            />
+            <input
+              ref="statusNoteAudioInputRef"
+              type="file"
+              :accept="AUDIO_ACCEPT"
+              multiple
+              class="hidden"
+              @change="onStatusNoteAudioSelect"
+            />
+
+            <div class="flex items-center gap-2 flex-wrap">
               <button @click="confirmStatusChange" class="btn-primary text-sm">
                 {{ t('common.confirm') }}
               </button>
               <button @click="cancelStatusChange" class="btn-secondary text-sm">
                 {{ t('common.cancel') }}
+              </button>
+              <button
+                @click="statusNoteFileInputRef?.click()"
+                class="btn-secondary text-sm inline-flex items-center gap-1"
+              >
+                <ImageIcon class="w-4 h-4" :stroke-width="2" />
+                {{ t('issueDetail.image') }}
+              </button>
+              <button
+                @click="statusNoteAudios.length < MAX_AUDIOS && statusNoteAudioInputRef?.click()"
+                :disabled="statusNoteAudios.length >= MAX_AUDIOS"
+                :title="statusNoteAudios.length >= MAX_AUDIOS ? t('issueDetail.audioMaxReached', { max: MAX_AUDIOS }) : undefined"
+                class="btn-secondary text-sm inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Music class="w-4 h-4" :stroke-width="2" />
+                {{ t('issueDetail.audio') }}
               </button>
             </div>
           </div>
@@ -667,7 +794,15 @@ function openVersionCompare() {
 
           <template v-for="comment in issue.comments" :key="comment.id">
             <div v-if="comment.is_status_note" class="rounded-lg bg-warning-bg border border-warning/20 px-3 py-2">
-              <span class="text-xs font-semibold text-warning block mb-1">{{ t('issue.revisionNote') }}</span>
+              <div class="flex items-center gap-2 mb-2 flex-wrap">
+                <span class="text-xs font-semibold text-warning">{{ t('issue.revisionNote') }}</span>
+                <template v-if="comment.old_status && comment.new_status">
+                  <span class="text-warning/40 text-xs">·</span>
+                  <StatusBadge :status="comment.old_status" type="issue" />
+                  <span class="text-xs text-muted-foreground">→</span>
+                  <StatusBadge :status="comment.new_status" type="issue" />
+                </template>
+              </div>
                 <TimestampText
                   :text="comment.content"
                   class="text-sm text-foreground"
@@ -675,6 +810,41 @@ function openVersionCompare() {
                   @activate="(reference, target) => handleCommentReference(comment, reference, target)"
                   @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
                 />
+              <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-2">
+                <a
+                  v-for="img in comment.images"
+                  :key="img.id"
+                  :href="resolveAssetUrl(img.image_url)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <img
+                    :src="resolveAssetUrl(img.image_url)"
+                    class="h-20 w-20 object-cover rounded border border-border cursor-pointer hover:opacity-80 transition-opacity"
+                    alt="attachment"
+                  />
+                </a>
+              </div>
+              <div v-if="comment.audios && comment.audios.length" class="flex flex-col gap-2 mt-2">
+                <div
+                  v-for="(audio, index) in comment.audios"
+                  :key="audio.id"
+                  class="bg-background/50 border border-border rounded-2xl px-4 py-3 space-y-2"
+                >
+                  <div class="flex items-center gap-2">
+                    <Music class="w-4 h-4 text-primary flex-shrink-0" :stroke-width="2" />
+                    <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
+                    <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
+                  </div>
+                  <audio
+                    :ref="(element) => setCommentAudioRef(comment.id, index, element)"
+                    :src="resolveAssetUrl(audio.audio_url)"
+                    controls
+                    class="w-full h-8"
+                    style="accent-color: #FF8400;"
+                  />
+                </div>
+              </div>
               <p class="text-xs text-muted-foreground mt-1">{{ comment.author?.display_name || t('issueDetail.unknown') }} · {{ fmtDate(comment.created_at) }}</p>
             </div>
             <div v-else class="card">

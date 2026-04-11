@@ -421,8 +421,17 @@ export const issueApi = {
     }
     return request<Issue>(`/tracks/${trackId}/issues`, { method: 'POST', body: form })
   },
-  update: (id: number, data: Partial<Pick<Issue, 'status' | 'title' | 'description' | 'severity'>> & { status_note?: string }) =>
-    request<Issue>(`/issues/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<Pick<Issue, 'status' | 'title' | 'description' | 'severity'>> & { status_note?: string; images?: File[]; audios?: File[] }) => {
+    const form = new FormData()
+    if (data.status) form.append('status', data.status)
+    if (data.title != null) form.append('title', data.title)
+    if (data.description != null) form.append('description', data.description)
+    if (data.severity) form.append('severity', data.severity)
+    if (data.status_note) form.append('status_note', data.status_note)
+    if (data.images) for (const img of data.images) form.append('images', img)
+    if (data.audios) for (const audio of data.audios) form.append('audios', audio)
+    return request<Issue>(`/issues/${id}`, { method: 'PATCH', body: form })
+  },
   batchUpdate: (trackId: number, data: { issue_ids: number[]; status: IssueStatus; status_note?: string }) =>
     request<Issue[]>(`/tracks/${trackId}/issues/batch`, { method: 'PATCH', body: JSON.stringify(data) }),
   addComment: (

@@ -481,6 +481,40 @@ onBeforeUnmount(() => {
                   :default-target="comment.audios?.length ? 'attachment' : 'track'"
                   @activate="(reference, target) => handleCommentReference(comment, reference, target)"
                 />
+                <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-2">
+                  <a
+                    v-for="img in comment.images"
+                    :key="img.id"
+                    :href="resolveAssetUrl(img.image_url)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <img
+                      :src="resolveAssetUrl(img.image_url)"
+                      class="h-16 w-16 object-cover rounded border border-border cursor-pointer hover:opacity-80 transition-opacity"
+                      alt="attachment"
+                    />
+                  </a>
+                </div>
+                <div v-if="comment.audios && comment.audios.length" class="flex flex-col gap-2 mt-2">
+                  <div
+                    v-for="audio in comment.audios"
+                    :key="audio.id"
+                    class="bg-background/50 border border-border rounded-2xl px-3 py-2 space-y-1.5"
+                  >
+                    <div class="flex items-center gap-2">
+                      <Music class="w-3.5 h-3.5 text-primary flex-shrink-0" :stroke-width="2" />
+                      <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
+                      <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
+                    </div>
+                    <audio
+                      :src="resolveAssetUrl(audio.audio_url)"
+                      controls
+                      class="w-full h-8"
+                      style="accent-color: #FF8400;"
+                    />
+                  </div>
+                </div>
                 <p class="text-xs text-muted-foreground mt-1">
                   {{ comment.author?.display_name ?? t('issueDetail.unknown') }} · {{ formatDate(comment.created_at) }}
                 </p>
