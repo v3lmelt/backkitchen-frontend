@@ -449,6 +449,9 @@ const statusActions = computed<IssueStatus[]>(() => {
 })
 
 function statusActionLabel(status: IssueStatus): string {
+  if (status === 'open' && issue.value?.status === 'pending_discussion') {
+    return t('issueDetail.publish')
+  }
   switch (status) {
     case 'resolved':
       return t('issueDetail.markFixed')
