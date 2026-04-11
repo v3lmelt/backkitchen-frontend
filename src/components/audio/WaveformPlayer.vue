@@ -192,8 +192,12 @@ function gainDbToLinear(value: number): number {
   return Math.pow(10, value / 20)
 }
 
+function isIssueUnresolved(status: string): boolean {
+  return status === 'open' || status === 'pending_discussion' || status === 'disagreed'
+}
+
 function getMarkerStatus(issues: Issue[]): MarkerStatus {
-  return issues.every(issue => issue.status === 'resolved') ? 'resolved' : 'unresolved'
+  return issues.every(issue => !isIssueUnresolved(issue.status)) ? 'resolved' : 'unresolved'
 }
 
 function getMarkerPosition(time: number): string {

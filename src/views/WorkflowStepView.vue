@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { checklistApi, issueApi, trackApi, r2Api, uploadToR2, API_ORIGIN } from '@/api'
@@ -30,6 +30,7 @@ import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useToast } from '@/composables/useToast'
 import { useAppStore } from '@/stores/app'
 import { useTrackStore } from '@/stores/tracks'
+import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { translateStepLabel } from '@/utils/workflow'
 import { hashId } from '@/utils/hash'
 import { extractAudioDuration } from '@/utils/audio'
@@ -44,6 +45,15 @@ const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
 const appStore = useAppStore()
 const trackStore = useTrackStore()
 const trackId = computed(() => Number(route.params.id))
+
+const wsReloading = ref(false)
+useTrackWebSocket(trackId.value, async () => {
+  if (wsReloading.value) return
+  wsReloading.value = true
+  await nextTick()
+  await loadPage()
+  wsReloading.value = false
+})
 
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
@@ -68,6 +78,10 @@ const isIssueFormOpen = ref(false)
 const waveformMode = computed<'seek' | 'annotate'>(() => (isIssueFormOpen.value ? 'annotate' : 'seek'))
 const showSourceCompare = ref(false)
 const selectedCompareSourceVersionId = ref<number | null>(null)
+
+function isIssueUnresolved(status: Issue['status']): boolean {
+  return status === 'open' || status === 'pending_discussion' || status === 'disagreed'
+}
 
 function onRequestWaveformMode(next: 'seek' | 'annotate') {
   if (next === 'annotate' && isSourceCompareActive.value) return
@@ -181,13 +195,13 @@ const producerSnapshotIssues = computed(() => producerIssues.value)
 const producerWaveformIssues = computed(() => {
   return filterIssuesForDisplayedSourceVersion(producerIssues.value)
 })
-const producerOpenCount = computed(() => producerSnapshotIssues.value.filter(issue => issue.status === 'open').length)
+const producerOpenCount = computed(() => producerSnapshotIssues.value.filter(issue => isIssueUnresolved(issue.status)).length)
 const producerResolvedCount = computed(() => producerSnapshotIssues.value.filter(issue => issue.status === 'resolved').length)
 const producerDisagreedCount = computed(() => producerSnapshotIssues.value.filter(issue => issue.status === 'disagreed').length)
 const peerIssues = computed(() =>
   issues.value.filter(i => i.phase === 'peer' || i.phase === 'peer_review'),
 )
-const peerOpenCount = computed(() => peerIssues.value.filter(issue => issue.status === 'open').length)
+const peerOpenCount = computed(() => peerIssues.value.filter(issue => isIssueUnresolved(issue.status)).length)
 const peerResolvedCount = computed(() => peerIssues.value.filter(issue => issue.status === 'resolved').length)
 const peerDisagreedCount = computed(() => peerIssues.value.filter(issue => issue.status === 'disagreed').length)
 const peerDiscussedCount = computed(() => peerIssues.value.filter(issue => (issue.comment_count ?? 0) > 0).length)
@@ -217,7 +231,7 @@ const revisionSnapshotIssues = computed(() => {
   return relatedIssues
 })
 const revisionOpenIssues = computed(() =>
-  revisionSnapshotIssues.value.filter(issue => issue.status !== 'resolved'),
+  revisionSnapshotIssues.value.filter(issue => isIssueUnresolved(issue.status)),
 )
 const revisionResolvedIssues = computed(() =>
   revisionSnapshotIssues.value.filter(issue => issue.status === 'resolved'),
@@ -228,7 +242,7 @@ const revisionWaveformIssues = computed(() => {
     issue => issue.source_version_number == null || issue.source_version_number === currentVersion.value,
   )
 })
-const openCount = computed(() => allCycleIssues.value.filter(i => i.status === 'open').length)
+const openCount = computed(() => allCycleIssues.value.filter(i => isIssueUnresolved(i.status)).length)
 const resolvedCount = computed(() => allCycleIssues.value.filter(i => i.status === 'resolved').length)
 const checklistPassedCount = computed(() => checklistItems.value.filter(item => item.passed).length)
 const checklistSaved = computed(() => checklistItems.value.length > 0)
@@ -472,7 +486,7 @@ function onIssueUpdated(updatedIssue: Issue) {
   }
 }
 
-async function onQuickIssueStatusChange({ issue, status }: { issue: Issue; status: 'open' | 'resolved' | 'disagreed' }) {
+async function onQuickIssueStatusChange({ issue, status }: { issue: Issue; status: Issue['status'] }) {
   const previousIssue = { ...issue }
   onIssueUpdated({ ...issue, status })
   try {

@@ -169,6 +169,7 @@
     "completed": "Completed",
     "rejected": "Rejected",
     "open": "Open",
+    "pending_discussion": "Pending Discussion",
     "disagreed": "Disagreed",
     "resolved": "Resolved",
     "critical": "Critical",
@@ -503,7 +504,16 @@
       "issue_created": "{name} created an issue",
       "issue_updated": "{name} updated an issue",
       "issue_comment_added": "{name} added a comment",
-      "metadata_updated": "{name} updated track info"
+      "metadata_updated": "{name} updated track info",
+      "workflow_transition": "{name} ran workflow action: {action}",
+      "workflow_review_progress": "{name} completed review progress {completed}/{required}",
+      "workflow_review_progress_generic": "{name} updated review progress",
+      "workflow_migration": "System migrated this track after workflow changes",
+      "track_reopened": "{name} reopened the workflow",
+      "reviewer_reassigned": "{name} reassigned reviewers",
+      "delivery_confirmed": "{name} confirmed the delivery",
+      "track_archived": "{name} archived the track",
+      "track_restored": "{name} restored the track"
     },
     "timeline": {
       "issueCreated": "{name} created issue #{num}",
@@ -511,6 +521,7 @@
       "issueUpdated": "{name} updated issue #{num}",
       "issueResolved": "{name} closed issue #{num}",
       "issueReopened": "{name} reopened issue #{num}",
+      "issuePendingDiscussion": "{name} marked issue #{num} pending discussion",
       "issueDisagreed": "{name} disputed issue #{num}"
     }
   },
@@ -529,7 +540,7 @@
     "reassignReviewer": "Reassign",
     "reassignReviewerTitle": "Reassign Reviewer",
     "reassignReviewerAuto": "A new reviewer will be automatically selected from the reviewer pool.",
-    "reassignReviewerManual": "Select a new reviewer for this stage:",
+    "reassignReviewerManual": "Select one or more reviewers for this stage:",
     "reassigning": "Assigning…",
     "reassignDone": "Reviewer reassigned successfully",
     "reassignNoPool": "Auto-assignment failed: no eligible reviewers for this stage",
@@ -708,6 +719,7 @@
     "back": "Back",
     "created": "Created {date}",
     "markFixed": "Resolved",
+    "markPendingDiscussion": "Mark Pending Discussion",
     "disagree": "Disagree",
     "reopen": "Reopen",
     "markResolved": "Mark Resolved",
@@ -910,6 +922,7 @@
     "shortcutRemoveLast": "Backspace Undo",
     "status": {
       "resolved": "Resolved",
+      "pending_discussion": "Pending Discussion",
       "disagreed": "Disagreed"
     }
   },

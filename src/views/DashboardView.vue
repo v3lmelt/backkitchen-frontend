@@ -147,6 +147,13 @@ function formatDuration(seconds: number | null): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+function originalMetaParts(track: Track): string[] {
+  const parts: string[] = []
+  if (track.original_title) parts.push(`${t('upload.originalTitle')}: ${track.original_title}`)
+  if (track.original_artist) parts.push(`${t('upload.originalArtist')}: ${track.original_artist}`)
+  return parts
+}
+
 function formatEventDescription(event: WorkflowEvent): string {
   const name = event.actor?.display_name ?? '?'
   const key = `dashboard.events.${event.event_type}`
@@ -428,7 +435,12 @@ function openAlbumSettings(albumId: number) {
                 class="border-b border-border last:border-0 hover:bg-white/5 cursor-pointer transition-colors"
               >
                 <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ track.track_number || '—' }}</td>
-                <td class="px-4 py-3 text-sm font-medium text-foreground">{{ track.title }}</td>
+                <td class="px-4 py-3">
+                  <div class="text-sm font-medium text-foreground">{{ track.title }}</div>
+                  <div v-if="originalMetaParts(track).length" class="mt-0.5 text-xs text-muted-foreground truncate">
+                    {{ originalMetaParts(track).join(' · ') }}
+                  </div>
+                </td>
                 <td class="px-4 py-3 text-sm text-muted-foreground" :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</td>
                 <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ formatDuration(track.duration) }}</td>
                 <td class="px-4 py-3">
@@ -478,6 +490,9 @@ function openAlbumSettings(albumId: number) {
                   :variant="track.workflow_variant"
                   :label="track.workflow_step?.label ?? null"
                 />
+              </div>
+              <div v-if="originalMetaParts(track).length" class="mb-1.5 text-xs text-muted-foreground truncate">
+                {{ originalMetaParts(track).join(' · ') }}
               </div>
               <div class="flex items-center gap-3 text-xs text-muted-foreground">
                 <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>

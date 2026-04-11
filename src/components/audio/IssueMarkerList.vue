@@ -85,6 +85,7 @@ function isReviewer(issue: Issue): boolean {
   if (!props.track) return false
   const uid = appStore.currentUser?.id
   if (!uid) return false
+  if (uid === issue.author_id) return true
   switch (issue.phase) {
     case 'peer':
     case 'peer_review':
@@ -103,8 +104,11 @@ function isReviewer(issue: Issue): boolean {
 function availableQuickActions(issue: Issue): IssueStatus[] {
   if (!props.enableQuickActions || !props.track) return []
   if (isSubmitter() && issue.status === 'open') return ['resolved', 'disagreed']
-  if (isReviewer(issue) && issue.status === 'open') return ['resolved']
-  if (isReviewer(issue) && (issue.status === 'resolved' || issue.status === 'disagreed')) return ['open']
+  if (isSubmitter() && issue.status === 'disagreed') return ['resolved']
+  if (isReviewer(issue) && issue.status === 'open') return ['resolved', 'pending_discussion']
+  if (isReviewer(issue) && issue.status === 'pending_discussion') return ['open', 'resolved']
+  if (isReviewer(issue) && issue.status === 'resolved') return ['open']
+  if (isReviewer(issue) && issue.status === 'disagreed') return ['open', 'resolved', 'pending_discussion']
   return []
 }
 
@@ -116,6 +120,8 @@ function quickActionLabel(status: IssueStatus): string {
       return t('issueDetail.disagree')
     case 'open':
       return t('issueDetail.reopen')
+    case 'pending_discussion':
+      return t('issueDetail.markPendingDiscussion')
   }
 }
 
@@ -126,6 +132,8 @@ function quickActionClass(status: IssueStatus): string {
     case 'disagreed':
       return 'bg-info-bg text-info hover:border-info/40'
     case 'open':
+      return 'bg-warning-bg text-warning hover:border-warning/40'
+    case 'pending_discussion':
       return 'bg-warning-bg text-warning hover:border-warning/40'
   }
 }

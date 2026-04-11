@@ -339,10 +339,10 @@ export const trackApi = {
     }),
   listAssignments: (trackId: number) =>
     request<StageAssignment[]>(`/tracks/${trackId}/assignments`),
-  reassignReviewer: (trackId: number, userId?: number) =>
+  reassignReviewer: (trackId: number, userIds?: number[]) =>
     request<Track>(`/tracks/${trackId}/reassign-reviewer`, {
       method: 'POST',
-      body: JSON.stringify({ user_id: userId ?? null }),
+      body: JSON.stringify(userIds && userIds.length > 0 ? { user_ids: userIds } : { user_id: null }),
     }),
   // Delivery confirmation
   confirmDelivery: (trackId: number, deliveryId: number) =>

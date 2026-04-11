@@ -16,7 +16,7 @@ export type TrackStatus = LegacyTrackStatus | (string & {})
 export type RejectionMode = 'final' | 'resubmittable'
 export type MarkerType = 'point' | 'range'
 export type IssueSeverity = 'critical' | 'major' | 'minor' | 'suggestion'
-export type IssueStatus = 'open' | 'disagreed' | 'resolved'
+export type IssueStatus = 'open' | 'pending_discussion' | 'disagreed' | 'resolved'
 export type IssuePhase = string
 export type UserRole = 'member' | 'producer'
 
@@ -193,7 +193,8 @@ export interface StageAssignment {
   track_id: number
   stage_id: string
   user_id: number
-  status: 'pending' | 'completed'
+  status: 'pending' | 'completed' | 'cancelled'
+  decision?: string | null
   assigned_at: string
   completed_at: string | null
   user?: User | null

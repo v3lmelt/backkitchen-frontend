@@ -44,9 +44,25 @@ function timelineDotColor(event: WorkflowEvent): string {
 function transitionLabel(event: WorkflowEvent): string | null {
   if (!event.from_status || !event.to_status) return null
   if (event.from_status === event.to_status) return null
-  const from = t(`status.${event.from_status}`, event.from_status)
-  const to = t(`status.${event.to_status}`, event.to_status)
+  const from = translateWorkflowStatus(event.from_status)
+  const to = translateWorkflowStatus(event.to_status)
   return `${from} → ${to}`
+}
+
+function translateWorkflowStatus(status: string): string {
+  const workflowStepKey = `workflowSteps.${status}`
+  if (te(workflowStepKey)) return t(workflowStepKey)
+  return t(`status.${status}`, status)
+}
+
+function translateWorkflowDecision(decision: string): string {
+  if (decision.startsWith('reject_to_')) {
+    const target = decision.slice('reject_to_'.length)
+    return t('workflowStep.rejectToStep', { step: translateWorkflowStatus(target) })
+  }
+  const actionKey = `trackDetail.actions.${decision}`
+  if (te(actionKey)) return t(actionKey)
+  return decision.replaceAll('_', ' ')
 }
 
 // Anonymize peer reviewer only for the submitter during active peer review phases
@@ -100,6 +116,9 @@ function formatTimelineEvent(event: WorkflowEvent): string {
       if (s === 'resolved') return num != null
         ? t('dashboard.timeline.issueResolved', { name, num })
         : t('dashboard.events.issue_updated', { name })
+      if (s === 'pending_discussion') return num != null
+        ? t('dashboard.timeline.issuePendingDiscussion', { name, num })
+        : t('dashboard.events.issue_updated', { name })
       if (s === 'open') return num != null
         ? t('dashboard.timeline.issueReopened', { name, num })
         : t('dashboard.events.issue_updated', { name })
@@ -111,6 +130,23 @@ function formatTimelineEvent(event: WorkflowEvent): string {
         : t('dashboard.events.issue_updated', { name })
     }
     default: {
+      if (event.event_type.startsWith('workflow_transition_')) {
+        const decision = event.event_type.slice('workflow_transition_'.length)
+        return t('dashboard.events.workflow_transition', {
+          name,
+          action: translateWorkflowDecision(decision),
+        })
+      }
+
+      if (event.event_type === 'workflow_review_progress') {
+        const completed = typeof payload.completed_reviews === 'number' ? payload.completed_reviews : null
+        const required = typeof payload.required_reviews === 'number' ? payload.required_reviews : null
+        if (completed != null && required != null) {
+          return t('dashboard.events.workflow_review_progress', { name, completed, required })
+        }
+        return t('dashboard.events.workflow_review_progress_generic', { name })
+      }
+
       const key = `dashboard.events.${event.event_type}`
       if (te(key)) return t(key, { name })
       return `${name}: ${event.event_type.replaceAll('_', ' ')}`
@@ -476,7 +512,7 @@ const isAutoAssign = computed(() => {
 })
 const showReassignModal = ref(false)
 const reassignMembers = ref<AlbumMember[]>([])
-const reassignSelectedUserId = ref<number | null>(null)
+const reassignSelectedUserIds = ref<number[]>([])
 const reassigning = ref(false)
 
 async function openReassignModal() {
@@ -484,7 +520,7 @@ async function openReassignModal() {
     await doReassign()
     return
   }
-  reassignSelectedUserId.value = null
+  reassignSelectedUserIds.value = []
   if (!reassignMembers.value.length && track.value) {
     const album = await albumApi.get(track.value.album_id)
     reassignMembers.value = album.members.filter(m => m.user_id !== track.value!.submitter_id)
@@ -492,14 +528,23 @@ async function openReassignModal() {
   showReassignModal.value = true
 }
 
-async function doReassign(userId?: number) {
+function toggleReassignMember(userId: number) {
+  const exists = reassignSelectedUserIds.value.includes(userId)
+  if (exists) {
+    reassignSelectedUserIds.value = reassignSelectedUserIds.value.filter(id => id !== userId)
+  } else {
+    reassignSelectedUserIds.value = [...reassignSelectedUserIds.value, userId]
+  }
+}
+
+async function doReassign(userIds?: number[]) {
   if (!track.value) return
   reassigning.value = true
   try {
-    const updated = await trackApi.reassignReviewer(track.value.id, userId)
+    const updated = await trackApi.reassignReviewer(track.value.id, userIds && userIds.length ? userIds : undefined)
     track.value = updated
     showReassignModal.value = false
-    reassignSelectedUserId.value = null
+    reassignSelectedUserIds.value = []
     if (updated.peer_reviewer_id !== null) {
       toastSuccess(t('trackDetail.reassignDone'))
     } else {
@@ -1064,16 +1109,21 @@ watch(selectedCompareMasterDelivery, (delivery) => {
               v-for="m in reassignMembers"
               :key="m.user_id"
               class="flex items-center gap-2 px-3 py-2 border border-border rounded-none cursor-pointer hover:bg-background/60 transition-colors"
-              :class="reassignSelectedUserId === m.user_id ? 'border-primary bg-background' : ''"
+              :class="reassignSelectedUserIds.includes(m.user_id) ? 'border-primary bg-background' : ''"
             >
-              <input type="radio" class="hidden" :value="m.user_id" v-model="reassignSelectedUserId" />
+              <input
+                type="checkbox"
+                class="checkbox"
+                :checked="reassignSelectedUserIds.includes(m.user_id)"
+                @change="toggleReassignMember(m.user_id)"
+              />
               <span class="text-sm text-foreground">{{ m.user.display_name }}</span>
             </label>
           </div>
           <div class="flex gap-2">
             <button
-              @click="doReassign(reassignSelectedUserId ?? undefined)"
-              :disabled="reassigning || reassignSelectedUserId === null"
+              @click="doReassign(reassignSelectedUserIds)"
+              :disabled="reassigning || reassignSelectedUserIds.length === 0"
               class="flex-1 btn-primary h-9 text-sm disabled:opacity-50"
             >
               {{ reassigning ? t('trackDetail.reassigning') : t('common.confirm') }}
