@@ -39,6 +39,7 @@ const lastDragRangeIdx = ref(-1)
 
 const POINT_NEAR_THRESHOLD_SECONDS = 0.05
 const MIN_RANGE_DURATION_SECONDS = 0.05
+const RANGE_MATCH_TOLERANCE_SECONDS = 0.05
 const ISSUE_DRAFT_STORAGE_PREFIX = 'backkitchen_issue_draft'
 const MAX_AUDIO_SIZE = 200 * 1024 * 1024
 const MAX_AUDIOS = 3
@@ -108,15 +109,26 @@ function markerEqualsPoint(marker: { marker_type: 'point' | 'range'; time_start:
   return marker.marker_type === 'point' && roundToMilliseconds(marker.time_start) === time
 }
 
-function markerEqualsRange(
+function markerMatchesRangeWithTolerance(
   marker: { marker_type: 'point' | 'range'; time_start: number; time_end: number | null },
   start: number,
   end: number,
 ): boolean {
-  return marker.marker_type === 'range'
-    && marker.time_end !== null
-    && roundToMilliseconds(marker.time_start) === start
-    && roundToMilliseconds(marker.time_end) === end
+  if (marker.marker_type !== 'range' || marker.time_end === null) return false
+  return Math.abs(roundToMilliseconds(marker.time_start) - start) <= RANGE_MATCH_TOLERANCE_SECONDS
+    && Math.abs(roundToMilliseconds(marker.time_end) - end) <= RANGE_MATCH_TOLERANCE_SECONDS
+}
+
+function removeMatchingRanges(start: number, end: number): number {
+  let removed = 0
+  for (let i = markers.value.length - 1; i >= 0; i--) {
+    if (!markerMatchesRangeWithTolerance(markers.value[i], start, end)) continue
+    markers.value.splice(i, 1)
+    removed++
+    if (lastDragRangeIdx.value === i) lastDragRangeIdx.value = -1
+    else if (lastDragRangeIdx.value > i) lastDragRangeIdx.value--
+  }
+  return removed
 }
 
 function handleClick(time: number) {
@@ -156,11 +168,8 @@ function handleRangeSelect(start: number, end: number) {
   // Ignore accidental micro-drags (< 50ms duration)
   if (normalizedEnd - normalizedStart < MIN_RANGE_DURATION_SECONDS) return
 
-  const sameRangeIndex = markers.value.findIndex(marker => markerEqualsRange(marker, normalizedStart, normalizedEnd))
-  if (sameRangeIndex !== -1) {
-    markers.value.splice(sameRangeIndex, 1)
-    if (lastDragRangeIdx.value === sameRangeIndex) lastDragRangeIdx.value = -1
-    else if (lastDragRangeIdx.value > sameRangeIndex) lastDragRangeIdx.value--
+  const removedRangeCount = removeMatchingRanges(normalizedStart, normalizedEnd)
+  if (removedRangeCount > 0) {
     rangeAnchor.value = null
     issueMode.value = 'timed'
     showForm.value = true
@@ -188,10 +197,19 @@ function handleRangeUpdate(start: number, end: number) {
   if (normalizedEnd <= normalizedStart) return
   if (normalizedEnd - normalizedStart < MIN_RANGE_DURATION_SECONDS) return
 
-  const idx = lastDragRangeIdx.value
+  let idx = lastDragRangeIdx.value
   if (idx >= 0 && idx < markers.value.length && markers.value[idx].marker_type === 'range') {
     markers.value[idx].time_start = normalizedStart
     markers.value[idx].time_end = normalizedEnd
+    for (let i = markers.value.length - 1; i >= 0; i--) {
+      if (i === idx) continue
+      if (!markerMatchesRangeWithTolerance(markers.value[i], normalizedStart, normalizedEnd)) continue
+      markers.value.splice(i, 1)
+      if (i < idx) idx--
+      if (lastDragRangeIdx.value === i) lastDragRangeIdx.value = -1
+      else if (lastDragRangeIdx.value > i) lastDragRangeIdx.value--
+    }
+    lastDragRangeIdx.value = idx
   }
 }
 
