@@ -122,10 +122,11 @@ export function uploadWithProgress<T>(
   url: string,
   body: FormData,
   onProgress?: (percent: number) => void,
+  method: string = 'POST',
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', `${BASE}${url}`)
+    xhr.open(method, `${BASE}${url}`)
     const token = localStorage.getItem(TOKEN_KEY)
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
 
@@ -437,7 +438,11 @@ export const issueApi = {
     }
     return request<Issue>(`/tracks/${trackId}/issues`, { method: 'POST', body: form })
   },
-  update: (id: number, data: Partial<Pick<Issue, 'status' | 'title' | 'description' | 'severity'>> & { status_note?: string; images?: File[]; audios?: File[] }) => {
+  update: (
+    id: number,
+    data: Partial<Pick<Issue, 'status' | 'title' | 'description' | 'severity'>> & { status_note?: string; images?: File[]; audios?: File[] },
+    onProgress?: (percent: number) => void,
+  ) => {
     const form = new FormData()
     if (data.status) form.append('status', data.status)
     if (data.title != null) form.append('title', data.title)
@@ -446,6 +451,9 @@ export const issueApi = {
     if (data.status_note) form.append('status_note', data.status_note)
     if (data.images) for (const img of data.images) form.append('images', img)
     if (data.audios) for (const audio of data.audios) form.append('audios', audio)
+    if (onProgress && (data.images?.length || data.audios?.length)) {
+      return uploadWithProgress<Issue>(`/issues/${id}`, form, onProgress, 'PATCH')
+    }
     return request<Issue>(`/issues/${id}`, { method: 'PATCH', body: form })
   },
   batchUpdate: (trackId: number, data: { issue_ids: number[]; status: IssueStatus; status_note?: string }) =>
@@ -500,11 +508,14 @@ export const checklistApi = {
 
 export const discussionApi = {
   list: (trackId: number) => request<Discussion[]>(`/tracks/${trackId}/discussions`),
-  create: (trackId: number, data: { content: string; images?: File[] }) => {
+  create: (trackId: number, data: { content: string; images?: File[] }, onProgress?: (percent: number) => void) => {
     const form = new FormData()
     form.append('content', data.content)
     if (data.images) {
       for (const img of data.images) form.append('images', img)
+    }
+    if (onProgress && data.images?.length) {
+      return uploadWithProgress<Discussion>(`/tracks/${trackId}/discussions`, form, onProgress)
     }
     return request<Discussion>(`/tracks/${trackId}/discussions`, { method: 'POST', body: form })
   },

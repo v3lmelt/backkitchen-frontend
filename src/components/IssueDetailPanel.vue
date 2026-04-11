@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, watch } from 'vue'
+
 import { useI18n } from 'vue-i18n'
 import { issueApi, commentApi, r2Api, uploadToR2, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Comment, Issue, IssueStatus } from '@/types'
-import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
 import TimestampText from '@/components/common/TimestampText.vue'
+import CommentInput from '@/components/common/CommentInput.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatTimestamp, formatDuration, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import type { TimeReference, TimestampTarget } from '@/utils/timestamps'
-import { useToast } from '@/composables/useToast'
-import { X, Music, ImageIcon, Pencil, Trash2 } from 'lucide-vue-next'
+import { X, Music, Pencil, Trash2 } from 'lucide-vue-next'
 
 const props = defineProps<{ issue: Issue | null; track?: import('@/types').Track | null }>()
 
@@ -21,17 +21,12 @@ const emit = defineEmits<{
 }>()
 
 const { t, locale } = useI18n()
-const { error: toastError } = useToast()
 const appStore = useAppStore()
-
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024  // 10 MB
-const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
 
 const fullIssue = ref<Issue | null>(null)
 const loading = ref(false)
-const newComment = ref('')
-const commentCursorPos = ref(0)
 const pendingStatus = ref<IssueStatus | null>(null)
+const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
 
 const isSubmitter = computed(() => appStore.currentUser?.id === props.track?.submitter_id)
 
@@ -102,24 +97,12 @@ function statusActionClass(status: IssueStatus): string {
   return 'bg-card border border-border text-foreground hover:bg-border'
 }
 const statusNote = ref('')
-const selectedImages = ref<File[]>([])
-const imagePreviewUrls = ref<string[]>([])
-const fileInputRef = ref<HTMLInputElement | null>(null)
-const AUDIO_ACCEPT = 'audio/mpeg,audio/wav,audio/flac,audio/aac,audio/ogg,.mp3,.wav,.flac,.aac,.ogg'
-const MAX_AUDIOS = 3
-const selectedAudios = ref<File[]>([])
-const audioInputRef = ref<HTMLInputElement | null>(null)
 const commentAudioRefs = new Map<number, HTMLAudioElement[]>()
 
 watch(() => props.issue, async (issue) => {
   pendingStatus.value = null
   statusNote.value = ''
-  newComment.value = ''
-  commentCursorPos.value = 0
-  imagePreviewUrls.value.forEach(url => URL.revokeObjectURL(url))
-  selectedImages.value = []
-  imagePreviewUrls.value = []
-  selectedAudios.value = []
+  commentInputRef.value?.reset()
   if (!issue) { fullIssue.value = null; return }
   loading.value = true
   try {
@@ -200,34 +183,10 @@ async function confirmStatusChange() {
   }
 }
 
-function onAudioSelect(event: Event) {
-  if (submittingComment.value) return
-  const input = event.target as HTMLInputElement
-  if (!input.files) return
-  for (const file of Array.from(input.files)) {
-    if (selectedAudios.value.length >= MAX_AUDIOS) break
-    if (file.size > MAX_AUDIO_SIZE) {
-      toastError(t('upload.fileTooLarge', { max: '200 MB' }))
-      continue
-    }
-    selectedAudios.value.push(file)
-  }
-  input.value = ''
-}
-
-function removeAudio(i: number) {
-  if (submittingComment.value) return
-  selectedAudios.value.splice(i, 1)
-}
-
 const submittingComment = ref(false)
 const commentUploadProgress = ref(0)
-const canSubmitComment = computed(
-  () => !submittingComment.value && (!!newComment.value.trim() || !!selectedImages.value.length || !!selectedAudios.value.length),
-)
 
-async function addComment() {
-  if (!newComment.value.trim() && !selectedImages.value.length && !selectedAudios.value.length) return
+async function handleCommentSubmit(payload: { content: string; images: File[]; audios: File[] }) {
   if (!fullIssue.value || !appStore.currentUser) return
   if (submittingComment.value) return
   submittingComment.value = true
@@ -235,20 +194,19 @@ async function addComment() {
   try {
     let comment: Comment
 
-    if (appStore.r2Enabled && selectedAudios.value.length > 0) {
-      // R2 flow: upload audios to R2 first, then submit comment with object keys
+    if (appStore.r2Enabled && payload.audios.length > 0) {
       const presignedResp = await r2Api.requestCommentAudioUpload(
         fullIssue.value.id,
-        selectedAudios.value.map(f => ({
+        payload.audios.map(f => ({
           filename: f.name,
           content_type: f.type || 'application/octet-stream',
           file_size: f.size,
         })),
       )
-      const totalSize = selectedAudios.value.reduce((s, f) => s + f.size, 0)
+      const totalSize = payload.audios.reduce((s, f) => s + f.size, 0)
       let uploadedBytes = 0
       for (let i = 0; i < presignedResp.uploads.length; i++) {
-        const file = selectedAudios.value[i]
+        const file = payload.audios[i]
         const prevBytes = uploadedBytes
         await uploadToR2(presignedResp.uploads[i].upload_url, file, file.type || 'application/octet-stream', (p) => {
           const currentBytes = prevBytes + (file.size * p / 100)
@@ -257,27 +215,22 @@ async function addComment() {
         uploadedBytes += file.size
       }
       comment = await issueApi.addComment(fullIssue.value.id, {
-        content: newComment.value,
-        images: selectedImages.value.length ? selectedImages.value : undefined,
+        content: payload.content,
+        images: payload.images.length ? payload.images : undefined,
         audioObjectKeys: presignedResp.uploads.map(u => u.object_key),
-        audioOriginalFilenames: selectedAudios.value.map(f => f.name),
+        audioOriginalFilenames: payload.audios.map(f => f.name),
       })
     } else {
       comment = await issueApi.addComment(fullIssue.value.id, {
-        content: newComment.value,
-        images: selectedImages.value.length ? selectedImages.value : undefined,
-        audios: selectedAudios.value.length ? selectedAudios.value : undefined,
+        content: payload.content,
+        images: payload.images.length ? payload.images : undefined,
+        audios: payload.audios.length ? payload.audios : undefined,
       }, (p) => { commentUploadProgress.value = p })
     }
 
     if (!fullIssue.value.comments) fullIssue.value.comments = []
     fullIssue.value.comments.push(comment)
-    newComment.value = ''
-    commentCursorPos.value = 0
-    imagePreviewUrls.value.forEach(url => URL.revokeObjectURL(url))
-    selectedImages.value = []
-    imagePreviewUrls.value = []
-    selectedAudios.value = []
+    commentInputRef.value?.reset()
     commentAudioRefs.clear()
   } finally {
     submittingComment.value = false
@@ -312,31 +265,6 @@ async function deleteComment(comment: Comment) {
   } catch { /* handled by request wrapper */ }
 }
 
-function onFileSelect(event: Event) {
-  if (submittingComment.value) return
-  const input = event.target as HTMLInputElement
-  if (!input.files) return
-  for (const file of Array.from(input.files)) {
-    if (file.size > MAX_IMAGE_SIZE) {
-      toastError(t('upload.fileTooLarge', { max: '10 MB' }))
-      continue
-    }
-    selectedImages.value.push(file)
-    imagePreviewUrls.value.push(URL.createObjectURL(file))
-  }
-  input.value = ''
-}
-
-function removeImage(i: number) {
-  if (submittingComment.value) return
-  URL.revokeObjectURL(imagePreviewUrls.value[i])
-  selectedImages.value.splice(i, 1)
-  imagePreviewUrls.value.splice(i, 1)
-}
-
-onBeforeUnmount(() => {
-  imagePreviewUrls.value.forEach(url => URL.revokeObjectURL(url))
-})
 </script>
 
 <template>
@@ -591,73 +519,18 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- Add comment -->
-          <div class="space-y-2 border-t border-border pt-4">
-            <div class="relative">
-              <textarea
-                v-model="newComment"
-                class="textarea-field w-full text-sm pr-8"
-                :placeholder="t('issueDetail.addCommentPlaceholder')"
-                rows="3"
-                @keydown.meta.enter="addComment"
-                @keydown.ctrl.enter="addComment"
-                @input="(e) => commentCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
-                @click="(e) => commentCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
-                @keyup="(e) => commentCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
-              />
-              <TimestampSyntaxPopover
-                :text="newComment"
-                :cursor-pos="commentCursorPos"
-                default-target="attachment"
-              />
-            </div>
-            <div v-if="imagePreviewUrls.length" class="flex flex-wrap gap-2">
-              <div v-for="(url, i) in imagePreviewUrls" :key="i" class="relative">
-                <img :src="url" class="h-14 w-14 object-cover rounded border border-border" alt="preview" />
-                <button
-                  @click="removeImage(i)"
-                  :disabled="submittingComment"
-                  class="absolute -top-1 -right-1 w-4 h-4 bg-error text-white rounded-full text-xs flex items-center justify-center leading-none"
-                >×</button>
-              </div>
-            </div>
-            <div v-if="selectedAudios.length" class="flex flex-wrap gap-2">
-              <div
-                v-for="(file, i) in selectedAudios" :key="i"
-                class="flex items-center gap-1.5 bg-background border border-border rounded-full px-2.5 py-1"
-              >
-                <Music class="w-3 h-3 text-primary flex-shrink-0" :stroke-width="2" />
-                <span class="text-xs font-mono text-foreground max-w-[100px] truncate">{{ file.name }}</span>
-                <button @click="removeAudio(i)" :disabled="submittingComment" class="text-muted-foreground hover:text-error transition-colors leading-none text-xs disabled:opacity-50 disabled:cursor-not-allowed">×</button>
-              </div>
-            </div>
-            <div class="flex items-center gap-2">
-              <input ref="fileInputRef" type="file" accept="image/*" multiple class="hidden" @change="onFileSelect" />
-              <input ref="audioInputRef" type="file" :accept="AUDIO_ACCEPT" multiple class="hidden" @change="onAudioSelect" />
-              <button @click="!submittingComment && fileInputRef?.click()" :disabled="submittingComment" class="btn-secondary text-xs inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
-                <ImageIcon class="w-3.5 h-3.5" :stroke-width="2" />
-                {{ t('issueDetail.image') }}
-              </button>
-              <button
-                @click="!submittingComment && selectedAudios.length < MAX_AUDIOS && audioInputRef?.click()"
-                :disabled="submittingComment || selectedAudios.length >= MAX_AUDIOS"
-                :title="selectedAudios.length >= MAX_AUDIOS ? t('issueDetail.audioMaxReached', { max: MAX_AUDIOS }) : undefined"
-                class="btn-secondary text-xs inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Music class="w-3.5 h-3.5" :stroke-width="2" />
-                {{ t('issueDetail.audio') }}
-              </button>
-                <button
-                  @click="addComment"
-                  :disabled="!canSubmitComment"
-                  class="btn-primary text-xs"
-                >{{ submittingComment ? t('common.loading') : t('issueDetail.addComment') }}</button>
-            </div>
-            <div v-if="submittingComment && (selectedAudios.length || selectedImages.length)" class="space-y-1">
-              <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
-                <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: commentUploadProgress + '%' }"></div>
-              </div>
-              <p class="text-xs text-muted-foreground text-right">{{ commentUploadProgress }}%</p>
-            </div>
+          <div class="border-t border-border pt-4">
+            <CommentInput
+              ref="commentInputRef"
+              :placeholder="t('issueDetail.addCommentPlaceholder')"
+              :submit-label="t('issueDetail.addComment')"
+              :submitting="submittingComment"
+              :upload-progress="commentUploadProgress"
+              enable-audio
+              enable-timestamp-popover
+              timestamp-default-target="attachment"
+              @submit="handleCommentSubmit"
+            />
           </div>
         </div>
       </div>

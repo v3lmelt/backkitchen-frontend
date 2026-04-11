@@ -13,7 +13,8 @@ import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
-import { Archive, Check, ChevronRight, UserRoundCog, ImageIcon, X, Pencil, Trash2 } from 'lucide-vue-next'
+import CommentInput from '@/components/common/CommentInput.vue'
+import { Archive, Check, ChevronRight, UserRoundCog, Pencil, Trash2 } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
@@ -202,17 +203,13 @@ const filteredEvents = computed(() => {
     return sorted.filter(e => e.event_type.includes('upload') || e.event_type.includes('deliver'))
   return sorted
 })
-const newDiscussionContent = ref('')
 const postingDiscussion = ref(false)
-const discussionImages = ref<File[]>([])
-const discussionImagePreviews = computed(() => discussionImages.value.map(f => URL.createObjectURL(f)))
+const postingDiscussionProgress = ref(0)
+const discussionInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
 const showVersionCompare = ref(false)
 const selectedCompareVersionId = ref<number | null>(null)
 const showMasterCompare = ref(false)
 const selectedCompareMasterDeliveryId = ref<number | null>(null)
-const canPostDiscussion = computed(() =>
-  !postingDiscussion.value && (!!newDiscussionContent.value.trim() || discussionImages.value.length > 0)
-)
 
 onMounted(loadTrack)
 onMounted(async () => {
@@ -346,31 +343,19 @@ function openPrimaryAction(_action: string) {
 }
 
 
-async function postDiscussion() {
-  if (!newDiscussionContent.value.trim() && discussionImages.value.length === 0) return
+async function handleDiscussionSubmit(payload: { content: string; images: File[]; audios: File[] }) {
   postingDiscussion.value = true
+  postingDiscussionProgress.value = 0
   try {
     const d = await discussionApi.create(trackId.value, {
-      content: newDiscussionContent.value.trim(),
-      images: discussionImages.value.length ? discussionImages.value : undefined,
-    })
+      content: payload.content.trim(),
+      images: payload.images.length ? payload.images : undefined,
+    }, (p) => { postingDiscussionProgress.value = p })
     discussions.value.push(d)
-    newDiscussionContent.value = ''
-    discussionImages.value = []
+    discussionInputRef.value?.reset()
   } finally {
     postingDiscussion.value = false
   }
-}
-
-function addDiscussionImages(files: FileList | null) {
-  if (!files) return
-  for (const file of Array.from(files)) {
-    if (file.type.startsWith('image/')) discussionImages.value.push(file)
-  }
-}
-
-function removeDiscussionImage(index: number) {
-  discussionImages.value.splice(index, 1)
 }
 
 function openImage(url: string) {
@@ -948,48 +933,15 @@ watch(selectedCompareMasterDelivery, (delivery) => {
                 </div>
               </div>
             </div>
-            <textarea
-              v-model="newDiscussionContent"
-              class="textarea-field w-full text-sm h-20"
+            <CommentInput
+              ref="discussionInputRef"
               :placeholder="t('trackDetail.discussionPlaceholder')"
-              @keydown.ctrl.enter="postDiscussion"
-              @keydown.meta.enter="postDiscussion"
+              :submit-label="t('trackDetail.postDiscussion')"
+              :submitting="postingDiscussion"
+              :upload-progress="postingDiscussionProgress"
+              :enable-audio="false"
+              @submit="handleDiscussionSubmit"
             />
-            <div v-if="discussionImagePreviews.length" class="flex flex-wrap gap-2">
-              <div
-                v-for="(preview, i) in discussionImagePreviews"
-                :key="i"
-                class="relative group"
-              >
-                <img :src="preview" class="h-20 rounded border border-border object-cover" />
-                <button
-                  type="button"
-                  @click="removeDiscussionImage(i)"
-                  class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-error transition-colors opacity-0 group-hover:opacity-100"
-                >
-                  <X class="w-3 h-3" :stroke-width="2.5" />
-                </button>
-              </div>
-            </div>
-            <div class="flex items-center gap-2">
-              <button
-                @click="postDiscussion"
-                :disabled="!canPostDiscussion"
-                class="btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {{ postingDiscussion ? t('common.loading') : t('trackDetail.postDiscussion') }}
-              </button>
-              <label class="inline-flex items-center justify-center w-9 h-9 rounded-full border border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground/40 cursor-pointer transition-colors">
-                <ImageIcon class="w-4 h-4" :stroke-width="2" />
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  class="sr-only"
-                  @change="addDiscussionImages(($event.target as HTMLInputElement).files)"
-                />
-              </label>
-            </div>
           </div>
         </div>
 

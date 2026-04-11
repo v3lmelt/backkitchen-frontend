@@ -713,6 +713,12 @@ function syncSelectedRange(region: { id: string; start: number; end: number; rem
   lastEmittedSelection.value = { id: region.id, start, end }
   lastSelectionAt.value = Date.now()
   emit('rangeSelect', start, end, isUpdate)
+
+  // After the parent processes the event, re-sync the selection region.
+  // This handles cases where the parent rejects the range (e.g. micro-drag
+  // below the minimum duration) or toggles off a non-last range marker,
+  // leaving selectedRange unchanged so the watcher never fires.
+  nextTick(renderSelectionRegion)
 }
 
 function renderSelectionRegion() {
