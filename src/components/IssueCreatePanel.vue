@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Eraser, Info, RotateCcw, X } from 'lucide-vue-next'
+import { Eraser, Info, Music, RotateCcw, X } from 'lucide-vue-next'
 import { issueApi } from '@/api'
 import type { Issue } from '@/types'
+import { useToast } from '@/composables/useToast'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import { formatTimestamp, roundToMilliseconds } from '@/utils/time'
@@ -21,6 +22,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { error: toastError } = useToast()
 
 const showForm = ref(false)
 const issueMode = ref<'timed' | 'general'>('timed')
@@ -31,9 +33,17 @@ const severity = ref<'critical' | 'major' | 'minor' | 'suggestion'>('major')
 const markers = ref<{ marker_type: 'point' | 'range'; time_start: number; time_end: number | null }[]>([])
 const rangeAnchor = ref<number | null>(null)
 const markerHint = ref('')
+// Index of the range marker tied to the current waveform drag selection.
+// Used to update the marker in-place when the user resizes the selection.
+const lastDragRangeIdx = ref(-1)
 
 const POINT_NEAR_THRESHOLD_SECONDS = 0.05
+const MIN_RANGE_DURATION_SECONDS = 0.05
+const RANGE_MATCH_TOLERANCE_SECONDS = 0.05
 const ISSUE_DRAFT_STORAGE_PREFIX = 'backkitchen_issue_draft'
+const MAX_AUDIO_SIZE = 200 * 1024 * 1024
+const MAX_AUDIOS = 3
+const AUDIO_ACCEPT = 'audio/mpeg,audio/wav,audio/flac,audio/aac,audio/ogg,.mp3,.wav,.flac,.aac,.ogg'
 
 const draftStorageKey = computed(() => {
   const delivery = props.masterDeliveryId == null ? 'none' : String(props.masterDeliveryId)
@@ -41,6 +51,10 @@ const draftStorageKey = computed(() => {
 })
 
 let markerHintTimer: ReturnType<typeof setTimeout> | null = null
+const selectedAudios = ref<File[]>([])
+const audioInputRef = ref<HTMLInputElement | null>(null)
+const submittingIssue = ref(false)
+const issueUploadProgress = ref(0)
 
 function clearMarkerHintTimer() {
   if (!markerHintTimer) return
@@ -95,15 +109,26 @@ function markerEqualsPoint(marker: { marker_type: 'point' | 'range'; time_start:
   return marker.marker_type === 'point' && roundToMilliseconds(marker.time_start) === time
 }
 
-function markerEqualsRange(
+function markerMatchesRangeWithTolerance(
   marker: { marker_type: 'point' | 'range'; time_start: number; time_end: number | null },
   start: number,
   end: number,
 ): boolean {
-  return marker.marker_type === 'range'
-    && marker.time_end !== null
-    && roundToMilliseconds(marker.time_start) === start
-    && roundToMilliseconds(marker.time_end) === end
+  if (marker.marker_type !== 'range' || marker.time_end === null) return false
+  return Math.abs(roundToMilliseconds(marker.time_start) - start) <= RANGE_MATCH_TOLERANCE_SECONDS
+    && Math.abs(roundToMilliseconds(marker.time_end) - end) <= RANGE_MATCH_TOLERANCE_SECONDS
+}
+
+function removeMatchingRanges(start: number, end: number): number {
+  let removed = 0
+  for (let i = markers.value.length - 1; i >= 0; i--) {
+    if (!markerMatchesRangeWithTolerance(markers.value[i], start, end)) continue
+    markers.value.splice(i, 1)
+    removed++
+    if (lastDragRangeIdx.value === i) lastDragRangeIdx.value = -1
+    else if (lastDragRangeIdx.value > i) lastDragRangeIdx.value--
+  }
+  return removed
 }
 
 function handleClick(time: number) {
@@ -140,9 +165,11 @@ function handleRangeSelect(start: number, end: number) {
   const normalizedEnd = roundToMilliseconds(Math.max(start, end))
   if (normalizedEnd <= normalizedStart) return
 
-  const sameRangeIndex = markers.value.findIndex(marker => markerEqualsRange(marker, normalizedStart, normalizedEnd))
-  if (sameRangeIndex !== -1) {
-    markers.value.splice(sameRangeIndex, 1)
+  // Ignore accidental micro-drags (< 50ms duration)
+  if (normalizedEnd - normalizedStart < MIN_RANGE_DURATION_SECONDS) return
+
+  const removedRangeCount = removeMatchingRanges(normalizedStart, normalizedEnd)
+  if (removedRangeCount > 0) {
     rangeAnchor.value = null
     issueMode.value = 'timed'
     showForm.value = true
@@ -158,17 +185,43 @@ function handleRangeSelect(start: number, end: number) {
     time_start: normalizedStart,
     time_end: normalizedEnd,
   })
+  lastDragRangeIdx.value = markers.value.length - 1
   rangeAnchor.value = null
   issueMode.value = 'timed'
   showForm.value = true
 }
 
+function handleRangeUpdate(start: number, end: number) {
+  const normalizedStart = roundToMilliseconds(Math.min(start, end))
+  const normalizedEnd = roundToMilliseconds(Math.max(start, end))
+  if (normalizedEnd <= normalizedStart) return
+  if (normalizedEnd - normalizedStart < MIN_RANGE_DURATION_SECONDS) return
+
+  let idx = lastDragRangeIdx.value
+  if (idx >= 0 && idx < markers.value.length && markers.value[idx].marker_type === 'range') {
+    markers.value[idx].time_start = normalizedStart
+    markers.value[idx].time_end = normalizedEnd
+    for (let i = markers.value.length - 1; i >= 0; i--) {
+      if (i === idx) continue
+      if (!markerMatchesRangeWithTolerance(markers.value[i], normalizedStart, normalizedEnd)) continue
+      markers.value.splice(i, 1)
+      if (i < idx) idx--
+      if (lastDragRangeIdx.value === i) lastDragRangeIdx.value = -1
+      else if (lastDragRangeIdx.value > i) lastDragRangeIdx.value--
+    }
+    lastDragRangeIdx.value = idx
+  }
+}
+
 function removeMarker(index: number) {
   markers.value.splice(index, 1)
+  if (lastDragRangeIdx.value === index) lastDragRangeIdx.value = -1
+  else if (lastDragRangeIdx.value > index) lastDragRangeIdx.value--
 }
 
 function removeLastMarker() {
   if (!markers.value.length) return
+  if (lastDragRangeIdx.value === markers.value.length - 1) lastDragRangeIdx.value = -1
   const removed = markers.value.pop()
   if (!removed) return
   showForm.value = true
@@ -180,6 +233,7 @@ function clearMarkers() {
   if (!markers.value.length) return
   markers.value = []
   rangeAnchor.value = null
+  lastDragRangeIdx.value = -1
   issueMode.value = 'timed'
   showForm.value = true
   setMarkerHint(t('issue.markersCleared'))
@@ -221,8 +275,31 @@ function resetForm() {
   severity.value = 'major'
   markers.value = []
   rangeAnchor.value = null
+  lastDragRangeIdx.value = -1
   markerHint.value = ''
   issueMode.value = 'timed'
+  selectedAudios.value = []
+  issueUploadProgress.value = 0
+}
+
+function onAudioSelect(event: Event) {
+  if (submittingIssue.value) return
+  const input = event.target as HTMLInputElement
+  if (!input.files) return
+  for (const file of Array.from(input.files)) {
+    if (selectedAudios.value.length >= MAX_AUDIOS) break
+    if (file.size > MAX_AUDIO_SIZE) {
+      toastError(t('upload.fileTooLarge', { max: '200 MB' }))
+      continue
+    }
+    selectedAudios.value.push(file)
+  }
+  input.value = ''
+}
+
+function removeAudio(index: number) {
+  if (submittingIssue.value) return
+  selectedAudios.value.splice(index, 1)
 }
 
 function clearDraftStorage() {
@@ -301,6 +378,7 @@ function restoreDraft() {
 }
 
 async function submitIssue() {
+  if (submittingIssue.value) return
   const payload: Parameters<typeof issueApi.create>[1] = {
     title: title.value,
     description: description.value,
@@ -311,15 +389,26 @@ async function submitIssue() {
       time_start: m.time_start,
       time_end: m.time_end,
     })),
+    audios: selectedAudios.value.length ? selectedAudios.value : undefined,
   }
   if (props.masterDeliveryId != null) {
     payload.master_delivery_id = props.masterDeliveryId
   }
-  const created = await issueApi.create(props.trackId, payload)
-  emit('created', created)
-  showForm.value = false
-  resetForm()
-  clearDraftStorage()
+  submittingIssue.value = true
+  issueUploadProgress.value = 0
+  try {
+    const created = await issueApi.create(props.trackId, payload, (percent) => {
+      issueUploadProgress.value = percent
+    })
+    emit('created', created)
+    showForm.value = false
+    resetForm()
+    clearDraftStorage()
+  } catch (error) {
+    toastError(error instanceof Error ? error.message : t('common.requestFailed'))
+  } finally {
+    submittingIssue.value = false
+  }
 }
 
 function switchMode(mode: 'timed' | 'general') {
@@ -347,6 +436,7 @@ function formatTime(seconds: number): string {
 }
 
 const canSubmit = computed(() => {
+  if (submittingIssue.value) return false
   if (!title.value.trim() || !description.value.trim()) return false
   if (issueMode.value === 'timed' && markers.value.length === 0) return false
   return true
@@ -390,6 +480,7 @@ onBeforeUnmount(() => {
 defineExpose({
   handleClick,
   handleRangeSelect,
+  handleRangeUpdate,
   selectedRange,
   showForm,
   markers,
@@ -531,6 +622,39 @@ defineExpose({
         />
       </div>
       <CustomSelect v-model="severity" :options="severityOptions" />
+      <div class="space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs font-mono text-muted-foreground">{{ t('issue.audioAttachments') }}</span>
+          <span class="text-[11px] text-muted-foreground">{{ selectedAudios.length }}/{{ MAX_AUDIOS }}</span>
+        </div>
+        <input ref="audioInputRef" type="file" :accept="AUDIO_ACCEPT" multiple class="hidden" @change="onAudioSelect" />
+        <div v-if="selectedAudios.length" class="flex flex-wrap gap-2">
+          <div
+            v-for="(file, index) in selectedAudios"
+            :key="`${file.name}-${file.size}-${index}`"
+            class="flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1"
+          >
+            <Music class="w-3 h-3 text-primary flex-shrink-0" :stroke-width="2" />
+            <span class="max-w-[180px] truncate text-xs font-mono text-foreground">{{ file.name }}</span>
+            <button
+              type="button"
+              @click="removeAudio(index)"
+              :disabled="submittingIssue"
+              class="text-xs leading-none text-muted-foreground transition-colors hover:text-error disabled:cursor-not-allowed disabled:opacity-50"
+            >×</button>
+          </div>
+        </div>
+        <button
+          type="button"
+          @click="!submittingIssue && selectedAudios.length < MAX_AUDIOS && audioInputRef?.click()"
+          :disabled="submittingIssue || selectedAudios.length >= MAX_AUDIOS"
+          :title="selectedAudios.length >= MAX_AUDIOS ? t('issue.audioMaxReached', { max: MAX_AUDIOS }) : undefined"
+          class="btn-secondary inline-flex items-center gap-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Music class="w-3.5 h-3.5" :stroke-width="2" />
+          {{ t('issueDetail.audio') }}
+        </button>
+      </div>
 
       <div v-if="hasDraftPreview" class="rounded-2xl border border-border bg-background px-3 py-2.5 space-y-2">
         <div class="flex flex-wrap items-center gap-2 text-xs">
@@ -543,6 +667,7 @@ defineExpose({
           >{{ t(`severity.${severity}`) }}</span>
           <span v-if="issueMode === 'timed'" class="text-muted-foreground">{{ t('issue.markersCount', { count: markers.length }) }}</span>
           <span v-else class="text-muted-foreground">{{ t('issue.generalIssue') }}</span>
+          <span v-if="selectedAudios.length" class="text-muted-foreground">{{ t('issue.audioAttachments') }} {{ selectedAudios.length }}</span>
         </div>
 
         <div v-if="issueMode === 'timed' && markers.length" class="flex flex-wrap gap-1.5">
@@ -577,9 +702,16 @@ defineExpose({
         </div>
       </div>
 
+      <div v-if="submittingIssue && selectedAudios.length" class="space-y-1">
+        <div class="h-1.5 w-full overflow-hidden rounded-full bg-border">
+          <div class="h-full rounded-full bg-primary transition-all duration-300" :style="{ width: issueUploadProgress + '%' }"></div>
+        </div>
+        <p class="text-xs text-muted-foreground text-right">{{ issueUploadProgress }}%</p>
+      </div>
+
       <div class="flex gap-2">
-        <button @click="submitIssue" :disabled="!canSubmit" class="btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed">{{ t('common.submitIssue') }}</button>
-        <button @click="showForm = false; resetForm()" class="btn-secondary text-sm">{{ t('common.cancel') }}</button>
+        <button @click="submitIssue" :disabled="!canSubmit" class="btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-50">{{ submittingIssue ? t('common.loading') : t('common.submitIssue') }}</button>
+        <button @click="showForm = false; resetForm()" :disabled="submittingIssue" class="btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50">{{ t('common.cancel') }}</button>
       </div>
     </div>
   </div>

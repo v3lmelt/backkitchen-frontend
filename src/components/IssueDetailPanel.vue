@@ -40,6 +40,7 @@ const isReviewer = computed(() => {
   const trk = props.track
   const iss = fullIssue.value
   if (!uid || !trk || !iss) return false
+  if (uid === iss.author_id) return true
   switch (iss.phase) {
     case 'peer': return uid === trk.peer_reviewer_id
     case 'producer': case 'final_review': return uid === trk.producer_id
@@ -47,6 +48,48 @@ const isReviewer = computed(() => {
     default: return false
   }
 })
+
+function availableStatusActions(currentStatus: IssueStatus): IssueStatus[] {
+  if (isSubmitter.value) {
+    if (currentStatus === 'open') return ['resolved', 'disagreed']
+    if (currentStatus === 'disagreed') return ['resolved']
+    return []
+  }
+
+  if (!isReviewer.value) return []
+  if (currentStatus === 'open') return ['resolved', 'pending_discussion']
+  if (currentStatus === 'pending_discussion') return ['open', 'resolved']
+  if (currentStatus === 'resolved') return ['open']
+  if (currentStatus === 'disagreed') return ['open', 'resolved', 'pending_discussion']
+  return []
+}
+
+const statusActions = computed<IssueStatus[]>(() => {
+  if (!fullIssue.value) return []
+  return availableStatusActions(fullIssue.value.status)
+})
+
+function statusActionLabel(status: IssueStatus): string {
+  switch (status) {
+    case 'resolved':
+      return t('issueDetail.markFixed')
+    case 'disagreed':
+      return t('issueDetail.disagree')
+    case 'open':
+      return t('issueDetail.reopen')
+    case 'pending_discussion':
+      return t('issueDetail.markPendingDiscussion')
+  }
+}
+
+function statusActionClass(status: IssueStatus): string {
+  if (pendingStatus.value === status) {
+    if (status === 'resolved') return 'bg-primary text-black'
+    if (status === 'disagreed') return 'bg-error-bg text-error border border-error/30'
+    return 'bg-warning-bg text-warning border border-warning/30'
+  }
+  return 'bg-card border border-border text-foreground hover:bg-border'
+}
 const statusNote = ref('')
 const selectedImages = ref<File[]>([])
 const imagePreviewUrls = ref<string[]>([])
@@ -355,36 +398,39 @@ onBeforeUnmount(() => {
           />
           <p v-else class="text-sm text-muted-foreground italic">{{ t('issueDetail.noDescription') }}</p>
 
+          <div v-if="fullIssue.audios?.length" class="space-y-2">
+            <p class="text-xs font-mono font-semibold text-muted-foreground">{{ t('issue.audioAttachments') }}</p>
+            <div class="flex flex-col gap-2">
+              <div
+                v-for="audio in fullIssue.audios"
+                :key="audio.id"
+                class="bg-background border border-border rounded-2xl px-3 py-2 space-y-1.5"
+              >
+                <div class="flex items-center gap-2">
+                  <Music class="w-3.5 h-3.5 text-primary flex-shrink-0" :stroke-width="2" />
+                  <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
+                  <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
+                </div>
+                <audio
+                  :src="resolveAssetUrl(audio.audio_url)"
+                  controls
+                  class="w-full h-8"
+                  style="accent-color: #FF8400;"
+                />
+              </div>
+            </div>
+          </div>
+
           <!-- Status actions -->
-          <div
-            v-if="(isSubmitter && fullIssue.status === 'open') || (isReviewer && (fullIssue.status === 'open' || fullIssue.status === 'resolved' || fullIssue.status === 'disagreed'))"
-            class="space-y-3"
-          >
+          <div v-if="statusActions.length" class="space-y-3">
             <div class="flex gap-2 flex-wrap">
               <button
-                v-if="fullIssue.status === 'open'"
-                @click="selectStatus('resolved')"
+                v-for="status in statusActions"
+                :key="`status-${status}`"
+                @click="selectStatus(status)"
                 class="rounded-full px-3 py-1.5 text-xs font-medium transition-colors"
-                :class="pendingStatus === 'resolved'
-                  ? 'bg-primary text-black'
-                  : 'bg-card border border-border text-foreground hover:bg-border'"
-              >{{ t('issueDetail.markFixed') }}</button>
-              <button
-                v-if="isSubmitter && fullIssue.status === 'open'"
-                @click="selectStatus('disagreed')"
-                class="rounded-full px-3 py-1.5 text-xs font-medium transition-colors"
-                :class="pendingStatus === 'disagreed'
-                  ? 'bg-error-bg text-error border border-error/30'
-                  : 'bg-card border border-border text-foreground hover:bg-border'"
-              >{{ t('issueDetail.disagree') }}</button>
-              <button
-                v-if="isReviewer && (fullIssue.status === 'resolved' || fullIssue.status === 'disagreed')"
-                @click="selectStatus('open')"
-                class="rounded-full px-3 py-1.5 text-xs font-medium transition-colors"
-                :class="pendingStatus === 'open'
-                  ? 'bg-warning-bg text-warning border border-warning/30'
-                  : 'bg-card border border-border text-foreground hover:bg-border'"
-              >{{ t('issueDetail.reopen') }}</button>
+                :class="statusActionClass(status)"
+              >{{ statusActionLabel(status) }}</button>
             </div>
             <div v-if="pendingStatus" class="space-y-2">
               <textarea

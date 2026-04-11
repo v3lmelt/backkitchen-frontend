@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight, RotateCcw, X } from 'lucide-vue-next'
 import BaseModal from '@/components/common/BaseModal.vue'
@@ -34,6 +34,34 @@ const props = withDefaults(defineProps<{
 
 const { t } = useI18n()
 const pendingAction = ref<WorkflowAction | null>(null)
+const actionBarRef = ref<HTMLElement | null>(null)
+const actionBarHeight = ref(0)
+const spacerStyle = computed(() => ({ '--fixed-bottom-bar-height': `${actionBarHeight.value}px` }))
+
+let resizeObserver: ResizeObserver | null = null
+
+function updateActionBarHeight() {
+  actionBarHeight.value = actionBarRef.value?.offsetHeight ?? 0
+}
+
+onMounted(async () => {
+  await nextTick()
+  updateActionBarHeight()
+
+  if (typeof ResizeObserver !== 'undefined' && actionBarRef.value) {
+    resizeObserver = new ResizeObserver(() => {
+      updateActionBarHeight()
+    })
+    resizeObserver.observe(actionBarRef.value)
+  }
+
+  window.addEventListener('resize', updateActionBarHeight)
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  window.removeEventListener('resize', updateActionBarHeight)
+})
 
 function handleClick(action: WorkflowAction) {
   if (action.confirm) {
@@ -76,8 +104,10 @@ function confirmPending() {
     </div>
   </BaseModal>
 
-  <div class="workflow-action-bar">
-    <div class="bar-surface border-t border-border px-4 md:px-8 py-3">
+  <div class="fixed-bottom-bar-spacer" :style="spacerStyle" aria-hidden="true"></div>
+
+  <div ref="actionBarRef" class="workflow-action-bar fixed-bottom-bar">
+    <div class="bar-surface fixed-bottom-bar__surface">
       <div class="flex flex-col sm:flex-row sm:items-center gap-4">
 
         <!-- Left: hint -->
@@ -178,24 +208,8 @@ function confirmPending() {
 </template>
 
 <style scoped>
-.workflow-action-bar {
-  position: sticky;
-  bottom: 0;
-  z-index: 40;
-  margin-left: -1rem;
-  margin-right: -1rem;
-}
-
-@media (min-width: 768px) {
-  .workflow-action-bar {
-    margin-left: -1.5rem;
-    margin-right: -1.5rem;
-  }
-}
-
 .bar-surface {
-  background: #111111;
-  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  background: transparent;
 }
 
 /* ── Pulsing status dot ── */

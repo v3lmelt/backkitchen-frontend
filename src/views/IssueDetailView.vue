@@ -112,6 +112,7 @@ const isReviewer = computed(() => {
   const trk = cachedTrack.value
   const iss = issue.value
   if (!uid || !trk || !iss) return false
+  if (uid === iss.author_id) return true
   switch (iss.phase) {
     case 'peer': return uid === trk.peer_reviewer_id
     case 'producer': case 'final_review': return uid === trk.producer_id
@@ -172,7 +173,7 @@ const siblingIssues = computed(() => {
 
 const visibleSiblingIssues = computed(() => {
   if (!showUnresolvedOnly.value) return siblingIssues.value
-  return siblingIssues.value.filter(i => i.status === 'open')
+  return siblingIssues.value.filter(i => i.status !== 'resolved')
 })
 
 const currentSiblingIndex = computed(() =>
@@ -375,6 +376,48 @@ function selectStatus(status: IssueStatus) {
   statusNote.value = ''
 }
 
+function availableStatusActions(currentStatus: IssueStatus): IssueStatus[] {
+  if (isSubmitter.value) {
+    if (currentStatus === 'open') return ['resolved', 'disagreed']
+    if (currentStatus === 'disagreed') return ['resolved']
+    return []
+  }
+
+  if (!isReviewer.value) return []
+  if (currentStatus === 'open') return ['resolved', 'pending_discussion']
+  if (currentStatus === 'pending_discussion') return ['open', 'resolved']
+  if (currentStatus === 'resolved') return ['open']
+  if (currentStatus === 'disagreed') return ['open', 'resolved', 'pending_discussion']
+  return []
+}
+
+const statusActions = computed<IssueStatus[]>(() => {
+  if (!issue.value) return []
+  return availableStatusActions(issue.value.status)
+})
+
+function statusActionLabel(status: IssueStatus): string {
+  switch (status) {
+    case 'resolved':
+      return t('issueDetail.markFixed')
+    case 'disagreed':
+      return t('issueDetail.disagree')
+    case 'open':
+      return t('issueDetail.reopen')
+    case 'pending_discussion':
+      return t('issueDetail.markPendingDiscussion')
+  }
+}
+
+function statusActionClass(status: IssueStatus): string {
+  if (pendingStatus.value === status) {
+    if (status === 'resolved') return 'bg-primary text-black'
+    if (status === 'disagreed') return 'bg-error-bg text-error border border-error/30'
+    return 'bg-warning-bg text-warning border border-warning/30'
+  }
+  return 'bg-card border border-border text-foreground hover:bg-border'
+}
+
 async function confirmStatusChange() {
   if (!issue.value || !pendingStatus.value) return
   issue.value = await issueApi.update(issueId.value, {
@@ -534,6 +577,7 @@ function openVersionCompare() {
               ref="waveformRef"
               :audio-url="audioUrl"
               :issues="waveformIssues"
+              :track-id="issue.track_id"
               :height="120"
               @ready="onWaveformReady"
             />
@@ -553,6 +597,28 @@ function openVersionCompare() {
             @activate="(reference) => playTrackReference(reference)"
             @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
           />
+          <div v-if="issue.audios?.length" class="mt-4 space-y-2">
+            <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('issue.audioAttachments') }}</h3>
+            <div class="flex flex-col gap-2">
+              <div
+                v-for="audio in issue.audios"
+                :key="audio.id"
+                class="bg-background border border-border rounded-2xl px-4 py-3 space-y-2"
+              >
+                <div class="flex items-center gap-2">
+                  <Music class="w-4 h-4 text-primary flex-shrink-0" :stroke-width="2" />
+                  <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
+                  <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
+                </div>
+                <audio
+                  :src="resolveAssetUrl(audio.audio_url)"
+                  controls
+                  class="w-full h-8"
+                  style="accent-color: #FF8400;"
+                />
+              </div>
+            </div>
+          </div>
           <div class="text-xs text-muted-foreground mt-3">
             {{ t('issueDetail.created', { date: fmtDate(issue.created_at) }) }}
           </div>
@@ -560,49 +626,15 @@ function openVersionCompare() {
 
         <!-- Status Actions -->
         <div class="space-y-3">
-          <!-- Submitter: resolved + disagreed when open -->
-          <div v-if="isSubmitter && issue.status === 'open'" class="flex gap-2">
+          <div v-if="statusActions.length" class="flex gap-2 flex-wrap">
             <button
-              @click="selectStatus('resolved')"
+              v-for="status in statusActions"
+              :key="`status-${status}`"
+              @click="selectStatus(status)"
               class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
-              :class="pendingStatus === 'resolved'
-                ? 'bg-primary text-black'
-                : 'bg-card border border-border text-foreground hover:bg-border'"
+              :class="statusActionClass(status)"
             >
-              {{ t('issueDetail.markFixed') }}
-            </button>
-            <button
-              @click="selectStatus('disagreed')"
-              class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
-              :class="pendingStatus === 'disagreed'
-                ? 'bg-error-bg text-error border border-error/30'
-                : 'bg-card border border-border text-foreground hover:bg-border'"
-            >
-              {{ t('issueDetail.disagree') }}
-            </button>
-          </div>
-          <!-- Reviewer: resolved when open -->
-          <div v-else-if="isReviewer && issue.status === 'open'" class="flex gap-2">
-            <button
-              @click="selectStatus('resolved')"
-              class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
-              :class="pendingStatus === 'resolved'
-                ? 'bg-primary text-black'
-                : 'bg-card border border-border text-foreground hover:bg-border'"
-            >
-              {{ t('issueDetail.markFixed') }}
-            </button>
-          </div>
-          <!-- Reviewer: reopen when resolved or disagreed -->
-          <div v-else-if="isReviewer && (issue.status === 'resolved' || issue.status === 'disagreed')" class="flex gap-2">
-            <button
-              @click="selectStatus('open')"
-              class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
-              :class="pendingStatus === 'open'
-                ? 'bg-warning-bg text-warning border border-warning/30'
-                : 'bg-card border border-border text-foreground hover:bg-border'"
-            >
-              {{ t('issueDetail.reopen') }}
+              {{ statusActionLabel(status) }}
             </button>
           </div>
           <div v-if="pendingStatus" class="space-y-2">

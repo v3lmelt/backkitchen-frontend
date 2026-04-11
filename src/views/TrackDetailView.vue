@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi, discussionApi, API_ORIGIN, resolveAssetUrl } from '@/api'
@@ -12,7 +12,7 @@ import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
-import { Archive, ChevronRight, UserRoundCog, ImageIcon, X, Pencil, Trash2 } from 'lucide-vue-next'
+import { Archive, Check, ChevronRight, UserRoundCog, ImageIcon, X, Pencil, Trash2 } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
@@ -44,9 +44,25 @@ function timelineDotColor(event: WorkflowEvent): string {
 function transitionLabel(event: WorkflowEvent): string | null {
   if (!event.from_status || !event.to_status) return null
   if (event.from_status === event.to_status) return null
-  const from = t(`status.${event.from_status}`, event.from_status)
-  const to = t(`status.${event.to_status}`, event.to_status)
+  const from = translateWorkflowStatus(event.from_status)
+  const to = translateWorkflowStatus(event.to_status)
   return `${from} → ${to}`
+}
+
+function translateWorkflowStatus(status: string): string {
+  const workflowStepKey = `workflowSteps.${status}`
+  if (te(workflowStepKey)) return t(workflowStepKey)
+  return t(`status.${status}`, status)
+}
+
+function translateWorkflowDecision(decision: string): string {
+  if (decision.startsWith('reject_to_')) {
+    const target = decision.slice('reject_to_'.length)
+    return t('workflowStep.rejectToStep', { step: translateWorkflowStatus(target) })
+  }
+  const actionKey = `trackDetail.actions.${decision}`
+  if (te(actionKey)) return t(actionKey)
+  return decision.replaceAll('_', ' ')
 }
 
 // Anonymize peer reviewer only for the submitter during active peer review phases
@@ -100,6 +116,9 @@ function formatTimelineEvent(event: WorkflowEvent): string {
       if (s === 'resolved') return num != null
         ? t('dashboard.timeline.issueResolved', { name, num })
         : t('dashboard.events.issue_updated', { name })
+      if (s === 'pending_discussion') return num != null
+        ? t('dashboard.timeline.issuePendingDiscussion', { name, num })
+        : t('dashboard.events.issue_updated', { name })
       if (s === 'open') return num != null
         ? t('dashboard.timeline.issueReopened', { name, num })
         : t('dashboard.events.issue_updated', { name })
@@ -111,6 +130,23 @@ function formatTimelineEvent(event: WorkflowEvent): string {
         : t('dashboard.events.issue_updated', { name })
     }
     default: {
+      if (event.event_type.startsWith('workflow_transition_')) {
+        const decision = event.event_type.slice('workflow_transition_'.length)
+        return t('dashboard.events.workflow_transition', {
+          name,
+          action: translateWorkflowDecision(decision),
+        })
+      }
+
+      if (event.event_type === 'workflow_review_progress') {
+        const completed = typeof payload.completed_reviews === 'number' ? payload.completed_reviews : null
+        const required = typeof payload.required_reviews === 'number' ? payload.required_reviews : null
+        if (completed != null && required != null) {
+          return t('dashboard.events.workflow_review_progress', { name, completed, required })
+        }
+        return t('dashboard.events.workflow_review_progress_generic', { name })
+      }
+
       const key = `dashboard.events.${event.event_type}`
       if (te(key)) return t(key, { name })
       return `${name}: ${event.event_type.replaceAll('_', ' ')}`
@@ -131,16 +167,38 @@ const loadError = ref(false)
 const timelineExpanded = ref(false)
 const timelineFilter = ref<'all' | 'transitions' | 'issues' | 'uploads'>('all')
 const TIMELINE_PREVIEW_COUNT = 5
+const mobileCtaBarRef = ref<HTMLElement | null>(null)
+const mobileCtaBarHeight = ref(0)
+const mobileCtaSpacerStyle = computed(() => ({ '--fixed-bottom-bar-height': `${mobileCtaBarHeight.value}px` }))
+
+let mobileCtaResizeObserver: ResizeObserver | null = null
+
+function updateMobileCtaHeight() {
+  mobileCtaBarHeight.value = mobileCtaBarRef.value?.offsetHeight ?? 0
+}
+
+function observeMobileCtaBar() {
+  mobileCtaResizeObserver?.disconnect()
+  mobileCtaResizeObserver = null
+
+  if (typeof ResizeObserver === 'undefined' || !mobileCtaBarRef.value) return
+
+  mobileCtaResizeObserver = new ResizeObserver(() => {
+    updateMobileCtaHeight()
+  })
+  mobileCtaResizeObserver.observe(mobileCtaBarRef.value)
+}
 
 const filteredEvents = computed(() => {
-  if (timelineFilter.value === 'all') return events.value
+  const sorted = [...events.value].reverse()
+  if (timelineFilter.value === 'all') return sorted
   if (timelineFilter.value === 'transitions')
-    return events.value.filter(e => e.from_status && e.to_status && e.from_status !== e.to_status)
+    return sorted.filter(e => e.from_status && e.to_status && e.from_status !== e.to_status)
   if (timelineFilter.value === 'issues')
-    return events.value.filter(e => e.event_type.startsWith('issue'))
+    return sorted.filter(e => e.event_type.startsWith('issue'))
   if (timelineFilter.value === 'uploads')
-    return events.value.filter(e => e.event_type.includes('upload') || e.event_type.includes('deliver'))
-  return events.value
+    return sorted.filter(e => e.event_type.includes('upload') || e.event_type.includes('deliver'))
+  return sorted
 })
 const newDiscussionContent = ref('')
 const postingDiscussion = ref(false)
@@ -155,6 +213,18 @@ const canPostDiscussion = computed(() =>
 )
 
 onMounted(loadTrack)
+onMounted(async () => {
+  await nextTick()
+  updateMobileCtaHeight()
+  observeMobileCtaBar()
+
+  window.addEventListener('resize', updateMobileCtaHeight)
+})
+
+onBeforeUnmount(() => {
+  mobileCtaResizeObserver?.disconnect()
+  window.removeEventListener('resize', updateMobileCtaHeight)
+})
 
 // Real-time: reload track data whenever another collaborator changes it
 const wsReloading = ref(false)
@@ -349,6 +419,59 @@ const archiving = ref(false)
 const showArchiveConfirm = ref(false)
 const togglingVisibility = ref(false)
 
+// ── Edit metadata ─────────────────────────────────────────────────────────
+const canEditMetadata = computed(() => {
+  if (!track.value || !appStore.currentUser) return false
+  return appStore.currentUser.id === track.value.submitter_id || isProducer.value
+})
+const editingMetadata = ref(false)
+const metadataForm = ref({ title: '', artist: '', bpm: '', original_title: '', original_artist: '' })
+const savingMetadata = ref(false)
+
+function startEditMetadata() {
+  if (!track.value) return
+  metadataForm.value = {
+    title: track.value.title,
+    artist: track.value.artist ?? '',
+    bpm: track.value.bpm ?? '',
+    original_title: track.value.original_title ?? '',
+    original_artist: track.value.original_artist ?? '',
+  }
+  editingMetadata.value = true
+}
+
+async function saveMetadata() {
+  if (!track.value) return
+  savingMetadata.value = true
+  try {
+    const data: Record<string, string | null> = {}
+    if (metadataForm.value.title && metadataForm.value.title !== track.value.title)
+      data.title = metadataForm.value.title
+    if (metadataForm.value.artist && metadataForm.value.artist !== (track.value.artist ?? ''))
+      data.artist = metadataForm.value.artist
+    const newBpm = metadataForm.value.bpm || null
+    if (newBpm !== (track.value.bpm ?? null)) data.bpm = newBpm
+    const newOT = metadataForm.value.original_title || null
+    if (newOT !== (track.value.original_title ?? null)) data.original_title = newOT
+    const newOA = metadataForm.value.original_artist || null
+    if (newOA !== (track.value.original_artist ?? null)) data.original_artist = newOA
+
+    if (Object.keys(data).length === 0) {
+      editingMetadata.value = false
+      return
+    }
+    const updated = await trackApi.updateMetadata(track.value.id, data)
+    track.value = { ...track.value, ...updated }
+    editingMetadata.value = false
+    toastSuccess(t('trackDetail.metadataSaved'))
+    await loadTrack()
+  } catch {
+    toastError(t('trackDetail.metadataSaveFailed'))
+  } finally {
+    savingMetadata.value = false
+  }
+}
+
 async function toggleVisibility() {
   if (!track.value) return
   togglingVisibility.value = true
@@ -389,7 +512,7 @@ const isAutoAssign = computed(() => {
 })
 const showReassignModal = ref(false)
 const reassignMembers = ref<AlbumMember[]>([])
-const reassignSelectedUserId = ref<number | null>(null)
+const reassignSelectedUserIds = ref<number[]>([])
 const reassigning = ref(false)
 
 async function openReassignModal() {
@@ -397,7 +520,7 @@ async function openReassignModal() {
     await doReassign()
     return
   }
-  reassignSelectedUserId.value = null
+  reassignSelectedUserIds.value = []
   if (!reassignMembers.value.length && track.value) {
     const album = await albumApi.get(track.value.album_id)
     reassignMembers.value = album.members.filter(m => m.user_id !== track.value!.submitter_id)
@@ -405,14 +528,23 @@ async function openReassignModal() {
   showReassignModal.value = true
 }
 
-async function doReassign(userId?: number) {
+function toggleReassignMember(userId: number) {
+  const exists = reassignSelectedUserIds.value.includes(userId)
+  if (exists) {
+    reassignSelectedUserIds.value = reassignSelectedUserIds.value.filter(id => id !== userId)
+  } else {
+    reassignSelectedUserIds.value = [...reassignSelectedUserIds.value, userId]
+  }
+}
+
+async function doReassign(userIds?: number[]) {
   if (!track.value) return
   reassigning.value = true
   try {
-    const updated = await trackApi.reassignReviewer(track.value.id, userId)
+    const updated = await trackApi.reassignReviewer(track.value.id, userIds && userIds.length ? userIds : undefined)
     track.value = updated
     showReassignModal.value = false
-    reassignSelectedUserId.value = null
+    reassignSelectedUserIds.value = []
     if (updated.peer_reviewer_id !== null) {
       toastSuccess(t('trackDetail.reassignDone'))
     } else {
@@ -431,6 +563,12 @@ const primaryActions = computed(() => {
     label: customWorkflowActionLabel.value,
     handler: () => openPrimaryAction('open-step'),
   }]
+})
+
+watch(() => primaryActions.value.length, async () => {
+  await nextTick()
+  updateMobileCtaHeight()
+  observeMobileCtaBar()
 })
 
 // Reopen logic
@@ -523,7 +661,7 @@ watch(selectedCompareMasterDelivery, (delivery) => {
         {{ t('trackDetail.liveDisconnected') }}
       </div>
       <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
-        <div class="min-w-0">
+        <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2 mb-2 flex-wrap">
             <StatusBadge
               :status="track.status"
@@ -544,13 +682,73 @@ watch(selectedCompareMasterDelivery, (delivery) => {
               {{ t('trackDetail.live') }}
             </span>
           </div>
-          <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">
-            <span v-if="track.track_number" class="text-muted-foreground font-mono">#{{ track.track_number }}</span>
-            {{ track.title }}
-          </h1>
-          <p class="text-sm sm:text-base text-muted-foreground">
-            <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span> · source v{{ track.version }} · cycle {{ track.workflow_cycle }}
-          </p>
+
+          <!-- Editing metadata inline -->
+          <template v-if="editingMetadata">
+            <div class="card space-y-3">
+              <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('trackDetail.editMetadataTitle') }}</h3>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('upload.trackTitle') }}</label>
+                  <input v-model="metadataForm.title" class="input-field w-full" />
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('upload.artist') }}</label>
+                  <input v-model="metadataForm.artist" class="input-field w-full" />
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('upload.bpm') }}</label>
+                  <input v-model="metadataForm.bpm" type="text" class="input-field w-full" :placeholder="t('upload.bpmPlaceholder')" />
+                </div>
+                <div></div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('upload.originalTitle') }}</label>
+                  <input v-model="metadataForm.original_title" type="text" class="input-field w-full" :placeholder="t('upload.originalTitlePlaceholder')" />
+                </div>
+                <div>
+                  <label class="block text-xs text-muted-foreground mb-1">{{ t('upload.originalArtist') }}</label>
+                  <input v-model="metadataForm.original_artist" type="text" class="input-field w-full" :placeholder="t('upload.originalArtistPlaceholder')" />
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <button @click="saveMetadata" :disabled="savingMetadata || !metadataForm.title || !metadataForm.artist" class="btn-primary text-sm disabled:opacity-50">
+                  <span class="flex items-center gap-1.5">
+                    <Check class="w-4 h-4" :stroke-width="2" />
+                    {{ savingMetadata ? t('common.loading') : t('common.save') }}
+                  </span>
+                </button>
+                <button @click="editingMetadata = false" class="btn-secondary text-sm">{{ t('common.cancel') }}</button>
+              </div>
+            </div>
+          </template>
+
+          <!-- Normal display -->
+          <template v-else>
+            <div class="flex items-start gap-2">
+              <div class="min-w-0">
+                <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">
+                  <span v-if="track.track_number" class="text-muted-foreground font-mono">#{{ track.track_number }}</span>
+                  {{ track.title }}
+                </h1>
+                <p class="text-sm sm:text-base text-muted-foreground">
+                  <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span> · source v{{ track.version }} · cycle {{ track.workflow_cycle }}
+                </p>
+                <div v-if="track.bpm || track.original_title || track.original_artist" class="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
+                  <span v-if="track.bpm" class="font-mono">BPM {{ track.bpm }}</span>
+                  <span v-if="track.original_title">{{ t('upload.originalTitle') }}: {{ track.original_title }}</span>
+                  <span v-if="track.original_artist">{{ t('upload.originalArtist') }}: {{ track.original_artist }}</span>
+                </div>
+              </div>
+              <button
+                v-if="canEditMetadata"
+                @click="startEditMetadata"
+                class="shrink-0 mt-1 p-1.5 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                :title="t('trackDetail.editMetadata')"
+              >
+                <Pencil class="w-4 h-4" :stroke-width="2" />
+              </button>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -631,6 +829,7 @@ watch(selectedCompareMasterDelivery, (delivery) => {
               :audio-url="masterAudioUrl"
               :issues="[]"
               :track-id="trackId"
+              playback-scope="master"
               :compare-audio-url="selectedCompareMasterAudioUrl"
             />
           </div>
@@ -910,16 +1109,21 @@ watch(selectedCompareMasterDelivery, (delivery) => {
               v-for="m in reassignMembers"
               :key="m.user_id"
               class="flex items-center gap-2 px-3 py-2 border border-border rounded-none cursor-pointer hover:bg-background/60 transition-colors"
-              :class="reassignSelectedUserId === m.user_id ? 'border-primary bg-background' : ''"
+              :class="reassignSelectedUserIds.includes(m.user_id) ? 'border-primary bg-background' : ''"
             >
-              <input type="radio" class="hidden" :value="m.user_id" v-model="reassignSelectedUserId" />
+              <input
+                type="checkbox"
+                class="checkbox"
+                :checked="reassignSelectedUserIds.includes(m.user_id)"
+                @change="toggleReassignMember(m.user_id)"
+              />
               <span class="text-sm text-foreground">{{ m.user.display_name }}</span>
             </label>
           </div>
           <div class="flex gap-2">
             <button
-              @click="doReassign(reassignSelectedUserId ?? undefined)"
-              :disabled="reassigning || reassignSelectedUserId === null"
+              @click="doReassign(reassignSelectedUserIds)"
+              :disabled="reassigning || reassignSelectedUserIds.length === 0"
               class="flex-1 btn-primary h-9 text-sm disabled:opacity-50"
             >
               {{ reassigning ? t('trackDetail.reassigning') : t('common.confirm') }}
@@ -971,22 +1175,23 @@ watch(selectedCompareMasterDelivery, (delivery) => {
       </div>
     </div>
 
-    <!-- Mobile sticky CTA -->
-    <div
-      v-if="primaryActions.length"
-      class="mobile-cta-bar lg:hidden border-t border-border bg-[#111111] px-4 md:px-6 py-3 flex items-center justify-end"
-    >
-      <button
-        v-for="action in primaryActions"
-        :key="'m-' + action.key"
-        @click="action.handler()"
-        class="workflow-cta-btn group flex items-center gap-2 rounded-full font-mono font-semibold px-5 h-10 text-sm leading-none transition-all
-               bg-primary hover:bg-primary-hover text-black
-               shadow-[0_0_16px_rgba(255,132,0,0.25)] hover:shadow-[0_0_24px_rgba(255,132,0,0.45)]"
-      >
-        {{ action.label }}
-        <ChevronRight class="w-4 h-4 transition-transform group-hover:translate-x-0.5" :stroke-width="2.5" />
-      </button>
+    <!-- Mobile fixed CTA -->
+    <div v-if="primaryActions.length" class="fixed-bottom-bar-spacer lg:hidden" :style="mobileCtaSpacerStyle" aria-hidden="true"></div>
+
+    <div v-if="primaryActions.length" ref="mobileCtaBarRef" class="fixed-bottom-bar lg:hidden">
+      <div class="fixed-bottom-bar__surface flex items-center justify-end gap-2">
+        <button
+          v-for="action in primaryActions"
+          :key="'m-' + action.key"
+          @click="action.handler()"
+          class="workflow-cta-btn group flex items-center gap-2 rounded-full font-mono font-semibold px-5 h-10 text-sm leading-none transition-all
+                 bg-primary hover:bg-primary-hover text-black
+                 shadow-[0_0_16px_rgba(255,132,0,0.25)] hover:shadow-[0_0_24px_rgba(255,132,0,0.45)]"
+        >
+          {{ action.label }}
+          <ChevronRight class="w-4 h-4 transition-transform group-hover:translate-x-0.5" :stroke-width="2.5" />
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -998,19 +1203,5 @@ watch(selectedCompareMasterDelivery, (delivery) => {
 @keyframes cta-glow {
   0%, 100% { box-shadow: 0 0 16px rgba(255, 132, 0, 0.2); }
   50% { box-shadow: 0 0 28px rgba(255, 132, 0, 0.4); }
-}
-
-.mobile-cta-bar {
-  position: sticky;
-  bottom: 0;
-  z-index: 30;
-  margin-left: -1rem;
-  margin-right: -1rem;
-}
-@media (min-width: 768px) {
-  .mobile-cta-bar {
-    margin-left: -1.5rem;
-    margin-right: -1.5rem;
-  }
 }
 </style>

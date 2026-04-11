@@ -59,13 +59,17 @@ describe('IssueCreatePanel', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(mocks.createMock).toHaveBeenCalledWith(7, expect.objectContaining({
+    expect(mocks.createMock).toHaveBeenCalledTimes(1)
+    const [trackId, payload, onProgress] = mocks.createMock.mock.calls[0]
+    expect(trackId).toBe(7)
+    expect(payload).toMatchObject({
       title: 'Clicks at 1:30',
       description: 'Audible clicking artifacts',
       severity: 'major',
       phase: 'mastering',
-      markers: expect.arrayContaining([expect.objectContaining({ marker_type: 'point', time_start: 1.5 })]),
-    }))
+      markers: [{ marker_type: 'point', time_start: 1.5, time_end: null }],
+    })
+    expect(typeof onProgress).toBe('function')
   })
 
   it('emits created event after successful submit', async () => {
@@ -113,7 +117,7 @@ describe('IssueCreatePanel', () => {
     await wrapper.find('button.btn-primary.text-xs').trigger('click')
     expect(wrapper.find('input').exists()).toBe(true)
 
-    await wrapper.findAll('button').find(b => b.classes().includes('btn-secondary'))!.trigger('click')
+    await wrapper.findAll('button').find(b => b.text() === 'Cancel')!.trigger('click')
     expect(wrapper.find('input').exists()).toBe(false)
   })
 
@@ -138,6 +142,34 @@ describe('IssueCreatePanel', () => {
     const vm = wrapper.vm as any
     vm.handleRangeSelect(1.0, 2.0)
     vm.handleRangeSelect(1.0, 2.0)
+
+    await wrapper.vm.$nextTick()
+    expect(vm.markers).toHaveLength(0)
+  })
+
+  it('toggles near-identical range marker off within tolerance', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 1, phase: 'peer' },
+    })
+
+    const vm = wrapper.vm as any
+    vm.handleRangeSelect(1.0, 2.0)
+    vm.handleRangeSelect(1.02, 2.03)
+
+    await wrapper.vm.$nextTick()
+    expect(vm.markers).toHaveLength(0)
+  })
+
+  it('removes duplicate near-identical ranges together when toggling', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 1, phase: 'peer' },
+    })
+
+    const vm = wrapper.vm as any
+    vm.markers.push({ marker_type: 'range', time_start: 1.0, time_end: 2.0 })
+    vm.markers.push({ marker_type: 'range', time_start: 1.03, time_end: 2.02 })
+
+    vm.handleRangeSelect(1.01, 2.01)
 
     await wrapper.vm.$nextTick()
     expect(vm.markers).toHaveLength(0)

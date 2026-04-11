@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: mocks.pushMock }),
+  useRoute: () => ({ fullPath: '/dashboard' }),
   RouterLink: { template: '<a><slot /></a>' },
 }))
 
@@ -65,7 +66,18 @@ describe('DashboardView', () => {
       },
     ]
     mocks.trackListMock.mockResolvedValue([
-      { id: 11, album_id: 1, title: 'Submitted Song', artist: 'Nova', status: 'submitted', duration: 61, version: 1, open_issue_count: 0 },
+      {
+        id: 11,
+        album_id: 1,
+        title: 'Submitted Song',
+        artist: 'Nova',
+        status: 'submitted',
+        duration: 61,
+        version: 1,
+        open_issue_count: 0,
+        original_title: 'Bad Apple!!',
+        original_artist: 'Touhou',
+      },
       { id: 12, album_id: 1, title: 'Peer Song', artist: 'Nova', status: 'peer_review', duration: 62, version: 2, open_issue_count: 1 },
     ])
     mocks.albumListMock.mockResolvedValue([
@@ -94,6 +106,8 @@ describe('DashboardView', () => {
     expect(mocks.albumStatsMock).toHaveBeenCalledWith(1)
     expect(wrapper.text()).toContain('Submitted Song')
     expect(wrapper.text()).toContain('Peer Song')
+    expect(wrapper.text()).toContain('Original Song: Bad Apple!!')
+    expect(wrapper.text()).toContain('Original Source: Touhou')
 
     await wrapper.findAll('.card.cursor-pointer').at(2)!.trigger('click')
     expect(wrapper.text()).toContain('Peer Song')

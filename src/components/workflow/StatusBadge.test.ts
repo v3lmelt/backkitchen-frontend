@@ -57,7 +57,7 @@ describe('StatusBadge', () => {
     const wrapper = mountWithPlugins(StatusBadge, {
       props: { status: 'unknown_thing' as any },
     })
-    expect(wrapper.find('span').classes()).toContain('bg-card')
+    expect(wrapper.find('span').classes()).toContain('bg-border')
   })
 
   it('has pill shape class', () => {

@@ -35,6 +35,7 @@ const config = computed(() => {
     completed: 'bg-success-bg text-success',
     rejected: 'bg-error-bg text-error',
     open: 'bg-error-bg text-error',
+    pending_discussion: 'bg-warning-bg text-warning',
     disagreed: 'bg-info-bg text-info',
     resolved: 'bg-success-bg text-success',
     critical: 'bg-error-bg text-error',
@@ -48,7 +49,7 @@ const config = computed(() => {
   }
 
   // For known statuses, use the class map; for custom step IDs, derive from step type prop
-  const cls = classMap[statusKey] ?? 'bg-info-bg text-info'
+  const cls = classMap[statusKey] ?? 'bg-border text-foreground'
   // Producer-direct variant reuses peer_revision/peer_review states, but the
   // label should reflect that the producer (not a peer reviewer) is driving it.
   const variantOverrideKey = props.type === 'track' && props.variant === 'producer_direct'
