@@ -667,7 +667,15 @@ function openVersionCompare() {
 
           <template v-for="comment in issue.comments" :key="comment.id">
             <div v-if="comment.is_status_note" class="rounded-lg bg-warning-bg border border-warning/20 px-3 py-2">
-              <span class="text-xs font-semibold text-warning block mb-1">{{ t('issue.revisionNote') }}</span>
+              <div class="flex items-center gap-2 mb-2 flex-wrap">
+                <span class="text-xs font-semibold text-warning">{{ t('issue.revisionNote') }}</span>
+                <template v-if="comment.old_status && comment.new_status">
+                  <span class="text-warning/40 text-xs">·</span>
+                  <StatusBadge :status="comment.old_status" type="issue" />
+                  <span class="text-xs text-muted-foreground">→</span>
+                  <StatusBadge :status="comment.new_status" type="issue" />
+                </template>
+              </div>
                 <TimestampText
                   :text="comment.content"
                   class="text-sm text-foreground"
