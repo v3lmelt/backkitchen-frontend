@@ -288,6 +288,8 @@ export interface Comment {
   author?: User | null
   content: string
   is_status_note: boolean
+  old_status?: IssueStatus | null
+  new_status?: IssueStatus | null
   created_at: string
   images?: CommentImage[]
   audios?: CommentAudio[]

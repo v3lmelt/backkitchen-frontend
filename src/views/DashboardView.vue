@@ -431,7 +431,7 @@ function openAlbumSettings(albumId: number) {
               <tr
                 v-for="track in group.tracks"
                 :key="track.id"
-                @click="router.push({ path: `/tracks/${track.id}`, query: { returnTo: route.fullPath } })"
+                @click="router.push({ path: `/tracks/${track.id}`, query: { returnTo: route.path } })"
                 class="border-b border-border last:border-0 hover:bg-white/5 cursor-pointer transition-colors"
               >
                 <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ track.track_number || '—' }}</td>
@@ -454,7 +454,7 @@ function openAlbumSettings(albumId: number) {
                 <td class="px-4 py-3 text-sm text-muted-foreground">
                   <button
                     v-if="track.open_issue_count"
-                    @click.stop="router.push({ path: `/tracks/${track.id}`, hash: '#issues', query: { returnTo: route.fullPath } })"
+                    @click.stop="router.push({ path: `/tracks/${track.id}`, hash: '#issues', query: { returnTo: route.path } })"
                     class="text-error hover:underline cursor-pointer"
                   >{{ t('dashboard.openCount', { count: track.open_issue_count }) }}</button>
                   <span v-else>--</span>
@@ -476,7 +476,7 @@ function openAlbumSettings(albumId: number) {
             <div
               v-for="track in group.tracks"
               :key="track.id"
-               @click="router.push({ path: `/tracks/${track.id}`, query: { returnTo: route.fullPath } })"
+               @click="router.push({ path: `/tracks/${track.id}`, query: { returnTo: route.path } })"
               class="bg-card border border-border p-3 cursor-pointer active:bg-white/5 transition-colors"
             >
               <div class="flex items-center justify-between gap-2 mb-1.5">

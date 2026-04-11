@@ -725,6 +725,7 @@
     "markPendingDiscussion": "Mark Pending Discussion",
     "disagree": "Disagree",
     "reopen": "Reopen",
+    "publish": "Publish",
     "markResolved": "Mark Resolved",
     "commentsHeading": "Comments ({count})",
     "unknown": "Unknown",

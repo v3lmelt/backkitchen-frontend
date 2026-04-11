@@ -76,6 +76,21 @@ const lastSelectionAt = ref(0)
 const lastEmittedSelection = ref<{ id: string; start: number; end: number } | null>(null)
 const activePointGroupKey = ref<string | null>(null)
 const hoveredRangeKey = ref<string | null>(null)
+// Only one range tooltip is visible at a time to prevent overlapping labels
+// when range markers share time segments.  Priority: direct bar hover >
+// external hover (from issue list) > active (clicked) issue.
+const visibleRangeTooltipKey = computed<string | null>(() => {
+  if (hoveredRangeKey.value) return hoveredRangeKey.value
+  if (props.hoveredIssueId != null) {
+    const item = rangeLaneItems.value.find(i => i.issue.id === props.hoveredIssueId)
+    if (item) return `${item.issue.id}-${item.marker.id}`
+  }
+  if (activeRangeIssueId.value != null) {
+    const item = rangeLaneItems.value.find(i => i.issue.id === activeRangeIssueId.value)
+    if (item) return `${item.issue.id}-${item.marker.id}`
+  }
+  return null
+})
 const abMode = ref<'A' | 'B'>('A')
 const hoverTime = ref<number | null>(null)
 const hoverLeft = ref<number>(0)
@@ -1259,7 +1274,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
           >
             <span
               class="pointer-events-none absolute left-1/2 top-full z-20 mt-1 min-w-max -translate-x-1/2 whitespace-nowrap rounded-full border bg-card px-2.5 py-1 text-[11px] font-mono text-foreground opacity-0 transition-opacity duration-150"
-              :class="activeRangeIssueId === item.issue.id || props.hoveredIssueId === item.issue.id || hoveredRangeKey === `${item.issue.id}-${item.marker.id}` ? 'opacity-100' : ''"
+              :class="visibleRangeTooltipKey === `${item.issue.id}-${item.marker.id}` ? 'opacity-100' : ''"
               :style="rangeRulerTooltipStyle(item.issue)"
             >{{ formatTimeShort(item.marker.time_start) }} <span class="opacity-50 mx-0.5">→</span> {{ formatTimeShort(item.marker.time_end) }}</span>
           </button>
