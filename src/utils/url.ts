@@ -23,8 +23,9 @@ export async function resolveAudioUrl(url: string): Promise<string> {
   // Blob URLs are local object URLs — no resolution needed
   if (url.startsWith('blob:')) return url
 
-  // Absolute URLs (public R2 CDN) — use directly
-  if (/^https?:\/\//i.test(url)) return url
+  // Absolute URLs pointing to our own API still need auth resolution
+  const apiOrigin = (import.meta.env.VITE_API_BASE_URL ?? '') as string
+  if (/^https?:\/\//i.test(url) && !(apiOrigin && url.startsWith(apiOrigin))) return url
 
   // Relative API URL — resolve via backend
   const authedUrl = withAuthToken(url)
