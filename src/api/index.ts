@@ -565,6 +565,7 @@ export function uploadToR2(
     const xhr = new XMLHttpRequest()
     xhr.open('PUT', presignedUrl)
     xhr.setRequestHeader('Content-Type', contentType)
+    xhr.setRequestHeader('Cache-Control', 'public, max-age=2592000')
 
     if (onProgress) {
       xhr.upload.addEventListener('progress', (e) => {
