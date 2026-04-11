@@ -431,7 +431,11 @@
     "modeAnnotate": "Annotate",
     "modeHintSeek": "Clicks only move the play head",
     "modeHintAnnotate": "Click to add a point, drag to add a range",
-    "pointGroup": "{count} issues"
+    "pointGroup": "{count} issues",
+    "gain": "Gain",
+    "resetGain": "Reset",
+    "resetToZeroDb": "Reset to 0 dB",
+    "activeGainNotice": "Playback gain is active: {gain}. This only affects your monitoring and does not modify the audio file."
   },
   "checklistLabels": {
     "arrangement": "Arrangement",
@@ -892,6 +896,8 @@
     "markersCleared": "Cleared all markers",
     "undoLastMarker": "Undo",
     "clearMarkers": "Clear",
+    "audioAttachments": "Audio Attachments",
+    "audioMaxReached": "At most {max} audio files per issue",
     "preview": "Submission Preview",
     "markerReferenceMissing": "missing",
     "rangeAnchorSet": "Range start set at {time}",

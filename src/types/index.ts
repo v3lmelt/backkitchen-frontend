@@ -21,6 +21,7 @@ export type IssuePhase = string
 export type UserRole = 'member' | 'producer'
 
 export type WorkflowStepType = 'approval' | 'gate' | 'review' | 'revision' | 'delivery'
+export type TrackPlaybackPreferenceScope = 'source' | 'master'
 
 export type WorkflowUiVariant =
   | 'generic'
@@ -179,6 +180,14 @@ export interface TrackSourceVersion {
   created_at: string
 }
 
+export interface TrackPlaybackPreference {
+  track_id: number
+  user_id: number
+  scope: TrackPlaybackPreferenceScope
+  gain_db: number
+  updated_at: string | null
+}
+
 export interface StageAssignment {
   id: number
   track_id: number
@@ -224,6 +233,15 @@ export interface IssueMarker {
   time_end: number | null
 }
 
+export interface IssueAudio {
+  id: number
+  issue_id: number
+  audio_url: string
+  original_filename: string
+  duration: number | null
+  created_at: string
+}
+
 export interface Issue {
   id: number
   track_id: number
@@ -239,6 +257,7 @@ export interface Issue {
   severity: IssueSeverity
   status: IssueStatus
   markers: IssueMarker[]
+  audios?: IssueAudio[]
   created_at: string
   updated_at: string
   comment_count?: number

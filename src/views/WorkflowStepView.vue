@@ -847,7 +847,7 @@ function handleIssueLeave() {
             {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
           </button>
         </div>
-        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" />
+        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" :track-id="trackId" />
       </div>
     </div>
 
@@ -1336,7 +1336,7 @@ function handleIssueLeave() {
               <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.deliveryPreviewHeading') }}</h4>
               <p class="text-sm text-muted-foreground">{{ t('workflowStep.deliveryPreviewNotice') }}</p>
             </div>
-            <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" />
+            <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" />
             <div class="flex flex-wrap gap-2">
               <button
                 @click="handleUpload('delivery')"
@@ -1401,7 +1401,7 @@ function handleIssueLeave() {
             {{ t('compare.clear') }}
           </button>
         </div>
-        <WaveformPlayer :audio-url="masterAudioUrl" :issues="[]" :compare-audio-url="selectedCompareMasterAudioUrl" />
+        <WaveformPlayer :audio-url="masterAudioUrl" :issues="[]" :track-id="trackId" playback-scope="master" :compare-audio-url="selectedCompareMasterAudioUrl" />
       </div>
 
       <div v-if="sortedMasterDeliveries.length > 0" class="card space-y-3">
@@ -1499,6 +1499,8 @@ function handleIssueLeave() {
           :audio-url="masterAudioUrl"
           :compare-audio-url="selectedCompareMasterAudioUrl"
           :issues="finalReviewIssues"
+          :track-id="trackId"
+          playback-scope="master"
           :selectable="true"
           :mode="waveformMode"
           :selected-range="issueFormRef?.selectedRange ?? null"
@@ -1739,6 +1741,7 @@ function handleIssueLeave() {
         <WaveformPlayer
           :audio-url="audioUrl"
           :issues="revisionWaveformIssues"
+          :track-id="trackId"
           :hovered-issue-id="hoveredIssueId"
           @issueHover="handleIssueHover"
           @issueLeave="handleIssueLeave"
@@ -1807,7 +1810,7 @@ function handleIssueLeave() {
             <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.revisedPreviewHeading') }}</h4>
             <p class="text-sm text-muted-foreground">{{ t('workflowStep.revisedPreviewNotice') }}</p>
           </div>
-          <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" />
+          <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" />
           <div class="flex flex-wrap gap-2">
             <button
               @click="handleUpload('revision')"
@@ -1904,7 +1907,7 @@ function handleIssueLeave() {
             <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.deliveryPreviewHeading') }}</h4>
             <p class="text-sm text-muted-foreground">{{ t('workflowStep.deliveryPreviewNotice') }}</p>
           </div>
-          <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" />
+          <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" />
           <div class="flex flex-wrap gap-2">
             <button
               @click="handleUpload('delivery')"
@@ -1935,7 +1938,7 @@ function handleIssueLeave() {
         <p class="text-xs text-muted-foreground">
           {{ masterDelivery?.confirmed_at ? t('workflowStep.deliveryConfirmed') : t('workflowStep.deliveryPendingConfirmation') }}
         </p>
-        <WaveformPlayer :audio-url="masterAudioUrl" :issues="[]" />
+        <WaveformPlayer :audio-url="masterAudioUrl" :issues="[]" :track-id="trackId" playback-scope="master" />
       </div>
 
       <WorkflowActionBar v-if="deliveryActions.length" :actions="deliveryActions" :hint="t('common.actions')" />

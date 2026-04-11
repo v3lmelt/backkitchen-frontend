@@ -9,7 +9,7 @@ function getWsUrl(path: string): string {
     const wsOrigin = apiBase.replace(/^http(s?):/, (_m, s) => `ws${s}:`)
     return `${wsOrigin}${path}`
   }
-  // Dev (Vite proxy handles /ws → ws://localhost:8000) or same-origin production
+  // Dev (Vite proxy handles /ws → ws://localhost:8001) or same-origin production
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${protocol}//${window.location.host}${path}`
 }

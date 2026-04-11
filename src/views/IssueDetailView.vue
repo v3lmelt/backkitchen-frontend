@@ -534,6 +534,7 @@ function openVersionCompare() {
               ref="waveformRef"
               :audio-url="audioUrl"
               :issues="waveformIssues"
+              :track-id="issue.track_id"
               :height="120"
               @ready="onWaveformReady"
             />
@@ -553,6 +554,28 @@ function openVersionCompare() {
             @activate="(reference) => playTrackReference(reference)"
             @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
           />
+          <div v-if="issue.audios?.length" class="mt-4 space-y-2">
+            <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('issue.audioAttachments') }}</h3>
+            <div class="flex flex-col gap-2">
+              <div
+                v-for="audio in issue.audios"
+                :key="audio.id"
+                class="bg-background border border-border rounded-2xl px-4 py-3 space-y-2"
+              >
+                <div class="flex items-center gap-2">
+                  <Music class="w-4 h-4 text-primary flex-shrink-0" :stroke-width="2" />
+                  <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
+                  <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
+                </div>
+                <audio
+                  :src="resolveAssetUrl(audio.audio_url)"
+                  controls
+                  class="w-full h-8"
+                  style="accent-color: #FF8400;"
+                />
+              </div>
+            </div>
+          </div>
           <div class="text-xs text-muted-foreground mt-3">
             {{ t('issueDetail.created', { date: fmtDate(issue.created_at) }) }}
           </div>

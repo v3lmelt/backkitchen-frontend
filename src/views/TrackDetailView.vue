@@ -784,6 +784,7 @@ watch(selectedCompareMasterDelivery, (delivery) => {
               :audio-url="masterAudioUrl"
               :issues="[]"
               :track-id="trackId"
+              playback-scope="master"
               :compare-audio-url="selectedCompareMasterAudioUrl"
             />
           </div>

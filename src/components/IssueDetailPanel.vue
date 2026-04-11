@@ -355,6 +355,29 @@ onBeforeUnmount(() => {
           />
           <p v-else class="text-sm text-muted-foreground italic">{{ t('issueDetail.noDescription') }}</p>
 
+          <div v-if="fullIssue.audios?.length" class="space-y-2">
+            <p class="text-xs font-mono font-semibold text-muted-foreground">{{ t('issue.audioAttachments') }}</p>
+            <div class="flex flex-col gap-2">
+              <div
+                v-for="audio in fullIssue.audios"
+                :key="audio.id"
+                class="bg-background border border-border rounded-2xl px-3 py-2 space-y-1.5"
+              >
+                <div class="flex items-center gap-2">
+                  <Music class="w-3.5 h-3.5 text-primary flex-shrink-0" :stroke-width="2" />
+                  <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
+                  <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
+                </div>
+                <audio
+                  :src="resolveAssetUrl(audio.audio_url)"
+                  controls
+                  class="w-full h-8"
+                  style="accent-color: #FF8400;"
+                />
+              </div>
+            </div>
+          </div>
+
           <!-- Status actions -->
           <div
             v-if="(isSubmitter && fullIssue.status === 'open') || (isReviewer && (fullIssue.status === 'open' || fullIssue.status === 'resolved' || fullIssue.status === 'disagreed'))"

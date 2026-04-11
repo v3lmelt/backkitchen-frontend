@@ -431,7 +431,11 @@
     "modeAnnotate": "标注",
     "modeHintSeek": "点击波形只移动播放头",
     "modeHintAnnotate": "点击加时间点，拖拽加时间段",
-    "pointGroup": "{count} 个问题"
+    "pointGroup": "{count} 个问题",
+    "gain": "Gain",
+    "resetGain": "重置",
+    "resetToZeroDb": "重置到 0 dB",
+    "activeGainNotice": "当前试听 Gain 已生效：{gain}。这只影响你的监听，不会修改音频文件。"
   },
   "checklistLabels": {
     "arrangement": "编曲",
@@ -938,6 +942,8 @@
     "markersCleared": "已清空全部标记",
     "undoLastMarker": "撤销",
     "clearMarkers": "清空",
+    "audioAttachments": "音频附件",
+    "audioMaxReached": "每个问题最多附加 {max} 个音频文件",
     "preview": "提交预览",
     "markerReferenceMissing": "不存在",
     "rangeAnchorSet": "已设置范围起点 {time}",

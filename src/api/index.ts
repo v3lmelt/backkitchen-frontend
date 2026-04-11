@@ -23,6 +23,8 @@ import type {
   IssueStatus,
   Notification,
   Track,
+  TrackPlaybackPreference,
+  TrackPlaybackPreferenceScope,
   TrackDetailResponse,
   TrackStatus,
   User,
@@ -377,6 +379,13 @@ export const trackApi = {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
+  getPlaybackPreference: (trackId: number, scope: TrackPlaybackPreferenceScope) =>
+    request<TrackPlaybackPreference>(`/tracks/${trackId}/playback-preferences/${scope}`),
+  setPlaybackPreference: (trackId: number, scope: TrackPlaybackPreferenceScope, data: { gain_db: number }) =>
+    request<TrackPlaybackPreference>(`/tracks/${trackId}/playback-preferences/${scope}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 }
 
 export const issueApi = {
@@ -389,8 +398,25 @@ export const issueApi = {
     phase: string
     markers: { marker_type: string; time_start: number; time_end?: number | null }[]
     master_delivery_id?: number | null
-  }) =>
-    request<Issue>(`/tracks/${trackId}/issues`, { method: 'POST', body: JSON.stringify(data) }),
+    audios?: File[]
+  }, onProgress?: (percent: number) => void) => {
+    const form = new FormData()
+    form.append('title', data.title)
+    form.append('description', data.description)
+    form.append('severity', data.severity)
+    form.append('phase', data.phase)
+    form.append('markers_json', JSON.stringify(data.markers))
+    if (data.master_delivery_id != null) {
+      form.append('master_delivery_id', String(data.master_delivery_id))
+    }
+    if (data.audios) {
+      for (const audio of data.audios) form.append('audios', audio)
+    }
+    if (onProgress) {
+      return uploadWithProgress<Issue>(`/tracks/${trackId}/issues`, form, onProgress)
+    }
+    return request<Issue>(`/tracks/${trackId}/issues`, { method: 'POST', body: form })
+  },
   update: (id: number, data: Partial<Pick<Issue, 'status' | 'title' | 'description' | 'severity'>> & { status_note?: string }) =>
     request<Issue>(`/issues/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   batchUpdate: (trackId: number, data: { issue_ids: number[]; status: IssueStatus; status_note?: string }) =>

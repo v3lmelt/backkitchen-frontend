@@ -6,15 +6,21 @@ import type { Issue, IssueMarker } from '@/types'
 import type WaveSurfer from 'wavesurfer.js'
 import type RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
 import { resolveAssetUrl } from '@/api'
+import { useTrackPlaybackPreference } from '@/composables/useTrackPlaybackPreference'
+import { useAppStore } from '@/stores/app'
 import { formatTimestamp, formatTimestampShort, roundToMilliseconds } from '@/utils/time'
 import { loadAudioCached } from '@/utils/audioCache'
 
 type InteractionMode = 'seek' | 'annotate'
+type PlaybackScope = 'source' | 'master' | 'local'
 
 const props = withDefaults(defineProps<{
   audioUrl: string
   issues?: Issue[]
   height?: number
+  gainDb?: number
+  showGainControl?: boolean
+  playbackScope?: PlaybackScope
   selectable?: boolean
   mode?: InteractionMode
   selectedRange?: { start: number; end: number } | null
@@ -26,11 +32,14 @@ const props = withDefaults(defineProps<{
   hoveredIssueId?: number | null
 }>(), {
   mode: 'seek',
+  showGainControl: true,
+  playbackScope: 'source',
 })
 
 const emit = defineEmits<{
   ready: [duration: number]
   timeupdate: [time: number]
+  'update:gainDb': [gainDb: number]
   click: [time: number]
   regionClick: [issue: Issue]
   rangeSelect: [start: number, end: number, isUpdate: boolean]
@@ -40,11 +49,19 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const appStore = useAppStore()
 
 const container = ref<HTMLDivElement>()
 const compareContainerRef = ref<HTMLDivElement>()
 const wavesurfer = ref<WaveSurfer | null>(null)
 const compareWaveSurfer = ref<WaveSurfer | null>(null)
+const audioContext = ref<AudioContext | null>(null)
+const primarySourceNode = ref<MediaElementAudioSourceNode | null>(null)
+const primaryUserGainNode = ref<GainNode | null>(null)
+const primaryGateGainNode = ref<GainNode | null>(null)
+const compareSourceNode = ref<MediaElementAudioSourceNode | null>(null)
+const compareUserGainNode = ref<GainNode | null>(null)
+const compareGateGainNode = ref<GainNode | null>(null)
 const regionsPlugin = ref<RegionsPlugin | null>(null)
 const isPlaying = ref(false)
 const currentTime = ref(0)
@@ -82,6 +99,24 @@ const markerTimelineDuration = computed(() => activeDuration.value)
 const DRAFT_EDGE = '#FF8400'
 const DRAFT_FILL = 'rgba(255, 132, 0, 0.22)'
 const selectionVisualColor = DRAFT_FILL
+const MIN_GAIN_DB = -24
+const MAX_GAIN_DB = 24
+const localGainDb = ref(0)
+const playbackScope = computed<PlaybackScope>(() => props.playbackScope)
+const hasTrackPreference = computed(() => playbackScope.value !== 'local' && props.trackId != null)
+const controlledGainDb = computed(() => props.gainDb)
+const persistedGainPreference = useTrackPlaybackPreference({
+  trackId: () => props.trackId ?? null,
+  userId: () => appStore.currentUser?.id ?? null,
+  enabled: () => props.showGainControl && hasTrackPreference.value,
+  scope: () => playbackScope.value === 'master' ? 'master' : 'source',
+})
+const gainDb = computed(() => {
+  if (controlledGainDb.value != null) return clampGainDb(controlledGainDb.value)
+  if (hasTrackPreference.value) return clampGainDb(persistedGainPreference.gainDb.value)
+  return clampGainDb(localGainDb.value)
+})
+const hasActiveGain = computed(() => Math.abs(gainDb.value) >= 0.05)
 
 // Severity tones — all values sourced from the design system tokens in
 // CLAUDE.md (error / primary / info / muted-foreground).
@@ -146,6 +181,15 @@ interface RangeLaneItem {
 
 function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, value))
+}
+
+function clampGainDb(value: number): number {
+  if (!Number.isFinite(value)) return 0
+  return Math.min(MAX_GAIN_DB, Math.max(MIN_GAIN_DB, Math.round(value * 10) / 10))
+}
+
+function gainDbToLinear(value: number): number {
+  return Math.pow(10, value / 20)
 }
 
 function getMarkerStatus(issues: Issue[]): MarkerStatus {
@@ -389,11 +433,91 @@ function setMode(mode: InteractionMode) {
   emit('requestModeChange', mode)
 }
 
+function ensureAudioContext(): AudioContext | null {
+  if (audioContext.value) return audioContext.value
+
+  const AudioContextCtor = window.AudioContext
+    || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  if (!AudioContextCtor) return null
+
+  audioContext.value = new AudioContextCtor()
+  return audioContext.value
+}
+
+async function resumeAudioContext() {
+  const ctx = ensureAudioContext()
+  if (!ctx || ctx.state !== 'suspended') return
+  try {
+    await ctx.resume()
+  } catch {
+    // Ignore resume errors and let HTMLMediaElement playback continue.
+  }
+}
+
+function disconnectGraph(kind: 'primary' | 'compare') {
+  const sourceNode = kind === 'primary' ? primarySourceNode : compareSourceNode
+  const userGainNode = kind === 'primary' ? primaryUserGainNode : compareUserGainNode
+  const gateGainNode = kind === 'primary' ? primaryGateGainNode : compareGateGainNode
+
+  sourceNode.value?.disconnect()
+  userGainNode.value?.disconnect()
+  gateGainNode.value?.disconnect()
+  sourceNode.value = null
+  userGainNode.value = null
+  gateGainNode.value = null
+}
+
+function setNodeGain(node: GainNode | null, value: number) {
+  if (!node) return
+  const ctx = audioContext.value
+  if (!ctx) {
+    node.gain.value = value
+    return
+  }
+  node.gain.setTargetAtTime(value, ctx.currentTime, 0.01)
+}
+
+function applyUserGain() {
+  const linearGain = gainDbToLinear(gainDb.value)
+  setNodeGain(primaryUserGainNode.value, linearGain)
+  setNodeGain(compareUserGainNode.value, linearGain)
+}
+
+function attachGainGraph(instance: WaveSurfer, kind: 'primary' | 'compare') {
+  disconnectGraph(kind)
+
+  const ctx = ensureAudioContext()
+  const mediaElement = instance.getMediaElement?.()
+  if (!ctx || !mediaElement) return
+
+  const source = ctx.createMediaElementSource(mediaElement)
+  const userGain = ctx.createGain()
+  const gateGain = ctx.createGain()
+  source.connect(userGain)
+  userGain.connect(gateGain)
+  gateGain.connect(ctx.destination)
+
+  if (kind === 'primary') {
+    primarySourceNode.value = source
+    primaryUserGainNode.value = userGain
+    primaryGateGainNode.value = gateGain
+  } else {
+    compareSourceNode.value = source
+    compareUserGainNode.value = userGain
+    compareGateGainNode.value = gateGain
+  }
+
+  applyUserGain()
+  applyCompareMode(abMode.value)
+}
+
 function applyCompareMode(mode: 'A' | 'B') {
   if (!wavesurfer.value) return
 
   if (!compareWaveSurfer.value || !isCompareReady.value) {
     wavesurfer.value.setVolume(1)
+    setNodeGain(primaryGateGainNode.value, 1)
+    setNodeGain(compareGateGainNode.value, 0)
     wavesurfer.value.setOptions({ waveColor: '#4A4A5A', progressColor: '#22D3EE', cursorWidth: 2 })
     return
   }
@@ -401,6 +525,8 @@ function applyCompareMode(mode: 'A' | 'B') {
   if (mode === 'A') {
     wavesurfer.value.setVolume(1)
     compareWaveSurfer.value.setVolume(0)
+    setNodeGain(primaryGateGainNode.value, 1)
+    setNodeGain(compareGateGainNode.value, 0)
     wavesurfer.value.setOptions({ waveColor: '#4A4A5A', progressColor: '#22D3EE', cursorWidth: 2 })
     compareWaveSurfer.value.setOptions({ waveColor: 'rgba(249,115,22,0.15)', progressColor: 'rgba(249,115,22,0.2)', cursorWidth: 0 })
     // Keep compare playing in sync so switching back to B is instant
@@ -414,6 +540,8 @@ function applyCompareMode(mode: 'A' | 'B') {
   syncCompareToPrimaryTime()
   wavesurfer.value.setVolume(0)
   compareWaveSurfer.value.setVolume(1)
+  setNodeGain(primaryGateGainNode.value, 0)
+  setNodeGain(compareGateGainNode.value, 1)
   wavesurfer.value.setOptions({ waveColor: 'rgba(74,74,90,0.15)', progressColor: 'rgba(34,211,238,0.2)', cursorWidth: 0 })
   compareWaveSurfer.value.setOptions({ waveColor: 'rgba(249,115,22,0.28)', progressColor: '#FB923C', cursorWidth: 0 })
   // Ensure compare is actually playing when primary is playing
@@ -603,6 +731,38 @@ function formatTime(seconds: number): string {
   return formatTimestamp(seconds)
 }
 
+function formatGainDb(value: number): string {
+  const normalized = clampGainDb(value)
+  return `${normalized > 0 ? '+' : ''}${normalized.toFixed(1)} dB`
+}
+
+function updateGainDb(nextGainDb: number) {
+  const next = clampGainDb(nextGainDb)
+  if (controlledGainDb.value != null) {
+    emit('update:gainDb', next)
+    return
+  }
+  if (hasTrackPreference.value) {
+    persistedGainPreference.setGainDb(next)
+    return
+  }
+  localGainDb.value = next
+}
+
+function resetGain() {
+  updateGainDb(0)
+}
+
+async function setAbMode(mode: 'A' | 'B') {
+  await resumeAudioContext()
+  abMode.value = mode
+}
+
+function onGainInput(event: Event) {
+  const target = event.target as HTMLInputElement | null
+  updateGainDb(Number(target?.value ?? 0))
+}
+
 function formatTimeShort(seconds: number): string {
   return formatTimestampShort(seconds)
 }
@@ -640,6 +800,8 @@ onMounted(async () => {
     barRadius: 2,
     plugins: [regions],
   })
+  ws.setVolume(1)
+  attachGainGraph(ws, 'primary')
 
   ws.on('ready', () => {
     updatePrimaryLoading(100)
@@ -794,6 +956,7 @@ watch([() => props.mode, () => props.selectable], () => {
 
 watch(compareSourceUrl, async (newCompareUrl) => {
   if (compareWaveSurfer.value) {
+    disconnectGraph('compare')
     compareWaveSurfer.value.destroy()
     compareWaveSurfer.value = null
     compareDuration.value = 0
@@ -828,6 +991,8 @@ watch(compareSourceUrl, async (newCompareUrl) => {
     interact: false,
     cursorWidth: 0,
   })
+  ws.setVolume(1)
+  attachGainGraph(ws, 'compare')
 
   ws.on('ready', () => {
     updateCompareLoading(100)
@@ -872,8 +1037,13 @@ watch(abMode, (mode) => {
   applyCompareMode(mode)
 })
 
-function togglePlay() {
-  wavesurfer.value?.playPause()
+watch(gainDb, () => {
+  applyUserGain()
+})
+
+async function togglePlay() {
+  await resumeAudioContext()
+  await wavesurfer.value?.playPause()
   if (compareWaveSurfer.value && isCompareMode.value) {
     if (wavesurfer.value?.isPlaying()) {
       syncCompareToPrimaryTime()
@@ -886,6 +1056,7 @@ function togglePlay() {
 
 async function play() {
   if (!wavesurfer.value) return
+  await resumeAudioContext()
   await wavesurfer.value.play()
 
   if (compareWaveSurfer.value && isCompareMode.value) {
@@ -916,8 +1087,11 @@ function getCurrentTime() {
 }
 
 onBeforeUnmount(() => {
+  disconnectGraph('primary')
+  disconnectGraph('compare')
   wavesurfer.value?.destroy()
   compareWaveSurfer.value?.destroy()
+  void audioContext.value?.close()
 })
 
 defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTime })
@@ -1134,12 +1308,14 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
         ></div>
         <div v-if="isCompareMode" class="absolute top-2 right-2 flex items-center gap-1 bg-black/60 rounded-lg p-1 z-10">
           <button
-            @click="abMode = 'A'"
+            type="button"
+            @click="setAbMode('A')"
             :class="['px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'A' ? 'bg-primary text-background' : 'text-muted-foreground hover:text-white']">
             A
           </button>
           <button
-            @click="abMode = 'B'"
+            type="button"
+            @click="setAbMode('B')"
             :class="[
               'px-2 py-0.5 rounded text-xs font-bold transition-colors',
               abMode === 'B' ? 'bg-primary text-background' : 'text-muted-foreground hover:text-white',
@@ -1154,14 +1330,58 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
       </div>
     </div>
 
-    <div class="flex items-center gap-4">
-      <button @click="togglePlay" class="text-primary hover:text-primary-hover transition-colors">
-        <Play v-if="!isPlaying" class="w-8 h-8" fill="currentColor" :stroke-width="0" />
-        <Pause v-else class="w-8 h-8" fill="currentColor" :stroke-width="0" />
-      </button>
-      <span class="text-sm text-muted-foreground font-mono">
-        {{ formatTime(activeCurrentTime) }} / {{ formatTime(activeDuration) }}
-      </span>
+    <div class="flex flex-col gap-3">
+      <div
+        v-if="showGainControl && hasActiveGain"
+        class="flex flex-col gap-2 border border-primary/40 bg-warning-bg px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <span class="text-sm font-mono font-semibold text-warning">
+          {{ t('waveform.activeGainNotice', { gain: formatGainDb(gainDb) }) }}
+        </span>
+        <button
+          type="button"
+          class="w-fit rounded-full border border-primary/60 px-2.5 py-1 text-[11px] font-mono text-warning transition-colors hover:bg-primary/15"
+          @click="resetGain"
+        >
+          {{ t('waveform.resetToZeroDb') }}
+        </button>
+      </div>
+
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex items-center gap-4">
+        <button type="button" @click="togglePlay" class="text-primary hover:text-primary-hover transition-colors">
+          <Play v-if="!isPlaying" class="w-8 h-8" fill="currentColor" :stroke-width="0" />
+          <Pause v-else class="w-8 h-8" fill="currentColor" :stroke-width="0" />
+        </button>
+        <span class="text-sm text-muted-foreground font-mono">
+          {{ formatTime(activeCurrentTime) }} / {{ formatTime(activeDuration) }}
+        </span>
+      </div>
+
+      <div v-if="showGainControl" class="flex flex-col gap-2 sm:min-w-[18rem] sm:items-end">
+        <div class="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+          <span>{{ t('waveform.gain') }}</span>
+          <span class="text-foreground">{{ formatGainDb(gainDb) }}</span>
+          <button
+            type="button"
+            class="rounded-full border border-border px-2 py-0.5 text-[11px] text-foreground transition-colors hover:border-primary hover:text-primary"
+            @click="resetGain"
+          >
+            {{ t('waveform.resetGain') }}
+          </button>
+        </div>
+        <input
+          :value="gainDb"
+          type="range"
+          :min="MIN_GAIN_DB"
+          :max="MAX_GAIN_DB"
+          step="0.5"
+          class="h-2 w-full cursor-pointer accent-primary sm:w-72"
+          :aria-label="t('waveform.gain')"
+          @input="onGainInput"
+        />
+      </div>
+      </div>
     </div>
   </div>
 </template>
