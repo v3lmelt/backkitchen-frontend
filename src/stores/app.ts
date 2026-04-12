@@ -3,9 +3,11 @@ import { computed, ref } from 'vue'
 import type { Invitation, Notification, User } from '@/types'
 import { authApi, configApi, invitationApi, notificationApi, userApi } from '@/api'
 import router from '@/router'
+import { buildWsUrl } from '@/utils/url'
 
 const USER_KEY = 'backkitchen_user'
 const TOKEN_KEY = 'backkitchen_token'
+const NOTIFICATION_PAGE_SIZE = 50
 
 export const useAppStore = defineStore('app', () => {
   const storedUser = localStorage.getItem(USER_KEY)
@@ -19,21 +21,112 @@ export const useAppStore = defineStore('app', () => {
   const pendingInvitations = ref<Invitation[]>([])
 
   const notifications = ref<Notification[]>([])
+  const notificationsHasMore = ref(false)
+  const notificationsLoadingMore = ref(false)
+  const notificationChannelConnected = ref(false)
   let _notificationTimer: ReturnType<typeof setInterval> | null = null
+  let _notificationSocket: WebSocket | null = null
+  let _notificationSocketReconnectTimer: ReturnType<typeof setTimeout> | null = null
+  let _notificationSocketShouldReconnect = false
+  let _notificationSocketReconnectDelay = 2000
 
   const isAuthenticated = computed(() => Boolean(token.value && currentUser.value))
   const unreadCount = computed(() => notifications.value.filter(n => !n.is_read).length)
+
+  async function loadConfig() {
+    try {
+      const cfg = await configApi.get()
+      r2Enabled.value = cfg.r2_enabled
+    } catch {
+      r2Enabled.value = false
+    }
+  }
+
+  function stopNotificationSocket() {
+    _notificationSocketShouldReconnect = false
+    notificationChannelConnected.value = false
+    if (_notificationSocketReconnectTimer) {
+      clearTimeout(_notificationSocketReconnectTimer)
+      _notificationSocketReconnectTimer = null
+    }
+    if (_notificationSocket) {
+      const socket = _notificationSocket
+      _notificationSocket = null
+      socket.close()
+    }
+  }
+
+  function scheduleNotificationSocketReconnect() {
+    if (!_notificationSocketShouldReconnect || _notificationSocketReconnectTimer) return
+    _notificationSocketReconnectTimer = setTimeout(() => {
+      _notificationSocketReconnectTimer = null
+      _notificationSocketReconnectDelay = Math.min(_notificationSocketReconnectDelay * 1.5, 30000)
+      connectNotificationSocket()
+    }, _notificationSocketReconnectDelay)
+  }
+
+  function connectNotificationSocket() {
+    if (!_notificationSocketShouldReconnect || !token.value || !currentUser.value || typeof WebSocket === 'undefined') {
+      return
+    }
+
+    try {
+      const socket = new WebSocket(`${buildWsUrl('/ws/notifications')}?token=${token.value}`)
+      _notificationSocket = socket
+
+      socket.onopen = () => {
+        notificationChannelConnected.value = true
+        _notificationSocketReconnectDelay = 2000
+      }
+
+      socket.onmessage = (event: MessageEvent) => {
+        try {
+          const message = JSON.parse(event.data as string)
+          if (message.type === 'notifications_updated') {
+            void loadNotifications({
+              limit: Math.max(NOTIFICATION_PAGE_SIZE, notifications.value.length || NOTIFICATION_PAGE_SIZE),
+            })
+          }
+        } catch {
+          // Ignore malformed socket messages.
+        }
+      }
+
+      socket.onclose = () => {
+        if (_notificationSocket === socket) {
+          _notificationSocket = null
+        }
+        notificationChannelConnected.value = false
+        if (_notificationSocketShouldReconnect) scheduleNotificationSocketReconnect()
+      }
+
+      socket.onerror = () => {
+        socket.close()
+      }
+    } catch {
+      scheduleNotificationSocketReconnect()
+    }
+  }
 
   function setAuth(user: User, accessToken: string) {
     currentUser.value = user
     token.value = accessToken
     localStorage.setItem(USER_KEY, JSON.stringify(user))
     localStorage.setItem(TOKEN_KEY, accessToken)
+    void loadConfig()
+    startNotificationChannel()
+    void loadPendingInvitations()
   }
 
   function clearAuth() {
+    stopNotificationChannel()
     currentUser.value = null
     token.value = null
+    users.value = []
+    notifications.value = []
+    notificationsHasMore.value = false
+    notificationsLoadingMore.value = false
+    pendingInvitations.value = []
     localStorage.removeItem(USER_KEY)
     localStorage.removeItem(TOKEN_KEY)
   }
@@ -47,11 +140,8 @@ export const useAppStore = defineStore('app', () => {
     try {
       currentUser.value = await authApi.me()
       localStorage.setItem(USER_KEY, JSON.stringify(currentUser.value))
-      try {
-        const cfg = await configApi.get()
-        r2Enabled.value = cfg.r2_enabled
-      } catch { /* ignore — default false */ }
-      startNotificationPolling()
+      await loadConfig()
+      startNotificationChannel()
     } catch {
       // request() already removes the token from localStorage on 401.
       // Only wipe Pinia state if that happened; network/server errors
@@ -64,14 +154,44 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  async function loadNotifications() {
+  async function loadNotifications(params?: { limit?: number; offset?: number; append?: boolean }) {
+    if (!isAuthenticated.value) {
+      notifications.value = []
+      notificationsHasMore.value = false
+      return
+    }
+
+    const limit = params?.limit ?? NOTIFICATION_PAGE_SIZE
+    const offset = params?.offset ?? 0
+    const append = params?.append ?? false
+
     try {
-      const fresh = await notificationApi.list()
-      const changed =
-        fresh.length !== notifications.value.length ||
-        fresh.some((n, i) => n.id !== notifications.value[i]?.id || n.is_read !== notifications.value[i]?.is_read)
-      if (changed) notifications.value = fresh
-    } catch {}
+      const fresh = await notificationApi.list({ limit, offset })
+      if (!Array.isArray(fresh)) throw new Error('Invalid notifications response')
+      if (append) {
+        const seenIds = new Set(notifications.value.map(notification => notification.id))
+        notifications.value = [...notifications.value, ...fresh.filter(notification => !seenIds.has(notification.id))]
+      } else {
+        notifications.value = fresh
+      }
+      notificationsHasMore.value = fresh.length === limit
+    } catch {
+      if (!append) notificationsHasMore.value = false
+    }
+  }
+
+  async function loadMoreNotifications() {
+    if (!notificationsHasMore.value || notificationsLoadingMore.value || !isAuthenticated.value) return
+    notificationsLoadingMore.value = true
+    try {
+      await loadNotifications({
+        limit: NOTIFICATION_PAGE_SIZE,
+        offset: notifications.value.length,
+        append: true,
+      })
+    } finally {
+      notificationsLoadingMore.value = false
+    }
   }
 
   async function markAllRead() {
@@ -87,8 +207,10 @@ export const useAppStore = defineStore('app', () => {
 
   function startNotificationPolling() {
     stopNotificationPolling()
-    loadNotifications()
-    _notificationTimer = setInterval(() => loadNotifications(), 30000)
+    void loadNotifications({ limit: Math.max(NOTIFICATION_PAGE_SIZE, notifications.value.length || NOTIFICATION_PAGE_SIZE) })
+    _notificationTimer = setInterval(() => {
+      void loadNotifications({ limit: Math.max(NOTIFICATION_PAGE_SIZE, notifications.value.length || NOTIFICATION_PAGE_SIZE) })
+    }, 30000)
   }
 
   function stopNotificationPolling() {
@@ -96,6 +218,19 @@ export const useAppStore = defineStore('app', () => {
       clearInterval(_notificationTimer)
       _notificationTimer = null
     }
+  }
+
+  function startNotificationChannel() {
+    stopNotificationChannel()
+    if (!token.value || !currentUser.value) return
+    _notificationSocketShouldReconnect = true
+    startNotificationPolling()
+    connectNotificationSocket()
+  }
+
+  function stopNotificationChannel() {
+    stopNotificationPolling()
+    stopNotificationSocket()
   }
 
   async function loadUsers() {
@@ -112,7 +247,8 @@ export const useAppStore = defineStore('app', () => {
       return
     }
     try {
-      pendingInvitations.value = await invitationApi.listMine()
+      const pending = await invitationApi.listMine()
+      pendingInvitations.value = Array.isArray(pending) ? pending : []
     } catch {
       pendingInvitations.value = []
     }
@@ -129,10 +265,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   function logout() {
-    stopNotificationPolling()
     clearAuth()
-    notifications.value = []
-    pendingInvitations.value = []
     router.push('/login')
   }
 
@@ -159,6 +292,9 @@ export const useAppStore = defineStore('app', () => {
     isAuthenticated,
     pendingInvitations,
     notifications,
+    notificationsHasMore,
+    notificationsLoadingMore,
+    notificationChannelConnected,
     unreadCount,
     setAuth,
     clearAuth,
@@ -172,9 +308,12 @@ export const useAppStore = defineStore('app', () => {
     openMobileSidebar,
     closeMobileSidebar,
     loadNotifications,
+    loadMoreNotifications,
     markAllRead,
     markNotificationRead,
     startNotificationPolling,
     stopNotificationPolling,
+    startNotificationChannel,
+    stopNotificationChannel,
   }
 })

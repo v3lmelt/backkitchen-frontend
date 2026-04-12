@@ -316,11 +316,13 @@ export const circleApi = {
 }
 
 export const trackApi = {
-  list: (params?: { status?: TrackStatus; album_id?: number; search?: string }) => {
+  list: (params?: { status?: TrackStatus; album_id?: number; search?: string; limit?: number; offset?: number }) => {
     const q = new URLSearchParams()
     if (params?.status) q.set('status', params.status)
     if (params?.album_id) q.set('album_id', String(params.album_id))
     if (params?.search) q.set('search', params.search)
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
     const qs = q.toString()
     return request<Track[]>(`/tracks${qs ? `?${qs}` : ''}`)
   },
@@ -488,7 +490,13 @@ export const issueApi = {
 }
 
 export const notificationApi = {
-  list: (): Promise<Notification[]> => request('/notifications'),
+  list: (params?: { limit?: number; offset?: number }): Promise<Notification[]> => {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    const qs = q.toString()
+    return request(`/notifications${qs ? `?${qs}` : ''}`)
+  },
   markRead: (id: number): Promise<Notification> => request(`/notifications/${id}/read`, { method: 'PATCH' }),
   markAllRead: (): Promise<{ updated: number }> => request('/notifications/read-all', { method: 'PATCH' }),
 }

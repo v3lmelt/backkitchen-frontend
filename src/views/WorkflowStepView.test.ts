@@ -21,8 +21,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: '9', stepId: 'intake' }, query: {}, fullPath: '/tracks/9/step/intake' }),
+  useRoute: () => ({ params: { id: '9', stepId: 'intake' }, query: {}, path: '/tracks/9/step/intake', fullPath: '/tracks/9/step/intake' }),
   useRouter: () => ({ push: mocks.pushMock }),
+  onBeforeRouteLeave: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({

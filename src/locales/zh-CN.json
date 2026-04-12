@@ -128,6 +128,7 @@
   "nav": {
     "dashboard": "仪表盘",
     "submit": "提交",
+    "notifications": "通知中心",
     "settings": "设置",
     "albums": "专辑管理",
     "circles": "社团管理",
@@ -146,6 +147,7 @@
       "masteringReview": "母带审核",
       "finalReview": "终审",
       "upload": "提交曲目",
+      "notifications": "通知中心",
       "settings": "专辑设置",
       "albums": "专辑管理",
       "albumNew": "新建专辑",
@@ -409,7 +411,8 @@
     "currentDelivery": "当前交付物",
     "deliveryPendingConfirmation": "待制作人确认",
     "deliveryConfirmed": "已确认",
-    "masterVersionHistory": "母带版本历史"
+    "masterVersionHistory": "母带版本历史",
+    "leaveUploadConfirm": "当前已选择待上传文件，离开后需要重新选择。确认离开吗？"
   },
   "workflowSteps": {
     "intake": "接收审核",
@@ -484,6 +487,13 @@
     "colOpenIssues": "未解决问题",
     "colVersion": "版本",
     "openCount": "{count} 待处理",
+    "waitingForMe": "等待我处理",
+    "attentionTracks": "需要关注的曲目",
+    "recentUpdates": "最近更新",
+    "attentionAlbums": "需要关注的专辑",
+    "noPendingActions": "当前没有需要你立即处理的曲目。",
+    "noAttentionTracks": "当前没有带未解决问题的曲目。",
+    "noRecentUpdates": "最近没有新的曲目更新。",
     "recentActivity": "近期动态",
     "pinnedOnly": "仅显示已固定",
     "manageAlbums": "管理专辑",
@@ -753,6 +763,9 @@
   },
   "upload": {
     "heading": "提交曲目",
+    "draftRestored": "已恢复上次未完成的提交草稿。",
+    "reselectFile": "上次选择的文件“{file}”无法自动恢复，请重新选择后再提交。",
+    "leaveConfirm": "当前提交内容尚未完成，确认离开吗？",
     "dropHint": "将音频文件拖放到此处或",
     "browse": "浏览",
     "trackTitle": "曲目标题 *",
@@ -917,7 +930,39 @@
   "notifications": {
     "title": "通知",
     "markAllRead": "全部已读",
-    "empty": "暂无通知"
+    "empty": "暂无通知",
+    "loadMore": "加载更多",
+    "viewAll": "查看全部",
+    "refresh": "刷新",
+    "all": "全部",
+    "unread": "未读",
+    "read": "已读",
+    "searchPlaceholder": "搜索通知标题或内容…",
+    "filterTypeAll": "所有类型",
+    "summaryUnread": "未读",
+    "summaryLoaded": "已加载",
+    "summaryActionable": "可跳转",
+    "emptyFiltered": "当前筛选条件下没有通知。",
+    "markRead": "标记已读",
+    "open": "打开",
+    "liveConnected": "实时通知已连接",
+    "liveDisconnected": "实时通知重连中",
+    "types": {
+      "track_status_changed": "流程更新",
+      "new_issue": "新问题",
+      "new_comment": "新评论",
+      "new_discussion": "新讨论",
+      "issue_status_changed": "问题状态变化",
+      "reviewer_assigned": "评审分配",
+      "reopen_request": "重新开启申请",
+      "reopen_approved": "重新开启已批准",
+      "reopen_rejected": "重新开启已拒绝",
+      "delivery_awaiting_confirmation": "待确认交付",
+      "track_archived": "曲目归档",
+      "track_restored": "曲目恢复",
+      "invitation_accepted": "邀请已接受",
+      "invitation_declined": "邀请已拒绝"
+    }
   },
   "compare": {
     "title": "版本对比",
@@ -943,6 +988,7 @@
   },
   "issue": {
     "selected": "个问题已选",
+    "noBatchActions": "所选问题没有共同可用的批量操作。",
     "statusNotePlaceholder": "描述你的修改内容（可选）",
     "revisionNote": "修改说明",
     "batchStatusNote": "批量修改说明（可选）",

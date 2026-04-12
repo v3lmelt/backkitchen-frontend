@@ -12,7 +12,7 @@ export const useTrackStore = defineStore('tracks', () => {
     currentTrack.value = track
   }
 
-  async function loadTracks(params?: { status?: TrackStatus; album_id?: number }) {
+  async function loadTracks(params?: { status?: TrackStatus; album_id?: number; limit?: number; offset?: number }) {
     loading.value = true
     try {
       tracks.value = await trackApi.list(params)

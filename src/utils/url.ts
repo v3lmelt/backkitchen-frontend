@@ -1,5 +1,15 @@
 const TOKEN_KEY = 'backkitchen_token'
 
+export function buildWsUrl(path: string): string {
+  const apiBase = (import.meta.env.VITE_API_BASE_URL ?? '') as string
+  if (apiBase) {
+    const wsOrigin = apiBase.replace(/^http(s?):/, (_m, s) => `ws${s}:`)
+    return `${wsOrigin}${path}`
+  }
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${protocol}//${window.location.host}${path}`
+}
+
 /**
  * Append the stored auth token as a query parameter to an audio URL.
  * Audio endpoints accept `?token=` for streaming contexts where

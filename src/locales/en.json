@@ -128,6 +128,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "submit": "Submit",
+    "notifications": "Notifications",
     "settings": "Settings",
     "albums": "Albums",
     "circles": "Circles",
@@ -146,6 +147,7 @@
       "masteringReview": "Mastering Review",
       "finalReview": "Final Review",
       "upload": "Submit Track",
+      "notifications": "Notifications",
       "settings": "Album Settings",
       "albums": "Albums",
       "albumNew": "New Album",
@@ -409,7 +411,8 @@
     "currentDelivery": "Current Delivery",
     "deliveryPendingConfirmation": "Pending Producer Confirmation",
     "deliveryConfirmed": "Confirmed",
-    "masterVersionHistory": "Master Delivery History"
+    "masterVersionHistory": "Master Delivery History",
+    "leaveUploadConfirm": "A file is selected for upload. If you leave now, you'll need to choose it again. Leave this page?"
   },
   "workflowSteps": {
     "intake": "Intake",
@@ -484,6 +487,13 @@
     "colOpenIssues": "Open Issues",
     "colVersion": "Version",
     "openCount": "{count} open",
+    "waitingForMe": "Waiting For Me",
+    "attentionTracks": "Tracks Needing Attention",
+    "recentUpdates": "Recent Updates",
+    "attentionAlbums": "Albums Needing Attention",
+    "noPendingActions": "Nothing is waiting on you right now.",
+    "noAttentionTracks": "No visible tracks currently have open issues.",
+    "noRecentUpdates": "No recent track updates yet.",
     "recentActivity": "Recent Activity",
     "pinnedOnly": "Pinned only",
     "manageAlbums": "Manage albums",
@@ -753,6 +763,9 @@
   },
   "upload": {
     "heading": "Submit Track",
+    "draftRestored": "Restored your unfinished submission draft.",
+    "reselectFile": "The previously selected file \"{file}\" cannot be restored automatically. Please choose it again before submitting.",
+    "leaveConfirm": "Your submission draft is not finished yet. Leave this page?",
     "dropHint": "Drop audio file here or",
     "browse": "browse",
     "trackTitle": "Track Title *",
@@ -871,7 +884,39 @@
   "notifications": {
     "title": "Notifications",
     "markAllRead": "Mark all read",
-    "empty": "No notifications"
+    "empty": "No notifications",
+    "loadMore": "Load more",
+    "viewAll": "View all",
+    "refresh": "Refresh",
+    "all": "All",
+    "unread": "Unread",
+    "read": "Read",
+    "searchPlaceholder": "Search notification title or body…",
+    "filterTypeAll": "All types",
+    "summaryUnread": "Unread",
+    "summaryLoaded": "Loaded",
+    "summaryActionable": "Openable",
+    "emptyFiltered": "No notifications match the current filters.",
+    "markRead": "Mark read",
+    "open": "Open",
+    "liveConnected": "Real-time notifications connected",
+    "liveDisconnected": "Reconnecting real-time notifications",
+    "types": {
+      "track_status_changed": "Workflow update",
+      "new_issue": "New issue",
+      "new_comment": "New comment",
+      "new_discussion": "New discussion",
+      "issue_status_changed": "Issue status changed",
+      "reviewer_assigned": "Reviewer assigned",
+      "reopen_request": "Reopen request",
+      "reopen_approved": "Reopen approved",
+      "reopen_rejected": "Reopen rejected",
+      "delivery_awaiting_confirmation": "Awaiting delivery confirmation",
+      "track_archived": "Track archived",
+      "track_restored": "Track restored",
+      "invitation_accepted": "Invitation accepted",
+      "invitation_declined": "Invitation declined"
+    }
   },
   "compare": {
     "title": "Compare Versions",
@@ -897,6 +942,7 @@
   },
   "issue": {
     "selected": "issues selected",
+    "noBatchActions": "The selected issues do not share any batch actions.",
     "statusNotePlaceholder": "Describe your changes (optional)",
     "revisionNote": "Revision Note",
     "batchStatusNote": "Batch revision note (optional)",

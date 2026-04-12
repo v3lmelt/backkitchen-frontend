@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { albumApi, r2Api, uploadToR2, uploadWithProgress } from '@/api'
 import type { Album, Track } from '@/types'
@@ -14,6 +14,8 @@ import type { SelectOption } from '@/components/common/CustomSelect.vue'
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
+
+const DRAFT_STORAGE_KEY = 'backkitchen_upload_draft_v1'
 
 const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
 const appStore = useAppStore()
@@ -35,6 +37,9 @@ const selectedFile = ref<File | null>(null)
 const audioDuration = ref<number | null>(null)
 const titleError = ref('')
 const artistError = ref('')
+const draftRestored = ref(false)
+const needsFileReselect = ref(false)
+const savedFileName = ref('')
 
 function validateTitle() {
   titleError.value = form.value.title.trim() ? '' : t('upload.titleRequired')
@@ -64,12 +69,91 @@ const albumOptions = computed<SelectOption[]>(() =>
   albums.value.map((a) => ({ value: a.id, label: a.title }))
 )
 
+const hasDraft = computed(() => {
+  return Boolean(
+    selectedFile.value
+    || savedFileName.value
+    || form.value.title.trim()
+    || form.value.artist.trim()
+    || form.value.bpm.trim()
+    || form.value.original_title.trim()
+    || form.value.original_artist.trim(),
+  )
+})
+
+function clearDraft() {
+  localStorage.removeItem(DRAFT_STORAGE_KEY)
+  draftRestored.value = false
+  needsFileReselect.value = false
+  savedFileName.value = ''
+}
+
+function persistDraft() {
+  if (!hasDraft.value) {
+    clearDraft()
+    return
+  }
+
+  localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({
+    ...form.value,
+    saved_file_name: selectedFile.value?.name ?? savedFileName.value,
+  }))
+}
+
+function restoreDraft() {
+  const raw = localStorage.getItem(DRAFT_STORAGE_KEY)
+  if (!raw) {
+    if (albums.value.length > 0) form.value.album_id = albums.value[0].id
+    return
+  }
+
+  try {
+    const draft = JSON.parse(raw) as Partial<typeof form.value> & { saved_file_name?: string }
+    form.value = {
+      title: typeof draft.title === 'string' ? draft.title : '',
+      artist: typeof draft.artist === 'string' ? draft.artist : '',
+      album_id: typeof draft.album_id === 'number' && albums.value.some(album => album.id === draft.album_id)
+        ? draft.album_id
+        : (albums.value[0]?.id ?? null),
+      bpm: typeof draft.bpm === 'string' ? draft.bpm : '',
+      original_title: typeof draft.original_title === 'string' ? draft.original_title : '',
+      original_artist: typeof draft.original_artist === 'string' ? draft.original_artist : '',
+    }
+    savedFileName.value = typeof draft.saved_file_name === 'string' ? draft.saved_file_name : ''
+    needsFileReselect.value = Boolean(savedFileName.value)
+    draftRestored.value = true
+  } catch {
+    clearDraft()
+    if (albums.value.length > 0) form.value.album_id = albums.value[0].id
+  }
+}
+
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (!hasDraft.value && !uploading.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
 onMounted(async () => {
   albums.value = await albumApi.list()
-  if (albums.value.length > 0) {
-    form.value.album_id = albums.value[0].id
-  }
+  restoreDraft()
+  window.addEventListener('beforeunload', handleBeforeUnload)
 })
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeRouteLeave(() => {
+  if (!hasDraft.value && !uploading.value) {
+    return true
+  }
+  return window.confirm(t('upload.leaveConfirm'))
+})
+
+watch(form, () => {
+  persistDraft()
+}, { deep: true })
 
 function validateFileSize(file: File): boolean {
   if (file.size > MAX_AUDIO_SIZE) {
@@ -84,10 +168,13 @@ function onFileSelect(e: Event) {
   if (input.files?.[0]) {
     if (!validateFileSize(input.files[0])) { input.value = ''; return }
     selectedFile.value = input.files[0]
+    savedFileName.value = input.files[0].name
+    needsFileReselect.value = false
     if (!form.value.title) {
       form.value.title = input.files[0].name.replace(/\.[^/.]+$/, '')
     }
     extractFileMeta(input.files[0])
+    persistDraft()
   }
 }
 
@@ -96,10 +183,13 @@ function onDrop(e: DragEvent) {
   if (e.dataTransfer?.files?.[0]) {
     if (!validateFileSize(e.dataTransfer.files[0])) return
     selectedFile.value = e.dataTransfer.files[0]
+    savedFileName.value = e.dataTransfer.files[0].name
+    needsFileReselect.value = false
     if (!form.value.title) {
       form.value.title = e.dataTransfer.files[0].name.replace(/\.[^/.]+$/, '')
     }
     extractFileMeta(e.dataTransfer.files[0])
+    persistDraft()
   }
 }
 
@@ -162,6 +252,7 @@ async function upload() {
       )
     }
     toastSuccess(t('upload.uploadSuccess'))
+    clearDraft()
     router.push({ path: `/tracks/${track.id}`, query: { returnTo: route.path } })
   } catch (err: any) {
     toastError(err.message || t('upload.uploadFailed'))
@@ -180,6 +271,13 @@ function formatFileSize(bytes: number): string {
 <template>
   <div class="max-w-2xl mx-auto space-y-6">
     <h1 class="text-2xl font-mono font-bold text-foreground">{{ t('upload.heading') }}</h1>
+
+    <div v-if="draftRestored || needsFileReselect" class="card border-primary/30 bg-primary/5 space-y-2">
+      <p class="text-sm text-foreground">{{ t('upload.draftRestored') }}</p>
+      <p v-if="needsFileReselect && savedFileName" class="text-xs text-muted-foreground">
+        {{ t('upload.reselectFile', { file: savedFileName }) }}
+      </p>
+    </div>
 
     <!-- Drop Zone -->
     <div

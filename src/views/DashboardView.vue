@@ -12,10 +12,12 @@ import { formatRelativeTime, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import { TRACK_STATUS_COLORS } from '@/utils/status'
 import { translateStepLabel } from '@/utils/workflow'
+import { useDashboardPins } from '@/composables/useDashboardPins'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { Music, Search } from 'lucide-vue-next'
 
 const ALBUM_STATS_TTL = 5 * 60 * 1000
+const TRACK_PAGE_SIZE = 100
 const albumStatsCache = new Map<number, { stats: AlbumStats; ts: number }>()
 
 async function fetchAlbumStats(albumId: number): Promise<AlbumStats> {
@@ -38,6 +40,8 @@ const loadError = ref(false)
 const filterStatus = ref<TrackStatus | ''>('')
 const searchQuery = ref('')
 const exportingAlbum = ref<number | null>(null)
+const showPinnedOnly = ref(false)
+const { hasAnyPins, isPinned, togglePin } = useDashboardPins(() => appStore.currentUser?.id ?? null)
 
 function statusColor(status: string): string {
   return TRACK_STATUS_COLORS[status as TrackStatus] ?? '#6b7280'
@@ -70,7 +74,7 @@ async function loadDashboard() {
   try {
     const query = searchQuery.value.trim() || undefined
     const [loadedTracks, loadedAlbums] = await Promise.all([
-      trackApi.list({ search: query }),
+      loadAllTracks({ search: query }),
       albumApi.list({ search: query }),
     ])
     tracks.value = loadedTracks
@@ -112,6 +116,20 @@ const filteredTracks = computed(() => {
   return result
 })
 
+async function loadAllTracks(params?: { status?: TrackStatus; album_id?: number; search?: string }) {
+  const allTracks: Track[] = []
+  let offset = 0
+
+  while (true) {
+    const page = await trackApi.list({ ...params, limit: TRACK_PAGE_SIZE, offset })
+    allTracks.push(...page)
+    if (page.length < TRACK_PAGE_SIZE) break
+    offset += page.length
+  }
+
+  return allTracks
+}
+
 const trackStats = computed(() => {
   let submitted = 0, peer_review = 0, mastering = 0, completed = 0, rejected = 0
   for (const track of tracks.value) {
@@ -127,6 +145,63 @@ const trackStats = computed(() => {
 
 // Group tracks by album, preserving order of first appearance
 const albumMap = computed(() => new Map(albums.value.map(a => [a.id, a])))
+
+const displayedAlbums = computed(() => {
+  const visibleAlbums = showPinnedOnly.value && hasAnyPins.value
+    ? albums.value.filter(album => isPinned(album.id))
+    : [...albums.value]
+
+  return visibleAlbums.sort((left, right) => {
+    const leftPinned = isPinned(left.id) ? 1 : 0
+    const rightPinned = isPinned(right.id) ? 1 : 0
+    if (leftPinned !== rightPinned) return rightPinned - leftPinned
+    return left.id - right.id
+  })
+})
+
+const actionableTracks = computed(() =>
+  [...tracks.value]
+    .filter(track => (track.allowed_actions?.length ?? 0) > 0)
+    .sort((left, right) => {
+      const issueDelta = (right.open_issue_count ?? 0) - (left.open_issue_count ?? 0)
+      if (issueDelta !== 0) return issueDelta
+      return Date.parse(right.updated_at) - Date.parse(left.updated_at)
+    })
+    .slice(0, 5),
+)
+
+const attentionTracks = computed(() =>
+  [...tracks.value]
+    .filter(track => (track.open_issue_count ?? 0) > 0)
+    .sort((left, right) => {
+      const issueDelta = (right.open_issue_count ?? 0) - (left.open_issue_count ?? 0)
+      if (issueDelta !== 0) return issueDelta
+      return Date.parse(right.updated_at) - Date.parse(left.updated_at)
+    })
+    .slice(0, 5),
+)
+
+const recentTracks = computed(() =>
+  [...tracks.value]
+    .sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at))
+    .slice(0, 5),
+)
+
+const attentionAlbums = computed(() =>
+  displayedAlbums.value
+    .filter((album) => {
+      const stats = albumStatsMap.value[album.id]
+      return Boolean(stats && ((stats.overdue_track_count ?? 0) > 0 || stats.open_issues > 0 || deadlineInfo(album.id)?.overdue))
+    })
+    .sort((left, right) => {
+      const leftStats = albumStatsMap.value[left.id]
+      const rightStats = albumStatsMap.value[right.id]
+      const leftScore = (leftStats?.overdue_track_count ?? 0) * 10 + (leftStats?.open_issues ?? 0)
+      const rightScore = (rightStats?.overdue_track_count ?? 0) * 10 + (rightStats?.open_issues ?? 0)
+      return rightScore - leftScore
+    })
+    .slice(0, 5),
+)
 
 const groupedTracks = computed(() => {
   const groups = new Map<number, Track[]>()
@@ -172,9 +247,7 @@ function formatEventDescription(event: WorkflowEvent): string {
 
 async function handleAccept(invitationId: number) {
   await appStore.acceptInvitation(invitationId)
-  const [loadedTracks, loadedAlbums] = await Promise.all([trackApi.list(), albumApi.list()])
-  tracks.value = loadedTracks
-  albums.value = loadedAlbums
+  await loadDashboard()
 }
 
 async function handleDecline(invitationId: number) {
@@ -218,6 +291,10 @@ async function handleExport(albumId: number) {
 
 function openAlbumSettings(albumId: number) {
   router.push(`/albums/${albumId}/settings`)
+}
+
+function openTrack(trackId: number) {
+  router.push({ path: `/tracks/${trackId}`, query: { returnTo: route.path } })
 }
 </script>
 
@@ -285,18 +362,142 @@ function openAlbumSettings(albumId: number) {
       </div>
     </div>
 
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div class="card space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('dashboard.waitingForMe') }}</h2>
+          <span class="text-xs text-muted-foreground">{{ actionableTracks.length }}</span>
+        </div>
+        <div v-if="actionableTracks.length" class="space-y-2">
+          <button
+            v-for="track in actionableTracks"
+            :key="`queue-${track.id}`"
+            class="w-full border border-border bg-background px-3 py-2 text-left transition-colors hover:border-primary/50"
+            @click="openTrack(track.id)"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <div class="min-w-0 space-y-1">
+                <div class="truncate text-sm text-foreground">{{ track.title }}</div>
+                <div class="text-xs text-muted-foreground">{{ formatRelativeTime(track.updated_at, locale) }}</div>
+              </div>
+              <StatusBadge
+                :status="track.status"
+                type="track"
+                :variant="track.workflow_variant"
+                :label="track.workflow_step?.label ?? null"
+              />
+            </div>
+          </button>
+        </div>
+        <p v-else class="text-sm text-muted-foreground">{{ t('dashboard.noPendingActions') }}</p>
+      </div>
+
+      <div class="card space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('dashboard.attentionTracks') }}</h2>
+          <span class="text-xs text-muted-foreground">{{ attentionTracks.length }}</span>
+        </div>
+        <div v-if="attentionTracks.length" class="space-y-2">
+          <button
+            v-for="track in attentionTracks"
+            :key="`attention-${track.id}`"
+            class="w-full border border-border bg-background px-3 py-2 text-left transition-colors hover:border-primary/50"
+            @click="openTrack(track.id)"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 space-y-1">
+                <div class="truncate text-sm text-foreground">{{ track.title }}</div>
+                <div class="text-xs text-error">{{ t('dashboard.openCount', { count: track.open_issue_count ?? 0 }) }}</div>
+              </div>
+              <StatusBadge
+                :status="track.status"
+                type="track"
+                :variant="track.workflow_variant"
+                :label="track.workflow_step?.label ?? null"
+              />
+            </div>
+          </button>
+        </div>
+        <p v-else class="text-sm text-muted-foreground">{{ t('dashboard.noAttentionTracks') }}</p>
+      </div>
+
+      <div class="card space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('dashboard.recentUpdates') }}</h2>
+          <span class="text-xs text-muted-foreground">{{ recentTracks.length }}</span>
+        </div>
+        <div v-if="recentTracks.length" class="space-y-2">
+          <button
+            v-for="track in recentTracks"
+            :key="`recent-${track.id}`"
+            class="w-full border border-border bg-background px-3 py-2 text-left transition-colors hover:border-primary/50"
+            @click="openTrack(track.id)"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <div class="min-w-0 space-y-1">
+                <div class="truncate text-sm text-foreground">{{ track.title }}</div>
+                <div class="text-xs text-muted-foreground">{{ formatRelativeTime(track.updated_at, locale) }}</div>
+              </div>
+              <span class="text-xs font-mono text-muted-foreground">v{{ track.version }}</span>
+            </div>
+          </button>
+        </div>
+        <p v-else class="text-sm text-muted-foreground">{{ t('dashboard.noRecentUpdates') }}</p>
+      </div>
+    </div>
+
     <!-- 专辑进度看板 -->
     <div v-if="albums.length > 0">
       <div class="flex items-center justify-between mb-3">
-        <h2 class="text-lg font-mono font-semibold text-foreground">{{ t('dashboard.albums') }}</h2>
+        <div class="flex items-center gap-3">
+          <h2 class="text-lg font-mono font-semibold text-foreground">{{ t('dashboard.albums') }}</h2>
+          <button
+            v-if="hasAnyPins"
+            class="text-xs rounded-full border border-border px-3 py-1 text-muted-foreground transition-colors hover:text-foreground"
+            :class="showPinnedOnly ? 'border-primary text-primary' : ''"
+            @click="showPinnedOnly = !showPinnedOnly"
+          >
+            {{ t('dashboard.pinnedOnly') }}
+          </button>
+        </div>
         <RouterLink to="/albums" class="text-xs text-muted-foreground hover:text-primary transition-colors">
           {{ t('dashboard.manageAlbums') }}
         </RouterLink>
       </div>
 
+      <div v-if="attentionAlbums.length > 0 && !showPinnedOnly" class="card space-y-3 mb-4">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('dashboard.attentionAlbums') }}</h3>
+          <span class="text-xs text-muted-foreground">{{ attentionAlbums.length }}</span>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <button
+            v-for="album in attentionAlbums"
+            :key="`attention-album-${album.id}`"
+            class="w-full border border-border bg-background px-4 py-3 text-left transition-colors hover:border-primary/50"
+            @click="openAlbumSettings(album.id)"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 space-y-1">
+                <div class="truncate text-sm font-medium text-foreground">{{ album.title }}</div>
+                <div class="text-xs text-muted-foreground">{{ album.circle_name || album.catalog_number || t('dashboard.tracksCount', { n: album.track_count }) }}</div>
+              </div>
+              <div class="flex flex-wrap justify-end gap-1">
+                <span v-if="deadlineInfo(album.id)" class="text-[11px] px-2 py-0.5 rounded-full" :class="deadlineInfo(album.id)!.overdue ? 'bg-error-bg text-error' : 'bg-warning-bg text-warning'">
+                  {{ deadlineInfo(album.id)!.text }}
+                </span>
+                <span v-if="albumStatsMap[album.id]?.open_issues" class="text-[11px] bg-error-bg text-error px-2 py-0.5 rounded-full">
+                  {{ t('dashboard.openIssues', { count: albumStatsMap[album.id].open_issues }) }}
+                </span>
+              </div>
+            </div>
+          </button>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div
-          v-for="album in albums"
+          v-for="album in displayedAlbums"
           :key="album.id"
           class="rounded-none border border-border bg-card overflow-hidden cursor-pointer transition-colors hover:border-primary/50"
           @click="openAlbumSettings(album.id)"
@@ -316,6 +517,13 @@ function openAlbumSettings(albumId: number) {
                 <div v-if="album.circle_name" class="text-xs text-muted-foreground mt-0.5 truncate">{{ album.circle_name }}</div>
               </div>
               <div class="flex flex-col items-end gap-1 flex-shrink-0">
+                <button
+                  class="text-[11px] rounded-full border border-border px-2.5 py-1 font-mono text-muted-foreground transition-colors hover:text-foreground"
+                  :class="isPinned(album.id) ? 'border-primary text-primary' : ''"
+                  @click.stop="togglePin(album.id)"
+                >
+                  {{ isPinned(album.id) ? t('albums.unpinDashboard') : t('albums.pinDashboard') }}
+                </button>
                 <span v-if="album.catalog_number" class="text-xs font-mono text-muted-foreground">{{ album.catalog_number }}</span>
                 <div class="flex items-center gap-1 flex-wrap justify-end">
                   <span v-if="deadlineInfo(album.id)" class="text-xs px-2 py-0.5 rounded-full" :class="deadlineInfo(album.id)!.overdue ? 'bg-error-bg text-error' : 'bg-warning-bg text-warning'">
@@ -376,6 +584,9 @@ function openAlbumSettings(albumId: number) {
             </template>
           </div>
         </div>
+      </div>
+      <div v-if="showPinnedOnly && displayedAlbums.length === 0" class="card text-sm text-muted-foreground">
+        {{ t('dashboard.noPinnedAlbums') }}
       </div>
     </div>
 

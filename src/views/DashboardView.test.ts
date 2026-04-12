@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: mocks.pushMock }),
-  useRoute: () => ({ fullPath: '/dashboard' }),
+  useRoute: () => ({ fullPath: '/dashboard', path: '/dashboard' }),
   RouterLink: { template: '<a><slot /></a>' },
 }))
 
@@ -74,11 +74,24 @@ describe('DashboardView', () => {
         status: 'submitted',
         duration: 61,
         version: 1,
+        updated_at: '2024-01-01T00:00:00Z',
+        allowed_actions: [],
         open_issue_count: 0,
         original_title: 'Bad Apple!!',
         original_artist: 'Touhou',
       },
-      { id: 12, album_id: 1, title: 'Peer Song', artist: 'Nova', status: 'peer_review', duration: 62, version: 2, open_issue_count: 1 },
+      {
+        id: 12,
+        album_id: 1,
+        title: 'Peer Song',
+        artist: 'Nova',
+        status: 'peer_review',
+        duration: 62,
+        version: 2,
+        updated_at: '2024-01-02T00:00:00Z',
+        allowed_actions: ['open-step'],
+        open_issue_count: 1,
+      },
     ])
     mocks.albumListMock.mockResolvedValue([
       { id: 1, title: 'Album One', producer_id: 1, track_count: 2, genres: ['Trance'], catalog_number: 'BK-001', circle_name: 'Back Kitchen', cover_image: null },
@@ -109,9 +122,9 @@ describe('DashboardView', () => {
     expect(wrapper.text()).toContain('Original Song: Bad Apple!!')
     expect(wrapper.text()).toContain('Original Source: Touhou')
 
-    await wrapper.findAll('.card.cursor-pointer').at(2)!.trigger('click')
-    expect(wrapper.text()).toContain('Peer Song')
-    expect(wrapper.text()).not.toContain('Submitted Song')
+    await wrapper.findAll('.card').find(node => node.text().includes('Peer Flow'))!.trigger('click')
+    expect(wrapper.find('tbody').text()).toContain('Peer Song')
+    expect(wrapper.find('tbody').text()).not.toContain('Submitted Song')
   })
 
   it('handles invitation actions and album export', async () => {

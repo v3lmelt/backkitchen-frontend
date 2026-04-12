@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { checklistApi, issueApi, trackApi, r2Api, uploadToR2, API_ORIGIN } from '@/api'
 import type {
@@ -22,6 +22,7 @@ import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import IssueDetailPanel from '@/components/IssueDetailPanel.vue'
 import WorkflowActionBar from '@/components/workflow/WorkflowActionBar.vue'
+import BatchIssueActions from '@/components/workflow/BatchIssueActions.vue'
 import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
@@ -74,6 +75,13 @@ const uploadProgress = ref(0)
 const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
 const hoveredIssueId = ref<number | null>(null)
 const selectedIssue = ref<Issue | null>(null)
+const selectedStageIssueIds = ref<number[]>([])
+const selectedProducerIssueIds = ref<number[]>([])
+const selectedRevisionIssueIds = ref<number[]>([])
+const stageBatchNote = ref('')
+const producerBatchNote = ref('')
+const revisionBatchNote = ref('')
+const batchUpdatingIssues = ref(false)
 const isIssueFormOpen = ref(false)
 const waveformMode = computed<'seek' | 'annotate'>(() => (isIssueFormOpen.value ? 'annotate' : 'seek'))
 const showSourceCompare = ref(false)
@@ -100,10 +108,27 @@ const defaultChecklistLabelKeyMap: Record<string, string> = {
 onMounted(loadPage)
 onMounted(() => {
   window.addEventListener('keydown', handleWaveformHotkeys)
+  window.addEventListener('beforeunload', handleBeforeUnload)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleWaveformHotkeys)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
   resetDeliveryPreview()
+})
+
+function hasPendingUploadSelection(): boolean {
+  return Boolean(uploading.value || uploadFile.value)
+}
+
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (!hasPendingUploadSelection()) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onBeforeRouteLeave(() => {
+  if (!hasPendingUploadSelection()) return true
+  return window.confirm(t('workflowStep.leaveUploadConfirm'))
 })
 
 const currentStep = computed<WorkflowStepDef | null>(() => track.value?.workflow_step ?? null)
@@ -498,6 +523,132 @@ async function onQuickIssueStatusChange({ issue, status }: { issue: Issue; statu
   }
 }
 
+function canCurrentUserReviewIssue(issue: Issue): boolean {
+  if (!track.value) return false
+  const userId = appStore.currentUser?.id
+  if (!userId) return false
+  if (userId === issue.author_id) return true
+  switch (issue.phase) {
+    case 'peer':
+    case 'peer_review':
+      return userId === track.value.peer_reviewer_id
+    case 'producer':
+    case 'producer_gate':
+    case 'final_review':
+      return userId === track.value.producer_id
+    case 'mastering':
+      return userId === track.value.mastering_engineer_id
+    default:
+      return false
+  }
+}
+
+function canCurrentUserSubmitIssue(issue: Issue): boolean {
+  return Boolean(track.value && appStore.currentUser?.id === track.value.submitter_id && ['open', 'disagreed'].includes(issue.status))
+}
+
+function availableBatchActionsForIssue(issue: Issue): Issue['status'][] {
+  if (canCurrentUserSubmitIssue(issue) && issue.status === 'open') return ['resolved', 'disagreed']
+  if (canCurrentUserSubmitIssue(issue) && issue.status === 'disagreed') return ['resolved']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'open') return ['resolved', 'pending_discussion']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'pending_discussion') return ['open', 'resolved']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'resolved') return ['open']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'disagreed') return ['open', 'resolved', 'pending_discussion']
+  return []
+}
+
+function intersectBatchActions(selectedIssues: Issue[]): Issue['status'][] {
+  if (!selectedIssues.length) return []
+  const [firstIssue, ...rest] = selectedIssues
+  return availableBatchActionsForIssue(firstIssue).filter(status =>
+    rest.every(issue => availableBatchActionsForIssue(issue).includes(status)),
+  )
+}
+
+const selectedProducerIssues = computed(() =>
+  producerSnapshotIssues.value.filter(issue => selectedProducerIssueIds.value.includes(issue.id)),
+)
+
+const selectedRevisionIssues = computed(() =>
+  revisionSnapshotIssues.value.filter(issue => selectedRevisionIssueIds.value.includes(issue.id)),
+)
+
+const producerBatchActions = computed(() => intersectBatchActions(selectedProducerIssues.value))
+const revisionBatchActions = computed(() => intersectBatchActions(selectedRevisionIssues.value))
+const stageBatchIssueList = computed(() => {
+  if (!currentStep.value) return []
+  if (activeVariant.value === 'peer_review' || activeVariant.value === 'mastering') return fallbackWaveformIssues.value
+  if (activeVariant.value === 'final_review') return finalReviewIssues.value
+  if (activeVariant.value === 'producer_gate' || activeVariant.value === 'intake' || currentStep.value.type === 'revision') return []
+  if (currentStep.value.type === 'approval' || currentStep.value.type === 'review') return fallbackWaveformIssues.value
+  return []
+})
+const selectedStageIssues = computed(() =>
+  stageBatchIssueList.value.filter(issue => selectedStageIssueIds.value.includes(issue.id)),
+)
+const stageBatchActions = computed(() => intersectBatchActions(selectedStageIssues.value))
+
+watch([stageBatchIssueList, activeVariant, () => currentStep.value?.id], ([issuesList]) => {
+  const validIds = new Set(issuesList.map(issue => issue.id))
+  selectedStageIssueIds.value = selectedStageIssueIds.value.filter(id => validIds.has(id))
+  if (selectedStageIssueIds.value.length === 0) stageBatchNote.value = ''
+})
+
+watch(producerSnapshotIssues, (issuesList) => {
+  const validIds = new Set(issuesList.map(issue => issue.id))
+  selectedProducerIssueIds.value = selectedProducerIssueIds.value.filter(id => validIds.has(id))
+  if (selectedProducerIssueIds.value.length === 0) producerBatchNote.value = ''
+})
+
+watch(revisionSnapshotIssues, (issuesList) => {
+  const validIds = new Set(issuesList.map(issue => issue.id))
+  selectedRevisionIssueIds.value = selectedRevisionIssueIds.value.filter(id => validIds.has(id))
+  if (selectedRevisionIssueIds.value.length === 0) revisionBatchNote.value = ''
+})
+
+async function applyBatchIssueStatusChange(
+  selectedIssues: Issue[],
+  selectedIds: typeof selectedProducerIssueIds,
+  note: typeof producerBatchNote,
+  status: Issue['status'],
+) {
+  if (!track.value || !selectedIssues.length) return
+  batchUpdatingIssues.value = true
+  try {
+    const updatedIssues = await issueApi.batchUpdate(trackId.value, {
+      issue_ids: selectedIssues.map(issue => issue.id),
+      status,
+      status_note: note.value.trim() || undefined,
+    })
+    const updatedById = new Map(updatedIssues.map(issue => [issue.id, issue]))
+    issues.value = issues.value.map(issue => {
+      const updated = updatedById.get(issue.id)
+      return updated ? { ...issue, ...updated } : issue
+    })
+    if (selectedIssue.value && updatedById.has(selectedIssue.value.id)) {
+      selectedIssue.value = { ...selectedIssue.value, ...updatedById.get(selectedIssue.value.id)! }
+    }
+    selectedIds.value = []
+    note.value = ''
+  } catch (err: any) {
+    toastError(err.message || t('workflowStep.transitionFailed'))
+  } finally {
+    batchUpdatingIssues.value = false
+  }
+}
+
+function applyProducerBatchStatus(status: Issue['status']) {
+  return applyBatchIssueStatusChange(selectedProducerIssues.value, selectedProducerIssueIds, producerBatchNote, status)
+}
+
+function applyRevisionBatchStatus(status: Issue['status']) {
+  return applyBatchIssueStatusChange(selectedRevisionIssues.value, selectedRevisionIssueIds, revisionBatchNote, status)
+}
+
+function applyStageBatchStatus(status: Issue['status']) {
+  return applyBatchIssueStatusChange(selectedStageIssues.value, selectedStageIssueIds, stageBatchNote, status)
+}
+
 function peerIssueMarkerSummary(issue: Issue): string {
   if (!issue.markers.length) return t('issue.generalIssue')
   return issue.markers
@@ -582,6 +733,8 @@ async function handleUpload(kind: 'revision' | 'delivery') {
       toastSuccess(t('workflowStep.deliveryUploaded'))
       return
     }
+    uploadFile.value = null
+    resetDeliveryPreview()
     pushToTrackDetail()
   } catch (err: any) {
     error.value = err.message || t('workflowStep.uploadFailed')
@@ -956,11 +1109,24 @@ function handleIssueLeave() {
             </template>
           </IssueCreatePanel>
 
+          <BatchIssueActions
+            :selected-count="selectedStageIssueIds.length"
+            :statuses="stageBatchActions"
+            :note="stageBatchNote"
+            :loading="batchUpdatingIssues"
+            @update:note="stageBatchNote = $event"
+            @clear="selectedStageIssueIds = []; stageBatchNote = ''"
+            @apply="applyStageBatchStatus($event)"
+          />
+
           <IssueMarkerList
             :issues="fallbackWaveformIssues"
+            :selectable="true"
+            :selected-ids="selectedStageIssueIds"
             :current-source-version-number="displayedSourceVersionNumber"
             :hovered-issue-id="hoveredIssueId"
             @select="onIssueSelect"
+            @update:selectedIds="selectedStageIssueIds = $event"
             @hover="handleIssueHover"
             @leave="handleIssueLeave"
           />
@@ -1220,14 +1386,27 @@ function handleIssueLeave() {
           </div>
         </div>
 
+        <BatchIssueActions
+          :selected-count="selectedProducerIssueIds.length"
+          :statuses="producerBatchActions"
+          :note="producerBatchNote"
+          :loading="batchUpdatingIssues"
+          @update:note="producerBatchNote = $event"
+          @clear="selectedProducerIssueIds = []; producerBatchNote = ''"
+          @apply="applyProducerBatchStatus($event)"
+        />
+
         <IssueMarkerList
           :issues="producerSnapshotIssues"
           :track="track"
+          :selectable="true"
+          :selected-ids="selectedProducerIssueIds"
           :current-source-version-number="track.version"
           :hovered-issue-id="hoveredIssueId"
           :show-activity="true"
           :enable-quick-actions="true"
           @select="openIssueDrawer"
+          @update:selectedIds="selectedProducerIssueIds = $event"
           @hover="handleIssueHover"
           @leave="handleIssueLeave"
           @status-change="onQuickIssueStatusChange"
@@ -1331,11 +1510,24 @@ function handleIssueLeave() {
             </template>
           </IssueCreatePanel>
 
+          <BatchIssueActions
+            :selected-count="selectedStageIssueIds.length"
+            :statuses="stageBatchActions"
+            :note="stageBatchNote"
+            :loading="batchUpdatingIssues"
+            @update:note="stageBatchNote = $event"
+            @clear="selectedStageIssueIds = []; stageBatchNote = ''"
+            @apply="applyStageBatchStatus($event)"
+          />
+
           <IssueMarkerList
             :issues="fallbackWaveformIssues"
+            :selectable="true"
+            :selected-ids="selectedStageIssueIds"
             :current-source-version-number="displayedSourceVersionNumber"
             :hovered-issue-id="hoveredIssueId"
             @select="onIssueSelect"
+            @update:selectedIds="selectedStageIssueIds = $event"
             @hover="handleIssueHover"
             @leave="handleIssueLeave"
           />
@@ -1545,10 +1737,23 @@ function handleIssueLeave() {
             </template>
           </IssueCreatePanel>
 
+          <BatchIssueActions
+            :selected-count="selectedStageIssueIds.length"
+            :statuses="stageBatchActions"
+            :note="stageBatchNote"
+            :loading="batchUpdatingIssues"
+            @update:note="stageBatchNote = $event"
+            @clear="selectedStageIssueIds = []; stageBatchNote = ''"
+            @apply="applyStageBatchStatus($event)"
+          />
+
           <IssueMarkerList
             :issues="finalReviewIssues"
+            :selectable="true"
+            :selected-ids="selectedStageIssueIds"
             :hovered-issue-id="hoveredIssueId"
             @select="onIssueSelect"
+            @update:selectedIds="selectedStageIssueIds = $event"
             @hover="handleIssueHover"
             @leave="handleIssueLeave"
           />
@@ -1675,7 +1880,23 @@ function handleIssueLeave() {
 
       <div v-if="fallbackStepIssues.length" class="card space-y-3">
         <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: fallbackWaveformIssues.length }) }}</h3>
-        <IssueMarkerList :issues="fallbackWaveformIssues" :current-source-version-number="displayedSourceVersionNumber" @select="onIssueSelect" />
+        <BatchIssueActions
+          :selected-count="selectedStageIssueIds.length"
+          :statuses="stageBatchActions"
+          :note="stageBatchNote"
+          :loading="batchUpdatingIssues"
+          @update:note="stageBatchNote = $event"
+          @clear="selectedStageIssueIds = []; stageBatchNote = ''"
+          @apply="applyStageBatchStatus($event)"
+        />
+        <IssueMarkerList
+          :issues="fallbackWaveformIssues"
+          :selectable="true"
+          :selected-ids="selectedStageIssueIds"
+          :current-source-version-number="displayedSourceVersionNumber"
+          @select="onIssueSelect"
+          @update:selectedIds="selectedStageIssueIds = $event"
+        />
       </div>
 
       <div class="card space-y-4">
@@ -1729,7 +1950,23 @@ function handleIssueLeave() {
 
       <div class="card space-y-3">
         <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: fallbackWaveformIssues.length }) }}</h3>
-        <IssueMarkerList :issues="fallbackWaveformIssues" :current-source-version-number="displayedSourceVersionNumber" @select="onIssueSelect" />
+        <BatchIssueActions
+          :selected-count="selectedStageIssueIds.length"
+          :statuses="stageBatchActions"
+          :note="stageBatchNote"
+          :loading="batchUpdatingIssues"
+          @update:note="stageBatchNote = $event"
+          @clear="selectedStageIssueIds = []; stageBatchNote = ''"
+          @apply="applyStageBatchStatus($event)"
+        />
+        <IssueMarkerList
+          :issues="fallbackWaveformIssues"
+          :selectable="true"
+          :selected-ids="selectedStageIssueIds"
+          :current-source-version-number="displayedSourceVersionNumber"
+          @select="onIssueSelect"
+          @update:selectedIds="selectedStageIssueIds = $event"
+        />
       </div>
 
       <div class="card space-y-4">
@@ -1791,15 +2028,27 @@ function handleIssueLeave() {
             </div>
           </div>
         </div>
+        <BatchIssueActions
+          :selected-count="selectedRevisionIssueIds.length"
+          :statuses="revisionBatchActions"
+          :note="revisionBatchNote"
+          :loading="batchUpdatingIssues"
+          @update:note="revisionBatchNote = $event"
+          @clear="selectedRevisionIssueIds = []; revisionBatchNote = ''"
+          @apply="applyRevisionBatchStatus($event)"
+        />
         <IssueMarkerList
           v-if="revisionSnapshotIssues.length"
           :issues="revisionSnapshotIssues"
           :track="track"
+          :selectable="true"
+          :selected-ids="selectedRevisionIssueIds"
           :current-source-version-number="track.version"
           :hovered-issue-id="hoveredIssueId"
           :show-activity="true"
           :enable-quick-actions="true"
           @select="openIssueDrawer"
+          @update:selectedIds="selectedRevisionIssueIds = $event"
           @hover="handleIssueHover"
           @leave="handleIssueLeave"
           @status-change="onQuickIssueStatusChange"

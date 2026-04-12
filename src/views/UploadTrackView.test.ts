@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('vue-router', () => ({
+  useRoute: () => ({ path: '/upload' }),
   useRouter: () => ({ push: mocks.pushMock }),
+  onBeforeRouteLeave: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -53,7 +55,7 @@ describe('UploadTrackView', () => {
     const wrapper = mountWithPlugins(UploadTrackView)
     await flushPromises()
 
-    const submitBtn = wrapper.find('button.w-full')
+    const submitBtn = wrapper.findAll('button').find(button => button.text().includes('Submit Track'))!
     expect(submitBtn.attributes('disabled')).toBeDefined()
   })
 
@@ -88,10 +90,10 @@ describe('UploadTrackView', () => {
     await inputs[1].setValue('My Track')
     await inputs[2].setValue('Artist Name')
 
-    await wrapper.find('button.w-full').trigger('click')
+    await wrapper.findAll('button').find(button => button.text().includes('Submit Track'))!.trigger('click')
     await flushPromises()
 
     expect(mocks.uploadWithProgressMock).toHaveBeenCalledWith('/tracks', expect.any(FormData), expect.any(Function))
-    expect(mocks.pushMock).toHaveBeenCalledWith('/tracks/42')
+    expect(mocks.pushMock).toHaveBeenCalledWith({ path: '/tracks/42', query: { returnTo: '/upload' } })
   })
 })
