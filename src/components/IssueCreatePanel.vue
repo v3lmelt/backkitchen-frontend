@@ -14,6 +14,7 @@ const props = defineProps<{
   trackId: number
   phase: string
   masterDeliveryId?: number | null
+  allowInternalVisibility?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -27,6 +28,7 @@ const { error: toastError } = useToast()
 const showForm = ref(false)
 const issueMode = ref<'timed' | 'general'>('timed')
 const issueVisibility = ref<'public' | 'internal'>('public')
+const issueVisibilityTouched = ref(false)
 const title = ref('')
 const description = ref('')
 const descriptionCursorPos = ref(0)
@@ -280,6 +282,7 @@ function resetForm() {
   description.value = ''
   severity.value = 'major'
   issueVisibility.value = 'public'
+  issueVisibilityTouched.value = false
   markers.value = []
   rangeAnchor.value = null
   lastDragRangeIdx.value = -1
@@ -355,6 +358,7 @@ function persistDraft() {
       showForm: showForm.value,
       issueMode: issueMode.value,
       issueVisibility: issueVisibility.value,
+      issueVisibilityTouched: issueVisibilityTouched.value,
       title: title.value,
       description: description.value,
       severity: severity.value,
@@ -375,6 +379,7 @@ function restoreDraft() {
       showForm?: boolean
       issueMode?: 'timed' | 'general'
       issueVisibility?: 'public' | 'internal'
+      issueVisibilityTouched?: boolean
       title?: string
       description?: string
       severity?: 'critical' | 'major' | 'minor' | 'suggestion'
@@ -385,6 +390,7 @@ function restoreDraft() {
     showForm.value = draft.showForm === true
     issueMode.value = draft.issueMode === 'general' ? 'general' : 'timed'
     issueVisibility.value = draft.issueVisibility === 'internal' ? 'internal' : 'public'
+    issueVisibilityTouched.value = Boolean(draft.issueVisibilityTouched || draft.issueVisibility === 'internal')
     title.value = typeof draft.title === 'string' ? draft.title : ''
     description.value = typeof draft.description === 'string' ? draft.description : ''
     severity.value = draft.severity ?? 'major'
@@ -403,6 +409,10 @@ function restoreDraft() {
       markers.value = []
       rangeAnchor.value = null
     }
+    if (props.allowInternalVisibility === false) {
+      issueVisibility.value = 'public'
+      issueVisibilityTouched.value = false
+    }
   } catch {
     // Ignore malformed draft payload.
   }
@@ -415,7 +425,7 @@ async function submitIssue() {
     description: description.value,
     severity: severity.value,
     phase: props.phase,
-    visibility: issueVisibility.value,
+    visibility: issueVisibilityTouched.value ? issueVisibility.value : undefined,
     markers: issueMode.value === 'general' ? [] : markers.value.map(m => ({
       marker_type: m.marker_type,
       time_start: m.time_start,
@@ -451,6 +461,11 @@ function switchMode(mode: 'timed' | 'general') {
     markers.value = []
     rangeAnchor.value = null
   }
+}
+
+function toggleIssueVisibility() {
+  issueVisibilityTouched.value = true
+  issueVisibility.value = issueVisibility.value === 'public' ? 'internal' : 'public'
 }
 
 function openForm() {
@@ -492,6 +507,12 @@ watch(
   () => persistDraft(),
   { deep: true },
 )
+
+watch(() => props.allowInternalVisibility, (allow) => {
+  if (allow !== false) return
+  issueVisibility.value = 'public'
+  issueVisibilityTouched.value = false
+}, { immediate: true })
 
 watch(showForm, (open) => {
   emit('formOpenChange', open)
@@ -782,8 +803,9 @@ defineExpose({
           <button @click="showForm = false; resetForm()" :disabled="submittingIssue" class="btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50">{{ t('common.cancel') }}</button>
         </div>
         <button
+          v-if="allowInternalVisibility !== false"
           type="button"
-          @click="issueVisibility = issueVisibility === 'public' ? 'internal' : 'public'"
+          @click="toggleIssueVisibility"
           class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-mono transition-colors"
           :class="issueVisibility === 'internal'
             ? 'border-info/40 bg-info-bg text-info'
