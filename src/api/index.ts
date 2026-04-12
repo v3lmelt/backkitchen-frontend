@@ -61,9 +61,18 @@ function authHeaders(headers?: HeadersInit): HeadersInit {
   }
 }
 
+type AuthClearedCallback = () => void
+let _onAuthCleared: AuthClearedCallback | null = null
+
+/** Register a callback invoked when stored credentials are wiped due to 401. */
+export function onAuthCleared(cb: AuthClearedCallback) {
+  _onAuthCleared = cb
+}
+
 function clearStoredAuth() {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem('backkitchen_user')
+  _onAuthCleared?.()
 }
 
 let verifyPromise: Promise<boolean> | null = null
@@ -161,22 +170,57 @@ export function uploadWithProgress<T>(
   })
 }
 
+const MAX_RETRIES = 2
+const RETRY_DELAY_MS = 600
+
+function isRetryable(status: number): boolean {
+  return status >= 500 && status < 600
+}
+
+function shouldRetry(method: string | undefined): boolean {
+  // Only retry idempotent methods to avoid duplicating side effects
+  const m = (method ?? 'GET').toUpperCase()
+  return m === 'GET' || m === 'HEAD' || m === 'OPTIONS'
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const isFormData = options?.body instanceof FormData
   const headers: HeadersInit = isFormData
     ? authHeaders(options?.headers)
     : authHeaders({ 'Content-Type': 'application/json', ...options?.headers })
 
-  const res = await fetch(`${BASE}${url}`, { ...options, headers })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    if (res.status === 401) {
-      await handleUnauthorized(url)
+  const retryable = shouldRetry(options?.method)
+  let lastError: Error | undefined
+
+  for (let attempt = 0; attempt <= (retryable ? MAX_RETRIES : 0); attempt++) {
+    if (attempt > 0) {
+      await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt))
     }
-    throw new Error(parseErrorDetail(body.detail) || `Request failed: ${res.status}`)
+    try {
+      const res = await fetch(`${BASE}${url}`, { ...options, headers })
+      if (!res.ok) {
+        // Retry on server errors for idempotent requests
+        if (retryable && isRetryable(res.status) && attempt < MAX_RETRIES) {
+          continue
+        }
+        const body = await res.json().catch(() => ({}))
+        if (res.status === 401) {
+          await handleUnauthorized(url)
+        }
+        throw new Error(parseErrorDetail(body.detail) || `Request failed: ${res.status}`)
+      }
+      if (res.status === 204) return undefined as T
+      return res.json()
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err))
+      // Retry on network errors for idempotent requests
+      if (retryable && attempt < MAX_RETRIES && !(lastError.message.startsWith('Request failed'))) {
+        continue
+      }
+      throw lastError
+    }
   }
-  if (res.status === 204) return undefined as T
-  return res.json()
+  throw lastError!
 }
 
 export const albumApi = {

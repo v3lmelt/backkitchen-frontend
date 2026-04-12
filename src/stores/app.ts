@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { Invitation, Notification, User } from '@/types'
-import { authApi, configApi, invitationApi, notificationApi, userApi } from '@/api'
+import { authApi, configApi, invitationApi, notificationApi, userApi, onAuthCleared } from '@/api'
 import router from '@/router'
 import { buildWsUrl } from '@/utils/url'
 
@@ -130,6 +130,10 @@ export const useAppStore = defineStore('app', () => {
     localStorage.removeItem(USER_KEY)
     localStorage.removeItem(TOKEN_KEY)
   }
+
+  // When the API layer detects a 401 and wipes localStorage, sync Pinia state
+  // so the App.vue watcher can redirect to /login.
+  onAuthCleared(() => clearAuth())
 
   async function bootstrap() {
     if (bootstrapped.value) return
