@@ -118,7 +118,8 @@ const webhookDeliveries = ref<WebhookDelivery[]>([])
 const loadingDeliveries = ref(false)
 
 const WEBHOOK_EVENT_TYPES = [
-  'track_status_changed', 'new_issue', 'issue_status_changed', 'new_comment', 'new_discussion',
+  'track_submitted', 'track_status_changed', 'reviewer_assigned', 'reviewer_reassigned',
+  'new_issue', 'issue_status_changed', 'new_comment', 'new_discussion',
 ]
 
 // Workflow state
@@ -427,6 +428,17 @@ async function saveTeam() {
     savingTeam.value = false
   }
 }
+
+// Album members (for webhook filter — only show users who belong to this album)
+const albumMemberUsers = computed<User[]>(() => {
+  if (!album.value) return []
+  const memberUsers = album.value.members.map(m => m.user)
+  // Include producer if not already in member list
+  if (album.value.producer && !memberUsers.some(u => u.id === album.value!.producer_id)) {
+    memberUsers.unshift(album.value.producer)
+  }
+  return memberUsers
+})
 
 // Member list actions (inline add/remove)
 const availableUserOptions = computed<SelectOption[]>(() =>
@@ -1388,7 +1400,7 @@ async function refreshDeliveries() {
           <div class="text-xs text-muted-foreground mb-2">{{ t('settings.webhookFilterUsers') }}</div>
           <p class="text-[11px] text-muted-foreground mb-2">{{ t('settings.webhookFilterUsersHint') }}</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <label v-for="u in users" :key="u.id" class="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+            <label v-for="u in albumMemberUsers" :key="u.id" class="flex items-center gap-2 text-sm text-foreground cursor-pointer">
               <input
                 type="checkbox"
                 class="checkbox"
