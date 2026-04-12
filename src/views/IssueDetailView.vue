@@ -349,8 +349,8 @@ function availableStatusActions(currentStatus: IssueStatus): IssueStatus[] {
 
   if (!isReviewer.value) return []
   if (currentStatus === 'open') return ['resolved', 'pending_discussion']
-  if (currentStatus === 'pending_discussion') return ['open', 'resolved', 'internal_resolved']
-  if (currentStatus === 'internal_resolved') return ['open', 'resolved']
+  if (currentStatus === 'pending_discussion') return ['open', 'internal_resolved']
+  if (currentStatus === 'internal_resolved') return ['open']
   if (currentStatus === 'resolved') return ['open']
   if (currentStatus === 'disagreed') return ['open', 'resolved', 'pending_discussion', 'internal_resolved']
   return []
