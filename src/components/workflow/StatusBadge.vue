@@ -36,6 +36,7 @@ const config = computed(() => {
     rejected: 'bg-error-bg text-error',
     open: 'bg-error-bg text-error',
     pending_discussion: 'bg-warning-bg text-warning',
+    internal_resolved: 'bg-info-bg text-info',
     disagreed: 'bg-info-bg text-info',
     resolved: 'bg-success-bg text-success',
     critical: 'bg-error-bg text-error',

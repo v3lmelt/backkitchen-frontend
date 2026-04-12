@@ -663,6 +663,13 @@ function removeStage(stageId: string) {
   for (const stage of stages.value) {
     stage.extra_reject_targets = stage.extra_reject_targets.filter(targetId => targetId !== stageId)
   }
+  // Clear allow_producer_direct on any intake stage that no longer has a downstream producer_gate
+  for (let i = 0; i < stages.value.length; i++) {
+    const stage = stages.value[i]
+    if (stage.kind === 'intake' && stage.allow_producer_direct && !directProducerTarget(i)) {
+      stage.allow_producer_direct = false
+    }
+  }
   selectedStageId.value = stages.value[Math.min(index, stages.value.length - 1)]?.id ?? null
   markChanged()
 }

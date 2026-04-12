@@ -4,11 +4,23 @@ import { createPinia, setActivePinia } from 'pinia'
 const mocks = vi.hoisted(() => ({
   meMock: vi.fn(),
   listMock: vi.fn(),
+  configMock: vi.fn(),
+  invitationListMock: vi.fn(),
+  notificationListMock: vi.fn(),
+  notificationMarkAllReadMock: vi.fn(),
+  notificationMarkReadMock: vi.fn(),
   pushMock: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
   authApi: { me: mocks.meMock },
+  configApi: { get: mocks.configMock },
+  invitationApi: { listMine: mocks.invitationListMock, accept: vi.fn(), decline: vi.fn() },
+  notificationApi: {
+    list: mocks.notificationListMock,
+    markAllRead: mocks.notificationMarkAllReadMock,
+    markRead: mocks.notificationMarkReadMock,
+  },
   userApi: { list: mocks.listMock },
 }))
 
@@ -24,7 +36,15 @@ describe('app store', () => {
     localStorage.clear()
     mocks.meMock.mockReset()
     mocks.listMock.mockReset()
+    mocks.configMock.mockReset()
+    mocks.invitationListMock.mockReset()
+    mocks.notificationListMock.mockReset()
+    mocks.notificationMarkAllReadMock.mockReset()
+    mocks.notificationMarkReadMock.mockReset()
     mocks.pushMock.mockReset()
+    mocks.configMock.mockResolvedValue({ r2_enabled: false })
+    mocks.invitationListMock.mockResolvedValue([])
+    mocks.notificationListMock.mockResolvedValue([])
   })
 
   it('persists auth changes', () => {
@@ -55,7 +75,10 @@ describe('app store', () => {
   it('clears auth when bootstrap fails', async () => {
     localStorage.setItem('backkitchen_token', 'token-1')
     localStorage.setItem('backkitchen_user', '{"id":9}')
-    mocks.meMock.mockRejectedValue(new Error('unauthorized'))
+    mocks.meMock.mockImplementation(async () => {
+      localStorage.removeItem('backkitchen_token')
+      throw new Error('unauthorized')
+    })
     const store = useAppStore()
 
     await store.bootstrap()

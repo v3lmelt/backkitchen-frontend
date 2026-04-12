@@ -37,6 +37,7 @@ const teamState = reactive<{ mastering_engineer_id: number | null; member_ids: n
 })
 
 const deadlineState = reactive({ deadline: '', peer_review: '', mastering: '', final_review: '' })
+const deadlineEnabled = reactive({ peer_review: false, mastering: false, final_review: false })
 
 const showWorkflowBuilder = ref(false)
 const showWorkflowGuide = ref(false)
@@ -309,16 +310,28 @@ async function create() {
             <input v-model="deadlineState.deadline" type="date" class="input-field w-full" />
           </div>
           <div>
-            <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.peerReviewDeadline') }}</label>
-            <input v-model="deadlineState.peer_review" type="date" class="input-field w-full" />
+            <label class="flex items-center gap-2 text-xs text-muted-foreground mb-1 cursor-pointer">
+              <input type="checkbox" class="checkbox" v-model="deadlineEnabled.peer_review"
+                @change="!deadlineEnabled.peer_review && (deadlineState.peer_review = '')" />
+              {{ t('settings.peerReviewDeadline') }}
+            </label>
+            <input v-if="deadlineEnabled.peer_review" v-model="deadlineState.peer_review" type="date" class="input-field w-full" />
           </div>
           <div>
-            <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.masteringDeadline') }}</label>
-            <input v-model="deadlineState.mastering" type="date" class="input-field w-full" />
+            <label class="flex items-center gap-2 text-xs text-muted-foreground mb-1 cursor-pointer">
+              <input type="checkbox" class="checkbox" v-model="deadlineEnabled.mastering"
+                @change="!deadlineEnabled.mastering && (deadlineState.mastering = '')" />
+              {{ t('settings.masteringDeadline') }}
+            </label>
+            <input v-if="deadlineEnabled.mastering" v-model="deadlineState.mastering" type="date" class="input-field w-full" />
           </div>
           <div>
-            <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.finalReviewDeadline') }}</label>
-            <input v-model="deadlineState.final_review" type="date" class="input-field w-full" />
+            <label class="flex items-center gap-2 text-xs text-muted-foreground mb-1 cursor-pointer">
+              <input type="checkbox" class="checkbox" v-model="deadlineEnabled.final_review"
+                @change="!deadlineEnabled.final_review && (deadlineState.final_review = '')" />
+              {{ t('settings.finalReviewDeadline') }}
+            </label>
+            <input v-if="deadlineEnabled.final_review" v-model="deadlineState.final_review" type="date" class="input-field w-full" />
           </div>
         </div>
       </div>

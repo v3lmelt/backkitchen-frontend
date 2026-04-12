@@ -3,18 +3,19 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { LayoutGrid, Upload, Archive, Smile, Lock, X } from 'lucide-vue-next'
+import { LayoutGrid, Upload, Archive, Smile, Lock, X, Bell } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const { t } = useI18n()
 
-const iconMap = { grid: LayoutGrid, upload: Upload, albums: Archive, circles: Smile, admin: Lock } as const
+const iconMap = { grid: LayoutGrid, upload: Upload, notifications: Bell, albums: Archive, circles: Smile, admin: Lock } as const
 
 const navItems = computed(() => [
   { label: t('nav.dashboard'), icon: 'grid' as const, path: '/' },
   { label: t('nav.submit'), icon: 'upload' as const, path: '/upload' },
+  { label: t('nav.notifications'), icon: 'notifications' as const, path: '/notifications' },
   { label: t('nav.albums'), icon: 'albums' as const, path: '/albums' },
   { label: t('nav.circles'), icon: 'circles' as const, path: '/circles' },
 ])
@@ -81,6 +82,12 @@ const navItemClass = (path: string) => [
       >
         <component :is="iconMap[item.icon]" class="w-5 h-5 flex-shrink-0" :stroke-width="2" />
         <span v-if="showLabel" class="whitespace-nowrap">{{ item.label }}</span>
+        <span
+          v-if="item.path === '/notifications' && appStore.unreadCount > 0"
+          class="ml-auto rounded-full bg-error px-2 py-0.5 text-[11px] font-mono text-white"
+        >
+          {{ appStore.unreadCount > 99 ? '99+' : appStore.unreadCount }}
+        </span>
       </RouterLink>
       <RouterLink
         v-if="appStore.currentUser?.is_admin"
@@ -142,6 +149,12 @@ const navItemClass = (path: string) => [
         >
           <component :is="iconMap[item.icon]" class="w-5 h-5 flex-shrink-0" :stroke-width="2" />
           <span class="whitespace-nowrap">{{ item.label }}</span>
+          <span
+            v-if="item.path === '/notifications' && appStore.unreadCount > 0"
+            class="ml-auto rounded-full bg-error px-2 py-0.5 text-[11px] font-mono text-white"
+          >
+            {{ appStore.unreadCount > 99 ? '99+' : appStore.unreadCount }}
+          </span>
         </button>
         <button
           v-if="appStore.currentUser?.is_admin"

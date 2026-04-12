@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 const STORAGE_KEY_PREFIX = 'backkitchen_dashboard_pins_'
 
@@ -21,8 +21,16 @@ function saveForUser(userId: number) {
   localStorage.setItem(`${STORAGE_KEY_PREFIX}${userId}`, JSON.stringify([..._pinnedIds.value]))
 }
 
-export function useDashboardPins(userId: number | null | undefined) {
-  if (userId) loadForUser(userId)
+export function useDashboardPins(userId: number | null | undefined | (() => number | null | undefined)) {
+  const resolvedUserId = computed(() => typeof userId === 'function' ? userId() : userId)
+
+  watch(resolvedUserId, (nextUserId) => {
+    if (nextUserId) loadForUser(nextUserId)
+    else {
+      _loadedUserId = null
+      _pinnedIds.value = new Set()
+    }
+  }, { immediate: true })
 
   const hasAnyPins = computed(() => _pinnedIds.value.size > 0)
 
@@ -31,12 +39,13 @@ export function useDashboardPins(userId: number | null | undefined) {
   }
 
   function togglePin(albumId: number): void {
-    if (!userId) return
+    const activeUserId = resolvedUserId.value
+    if (!activeUserId) return
     const next = new Set(_pinnedIds.value)
     if (next.has(albumId)) next.delete(albumId)
     else next.add(albumId)
     _pinnedIds.value = next
-    saveForUser(userId)
+    saveForUser(activeUserId)
   }
 
   return { hasAnyPins, isPinned, togglePin }

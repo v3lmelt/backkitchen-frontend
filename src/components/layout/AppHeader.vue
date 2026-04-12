@@ -75,9 +75,10 @@ const currentWorkflowStepLabel = computed(() => {
 
 const pageTitle = computed(() => {
   const name = route.name as string
-  const map: Record<string, string> = {
-    dashboard: t('header.pages.dashboard'),
-    'track-detail': t('header.pages.trackDetail'),
+    const map: Record<string, string> = {
+      dashboard: t('header.pages.dashboard'),
+      notifications: t('header.pages.notifications'),
+      'track-detail': t('header.pages.trackDetail'),
     'peer-review': t('header.pages.peerReview'),
     'issue-detail': t('header.pages.issueDetail'),
     'author-revision': t('header.pages.authorRevision'),
@@ -212,6 +213,10 @@ function handleMenuToggle() {
       <div v-if="appStore.currentUser" class="relative" data-notification-panel>
         <button @click.stop="showNotifications = !showNotifications" class="relative p-2 rounded-lg hover:bg-white/10 transition-colors text-muted-foreground hover:text-foreground">
           <Bell class="h-5 w-5" :stroke-width="2" />
+          <span
+            v-if="appStore.notificationChannelConnected"
+            class="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-success"
+          ></span>
           <span v-if="appStore.unreadCount > 0"
             class="absolute -top-1 -right-1 bg-error text-white text-xs rounded-full h-4 w-4 flex items-center justify-center font-mono font-bold">
             {{ appStore.unreadCount > 9 ? '9+' : appStore.unreadCount }}
@@ -248,6 +253,23 @@ function handleMenuToggle() {
                 </div>
               </div>
             </button>
+            <div v-if="appStore.notificationsHasMore" class="border-t border-border p-2">
+              <button
+                @click="appStore.loadMoreNotifications()"
+                :disabled="appStore.notificationsLoadingMore"
+                class="w-full btn-secondary text-xs"
+              >
+                {{ appStore.notificationsLoadingMore ? t('common.loading') : t('notifications.loadMore') }}
+              </button>
+            </div>
+            <div class="border-t border-border p-2">
+              <button
+                @click="showNotifications = false; router.push('/notifications')"
+                class="w-full btn-secondary text-xs"
+              >
+                {{ t('notifications.viewAll') }}
+              </button>
+            </div>
           </div>
         </div>
       </div>

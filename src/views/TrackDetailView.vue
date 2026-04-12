@@ -118,6 +118,9 @@ function formatTimelineEvent(event: WorkflowEvent): string {
       if (s === 'resolved') return num != null
         ? t('dashboard.timeline.issueResolved', { name, num })
         : t('dashboard.events.issue_updated', { name })
+      if (s === 'internal_resolved') return num != null
+        ? t('dashboard.timeline.issueInternalResolved', { name, num })
+        : t('dashboard.events.issue_updated', { name })
       if (s === 'pending_discussion') return num != null
         ? t('dashboard.timeline.issuePendingDiscussion', { name, num })
         : t('dashboard.events.issue_updated', { name })
@@ -241,7 +244,7 @@ watch(wsConnected, (val) => {
 })
 
 async function loadTrack() {
-  loading.value = true
+  if (!track.value) loading.value = true
   loadError.value = false
   try {
     const detail = await trackApi.get(trackId.value)
@@ -484,7 +487,6 @@ async function saveMetadata() {
     track.value = { ...track.value, ...updated }
     editingMetadata.value = false
     toastSuccess(t('trackDetail.metadataSaved'))
-    await loadTrack()
   } catch {
     toastError(t('trackDetail.metadataSaveFailed'))
   } finally {
@@ -534,6 +536,8 @@ const showReassignModal = ref(false)
 const reassignMembers = ref<AlbumMember[]>([])
 const reassignSelectedUserIds = ref<number[]>([])
 const reassigning = ref(false)
+const reassignReviewerLimit = computed(() => Math.max(1, track.value?.workflow_step?.required_reviewer_count ?? 1))
+const canSelectMoreReassignReviewers = computed(() => reassignSelectedUserIds.value.length < reassignReviewerLimit.value)
 
 async function openReassignModal() {
   if (isAutoAssign.value) {
@@ -552,10 +556,21 @@ function toggleReassignMember(userId: number) {
   const exists = reassignSelectedUserIds.value.includes(userId)
   if (exists) {
     reassignSelectedUserIds.value = reassignSelectedUserIds.value.filter(id => id !== userId)
-  } else {
-    reassignSelectedUserIds.value = [...reassignSelectedUserIds.value, userId]
+    return
   }
+  if (!canSelectMoreReassignReviewers.value) return
+  reassignSelectedUserIds.value = [...reassignSelectedUserIds.value, userId]
 }
+
+function isReassignMemberSelectionDisabled(userId: number): boolean {
+  if (reassignSelectedUserIds.value.includes(userId)) return false
+  return !canSelectMoreReassignReviewers.value
+}
+
+const reassignSelectionSummary = computed(() => t('trackDetail.reassignSelectionSummary', {
+  selected: reassignSelectedUserIds.value.length,
+  limit: reassignReviewerLimit.value,
+}))
 
 async function doReassign(userIds?: number[]) {
   if (!track.value) return
@@ -749,29 +764,29 @@ watch(selectedCompareMasterDelivery, (delivery) => {
 
           <!-- Normal display -->
           <template v-else>
-            <div class="flex items-start gap-2">
-              <div class="min-w-0">
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5">
                 <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">
                   <span v-if="track.track_number" class="text-muted-foreground font-mono">#{{ track.track_number }}</span>
                   {{ track.title }}
                 </h1>
-                <p class="text-sm sm:text-base text-muted-foreground">
-                  <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span> · source v{{ track.version }} · cycle {{ track.workflow_cycle }}
-                </p>
-                <div v-if="track.bpm || track.original_title || track.original_artist" class="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
-                  <span v-if="track.bpm" class="font-mono">BPM {{ track.bpm }}</span>
-                  <span v-if="track.original_title">{{ t('upload.originalTitle') }}: {{ track.original_title }}</span>
-                  <span v-if="track.original_artist">{{ t('upload.originalArtist') }}: {{ track.original_artist }}</span>
-                </div>
+                <button
+                  v-if="canEditMetadata"
+                  @click="startEditMetadata"
+                  class="shrink-0 p-1.5 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                  :title="t('trackDetail.editMetadata')"
+                >
+                  <Pencil class="w-4 h-4" :stroke-width="2" />
+                </button>
               </div>
-              <button
-                v-if="canEditMetadata"
-                @click="startEditMetadata"
-                class="shrink-0 mt-1 p-1.5 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                :title="t('trackDetail.editMetadata')"
-              >
-                <Pencil class="w-4 h-4" :stroke-width="2" />
-              </button>
+              <p class="text-sm sm:text-base text-muted-foreground">
+                <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span> · source v{{ track.version }} · cycle {{ track.workflow_cycle }}
+              </p>
+              <div v-if="track.bpm || track.original_title || track.original_artist" class="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
+                <span v-if="track.bpm" class="font-mono">BPM {{ track.bpm }}</span>
+                <span v-if="track.original_title">{{ t('upload.originalTitle') }}: {{ track.original_title }}</span>
+                <span v-if="track.original_artist">{{ t('upload.originalArtist') }}: {{ track.original_artist }}</span>
+              </div>
             </div>
           </template>
         </div>
@@ -1138,38 +1153,48 @@ watch(selectedCompareMasterDelivery, (delivery) => {
         </div>
 
         <!-- Reassign reviewer modal (manual mode) -->
-        <div v-if="showReassignModal" class="card space-y-3">
-          <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('trackDetail.reassignReviewerTitle') }}</h4>
-          <p class="text-xs text-muted-foreground">{{ t('trackDetail.reassignReviewerManual') }}</p>
-          <div class="space-y-1 max-h-48 overflow-y-auto">
-            <label
-              v-for="m in reassignMembers"
-              :key="m.user_id"
-              class="flex items-center gap-2 px-3 py-2 border border-border rounded-none cursor-pointer hover:bg-background/60 transition-colors"
-              :class="reassignSelectedUserIds.includes(m.user_id) ? 'border-primary bg-background' : ''"
-            >
-              <input
-                type="checkbox"
-                class="checkbox"
-                :checked="reassignSelectedUserIds.includes(m.user_id)"
-                @change="toggleReassignMember(m.user_id)"
-              />
-              <span class="text-sm text-foreground">{{ m.user.display_name }}</span>
-            </label>
+        <Teleport to="body">
+          <div v-if="showReassignModal" class="fixed inset-0 z-50 flex items-center justify-center" @click.self="showReassignModal = false">
+            <div class="absolute inset-0 bg-black/60" />
+            <div class="relative bg-card border border-border rounded-none p-5 w-full max-w-sm space-y-3 shadow-lg">
+              <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('trackDetail.reassignReviewerTitle') }}</h4>
+              <p class="text-xs text-muted-foreground">{{ t('trackDetail.reassignReviewerManual') }}</p>
+              <p class="text-xs text-muted-foreground">{{ reassignSelectionSummary }}</p>
+              <div class="space-y-1 max-h-48 overflow-y-auto">
+                <label
+                  v-for="m in reassignMembers"
+                  :key="m.user_id"
+                  class="flex items-center gap-2 px-3 py-2 border border-border rounded-none cursor-pointer hover:bg-background/60 transition-colors"
+                  :class="[
+                    reassignSelectedUserIds.includes(m.user_id) ? 'border-primary bg-background' : '',
+                    isReassignMemberSelectionDisabled(m.user_id) ? 'opacity-50 cursor-not-allowed hover:bg-transparent' : '',
+                  ]"
+                >
+                  <input
+                    type="checkbox"
+                    class="checkbox"
+                    :checked="reassignSelectedUserIds.includes(m.user_id)"
+                    :disabled="isReassignMemberSelectionDisabled(m.user_id)"
+                    @change="toggleReassignMember(m.user_id)"
+                  />
+                  <span class="text-sm text-foreground">{{ m.user.display_name }}</span>
+                </label>
+              </div>
+              <div class="flex gap-2">
+                <button
+                  @click="doReassign(reassignSelectedUserIds)"
+                  :disabled="reassigning || reassignSelectedUserIds.length === 0"
+                  class="flex-1 btn-primary h-9 text-sm disabled:opacity-50"
+                >
+                  {{ reassigning ? t('trackDetail.reassigning') : t('common.confirm') }}
+                </button>
+                <button @click="showReassignModal = false" class="flex-1 btn-secondary h-9 text-sm">
+                  {{ t('common.cancel') }}
+                </button>
+              </div>
+            </div>
           </div>
-          <div class="flex gap-2">
-            <button
-              @click="doReassign(reassignSelectedUserIds)"
-              :disabled="reassigning || reassignSelectedUserIds.length === 0"
-              class="flex-1 btn-primary h-9 text-sm disabled:opacity-50"
-            >
-              {{ reassigning ? t('trackDetail.reassigning') : t('common.confirm') }}
-            </button>
-            <button @click="showReassignModal = false" class="flex-1 btn-secondary h-9 text-sm">
-              {{ t('common.cancel') }}
-            </button>
-          </div>
-        </div>
+        </Teleport>
 
         <!-- Visibility toggle (producer only, non-archived) -->
         <div v-if="isProducer && !track.archived_at" class="pt-2">

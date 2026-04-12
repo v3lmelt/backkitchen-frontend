@@ -30,10 +30,12 @@ const props = withDefaults(defineProps<{
   draftMarkers?: { marker_type: 'point' | 'range'; time_start: number; time_end: number | null }[]
   draftRangeAnchor?: number | null
   hoveredIssueId?: number | null
+  compact?: boolean
 }>(), {
   mode: 'seek',
   showGainControl: true,
   playbackScope: 'source',
+  compact: false,
 })
 
 const emit = defineEmits<{
@@ -205,6 +207,10 @@ function gainDbToLinear(value: number): number {
 
 function isIssueUnresolved(status: string): boolean {
   return status === 'open' || status === 'pending_discussion' || status === 'disagreed'
+}
+
+function isIssueResolvedLike(status: string): boolean {
+  return status === 'resolved' || status === 'internal_resolved'
 }
 
 function getMarkerStatus(issues: Issue[]): MarkerStatus {
@@ -406,7 +412,7 @@ function rangeTone(severity: string) {
 }
 
 function rangeRulerBarStyle(issue: Issue) {
-  const tone = issue.status === 'resolved' ? RESOLVED_TONE : rangeTone(issue.severity)
+  const tone = isIssueResolvedLike(issue.status) ? RESOLVED_TONE : rangeTone(issue.severity)
   const isActive = activeRangeIssueId.value === issue.id
   const isHovered = props.hoveredIssueId === issue.id
 
@@ -418,7 +424,7 @@ function rangeRulerBarStyle(issue: Issue) {
 }
 
 function rangeRulerTooltipStyle(issue: Issue) {
-  const tone = issue.status === 'resolved' ? RESOLVED_TONE : rangeTone(issue.severity)
+  const tone = isIssueResolvedLike(issue.status) ? RESOLVED_TONE : rangeTone(issue.severity)
   return {
     borderColor: tone.edge,
     boxShadow: '0 4px 12px rgba(0,0,0,0.32)',
@@ -620,7 +626,7 @@ function _removeRegionById(id: string) {
 
 function _addHighlightRegion(issue: Issue, start: number, end: number) {
   if (!regionsPlugin.value) return
-  const tone = issue.status === 'resolved' ? RESOLVED_TONE : rangeTone(issue.severity)
+  const tone = isIssueResolvedLike(issue.status) ? RESOLVED_TONE : rangeTone(issue.severity)
   const region = regionsPlugin.value.addRegion({
     start,
     end,
@@ -1203,8 +1209,8 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
     <div class="relative" :style="{ paddingTop: hasPointIssues ? '14px' : '0' }">
       <div
         v-if="hasPointIssues"
-        class="pointer-events-none absolute inset-x-0 top-0 z-10 overflow-visible"
-        :style="{ height: `${overlayHeight + 14}px` }"
+        class="pointer-events-none absolute inset-x-0 top-0 z-20 overflow-visible"
+        :style="{ height: `${overlayHeight + 14 + (hasRangeIssues && markerTimelineDuration > 0 ? rangeRulerHeight + 4 : 0)}px` }"
       >
         <div
           v-for="group in pointGroups"
@@ -1221,6 +1227,11 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
             @mouseenter="emitPointGroupHover(group)"
             @mouseleave="emitIssueLeave"
           >
+            <span
+              v-if="hasRangeIssues && markerTimelineDuration > 0"
+              class="shrink-0"
+              :style="{ height: `${rangeRulerHeight + 4}px` }"
+            />
             <span
               class="h-2.5 w-2.5 shrink-0 rounded-full transition-transform duration-150"
               :style="pointGroupDotStyle(group)"
@@ -1239,7 +1250,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
 
           <div
             v-if="activePointGroupKey === group.key"
-            class="pointer-events-auto absolute top-4 z-20 w-56 rounded-lg border border-border bg-card/95 p-2 shadow-xl backdrop-blur"
+            class="pointer-events-auto absolute top-4 z-30 w-56 rounded-lg border border-border bg-card/95 p-2 shadow-xl backdrop-blur"
             :class="popoverAnchorClass(group.popoverAlign)"
           >
             <button
@@ -1253,7 +1264,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
             >
               <span
                 class="mt-1 h-2 w-2 shrink-0 rounded-full"
-                :style="{ background: issue.status === 'resolved' ? RESOLVED_TONE.edge : rangeTone(issue.severity).edge }"
+                :style="{ background: isIssueResolvedLike(issue.status) ? RESOLVED_TONE.edge : rangeTone(issue.severity).edge }"
               />
               <span class="min-w-0">
                 <span class="block truncate text-xs font-medium text-foreground">{{ issue.title }}</span>
@@ -1396,7 +1407,8 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
     <div class="flex flex-col gap-3">
       <div
         v-if="showGainControl && hasActiveGain"
-        class="flex flex-col gap-2 border border-primary/40 bg-warning-bg px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+        class="flex flex-col gap-2 border border-primary/40 bg-warning-bg px-3 py-2"
+        :class="compact ? '' : 'sm:flex-row sm:items-center sm:justify-between'"
       >
         <span class="text-sm font-mono font-semibold text-warning">
           {{ t('waveform.activeGainNotice', { gain: formatGainDb(gainDb) }) }}
@@ -1410,7 +1422,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
         </button>
       </div>
 
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex flex-col gap-3" :class="compact ? '' : 'sm:flex-row sm:items-center sm:justify-between'">
       <div class="flex items-center gap-4">
         <button type="button" @click="togglePlay" class="text-primary hover:text-primary-hover transition-colors">
           <Play v-if="!isPlaying" class="w-8 h-8" fill="currentColor" :stroke-width="0" />
@@ -1421,7 +1433,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
         </span>
       </div>
 
-      <div v-if="showGainControl" class="flex flex-col gap-2 sm:min-w-[18rem] sm:items-end">
+      <div v-if="showGainControl" class="flex flex-col gap-2" :class="compact ? '' : 'sm:min-w-[18rem] sm:items-end'">
         <div class="flex items-center gap-2 text-xs font-mono text-muted-foreground">
           <span>{{ t('waveform.gain') }}</span>
           <span class="text-foreground">{{ formatGainDb(gainDb) }}</span>
@@ -1439,7 +1451,8 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
           :min="MIN_GAIN_DB"
           :max="MAX_GAIN_DB"
           step="0.5"
-          class="h-2 w-full cursor-pointer accent-primary sm:w-72"
+          class="h-2 w-full cursor-pointer accent-primary"
+          :class="compact ? '' : 'sm:w-72'"
           :aria-label="t('waveform.gain')"
           @input="onGainInput"
         />

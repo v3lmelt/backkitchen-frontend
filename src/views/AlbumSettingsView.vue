@@ -78,6 +78,7 @@ const leavingAlbum = ref(false)
 
 // Deadline state
 const deadlineState = reactive({ deadline: '', peer_review: '', mastering: '', final_review: '' })
+const deadlineEnabled = reactive({ peer_review: false, mastering: false, final_review: false })
 const savingDeadlines = ref(false)
 
 // Activity state
@@ -253,6 +254,9 @@ function syncDeadlineState() {
   deadlineState.peer_review = toDateInput(album.value.phase_deadlines?.peer_review)
   deadlineState.mastering = toDateInput(album.value.phase_deadlines?.mastering)
   deadlineState.final_review = toDateInput(album.value.phase_deadlines?.final_review)
+  deadlineEnabled.peer_review = !!album.value.phase_deadlines?.peer_review
+  deadlineEnabled.mastering = !!album.value.phase_deadlines?.mastering
+  deadlineEnabled.final_review = !!album.value.phase_deadlines?.final_review
 }
 
 onMounted(async () => {
@@ -1076,16 +1080,28 @@ async function refreshDeliveries() {
               <input v-model="deadlineState.deadline" type="date" class="input-field w-full" />
             </div>
             <div>
-              <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.peerReviewDeadline') }}</label>
-              <input v-model="deadlineState.peer_review" type="date" class="input-field w-full" />
+              <label class="flex items-center gap-2 text-xs text-muted-foreground mb-1 cursor-pointer">
+                <input type="checkbox" class="checkbox" v-model="deadlineEnabled.peer_review"
+                  @change="!deadlineEnabled.peer_review && (deadlineState.peer_review = '')" />
+                {{ t('settings.peerReviewDeadline') }}
+              </label>
+              <input v-if="deadlineEnabled.peer_review" v-model="deadlineState.peer_review" type="date" class="input-field w-full" />
             </div>
             <div>
-              <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.masteringDeadline') }}</label>
-              <input v-model="deadlineState.mastering" type="date" class="input-field w-full" />
+              <label class="flex items-center gap-2 text-xs text-muted-foreground mb-1 cursor-pointer">
+                <input type="checkbox" class="checkbox" v-model="deadlineEnabled.mastering"
+                  @change="!deadlineEnabled.mastering && (deadlineState.mastering = '')" />
+                {{ t('settings.masteringDeadline') }}
+              </label>
+              <input v-if="deadlineEnabled.mastering" v-model="deadlineState.mastering" type="date" class="input-field w-full" />
             </div>
             <div>
-              <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.finalReviewDeadline') }}</label>
-              <input v-model="deadlineState.final_review" type="date" class="input-field w-full" />
+              <label class="flex items-center gap-2 text-xs text-muted-foreground mb-1 cursor-pointer">
+                <input type="checkbox" class="checkbox" v-model="deadlineEnabled.final_review"
+                  @change="!deadlineEnabled.final_review && (deadlineState.final_review = '')" />
+                {{ t('settings.finalReviewDeadline') }}
+              </label>
+              <input v-if="deadlineEnabled.final_review" v-model="deadlineState.final_review" type="date" class="input-field w-full" />
             </div>
           </div>
           <button @click="saveDeadlines" :disabled="savingDeadlines" class="btn-primary text-sm">

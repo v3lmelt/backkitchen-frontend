@@ -2,10 +2,11 @@
 import { useI18n } from 'vue-i18n'
 import { Globe, MessageSquare } from 'lucide-vue-next'
 import { useAppStore } from '@/stores/app'
-import type { Issue, IssueStatus, Track } from '@/types'
+import type { Issue, IssueStatus, StageAssignment, Track } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatLocaleDate, formatTimestampShort } from '@/utils/time'
 import { hashId } from '@/utils/hash'
+import { canUserReviewIssue } from '@/utils/reviewAssignments'
 
 const props = withDefaults(defineProps<{
   issues: Issue[]
@@ -14,6 +15,7 @@ const props = withDefaults(defineProps<{
   currentSourceVersionNumber?: number | null
   hoveredIssueId?: number | null
   track?: Track | null
+  assignments?: StageAssignment[]
   showActivity?: boolean
   enableQuickActions?: boolean
 }>(), {
@@ -22,6 +24,7 @@ const props = withDefaults(defineProps<{
   currentSourceVersionNumber: null,
   hoveredIssueId: null,
   track: null,
+  assignments: () => [],
   showActivity: false,
   enableQuickActions: false,
 })
@@ -82,33 +85,17 @@ function isSubmitter(): boolean {
 }
 
 function isReviewer(issue: Issue): boolean {
-  if (!props.track) return false
-  const uid = appStore.currentUser?.id
-  if (!uid) return false
-  if (uid === issue.author_id) return true
-  switch (issue.phase) {
-    case 'peer':
-    case 'peer_review':
-      return uid === props.track.peer_reviewer_id
-    case 'producer':
-    case 'producer_gate':
-    case 'final_review':
-      return uid === props.track.producer_id
-    case 'mastering':
-      return uid === props.track.mastering_engineer_id
-    default:
-      return false
-  }
+  return canUserReviewIssue(appStore.currentUser?.id, props.track, issue, props.assignments)
 }
 
 function availableQuickActions(issue: Issue): IssueStatus[] {
   if (!props.enableQuickActions || !props.track) return []
   if (isSubmitter() && issue.status === 'open') return ['resolved', 'disagreed']
-  if (isSubmitter() && issue.status === 'disagreed') return ['resolved']
   if (isReviewer(issue) && issue.status === 'open') return ['resolved', 'pending_discussion']
-  if (isReviewer(issue) && issue.status === 'pending_discussion') return ['open', 'resolved']
+  if (isReviewer(issue) && issue.status === 'pending_discussion') return ['open', 'internal_resolved']
+  if (isReviewer(issue) && issue.status === 'internal_resolved') return ['open']
   if (isReviewer(issue) && issue.status === 'resolved') return ['open']
-  if (isReviewer(issue) && issue.status === 'disagreed') return ['open', 'resolved', 'pending_discussion']
+  if (isReviewer(issue) && issue.status === 'disagreed') return ['open']
   return []
 }
 
@@ -116,6 +103,8 @@ function quickActionLabel(status: IssueStatus): string {
   switch (status) {
     case 'resolved':
       return t('issueDetail.markFixed')
+    case 'internal_resolved':
+      return t('issueDetail.markInternalResolved')
     case 'disagreed':
       return t('issueDetail.disagree')
     case 'open':
@@ -129,6 +118,8 @@ function quickActionClass(status: IssueStatus): string {
   switch (status) {
     case 'resolved':
       return 'bg-success-bg text-success hover:border-success/40'
+    case 'internal_resolved':
+      return 'bg-info-bg text-info hover:border-info/40'
     case 'disagreed':
       return 'bg-info-bg text-info hover:border-info/40'
     case 'open':

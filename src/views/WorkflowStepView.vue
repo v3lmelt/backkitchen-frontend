@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { checklistApi, issueApi, trackApi, r2Api, uploadToR2, API_ORIGIN } from '@/api'
 import type {
   ChecklistItem,
   ChecklistTemplateItem,
   Issue,
+  StageAssignment,
   Track,
   TrackSourceVersion,
+  User,
   WorkflowConfig,
   MasterDelivery,
   WorkflowStepDef,
@@ -22,6 +24,7 @@ import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import IssueDetailPanel from '@/components/IssueDetailPanel.vue'
 import WorkflowActionBar from '@/components/workflow/WorkflowActionBar.vue'
+import BatchIssueActions from '@/components/workflow/BatchIssueActions.vue'
 import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
@@ -34,6 +37,7 @@ import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { translateStepLabel } from '@/utils/workflow'
 import { hashId } from '@/utils/hash'
 import { extractAudioDuration } from '@/utils/audio'
+import { activeAssignmentsForStep, canUserReviewIssue } from '@/utils/reviewAssignments'
 
 const route = useRoute()
 const router = useRouter()
@@ -63,6 +67,7 @@ const workflowConfig = ref<WorkflowConfig | null>(null)
 const checklistItems = ref<ChecklistItem[]>([])
 const templateItems = ref<ChecklistTemplateItem[]>([])
 const checklistDraft = ref<{ label: string; passed: boolean; note: string }[]>([])
+const reviewAssignments = ref<StageAssignment[]>([])
 const loading = ref(true)
 const acting = ref(false)
 const uploadFile = ref<File | null>(null)
@@ -74,6 +79,13 @@ const uploadProgress = ref(0)
 const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
 const hoveredIssueId = ref<number | null>(null)
 const selectedIssue = ref<Issue | null>(null)
+const selectedStageIssueIds = ref<number[]>([])
+const selectedProducerIssueIds = ref<number[]>([])
+const selectedRevisionIssueIds = ref<number[]>([])
+const stageBatchNote = ref('')
+const producerBatchNote = ref('')
+const revisionBatchNote = ref('')
+const batchUpdatingIssues = ref(false)
 const isIssueFormOpen = ref(false)
 const waveformMode = computed<'seek' | 'annotate'>(() => (isIssueFormOpen.value ? 'annotate' : 'seek'))
 const showSourceCompare = ref(false)
@@ -100,14 +112,54 @@ const defaultChecklistLabelKeyMap: Record<string, string> = {
 onMounted(loadPage)
 onMounted(() => {
   window.addEventListener('keydown', handleWaveformHotkeys)
+  window.addEventListener('beforeunload', handleBeforeUnload)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleWaveformHotkeys)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
   resetDeliveryPreview()
+})
+
+function hasPendingUploadSelection(): boolean {
+  return Boolean(uploading.value || uploadFile.value)
+}
+
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (!hasPendingUploadSelection()) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onBeforeRouteLeave(() => {
+  if (!hasPendingUploadSelection()) return true
+  return window.confirm(t('workflowStep.leaveUploadConfirm'))
 })
 
 const currentStep = computed<WorkflowStepDef | null>(() => track.value?.workflow_step ?? null)
 const transitions = computed<WorkflowTransitionOption[]>(() => track.value?.workflow_transitions ?? [])
+const currentStepAssignments = computed(() => activeAssignmentsForStep(reviewAssignments.value, currentStep.value?.id))
+const completedReviewCount = computed(() => currentStepAssignments.value.filter(assignment => assignment.status === 'completed').length)
+const requiredReviewCount = computed(() => Math.max(1, currentStep.value?.required_reviewer_count ?? 1))
+const currentUserAssignment = computed(() => {
+  const userId = appStore.currentUser?.id
+  if (!userId) return null
+  return currentStepAssignments.value.find(assignment => assignment.user_id === userId) ?? null
+})
+const reviewQuorumReached = computed(() => completedReviewCount.value >= requiredReviewCount.value)
+const reviewRequiresGroupFinalization = computed(() => currentStep.value?.type === 'review' && requiredReviewCount.value > 1)
+const reviewAllowsInternalIssueVisibility = computed(() => {
+  if (currentStep.value?.type !== 'review') return false
+  const assignmentCount = currentStepAssignments.value.length
+  const reviewerScopeCount = Math.max(requiredReviewCount.value, assignmentCount)
+  return reviewerScopeCount > 1
+})
+const reviewWaitingForAssignment = computed(() => currentStep.value?.type === 'review' && currentStepAssignments.value.length === 0)
+const currentUserCanFinalizeReview = computed(() =>
+  currentUserAssignment.value?.status === 'completed'
+  && reviewRequiresGroupFinalization.value
+  && reviewQuorumReached.value,
+)
+const currentUserCanSubmitReview = computed(() => currentUserAssignment.value?.status === 'pending')
 
 function inferClassicVariant(step: WorkflowStepDef | null) {
   if (!step) return 'generic'
@@ -196,13 +248,17 @@ const producerWaveformIssues = computed(() => {
   return filterIssuesForDisplayedSourceVersion(producerIssues.value)
 })
 const producerOpenCount = computed(() => producerSnapshotIssues.value.filter(issue => isIssueUnresolved(issue.status)).length)
-const producerResolvedCount = computed(() => producerSnapshotIssues.value.filter(issue => issue.status === 'resolved').length)
+const producerResolvedCount = computed(() =>
+  producerSnapshotIssues.value.filter(issue => issue.status === 'resolved' || issue.status === 'internal_resolved').length,
+)
 const producerDisagreedCount = computed(() => producerSnapshotIssues.value.filter(issue => issue.status === 'disagreed').length)
 const peerIssues = computed(() =>
   issues.value.filter(i => i.phase === 'peer' || i.phase === 'peer_review'),
 )
 const peerOpenCount = computed(() => peerIssues.value.filter(issue => isIssueUnresolved(issue.status)).length)
-const peerResolvedCount = computed(() => peerIssues.value.filter(issue => issue.status === 'resolved').length)
+const peerResolvedCount = computed(() =>
+  peerIssues.value.filter(issue => issue.status === 'resolved' || issue.status === 'internal_resolved').length,
+)
 const peerDisagreedCount = computed(() => peerIssues.value.filter(issue => issue.status === 'disagreed').length)
 const peerDiscussedCount = computed(() => peerIssues.value.filter(issue => (issue.comment_count ?? 0) > 0).length)
 const revisionSnapshotIssues = computed(() => {
@@ -234,7 +290,7 @@ const revisionOpenIssues = computed(() =>
   revisionSnapshotIssues.value.filter(issue => isIssueUnresolved(issue.status)),
 )
 const revisionResolvedIssues = computed(() =>
-  revisionSnapshotIssues.value.filter(issue => issue.status === 'resolved'),
+  revisionSnapshotIssues.value.filter(issue => issue.status === 'resolved' || issue.status === 'internal_resolved'),
 )
 const revisionWaveformIssues = computed(() => {
   if (currentVersion.value == null) return revisionOpenIssues.value
@@ -243,9 +299,25 @@ const revisionWaveformIssues = computed(() => {
   )
 })
 const openCount = computed(() => allCycleIssues.value.filter(i => isIssueUnresolved(i.status)).length)
-const resolvedCount = computed(() => allCycleIssues.value.filter(i => i.status === 'resolved').length)
+const resolvedCount = computed(() =>
+  allCycleIssues.value.filter(i => i.status === 'resolved' || i.status === 'internal_resolved').length,
+)
+const currentUserChecklistItems = computed(() =>
+  checklistItems.value.filter(item => item.reviewer_id === appStore.currentUser?.id),
+)
 const checklistPassedCount = computed(() => checklistItems.value.filter(item => item.passed).length)
-const checklistSaved = computed(() => checklistItems.value.length > 0)
+const checklistSaved = computed(() => currentUserChecklistItems.value.length > 0)
+const checklistByReviewer = computed(() => {
+  const groups = new Map<number, { user: User | null | undefined; items: ChecklistItem[] }>()
+  for (const item of checklistItems.value) {
+    if (!groups.has(item.reviewer_id)) {
+      const assignment = reviewAssignments.value.find(a => a.user_id === item.reviewer_id)
+      groups.set(item.reviewer_id, { user: assignment?.user, items: [] })
+    }
+    groups.get(item.reviewer_id)!.items.push(item)
+  }
+  return Array.from(groups.values())
+})
 const masterDelivery = computed<MasterDelivery | null>(() => track.value?.current_master_delivery ?? null)
 const masterAudioUrl = computed(() => {
   const d = masterDelivery.value
@@ -364,9 +436,9 @@ async function loadPeerChecklist(albumId: number) {
     .sort((a, b) => a.sort_order - b.sort_order)
     .map(item => item.label)
 
-  if (checklistItems.value.length > 0) {
+  if (currentUserChecklistItems.value.length > 0) {
     checklistDraft.value = labels.map(label => {
-      const item = checklistItems.value.find(entry => entry.label === label)
+      const item = currentUserChecklistItems.value.find(entry => entry.label === label)
       return { label, passed: item?.passed ?? false, note: item?.note ?? '' }
     })
     return
@@ -376,7 +448,7 @@ async function loadPeerChecklist(albumId: number) {
 }
 
 async function loadPage() {
-  loading.value = true
+  if (!track.value) loading.value = true
   error.value = ''
   try {
     const detail = await trackApi.get(trackId.value)
@@ -392,6 +464,11 @@ async function loadPage() {
       selectedIssue.value = issues.value.find(issue => issue.id === selectedIssue.value?.id) ?? null
     }
     checklistItems.value = detail.checklist_items
+    try {
+      reviewAssignments.value = await trackApi.listAssignments(trackId.value)
+    } catch {
+      reviewAssignments.value = []
+    }
 
     if (inferClassicVariant(detail.track.workflow_step ?? null) === 'peer_review') {
       await loadPeerChecklist(detail.track.album_id)
@@ -498,6 +575,116 @@ async function onQuickIssueStatusChange({ issue, status }: { issue: Issue; statu
   }
 }
 
+function canCurrentUserReviewIssue(issue: Issue): boolean {
+  return canUserReviewIssue(appStore.currentUser?.id, track.value, issue, reviewAssignments.value)
+}
+
+function canCurrentUserSubmitIssue(issue: Issue): boolean {
+  return Boolean(track.value && appStore.currentUser?.id === track.value.submitter_id && ['open', 'disagreed'].includes(issue.status))
+}
+
+function availableBatchActionsForIssue(issue: Issue): Issue['status'][] {
+  if (canCurrentUserSubmitIssue(issue) && issue.status === 'open') return ['resolved', 'disagreed']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'open') return ['resolved', 'pending_discussion']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'pending_discussion') return ['open', 'internal_resolved']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'internal_resolved') return ['open']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'resolved') return ['open']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'disagreed') return ['open']
+  return []
+}
+
+function intersectBatchActions(selectedIssues: Issue[]): Issue['status'][] {
+  if (!selectedIssues.length) return []
+  const [firstIssue, ...rest] = selectedIssues
+  return availableBatchActionsForIssue(firstIssue).filter(status =>
+    rest.every(issue => availableBatchActionsForIssue(issue).includes(status)),
+  )
+}
+
+const selectedProducerIssues = computed(() =>
+  producerSnapshotIssues.value.filter(issue => selectedProducerIssueIds.value.includes(issue.id)),
+)
+
+const selectedRevisionIssues = computed(() =>
+  revisionSnapshotIssues.value.filter(issue => selectedRevisionIssueIds.value.includes(issue.id)),
+)
+
+const producerBatchActions = computed(() => intersectBatchActions(selectedProducerIssues.value))
+const revisionBatchActions = computed(() => intersectBatchActions(selectedRevisionIssues.value))
+const stageBatchIssueList = computed(() => {
+  if (!currentStep.value) return []
+  if (activeVariant.value === 'peer_review' || activeVariant.value === 'mastering') return fallbackWaveformIssues.value
+  if (activeVariant.value === 'final_review') return finalReviewIssues.value
+  if (activeVariant.value === 'producer_gate' || activeVariant.value === 'intake' || currentStep.value.type === 'revision') return []
+  if (currentStep.value.type === 'approval' || currentStep.value.type === 'review') return fallbackWaveformIssues.value
+  return []
+})
+const selectedStageIssues = computed(() =>
+  stageBatchIssueList.value.filter(issue => selectedStageIssueIds.value.includes(issue.id)),
+)
+const stageBatchActions = computed(() => intersectBatchActions(selectedStageIssues.value))
+
+watch([stageBatchIssueList, activeVariant, () => currentStep.value?.id], ([issuesList]) => {
+  const validIds = new Set(issuesList.map(issue => issue.id))
+  selectedStageIssueIds.value = selectedStageIssueIds.value.filter(id => validIds.has(id))
+  if (selectedStageIssueIds.value.length === 0) stageBatchNote.value = ''
+})
+
+watch(producerSnapshotIssues, (issuesList) => {
+  const validIds = new Set(issuesList.map(issue => issue.id))
+  selectedProducerIssueIds.value = selectedProducerIssueIds.value.filter(id => validIds.has(id))
+  if (selectedProducerIssueIds.value.length === 0) producerBatchNote.value = ''
+})
+
+watch(revisionSnapshotIssues, (issuesList) => {
+  const validIds = new Set(issuesList.map(issue => issue.id))
+  selectedRevisionIssueIds.value = selectedRevisionIssueIds.value.filter(id => validIds.has(id))
+  if (selectedRevisionIssueIds.value.length === 0) revisionBatchNote.value = ''
+})
+
+async function applyBatchIssueStatusChange(
+  selectedIssues: Issue[],
+  selectedIds: typeof selectedProducerIssueIds,
+  note: typeof producerBatchNote,
+  status: Issue['status'],
+) {
+  if (!track.value || !selectedIssues.length) return
+  batchUpdatingIssues.value = true
+  try {
+    const updatedIssues = await issueApi.batchUpdate(trackId.value, {
+      issue_ids: selectedIssues.map(issue => issue.id),
+      status,
+      status_note: note.value.trim() || undefined,
+    })
+    const updatedById = new Map(updatedIssues.map(issue => [issue.id, issue]))
+    issues.value = issues.value.map(issue => {
+      const updated = updatedById.get(issue.id)
+      return updated ? { ...issue, ...updated } : issue
+    })
+    if (selectedIssue.value && updatedById.has(selectedIssue.value.id)) {
+      selectedIssue.value = { ...selectedIssue.value, ...updatedById.get(selectedIssue.value.id)! }
+    }
+    selectedIds.value = []
+    note.value = ''
+  } catch (err: any) {
+    toastError(err.message || t('workflowStep.transitionFailed'))
+  } finally {
+    batchUpdatingIssues.value = false
+  }
+}
+
+function applyProducerBatchStatus(status: Issue['status']) {
+  return applyBatchIssueStatusChange(selectedProducerIssues.value, selectedProducerIssueIds, producerBatchNote, status)
+}
+
+function applyRevisionBatchStatus(status: Issue['status']) {
+  return applyBatchIssueStatusChange(selectedRevisionIssues.value, selectedRevisionIssueIds, revisionBatchNote, status)
+}
+
+function applyStageBatchStatus(status: Issue['status']) {
+  return applyBatchIssueStatusChange(selectedStageIssues.value, selectedStageIssueIds, stageBatchNote, status)
+}
+
 function peerIssueMarkerSummary(issue: Issue): string {
   if (!issue.markers.length) return t('issue.generalIssue')
   return issue.markers
@@ -524,6 +711,7 @@ function pushToTrackDetail() {
 
 async function executeTransition(decision: string) {
   if (!track.value) return
+  const previousStatus = track.value.status
   if (decision === 'reject_final') {
     const confirmed = window.confirm(t('producer.rejectFinalConfirm'))
     if (!confirmed) return
@@ -534,7 +722,11 @@ async function executeTransition(decision: string) {
     if (activeVariant.value === 'peer_review' && checklistDraft.value.length > 0) {
       await persistChecklist()
     }
-    await trackApi.workflowTransition(trackId.value, decision)
+    const updatedTrack = await trackApi.workflowTransition(trackId.value, decision)
+    if (updatedTrack.status === previousStatus) {
+      await loadPage()
+      return
+    }
     pushToTrackDetail()
   } catch (err: any) {
     error.value = err.message || t('workflowStep.transitionFailed')
@@ -578,10 +770,11 @@ async function handleUpload(kind: 'revision' | 'delivery') {
     if (kind === 'delivery') {
       uploadFile.value = null
       resetDeliveryPreview()
-      await loadPage()
       toastSuccess(t('workflowStep.deliveryUploaded'))
       return
     }
+    uploadFile.value = null
+    resetDeliveryPreview()
     pushToTrackDetail()
   } catch (err: any) {
     error.value = err.message || t('workflowStep.uploadFailed')
@@ -592,12 +785,17 @@ async function handleUpload(kind: 'revision' | 'delivery') {
 
 async function confirmDelivery() {
   if (!track.value || !masterDelivery.value) return
+  const previousStatus = track.value.status
   acting.value = true
   error.value = ''
   try {
-    await trackApi.confirmDelivery(track.value.id, masterDelivery.value.id)
-    await loadPage()
+    const updatedTrack = await trackApi.confirmDelivery(track.value.id, masterDelivery.value.id)
     toastSuccess(t('trackDetail.actions.confirm_delivery', 'Confirm Delivery'))
+    if (updatedTrack.status !== previousStatus) {
+      pushToTrackDetail()
+      return
+    }
+    await loadPage()
   } catch (err: any) {
     error.value = err.message || t('workflowStep.transitionFailed')
   } finally {
@@ -607,10 +805,15 @@ async function confirmDelivery() {
 
 async function approveFinal() {
   if (!track.value) return
+  const previousStatus = track.value.status
   acting.value = true
   error.value = ''
   try {
-    await trackApi.approveFinalReview(track.value.id)
+    const updatedTrack = await trackApi.approveFinalReview(track.value.id)
+    if (updatedTrack.status !== previousStatus) {
+      pushToTrackDetail()
+      return
+    }
     await loadPage()
   } catch (err: any) {
     error.value = err.message || t('workflowStep.transitionFailed')
@@ -637,6 +840,16 @@ function onFileChange(event: Event) {
 function transitionLabel(decision: string, fallbackLabel: string) {
   if (activeVariant.value === 'producer_gate' && decision === 'approve') {
     return t('producer.sendToMastering')
+  }
+  if (currentStep.value?.type === 'review') {
+    if (currentUserCanFinalizeReview.value) {
+      if (decision === 'pass' || decision === 'approve') return t('workflowStep.reviewFinalizeApprove')
+      if (decision.includes('revision') || decision.includes('reject')) return t('workflowStep.reviewFinalizeRevision')
+    }
+    if (currentUserCanSubmitReview.value) {
+      if (decision === 'pass' || decision === 'approve') return t('workflowStep.reviewSubmitApprove')
+      if (decision.includes('revision') || decision.includes('reject')) return t('workflowStep.reviewSubmitRevision')
+    }
   }
   if (decision.startsWith('reject_to_')) {
     const targetStepId = decision.slice('reject_to_'.length)
@@ -747,6 +960,16 @@ const genericApprovalActions = computed<WorkflowAction[]>(() =>
     handler: () => executeTransition(tr.decision),
   })),
 )
+
+const peerReviewActionHint = computed(() => {
+  if (reviewWaitingForAssignment.value) return t('workflowStep.reviewWaitingForAssignment')
+  if (currentUserCanFinalizeReview.value) return t('workflowStep.reviewFinalizeHint')
+  if (reviewRequiresGroupFinalization.value && currentUserAssignment.value?.status === 'completed' && !reviewQuorumReached.value) {
+    return t('workflowStep.reviewWaitingForQuorum', { completed: completedReviewCount.value, required: requiredReviewCount.value })
+  }
+  if (currentUserCanSubmitReview.value) return t('workflowStep.reviewSubmitHint')
+  return t('peerReview.actionHint')
+})
 
 function canUseWaveformShortcuts(): boolean {
   return ['peer_review', 'producer_gate', 'mastering', 'final_review'].includes(activeVariant.value)
@@ -884,6 +1107,57 @@ function handleIssueLeave() {
         {{ error }}
       </div>
 
+      <div class="card space-y-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="space-y-1">
+            <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('workflowStep.reviewTeamHeading') }}</h3>
+            <p class="text-xs text-muted-foreground">
+              <template v-if="reviewWaitingForAssignment">
+                {{ t('workflowStep.reviewWaitingForAssignment') }}
+              </template>
+              <template v-else-if="currentUserCanFinalizeReview">
+                {{ t('workflowStep.reviewFinalizeReady') }}
+              </template>
+              <template v-else-if="reviewRequiresGroupFinalization && currentUserAssignment?.status === 'completed' && !reviewQuorumReached">
+                {{ t('workflowStep.reviewWaitingForQuorum', { completed: completedReviewCount, required: requiredReviewCount }) }}
+              </template>
+              <template v-else>
+                {{ t('workflowStep.reviewSubmitHint') }}
+              </template>
+            </p>
+          </div>
+          <div class="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-mono text-muted-foreground">
+            <span class="text-foreground">{{ completedReviewCount }}/{{ requiredReviewCount }}</span>
+            <span>{{ t('workflowStep.reviewProgress') }}</span>
+          </div>
+        </div>
+
+        <div v-if="currentStepAssignments.length > 0" class="space-y-2">
+          <div
+            v-for="assignment in currentStepAssignments"
+            :key="assignment.id"
+            class="flex items-center justify-between gap-3 border border-border bg-background px-3 py-2 text-sm"
+          >
+            <span class="text-foreground">
+              {{ assignment.user?.display_name ?? `#${assignment.user_id}` }}
+            </span>
+            <div class="flex items-center gap-2 text-xs font-mono">
+              <span
+                class="rounded-full px-2.5 py-1"
+                :class="assignment.status === 'completed' ? 'bg-success-bg text-success' : 'bg-border text-muted-foreground'"
+              >
+                {{ assignment.status === 'completed' ? t('workflowStep.reviewSubmitted') : t('workflowStep.reviewPending') }}
+              </span>
+              <span v-if="assignment.decision" class="rounded-full bg-info-bg px-2.5 py-1 text-info">
+                {{ assignment.decision === 'pass' || assignment.decision === 'approve'
+                  ? t('workflowStep.reviewDecisionApprove')
+                  : t('workflowStep.reviewDecisionRevision') }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div v-if="audioUrl">
         <div class="flex items-start justify-between gap-3 mb-2">
           <p class="text-xs text-muted-foreground leading-relaxed">{{ t('peerReview.waveformHint') }}</p>
@@ -948,6 +1222,7 @@ function handleIssueLeave() {
             ref="issueFormRef"
             :track-id="trackId"
             phase="peer"
+            :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
             @created="onIssueCreated"
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
@@ -956,11 +1231,24 @@ function handleIssueLeave() {
             </template>
           </IssueCreatePanel>
 
+          <BatchIssueActions
+            :selected-count="selectedStageIssueIds.length"
+            :statuses="stageBatchActions"
+            :note="stageBatchNote"
+            :loading="batchUpdatingIssues"
+            @update:note="stageBatchNote = $event"
+            @clear="selectedStageIssueIds = []; stageBatchNote = ''"
+            @apply="applyStageBatchStatus($event)"
+          />
+
           <IssueMarkerList
             :issues="fallbackWaveformIssues"
+            :selectable="true"
+            :selected-ids="selectedStageIssueIds"
             :current-source-version-number="displayedSourceVersionNumber"
             :hovered-issue-id="hoveredIssueId"
             @select="onIssueSelect"
+            @update:selectedIds="selectedStageIssueIds = $event"
             @hover="handleIssueHover"
             @leave="handleIssueLeave"
           />
@@ -990,7 +1278,7 @@ function handleIssueLeave() {
       </div>
     </div>
 
-    <WorkflowActionBar :actions="classicActions.map(action => ({ ...action, disabled: action.disabled || !checklistSaved }))" :hint="t('peerReview.actionHint')" />
+    <WorkflowActionBar :actions="classicActions.map(action => ({ ...action, disabled: action.disabled || !checklistSaved }))" :hint="peerReviewActionHint" />
   </div>
 
   <div v-else-if="activeVariant === 'producer_gate'" class="max-w-4xl mx-auto min-h-full flex flex-col">
@@ -1025,8 +1313,13 @@ function handleIssueLeave() {
           <div class="text-xs text-muted-foreground">{{ t('producer.resolved') }}</div>
         </div>
         <div class="card text-center">
-          <div class="text-2xl font-bold text-primary">{{ checklistPassedCount }}/{{ checklistItems.length }}</div>
-          <div class="text-xs text-muted-foreground">{{ t('producer.checklistPassed') }}</div>
+          <div v-if="checklistByReviewer.length <= 1" class="text-2xl font-bold text-primary">
+            {{ checklistPassedCount }}/{{ checklistItems.length }}
+          </div>
+          <div v-else class="text-2xl font-bold text-primary">{{ checklistByReviewer.length }}</div>
+          <div class="text-xs text-muted-foreground">
+            {{ checklistByReviewer.length <= 1 ? t('producer.checklistPassed') : t('producer.checklistReviewers') }}
+          </div>
         </div>
       </div>
 
@@ -1113,13 +1406,25 @@ function handleIssueLeave() {
 
       <div v-if="checklistItems.length > 0" class="card">
         <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('producer.checklistHeading') }}</h3>
-        <div class="space-y-2">
-          <div v-for="item in checklistItems" :key="item.id" class="flex items-center gap-3 text-sm">
-            <span :class="item.passed ? 'text-success' : 'text-error'">
-              {{ item.passed ? 'OK' : 'NG' }}
-            </span>
+        <div v-if="checklistByReviewer.length === 1" class="space-y-2">
+          <div v-for="item in checklistByReviewer[0].items" :key="item.id" class="flex items-center gap-3 text-sm">
+            <span :class="item.passed ? 'text-success' : 'text-error'">{{ item.passed ? 'OK' : 'NG' }}</span>
             <span class="text-foreground">{{ item.label }}</span>
             <span v-if="item.note" class="text-muted-foreground text-xs">- {{ item.note }}</span>
+          </div>
+        </div>
+        <div v-else class="space-y-5">
+          <div v-for="(group, idx) in checklistByReviewer" :key="group.user?.id ?? idx">
+            <div class="text-xs font-mono text-muted-foreground mb-2">
+              {{ group.user?.username ?? `#${idx + 1}` }}
+            </div>
+            <div class="space-y-2">
+              <div v-for="item in group.items" :key="item.id" class="flex items-center gap-3 text-sm">
+                <span :class="item.passed ? 'text-success' : 'text-error'">{{ item.passed ? 'OK' : 'NG' }}</span>
+                <span class="text-foreground">{{ item.label }}</span>
+                <span v-if="item.note" class="text-muted-foreground text-xs">- {{ item.note }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1193,6 +1498,7 @@ function handleIssueLeave() {
         <IssueDetailPanel
           :issue="selectedIssue"
           :track="track"
+          :assignments="reviewAssignments"
           @close="closeIssueDrawer"
           @updated="onIssueUpdated"
         />
@@ -1220,14 +1526,27 @@ function handleIssueLeave() {
           </div>
         </div>
 
+        <BatchIssueActions
+          :selected-count="selectedProducerIssueIds.length"
+          :statuses="producerBatchActions"
+          :note="producerBatchNote"
+          :loading="batchUpdatingIssues"
+          @update:note="producerBatchNote = $event"
+          @clear="selectedProducerIssueIds = []; producerBatchNote = ''"
+          @apply="applyProducerBatchStatus($event)"
+        />
+
         <IssueMarkerList
           :issues="producerSnapshotIssues"
           :track="track"
+          :selectable="true"
+          :selected-ids="selectedProducerIssueIds"
           :current-source-version-number="track.version"
           :hovered-issue-id="hoveredIssueId"
           :show-activity="true"
           :enable-quick-actions="true"
           @select="openIssueDrawer"
+          @update:selectedIds="selectedProducerIssueIds = $event"
           @hover="handleIssueHover"
           @leave="handleIssueLeave"
           @status-change="onQuickIssueStatusChange"
@@ -1323,6 +1642,7 @@ function handleIssueLeave() {
             ref="issueFormRef"
             :track-id="trackId"
             phase="mastering"
+            :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
             @created="onIssueCreated"
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
@@ -1331,11 +1651,24 @@ function handleIssueLeave() {
             </template>
           </IssueCreatePanel>
 
+          <BatchIssueActions
+            :selected-count="selectedStageIssueIds.length"
+            :statuses="stageBatchActions"
+            :note="stageBatchNote"
+            :loading="batchUpdatingIssues"
+            @update:note="stageBatchNote = $event"
+            @clear="selectedStageIssueIds = []; stageBatchNote = ''"
+            @apply="applyStageBatchStatus($event)"
+          />
+
           <IssueMarkerList
             :issues="fallbackWaveformIssues"
+            :selectable="true"
+            :selected-ids="selectedStageIssueIds"
             :current-source-version-number="displayedSourceVersionNumber"
             :hovered-issue-id="hoveredIssueId"
             @select="onIssueSelect"
+            @update:selectedIds="selectedStageIssueIds = $event"
             @hover="handleIssueHover"
             @leave="handleIssueLeave"
           />
@@ -1350,7 +1683,7 @@ function handleIssueLeave() {
               <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.deliveryPreviewHeading') }}</h4>
               <p class="text-sm text-muted-foreground">{{ t('workflowStep.deliveryPreviewNotice') }}</p>
             </div>
-            <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" />
+            <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" :compact="true" :height="96" />
             <div class="flex flex-wrap gap-2">
               <button
                 @click="handleUpload('delivery')"
@@ -1545,10 +1878,23 @@ function handleIssueLeave() {
             </template>
           </IssueCreatePanel>
 
+          <BatchIssueActions
+            :selected-count="selectedStageIssueIds.length"
+            :statuses="stageBatchActions"
+            :note="stageBatchNote"
+            :loading="batchUpdatingIssues"
+            @update:note="stageBatchNote = $event"
+            @clear="selectedStageIssueIds = []; stageBatchNote = ''"
+            @apply="applyStageBatchStatus($event)"
+          />
+
           <IssueMarkerList
             :issues="finalReviewIssues"
+            :selectable="true"
+            :selected-ids="selectedStageIssueIds"
             :hovered-issue-id="hoveredIssueId"
             @select="onIssueSelect"
+            @update:selectedIds="selectedStageIssueIds = $event"
             @hover="handleIssueHover"
             @leave="handleIssueLeave"
           />
@@ -1675,13 +2021,30 @@ function handleIssueLeave() {
 
       <div v-if="fallbackStepIssues.length" class="card space-y-3">
         <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: fallbackWaveformIssues.length }) }}</h3>
-        <IssueMarkerList :issues="fallbackWaveformIssues" :current-source-version-number="displayedSourceVersionNumber" @select="onIssueSelect" />
+        <BatchIssueActions
+          :selected-count="selectedStageIssueIds.length"
+          :statuses="stageBatchActions"
+          :note="stageBatchNote"
+          :loading="batchUpdatingIssues"
+          @update:note="stageBatchNote = $event"
+          @clear="selectedStageIssueIds = []; stageBatchNote = ''"
+          @apply="applyStageBatchStatus($event)"
+        />
+        <IssueMarkerList
+          :issues="fallbackWaveformIssues"
+          :selectable="true"
+          :selected-ids="selectedStageIssueIds"
+          :current-source-version-number="displayedSourceVersionNumber"
+          @select="onIssueSelect"
+          @update:selectedIds="selectedStageIssueIds = $event"
+        />
       </div>
 
       <div class="card space-y-4">
         <IssueCreatePanel
           :track-id="trackId"
           :phase="currentStep.id"
+          :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
           @created="onIssueCreated"
         />
       </div>
@@ -1729,18 +2092,35 @@ function handleIssueLeave() {
 
       <div class="card space-y-3">
         <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: fallbackWaveformIssues.length }) }}</h3>
-        <IssueMarkerList :issues="fallbackWaveformIssues" :current-source-version-number="displayedSourceVersionNumber" @select="onIssueSelect" />
+        <BatchIssueActions
+          :selected-count="selectedStageIssueIds.length"
+          :statuses="stageBatchActions"
+          :note="stageBatchNote"
+          :loading="batchUpdatingIssues"
+          @update:note="stageBatchNote = $event"
+          @clear="selectedStageIssueIds = []; stageBatchNote = ''"
+          @apply="applyStageBatchStatus($event)"
+        />
+        <IssueMarkerList
+          :issues="fallbackWaveformIssues"
+          :selectable="true"
+          :selected-ids="selectedStageIssueIds"
+          :current-source-version-number="displayedSourceVersionNumber"
+          @select="onIssueSelect"
+          @update:selectedIds="selectedStageIssueIds = $event"
+        />
       </div>
 
       <div class="card space-y-4">
         <IssueCreatePanel
           :track-id="trackId"
           :phase="currentStep.id"
+          :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
           @created="onIssueCreated"
         />
       </div>
 
-      <WorkflowActionBar :actions="genericReviewActions" :hint="t('common.actions')" />
+      <WorkflowActionBar :actions="genericReviewActions" :hint="peerReviewActionHint" />
     </template>
 
     <template v-if="currentStep.type === 'revision'">
@@ -1791,15 +2171,27 @@ function handleIssueLeave() {
             </div>
           </div>
         </div>
+        <BatchIssueActions
+          :selected-count="selectedRevisionIssueIds.length"
+          :statuses="revisionBatchActions"
+          :note="revisionBatchNote"
+          :loading="batchUpdatingIssues"
+          @update:note="revisionBatchNote = $event"
+          @clear="selectedRevisionIssueIds = []; revisionBatchNote = ''"
+          @apply="applyRevisionBatchStatus($event)"
+        />
         <IssueMarkerList
           v-if="revisionSnapshotIssues.length"
           :issues="revisionSnapshotIssues"
           :track="track"
+          :selectable="true"
+          :selected-ids="selectedRevisionIssueIds"
           :current-source-version-number="track.version"
           :hovered-issue-id="hoveredIssueId"
           :show-activity="true"
           :enable-quick-actions="true"
           @select="openIssueDrawer"
+          @update:selectedIds="selectedRevisionIssueIds = $event"
           @hover="handleIssueHover"
           @leave="handleIssueLeave"
           @status-change="onQuickIssueStatusChange"
@@ -1862,6 +2254,7 @@ function handleIssueLeave() {
       <IssueDetailPanel
         :issue="selectedIssue"
         :track="track"
+        :assignments="reviewAssignments"
         @close="closeIssueDrawer"
         @updated="onIssueUpdated"
       />

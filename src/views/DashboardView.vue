@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Album, AlbumStats, Track, TrackStatus, WorkflowEvent } from '@/types'
+import type { Album, AlbumStats, ExportProgressEvent, Track, TrackStatus, WorkflowEvent } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -12,10 +12,12 @@ import { formatRelativeTime, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import { TRACK_STATUS_COLORS } from '@/utils/status'
 import { translateStepLabel } from '@/utils/workflow'
+import { useDashboardPins } from '@/composables/useDashboardPins'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { Music, Search } from 'lucide-vue-next'
 
 const ALBUM_STATS_TTL = 5 * 60 * 1000
+const TRACK_PAGE_SIZE = 100
 const albumStatsCache = new Map<number, { stats: AlbumStats; ts: number }>()
 
 async function fetchAlbumStats(albumId: number): Promise<AlbumStats> {
@@ -38,6 +40,16 @@ const loadError = ref(false)
 const filterStatus = ref<TrackStatus | ''>('')
 const searchQuery = ref('')
 const exportingAlbum = ref<number | null>(null)
+const exportProgress = ref<{
+  total: number
+  index: number
+  title: string
+  step: string
+  done: boolean
+  error: string | null
+} | null>(null)
+const showPinnedOnly = ref(false)
+const { hasAnyPins, isPinned, togglePin } = useDashboardPins(() => appStore.currentUser?.id ?? null)
 
 function statusColor(status: string): string {
   return TRACK_STATUS_COLORS[status as TrackStatus] ?? '#6b7280'
@@ -70,7 +82,7 @@ async function loadDashboard() {
   try {
     const query = searchQuery.value.trim() || undefined
     const [loadedTracks, loadedAlbums] = await Promise.all([
-      trackApi.list({ search: query }),
+      loadAllTracks({ search: query }),
       albumApi.list({ search: query }),
     ])
     tracks.value = loadedTracks
@@ -112,6 +124,20 @@ const filteredTracks = computed(() => {
   return result
 })
 
+async function loadAllTracks(params?: { status?: TrackStatus; album_id?: number; search?: string }) {
+  const allTracks: Track[] = []
+  let offset = 0
+
+  while (true) {
+    const page = await trackApi.list({ ...params, limit: TRACK_PAGE_SIZE, offset })
+    allTracks.push(...page)
+    if (page.length < TRACK_PAGE_SIZE) break
+    offset += page.length
+  }
+
+  return allTracks
+}
+
 const trackStats = computed(() => {
   let submitted = 0, peer_review = 0, mastering = 0, completed = 0, rejected = 0
   for (const track of tracks.value) {
@@ -127,6 +153,63 @@ const trackStats = computed(() => {
 
 // Group tracks by album, preserving order of first appearance
 const albumMap = computed(() => new Map(albums.value.map(a => [a.id, a])))
+
+const displayedAlbums = computed(() => {
+  const visibleAlbums = showPinnedOnly.value && hasAnyPins.value
+    ? albums.value.filter(album => isPinned(album.id))
+    : [...albums.value]
+
+  return visibleAlbums.sort((left, right) => {
+    const leftPinned = isPinned(left.id) ? 1 : 0
+    const rightPinned = isPinned(right.id) ? 1 : 0
+    if (leftPinned !== rightPinned) return rightPinned - leftPinned
+    return left.id - right.id
+  })
+})
+
+const actionableTracks = computed(() =>
+  [...tracks.value]
+    .filter(track => (track.allowed_actions?.length ?? 0) > 0)
+    .sort((left, right) => {
+      const issueDelta = (right.open_issue_count ?? 0) - (left.open_issue_count ?? 0)
+      if (issueDelta !== 0) return issueDelta
+      return Date.parse(right.updated_at) - Date.parse(left.updated_at)
+    })
+    .slice(0, 5),
+)
+
+const attentionTracks = computed(() =>
+  [...tracks.value]
+    .filter(track => (track.open_issue_count ?? 0) > 0)
+    .sort((left, right) => {
+      const issueDelta = (right.open_issue_count ?? 0) - (left.open_issue_count ?? 0)
+      if (issueDelta !== 0) return issueDelta
+      return Date.parse(right.updated_at) - Date.parse(left.updated_at)
+    })
+    .slice(0, 5),
+)
+
+const recentTracks = computed(() =>
+  [...tracks.value]
+    .sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at))
+    .slice(0, 5),
+)
+
+const attentionAlbums = computed(() =>
+  displayedAlbums.value
+    .filter((album) => {
+      const stats = albumStatsMap.value[album.id]
+      return Boolean(stats && ((stats.overdue_track_count ?? 0) > 0 || stats.open_issues > 0 || deadlineInfo(album.id)?.overdue))
+    })
+    .sort((left, right) => {
+      const leftStats = albumStatsMap.value[left.id]
+      const rightStats = albumStatsMap.value[right.id]
+      const leftScore = (leftStats?.overdue_track_count ?? 0) * 10 + (leftStats?.open_issues ?? 0)
+      const rightScore = (rightStats?.overdue_track_count ?? 0) * 10 + (rightStats?.open_issues ?? 0)
+      return rightScore - leftScore
+    })
+    .slice(0, 5),
+)
 
 const groupedTracks = computed(() => {
   const groups = new Map<number, Track[]>()
@@ -172,9 +255,7 @@ function formatEventDescription(event: WorkflowEvent): string {
 
 async function handleAccept(invitationId: number) {
   await appStore.acceptInvitation(invitationId)
-  const [loadedTracks, loadedAlbums] = await Promise.all([trackApi.list(), albumApi.list()])
-  tracks.value = loadedTracks
-  albums.value = loadedAlbums
+  await loadDashboard()
 }
 
 async function handleDecline(invitationId: number) {
@@ -197,27 +278,57 @@ function deadlineInfo(albumId: number): { text: string; overdue: boolean } | nul
   return { text: t('dashboard.deadlineDaysLeft', { days: diffDays }), overdue: false }
 }
 
-async function handleExport(albumId: number) {
+function handleExport(albumId: number) {
   exportingAlbum.value = albumId
-  try {
-    const blob = await albumApi.export(albumId)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${albums.value.find(al => al.id === albumId)?.title ?? 'album'}.zip`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  } catch {
-    // error is shown by the request layer
-  } finally {
-    exportingAlbum.value = null
-  }
+  exportProgress.value = { total: 0, index: 0, title: '', step: 'start', done: false, error: null }
+
+  albumApi.exportStream(albumId, async (event: ExportProgressEvent) => {
+    if (event.type === 'start') {
+      exportProgress.value = { total: event.total, index: 0, title: '', step: 'start', done: false, error: null }
+    } else if (event.type === 'track_progress') {
+      exportProgress.value = { total: event.total, index: event.index, title: event.title, step: event.step, done: false, error: null }
+    } else if (event.type === 'track_done') {
+      exportProgress.value = { total: event.total, index: event.index, title: event.title, step: 'done', done: false, error: null }
+    } else if (event.type === 'track_skipped') {
+      exportProgress.value = { total: event.total, index: event.index, title: event.title, step: 'skipped', done: false, error: null }
+    } else if (event.type === 'zipping') {
+      exportProgress.value = { ...exportProgress.value!, step: 'zipping' }
+    } else if (event.type === 'complete') {
+      exportProgress.value = { ...exportProgress.value!, step: 'downloading_zip', done: false }
+      try {
+        const blob = await albumApi.exportDownload(albumId, event.download_id)
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${albums.value.find(al => al.id === albumId)?.title ?? 'album'}.zip`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        exportProgress.value = { ...exportProgress.value!, done: true }
+      } catch {
+        exportProgress.value = { ...exportProgress.value!, error: 'Download failed' }
+      }
+      setTimeout(() => {
+        exportingAlbum.value = null
+        exportProgress.value = null
+      }, 1500)
+    } else if (event.type === 'error') {
+      exportProgress.value = { ...exportProgress.value!, error: event.message }
+      setTimeout(() => {
+        exportingAlbum.value = null
+        exportProgress.value = null
+      }, 3000)
+    }
+  })
 }
 
 function openAlbumSettings(albumId: number) {
   router.push(`/albums/${albumId}/settings`)
+}
+
+function openTrack(trackId: number) {
+  router.push({ path: `/tracks/${trackId}`, query: { returnTo: route.path } })
 }
 </script>
 
@@ -285,18 +396,142 @@ function openAlbumSettings(albumId: number) {
       </div>
     </div>
 
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div class="card space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('dashboard.waitingForMe') }}</h2>
+          <span class="text-xs text-muted-foreground">{{ actionableTracks.length }}</span>
+        </div>
+        <div v-if="actionableTracks.length" class="space-y-2">
+          <button
+            v-for="track in actionableTracks"
+            :key="`queue-${track.id}`"
+            class="w-full border border-border bg-background px-3 py-2 text-left transition-colors hover:border-primary/50"
+            @click="openTrack(track.id)"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <div class="min-w-0 space-y-1">
+                <div class="truncate text-sm text-foreground">{{ track.title }}</div>
+                <div class="text-xs text-muted-foreground">{{ formatRelativeTime(track.updated_at, locale) }}</div>
+              </div>
+              <StatusBadge
+                :status="track.status"
+                type="track"
+                :variant="track.workflow_variant"
+                :label="track.workflow_step?.label ?? null"
+              />
+            </div>
+          </button>
+        </div>
+        <p v-else class="text-sm text-muted-foreground">{{ t('dashboard.noPendingActions') }}</p>
+      </div>
+
+      <div class="card space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('dashboard.attentionTracks') }}</h2>
+          <span class="text-xs text-muted-foreground">{{ attentionTracks.length }}</span>
+        </div>
+        <div v-if="attentionTracks.length" class="space-y-2">
+          <button
+            v-for="track in attentionTracks"
+            :key="`attention-${track.id}`"
+            class="w-full border border-border bg-background px-3 py-2 text-left transition-colors hover:border-primary/50"
+            @click="openTrack(track.id)"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 space-y-1">
+                <div class="truncate text-sm text-foreground">{{ track.title }}</div>
+                <div class="text-xs text-error">{{ t('dashboard.openCount', { count: track.open_issue_count ?? 0 }) }}</div>
+              </div>
+              <StatusBadge
+                :status="track.status"
+                type="track"
+                :variant="track.workflow_variant"
+                :label="track.workflow_step?.label ?? null"
+              />
+            </div>
+          </button>
+        </div>
+        <p v-else class="text-sm text-muted-foreground">{{ t('dashboard.noAttentionTracks') }}</p>
+      </div>
+
+      <div class="card space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('dashboard.recentUpdates') }}</h2>
+          <span class="text-xs text-muted-foreground">{{ recentTracks.length }}</span>
+        </div>
+        <div v-if="recentTracks.length" class="space-y-2">
+          <button
+            v-for="track in recentTracks"
+            :key="`recent-${track.id}`"
+            class="w-full border border-border bg-background px-3 py-2 text-left transition-colors hover:border-primary/50"
+            @click="openTrack(track.id)"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <div class="min-w-0 space-y-1">
+                <div class="truncate text-sm text-foreground">{{ track.title }}</div>
+                <div class="text-xs text-muted-foreground">{{ formatRelativeTime(track.updated_at, locale) }}</div>
+              </div>
+              <span class="text-xs font-mono text-muted-foreground">v{{ track.version }}</span>
+            </div>
+          </button>
+        </div>
+        <p v-else class="text-sm text-muted-foreground">{{ t('dashboard.noRecentUpdates') }}</p>
+      </div>
+    </div>
+
     <!-- 专辑进度看板 -->
     <div v-if="albums.length > 0">
       <div class="flex items-center justify-between mb-3">
-        <h2 class="text-lg font-mono font-semibold text-foreground">{{ t('dashboard.albums') }}</h2>
+        <div class="flex items-center gap-3">
+          <h2 class="text-lg font-mono font-semibold text-foreground">{{ t('dashboard.albums') }}</h2>
+          <button
+            v-if="hasAnyPins"
+            class="text-xs rounded-full border border-border px-3 py-1 text-muted-foreground transition-colors hover:text-foreground"
+            :class="showPinnedOnly ? 'border-primary text-primary' : ''"
+            @click="showPinnedOnly = !showPinnedOnly"
+          >
+            {{ t('dashboard.pinnedOnly') }}
+          </button>
+        </div>
         <RouterLink to="/albums" class="text-xs text-muted-foreground hover:text-primary transition-colors">
           {{ t('dashboard.manageAlbums') }}
         </RouterLink>
       </div>
 
+      <div v-if="attentionAlbums.length > 0 && !showPinnedOnly" class="card space-y-3 mb-4">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('dashboard.attentionAlbums') }}</h3>
+          <span class="text-xs text-muted-foreground">{{ attentionAlbums.length }}</span>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <button
+            v-for="album in attentionAlbums"
+            :key="`attention-album-${album.id}`"
+            class="w-full border border-border bg-background px-4 py-3 text-left transition-colors hover:border-primary/50"
+            @click="openAlbumSettings(album.id)"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 space-y-1">
+                <div class="truncate text-sm font-medium text-foreground">{{ album.title }}</div>
+                <div class="text-xs text-muted-foreground">{{ album.circle_name || album.catalog_number || t('dashboard.tracksCount', { n: album.track_count }) }}</div>
+              </div>
+              <div class="flex flex-wrap justify-end gap-1">
+                <span v-if="deadlineInfo(album.id)" class="text-[11px] px-2 py-0.5 rounded-full" :class="deadlineInfo(album.id)!.overdue ? 'bg-error-bg text-error' : 'bg-warning-bg text-warning'">
+                  {{ deadlineInfo(album.id)!.text }}
+                </span>
+                <span v-if="albumStatsMap[album.id]?.open_issues" class="text-[11px] bg-error-bg text-error px-2 py-0.5 rounded-full">
+                  {{ t('dashboard.openIssues', { count: albumStatsMap[album.id].open_issues }) }}
+                </span>
+              </div>
+            </div>
+          </button>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div
-          v-for="album in albums"
+          v-for="album in displayedAlbums"
           :key="album.id"
           class="rounded-none border border-border bg-card overflow-hidden cursor-pointer transition-colors hover:border-primary/50"
           @click="openAlbumSettings(album.id)"
@@ -316,6 +551,13 @@ function openAlbumSettings(albumId: number) {
                 <div v-if="album.circle_name" class="text-xs text-muted-foreground mt-0.5 truncate">{{ album.circle_name }}</div>
               </div>
               <div class="flex flex-col items-end gap-1 flex-shrink-0">
+                <button
+                  class="text-[11px] rounded-full border border-border px-2.5 py-1 font-mono text-muted-foreground transition-colors hover:text-foreground"
+                  :class="isPinned(album.id) ? 'border-primary text-primary' : ''"
+                  @click.stop="togglePin(album.id)"
+                >
+                  {{ isPinned(album.id) ? t('albums.unpinDashboard') : t('albums.pinDashboard') }}
+                </button>
                 <span v-if="album.catalog_number" class="text-xs font-mono text-muted-foreground">{{ album.catalog_number }}</span>
                 <div class="flex items-center gap-1 flex-wrap justify-end">
                   <span v-if="deadlineInfo(album.id)" class="text-xs px-2 py-0.5 rounded-full" :class="deadlineInfo(album.id)!.overdue ? 'bg-error-bg text-error' : 'bg-warning-bg text-warning'">
@@ -376,6 +618,9 @@ function openAlbumSettings(albumId: number) {
             </template>
           </div>
         </div>
+      </div>
+      <div v-if="showPinnedOnly && displayedAlbums.length === 0" class="card text-sm text-muted-foreground">
+        {{ t('dashboard.noPinnedAlbums') }}
       </div>
     </div>
 
@@ -531,5 +776,46 @@ function openAlbumSettings(albumId: number) {
       </div>
     </div>
   </div>
+
+  <!-- Export progress overlay -->
+  <Teleport to="body">
+    <div v-if="exportProgress" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div class="bg-card border border-border rounded-none p-6 w-full max-w-md space-y-4">
+        <h3 class="font-mono font-semibold text-foreground">{{ t('export.title') }}</h3>
+
+        <!-- Progress bar -->
+        <div class="w-full h-2 bg-background rounded-full overflow-hidden">
+          <div
+            class="h-full bg-primary transition-all duration-300"
+            :style="{ width: exportProgress.total > 0 ? `${(exportProgress.index / exportProgress.total) * 100}%` : '0%' }"
+          ></div>
+        </div>
+
+        <!-- Status text -->
+        <div class="text-sm text-muted-foreground space-y-1">
+          <p v-if="exportProgress.error" class="text-error">{{ exportProgress.error }}</p>
+          <p v-else-if="exportProgress.done" class="text-success">{{ t('export.done') }}</p>
+          <p v-else-if="exportProgress.step === 'start'">{{ t('export.preparing') }}</p>
+          <p v-else-if="exportProgress.step === 'downloading'">
+            {{ t('export.downloading', { index: exportProgress.index, total: exportProgress.total, title: exportProgress.title }) }}
+          </p>
+          <p v-else-if="exportProgress.step === 'reading'">
+            {{ t('export.reading', { index: exportProgress.index, total: exportProgress.total, title: exportProgress.title }) }}
+          </p>
+          <p v-else-if="exportProgress.step === 'metadata'">
+            {{ t('export.metadata', { index: exportProgress.index, total: exportProgress.total, title: exportProgress.title }) }}
+          </p>
+          <p v-else-if="exportProgress.step === 'skipped'">
+            {{ t('export.skipped', { title: exportProgress.title }) }}
+          </p>
+          <p v-else-if="exportProgress.step === 'zipping'">{{ t('export.zipping') }}</p>
+          <p v-else-if="exportProgress.step === 'downloading_zip'">{{ t('export.downloadingZip') }}</p>
+          <template v-if="!exportProgress.done && !exportProgress.error && exportProgress.total > 0">
+            <p class="text-xs">{{ exportProgress.index }} / {{ exportProgress.total }}</p>
+          </template>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
 </template>

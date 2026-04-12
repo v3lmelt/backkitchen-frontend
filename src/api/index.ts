@@ -11,6 +11,7 @@ import type {
   Comment,
   Discussion,
   EditHistory,
+  ExportProgressEvent,
   Invitation,
   InviteCode,
   PresignedUploadResponse,
@@ -61,9 +62,18 @@ function authHeaders(headers?: HeadersInit): HeadersInit {
   }
 }
 
+type AuthClearedCallback = () => void
+let _onAuthCleared: AuthClearedCallback | null = null
+
+/** Register a callback invoked when stored credentials are wiped due to 401. */
+export function onAuthCleared(cb: AuthClearedCallback) {
+  _onAuthCleared = cb
+}
+
 function clearStoredAuth() {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem('backkitchen_user')
+  _onAuthCleared?.()
 }
 
 let verifyPromise: Promise<boolean> | null = null
@@ -161,22 +171,57 @@ export function uploadWithProgress<T>(
   })
 }
 
+const MAX_RETRIES = 2
+const RETRY_DELAY_MS = 600
+
+function isRetryable(status: number): boolean {
+  return status >= 500 && status < 600
+}
+
+function shouldRetry(method: string | undefined): boolean {
+  // Only retry idempotent methods to avoid duplicating side effects
+  const m = (method ?? 'GET').toUpperCase()
+  return m === 'GET' || m === 'HEAD' || m === 'OPTIONS'
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const isFormData = options?.body instanceof FormData
   const headers: HeadersInit = isFormData
     ? authHeaders(options?.headers)
     : authHeaders({ 'Content-Type': 'application/json', ...options?.headers })
 
-  const res = await fetch(`${BASE}${url}`, { ...options, headers })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    if (res.status === 401) {
-      await handleUnauthorized(url)
+  const retryable = shouldRetry(options?.method)
+  let lastError: Error | undefined
+
+  for (let attempt = 0; attempt <= (retryable ? MAX_RETRIES : 0); attempt++) {
+    if (attempt > 0) {
+      await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt))
     }
-    throw new Error(parseErrorDetail(body.detail) || `Request failed: ${res.status}`)
+    try {
+      const res = await fetch(`${BASE}${url}`, { ...options, headers })
+      if (!res.ok) {
+        // Retry on server errors for idempotent requests
+        if (retryable && isRetryable(res.status) && attempt < MAX_RETRIES) {
+          continue
+        }
+        const body = await res.json().catch(() => ({}))
+        if (res.status === 401) {
+          await handleUnauthorized(url)
+        }
+        throw new Error(parseErrorDetail(body.detail) || `Request failed: ${res.status}`)
+      }
+      if (res.status === 204) return undefined as T
+      return res.json()
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err))
+      // Retry on network errors for idempotent requests
+      if (retryable && attempt < MAX_RETRIES && !(lastError.message.startsWith('Request failed'))) {
+        continue
+      }
+      throw lastError
+    }
   }
-  if (res.status === 204) return undefined as T
-  return res.json()
+  throw lastError!
 }
 
 export const albumApi = {
@@ -261,14 +306,52 @@ export const albumApi = {
     const qs = q.toString()
     return request<WorkflowEvent[]>(`/albums/${id}/activity${qs ? `?${qs}` : ''}`)
   },
-  export: async (id: number): Promise<Blob> => {
+  exportStream: (id: number, onEvent: (event: ExportProgressEvent) => void): { cancel: () => void } => {
     const token = localStorage.getItem(TOKEN_KEY)
-    const res = await fetch(`${BASE}/albums/${id}/export`, {
+    const controller = new AbortController()
+    ;(async () => {
+      try {
+        const res = await fetch(`${BASE}/albums/${id}/export/stream`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          onEvent({ type: 'error', message: parseErrorDetail(body.detail) || `Export failed: ${res.status}` })
+          return
+        }
+        const reader = res.body!.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() ?? ''
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                onEvent(JSON.parse(line.slice(6)))
+              } catch { /* ignore malformed */ }
+            }
+          }
+        }
+      } catch (e: unknown) {
+        if (e instanceof DOMException && e.name === 'AbortError') return
+        onEvent({ type: 'error', message: String(e) })
+      }
+    })()
+    return { cancel: () => controller.abort() }
+  },
+  exportDownload: async (id: number, downloadId: string): Promise<Blob> => {
+    const token = localStorage.getItem(TOKEN_KEY)
+    const res = await fetch(`${BASE}/albums/${id}/export/download/${downloadId}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw new Error(parseErrorDetail(body.detail) || `Export failed: ${res.status}`)
+      throw new Error(parseErrorDetail(body.detail) || `Download failed: ${res.status}`)
     }
     return res.blob()
   },
@@ -316,11 +399,13 @@ export const circleApi = {
 }
 
 export const trackApi = {
-  list: (params?: { status?: TrackStatus; album_id?: number; search?: string }) => {
+  list: (params?: { status?: TrackStatus; album_id?: number; search?: string; limit?: number; offset?: number }) => {
     const q = new URLSearchParams()
     if (params?.status) q.set('status', params.status)
     if (params?.album_id) q.set('album_id', String(params.album_id))
     if (params?.search) q.set('search', params.search)
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
     const qs = q.toString()
     return request<Track[]>(`/tracks${qs ? `?${qs}` : ''}`)
   },
@@ -488,7 +573,13 @@ export const issueApi = {
 }
 
 export const notificationApi = {
-  list: (): Promise<Notification[]> => request('/notifications'),
+  list: (params?: { limit?: number; offset?: number }): Promise<Notification[]> => {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    const qs = q.toString()
+    return request(`/notifications${qs ? `?${qs}` : ''}`)
+  },
   markRead: (id: number): Promise<Notification> => request(`/notifications/${id}/read`, { method: 'PATCH' }),
   markAllRead: (): Promise<{ updated: number }> => request('/notifications/read-all', { method: 'PATCH' }),
 }

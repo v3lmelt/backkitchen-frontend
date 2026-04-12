@@ -16,7 +16,7 @@ export type TrackStatus = LegacyTrackStatus | (string & {})
 export type RejectionMode = 'final' | 'resubmittable'
 export type MarkerType = 'point' | 'range'
 export type IssueSeverity = 'critical' | 'major' | 'minor' | 'suggestion'
-export type IssueStatus = 'open' | 'pending_discussion' | 'disagreed' | 'resolved'
+export type IssueStatus = 'open' | 'pending_discussion' | 'internal_resolved' | 'disagreed' | 'resolved'
 export type IssuePhase = string
 export type UserRole = 'member' | 'producer'
 
@@ -195,6 +195,7 @@ export interface StageAssignment {
   user_id: number
   status: 'pending' | 'completed' | 'cancelled'
   decision?: string | null
+  cancellation_reason?: string | null
   assigned_at: string
   completed_at: string | null
   user?: User | null
@@ -295,6 +296,7 @@ export interface Comment {
   author_id: number
   author?: User | null
   content: string
+  visibility?: 'public' | 'internal'
   is_status_note: boolean
   old_status?: IssueStatus | null
   new_status?: IssueStatus | null
@@ -412,6 +414,7 @@ export interface Discussion {
   id: number
   track_id: number
   author_id: number
+  visibility?: 'public' | 'internal'
   content: string
   created_at: string
   edited_at?: string | null
@@ -478,3 +481,12 @@ export interface PresignedUploadResponse {
 export interface AppConfig {
   r2_enabled: boolean
 }
+
+export type ExportProgressEvent =
+  | { type: 'start'; total: number }
+  | { type: 'track_progress'; index: number; total: number; title: string; step: 'downloading' | 'reading' | 'metadata' }
+  | { type: 'track_done'; index: number; total: number; title: string }
+  | { type: 'track_skipped'; index: number; total: number; title: string }
+  | { type: 'zipping'; total: number }
+  | { type: 'complete'; download_id: string; total: number; processed: number }
+  | { type: 'error'; message: string }

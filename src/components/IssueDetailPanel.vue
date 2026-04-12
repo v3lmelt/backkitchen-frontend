@@ -4,7 +4,7 @@ import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { issueApi, commentApi, r2Api, uploadToR2, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Comment, Issue, IssueStatus } from '@/types'
+import type { Comment, Issue, IssueStatus, StageAssignment } from '@/types'
 import TimestampText from '@/components/common/TimestampText.vue'
 import CommentInput from '@/components/common/CommentInput.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
@@ -12,8 +12,13 @@ import { formatTimestamp, formatDuration, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import type { TimeReference, TimestampTarget } from '@/utils/timestamps'
 import { X, Music, Pencil, Trash2 } from 'lucide-vue-next'
+import { canUserReviewIssue } from '@/utils/reviewAssignments'
 
-const props = defineProps<{ issue: Issue | null; track?: import('@/types').Track | null }>()
+const props = defineProps<{
+  issue: Issue | null
+  track?: import('@/types').Track | null
+  assignments?: StageAssignment[]
+}>()
 
 const emit = defineEmits<{
   close: []
@@ -31,31 +36,22 @@ const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
 const isSubmitter = computed(() => appStore.currentUser?.id === props.track?.submitter_id)
 
 const isReviewer = computed(() => {
-  const uid = appStore.currentUser?.id
-  const trk = props.track
-  const iss = fullIssue.value
-  if (!uid || !trk || !iss) return false
-  if (uid === iss.author_id) return true
-  switch (iss.phase) {
-    case 'peer': return uid === trk.peer_reviewer_id
-    case 'producer': case 'final_review': return uid === trk.producer_id
-    case 'mastering': return uid === trk.mastering_engineer_id
-    default: return false
-  }
+  return fullIssue.value != null
+    && canUserReviewIssue(appStore.currentUser?.id, props.track, fullIssue.value, props.assignments ?? [])
 })
 
 function availableStatusActions(currentStatus: IssueStatus): IssueStatus[] {
   if (isSubmitter.value) {
     if (currentStatus === 'open') return ['resolved', 'disagreed']
-    if (currentStatus === 'disagreed') return ['resolved']
     return []
   }
 
   if (!isReviewer.value) return []
   if (currentStatus === 'open') return ['resolved', 'pending_discussion']
-  if (currentStatus === 'pending_discussion') return ['open', 'resolved']
+  if (currentStatus === 'pending_discussion') return ['open', 'internal_resolved']
+  if (currentStatus === 'internal_resolved') return ['open']
   if (currentStatus === 'resolved') return ['open']
-  if (currentStatus === 'disagreed') return ['open', 'resolved', 'pending_discussion']
+  if (currentStatus === 'disagreed') return ['open']
   return []
 }
 
@@ -66,12 +62,14 @@ const statusActions = computed<IssueStatus[]>(() => {
 
 function statusActionLabel(status: IssueStatus): string {
   // When transitioning from pending_discussion to open, use "Publish" instead of "Reopen"
-  if (status === 'open' && fullIssue.value?.status === 'pending_discussion') {
+  if (status === 'open' && (fullIssue.value?.status === 'pending_discussion' || fullIssue.value?.status === 'internal_resolved')) {
     return t('issueDetail.publish')
   }
   switch (status) {
     case 'resolved':
       return t('issueDetail.markFixed')
+    case 'internal_resolved':
+      return t('issueDetail.markInternalResolved')
     case 'disagreed':
       return t('issueDetail.disagree')
     case 'open':
@@ -88,9 +86,20 @@ function statusTransitionLabel(oldStatus: string | null | undefined, newStatus: 
   return `${oldLabel} → ${newLabel}`
 }
 
+const shouldHideInternalComments = computed(() =>
+  Boolean(props.track && appStore.currentUser?.id === props.track.submitter_id),
+)
+
+const visibleComments = computed(() =>
+  (fullIssue.value?.comments ?? []).filter(
+    comment => !(shouldHideInternalComments.value && comment.visibility === 'internal'),
+  ),
+)
+
 function statusActionClass(status: IssueStatus): string {
   if (pendingStatus.value === status) {
     if (status === 'resolved') return 'bg-primary text-black'
+    if (status === 'internal_resolved') return 'bg-info-bg text-info border border-info/30'
     if (status === 'disagreed') return 'bg-error-bg text-error border border-error/30'
     return 'bg-warning-bg text-warning border border-warning/30'
   }
@@ -388,10 +397,10 @@ async function deleteComment(comment: Comment) {
           <!-- Comments -->
           <div class="space-y-3">
             <p class="text-xs font-mono font-semibold text-muted-foreground">
-              {{ t('issueDetail.commentsHeading', { count: fullIssue.comments?.length ?? 0 }) }}
+              {{ t('issueDetail.commentsHeading', { count: visibleComments.length }) }}
             </p>
 
-            <template v-for="comment in fullIssue.comments" :key="comment.id">
+            <template v-for="comment in visibleComments" :key="comment.id">
               <div
                 v-if="comment.is_status_note"
                 class="rounded-lg bg-warning-bg border border-warning/20 px-3 py-2"
@@ -402,6 +411,10 @@ async function deleteComment(comment: Comment) {
                     v-if="statusTransitionLabel(comment.old_status, comment.new_status)"
                     class="text-[11px] font-mono text-muted-foreground"
                   >{{ statusTransitionLabel(comment.old_status, comment.new_status) }}</span>
+                  <span
+                    v-if="comment.visibility === 'internal'"
+                    class="inline-flex items-center rounded-full bg-info-bg px-2 py-0.5 text-[10px] font-mono text-info"
+                  >{{ t('issueDetail.internalCommentBadge') }}</span>
                 </div>
                 <TimestampText
                   :text="comment.content"
@@ -458,6 +471,10 @@ async function deleteComment(comment: Comment) {
                     {{ comment.author?.display_name ?? t('issueDetail.unknown') }}
                   </span>
                   <span class="text-xs text-muted-foreground">{{ formatDate(comment.created_at) }}</span>
+                  <span
+                    v-if="comment.visibility === 'internal'"
+                    class="inline-flex items-center rounded-full bg-info-bg px-2 py-0.5 text-[10px] font-mono text-info"
+                  >{{ t('issueDetail.internalCommentBadge') }}</span>
                   <template v-if="comment.author_id === appStore.currentUser?.id && !comment.is_status_note">
                     <button @click="startEditComment(comment)" class="text-muted-foreground hover:text-foreground transition-colors ml-auto">
                       <Pencil class="w-3 h-3" :stroke-width="2" />
@@ -520,6 +537,10 @@ async function deleteComment(comment: Comment) {
 
           <!-- Add comment -->
           <div class="border-t border-border pt-4">
+            <p
+              v-if="fullIssue?.status === 'pending_discussion' || fullIssue?.status === 'internal_resolved'"
+              class="rounded-none border border-info/30 bg-info-bg px-3 py-2 text-xs text-info mb-3"
+            >{{ t('issueDetail.internalCommentHint') }}</p>
             <CommentInput
               ref="commentInputRef"
               :placeholder="t('issueDetail.addCommentPlaceholder')"

@@ -1,18 +1,8 @@
 import { ref, onUnmounted } from 'vue'
 
-const TOKEN_KEY = 'backkitchen_token'
+import { buildWsUrl } from '@/utils/url'
 
-function getWsUrl(path: string): string {
-  const apiBase = (import.meta.env.VITE_API_BASE_URL ?? '') as string
-  if (apiBase) {
-    // Production with explicit API URL — convert http(s) → ws(s)
-    const wsOrigin = apiBase.replace(/^http(s?):/, (_m, s) => `ws${s}:`)
-    return `${wsOrigin}${path}`
-  }
-  // Dev (Vite proxy handles /ws → ws://localhost:8001) or same-origin production
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}${path}`
-}
+const TOKEN_KEY = 'backkitchen_token'
 
 /**
  * Opens a WebSocket connection for a specific track. Reconnects automatically
@@ -31,7 +21,7 @@ export function useTrackWebSocket(trackId: number, onTrackUpdated: () => void) {
     if (!token) return
 
     try {
-      ws = new WebSocket(`${getWsUrl(`/ws/tracks/${trackId}`)}?token=${token}`)
+      ws = new WebSocket(`${buildWsUrl(`/ws/tracks/${trackId}`)}?token=${token}`)
     } catch {
       scheduleReconnect()
       return

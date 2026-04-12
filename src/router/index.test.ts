@@ -8,6 +8,7 @@ vi.mock('@/views/TrackDetailView.vue', () => ({ default: { template: '<div>track
 vi.mock('@/views/IssueDetailView.vue', () => ({ default: { template: '<div>issue</div>' } }))
 vi.mock('@/views/WorkflowStepView.vue', () => ({ default: { template: '<div>workflow-step</div>' } }))
 vi.mock('@/views/UploadTrackView.vue', () => ({ default: { template: '<div>upload</div>' } }))
+vi.mock('@/views/NotificationsView.vue', () => ({ default: { template: '<div>notifications</div>' } }))
 vi.mock('@/views/AlbumsView.vue', () => ({ default: { template: '<div>albums</div>' } }))
 vi.mock('@/views/AlbumNewView.vue', () => ({ default: { template: '<div>album-new</div>' } }))
 vi.mock('@/views/AlbumSettingsView.vue', () => ({ default: { template: '<div>album-settings</div>' } }))

@@ -28,3 +28,28 @@ Object.defineProperty(URL, 'revokeObjectURL', {
   writable: true,
   value: vi.fn(),
 })
+
+class MockWebSocket {
+  static OPEN = 1
+  url: string
+  readyState = 1
+  onopen: ((event: Event) => void) | null = null
+  onmessage: ((event: MessageEvent) => void) | null = null
+  onclose: ((event: CloseEvent) => void) | null = null
+  onerror: ((event: Event) => void) | null = null
+
+  constructor(url: string) {
+    this.url = url
+  }
+
+  close() {
+    this.readyState = 3
+  }
+
+  send() {}
+}
+
+Object.defineProperty(window, 'WebSocket', {
+  writable: true,
+  value: MockWebSocket,
+})
