@@ -771,6 +771,7 @@ async function handleUpload(kind: 'revision' | 'delivery') {
       uploadFile.value = null
       resetDeliveryPreview()
       toastSuccess(t('workflowStep.deliveryUploaded'))
+      await loadPage()
       return
     }
     uploadFile.value = null
