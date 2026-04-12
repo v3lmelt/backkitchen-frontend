@@ -10,6 +10,7 @@ import type {
   StageAssignment,
   Track,
   TrackSourceVersion,
+  User,
   WorkflowConfig,
   MasterDelivery,
   WorkflowStepDef,
@@ -146,6 +147,12 @@ const currentUserAssignment = computed(() => {
 })
 const reviewQuorumReached = computed(() => completedReviewCount.value >= requiredReviewCount.value)
 const reviewRequiresGroupFinalization = computed(() => currentStep.value?.type === 'review' && requiredReviewCount.value > 1)
+const reviewAllowsInternalIssueVisibility = computed(() => {
+  if (currentStep.value?.type !== 'review') return false
+  const assignmentCount = currentStepAssignments.value.length
+  const reviewerScopeCount = Math.max(requiredReviewCount.value, assignmentCount)
+  return reviewerScopeCount > 1
+})
 const reviewWaitingForAssignment = computed(() => currentStep.value?.type === 'review' && currentStepAssignments.value.length === 0)
 const currentUserCanFinalizeReview = computed(() =>
   currentUserAssignment.value?.status === 'completed'
@@ -241,13 +248,17 @@ const producerWaveformIssues = computed(() => {
   return filterIssuesForDisplayedSourceVersion(producerIssues.value)
 })
 const producerOpenCount = computed(() => producerSnapshotIssues.value.filter(issue => isIssueUnresolved(issue.status)).length)
-const producerResolvedCount = computed(() => producerSnapshotIssues.value.filter(issue => issue.status === 'resolved').length)
+const producerResolvedCount = computed(() =>
+  producerSnapshotIssues.value.filter(issue => issue.status === 'resolved' || issue.status === 'internal_resolved').length,
+)
 const producerDisagreedCount = computed(() => producerSnapshotIssues.value.filter(issue => issue.status === 'disagreed').length)
 const peerIssues = computed(() =>
   issues.value.filter(i => i.phase === 'peer' || i.phase === 'peer_review'),
 )
 const peerOpenCount = computed(() => peerIssues.value.filter(issue => isIssueUnresolved(issue.status)).length)
-const peerResolvedCount = computed(() => peerIssues.value.filter(issue => issue.status === 'resolved').length)
+const peerResolvedCount = computed(() =>
+  peerIssues.value.filter(issue => issue.status === 'resolved' || issue.status === 'internal_resolved').length,
+)
 const peerDisagreedCount = computed(() => peerIssues.value.filter(issue => issue.status === 'disagreed').length)
 const peerDiscussedCount = computed(() => peerIssues.value.filter(issue => (issue.comment_count ?? 0) > 0).length)
 const revisionSnapshotIssues = computed(() => {
@@ -279,7 +290,7 @@ const revisionOpenIssues = computed(() =>
   revisionSnapshotIssues.value.filter(issue => isIssueUnresolved(issue.status)),
 )
 const revisionResolvedIssues = computed(() =>
-  revisionSnapshotIssues.value.filter(issue => issue.status === 'resolved'),
+  revisionSnapshotIssues.value.filter(issue => issue.status === 'resolved' || issue.status === 'internal_resolved'),
 )
 const revisionWaveformIssues = computed(() => {
   if (currentVersion.value == null) return revisionOpenIssues.value
@@ -288,9 +299,25 @@ const revisionWaveformIssues = computed(() => {
   )
 })
 const openCount = computed(() => allCycleIssues.value.filter(i => isIssueUnresolved(i.status)).length)
-const resolvedCount = computed(() => allCycleIssues.value.filter(i => i.status === 'resolved').length)
+const resolvedCount = computed(() =>
+  allCycleIssues.value.filter(i => i.status === 'resolved' || i.status === 'internal_resolved').length,
+)
+const currentUserChecklistItems = computed(() =>
+  checklistItems.value.filter(item => item.reviewer_id === appStore.currentUser?.id),
+)
 const checklistPassedCount = computed(() => checklistItems.value.filter(item => item.passed).length)
-const checklistSaved = computed(() => checklistItems.value.length > 0)
+const checklistSaved = computed(() => currentUserChecklistItems.value.length > 0)
+const checklistByReviewer = computed(() => {
+  const groups = new Map<number, { user: User | null | undefined; items: ChecklistItem[] }>()
+  for (const item of checklistItems.value) {
+    if (!groups.has(item.reviewer_id)) {
+      const assignment = reviewAssignments.value.find(a => a.user_id === item.reviewer_id)
+      groups.set(item.reviewer_id, { user: assignment?.user, items: [] })
+    }
+    groups.get(item.reviewer_id)!.items.push(item)
+  }
+  return Array.from(groups.values())
+})
 const masterDelivery = computed<MasterDelivery | null>(() => track.value?.current_master_delivery ?? null)
 const masterAudioUrl = computed(() => {
   const d = masterDelivery.value
@@ -409,9 +436,9 @@ async function loadPeerChecklist(albumId: number) {
     .sort((a, b) => a.sort_order - b.sort_order)
     .map(item => item.label)
 
-  if (checklistItems.value.length > 0) {
+  if (currentUserChecklistItems.value.length > 0) {
     checklistDraft.value = labels.map(label => {
-      const item = checklistItems.value.find(entry => entry.label === label)
+      const item = currentUserChecklistItems.value.find(entry => entry.label === label)
       return { label, passed: item?.passed ?? false, note: item?.note ?? '' }
     })
     return
@@ -560,9 +587,10 @@ function availableBatchActionsForIssue(issue: Issue): Issue['status'][] {
   if (canCurrentUserSubmitIssue(issue) && issue.status === 'open') return ['resolved', 'disagreed']
   if (canCurrentUserSubmitIssue(issue) && issue.status === 'disagreed') return ['resolved']
   if (canCurrentUserReviewIssue(issue) && issue.status === 'open') return ['resolved', 'pending_discussion']
-  if (canCurrentUserReviewIssue(issue) && issue.status === 'pending_discussion') return ['open', 'resolved']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'pending_discussion') return ['open', 'resolved', 'internal_resolved']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'internal_resolved') return ['open', 'resolved']
   if (canCurrentUserReviewIssue(issue) && issue.status === 'resolved') return ['open']
-  if (canCurrentUserReviewIssue(issue) && issue.status === 'disagreed') return ['open', 'resolved', 'pending_discussion']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'disagreed') return ['open', 'resolved', 'pending_discussion', 'internal_resolved']
   return []
 }
 
@@ -1186,6 +1214,7 @@ function handleIssueLeave() {
             ref="issueFormRef"
             :track-id="trackId"
             phase="peer"
+            :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
             @created="onIssueCreated"
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
@@ -1276,8 +1305,13 @@ function handleIssueLeave() {
           <div class="text-xs text-muted-foreground">{{ t('producer.resolved') }}</div>
         </div>
         <div class="card text-center">
-          <div class="text-2xl font-bold text-primary">{{ checklistPassedCount }}/{{ checklistItems.length }}</div>
-          <div class="text-xs text-muted-foreground">{{ t('producer.checklistPassed') }}</div>
+          <div v-if="checklistByReviewer.length <= 1" class="text-2xl font-bold text-primary">
+            {{ checklistPassedCount }}/{{ checklistItems.length }}
+          </div>
+          <div v-else class="text-2xl font-bold text-primary">{{ checklistByReviewer.length }}</div>
+          <div class="text-xs text-muted-foreground">
+            {{ checklistByReviewer.length <= 1 ? t('producer.checklistPassed') : t('producer.checklistReviewers') }}
+          </div>
         </div>
       </div>
 
@@ -1364,13 +1398,25 @@ function handleIssueLeave() {
 
       <div v-if="checklistItems.length > 0" class="card">
         <h3 class="text-sm font-sans font-semibold text-foreground mb-3">{{ t('producer.checklistHeading') }}</h3>
-        <div class="space-y-2">
-          <div v-for="item in checklistItems" :key="item.id" class="flex items-center gap-3 text-sm">
-            <span :class="item.passed ? 'text-success' : 'text-error'">
-              {{ item.passed ? 'OK' : 'NG' }}
-            </span>
+        <div v-if="checklistByReviewer.length === 1" class="space-y-2">
+          <div v-for="item in checklistByReviewer[0].items" :key="item.id" class="flex items-center gap-3 text-sm">
+            <span :class="item.passed ? 'text-success' : 'text-error'">{{ item.passed ? 'OK' : 'NG' }}</span>
             <span class="text-foreground">{{ item.label }}</span>
             <span v-if="item.note" class="text-muted-foreground text-xs">- {{ item.note }}</span>
+          </div>
+        </div>
+        <div v-else class="space-y-5">
+          <div v-for="(group, idx) in checklistByReviewer" :key="group.user?.id ?? idx">
+            <div class="text-xs font-mono text-muted-foreground mb-2">
+              {{ group.user?.username ?? `#${idx + 1}` }}
+            </div>
+            <div class="space-y-2">
+              <div v-for="item in group.items" :key="item.id" class="flex items-center gap-3 text-sm">
+                <span :class="item.passed ? 'text-success' : 'text-error'">{{ item.passed ? 'OK' : 'NG' }}</span>
+                <span class="text-foreground">{{ item.label }}</span>
+                <span v-if="item.note" class="text-muted-foreground text-xs">- {{ item.note }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1588,6 +1634,7 @@ function handleIssueLeave() {
             ref="issueFormRef"
             :track-id="trackId"
             phase="mastering"
+            :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
             @created="onIssueCreated"
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
@@ -1628,7 +1675,7 @@ function handleIssueLeave() {
               <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.deliveryPreviewHeading') }}</h4>
               <p class="text-sm text-muted-foreground">{{ t('workflowStep.deliveryPreviewNotice') }}</p>
             </div>
-            <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" />
+            <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" :compact="true" :height="96" />
             <div class="flex flex-wrap gap-2">
               <button
                 @click="handleUpload('delivery')"
@@ -1989,6 +2036,7 @@ function handleIssueLeave() {
         <IssueCreatePanel
           :track-id="trackId"
           :phase="currentStep.id"
+          :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
           @created="onIssueCreated"
         />
       </div>
@@ -2059,6 +2107,7 @@ function handleIssueLeave() {
         <IssueCreatePanel
           :track-id="trackId"
           :phase="currentStep.id"
+          :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
           @created="onIssueCreated"
         />
       </div>

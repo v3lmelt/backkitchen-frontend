@@ -93,9 +93,10 @@ function availableQuickActions(issue: Issue): IssueStatus[] {
   if (isSubmitter() && issue.status === 'open') return ['resolved', 'disagreed']
   if (isSubmitter() && issue.status === 'disagreed') return ['resolved']
   if (isReviewer(issue) && issue.status === 'open') return ['resolved', 'pending_discussion']
-  if (isReviewer(issue) && issue.status === 'pending_discussion') return ['open', 'resolved']
+  if (isReviewer(issue) && issue.status === 'pending_discussion') return ['open', 'resolved', 'internal_resolved']
+  if (isReviewer(issue) && issue.status === 'internal_resolved') return ['open', 'resolved']
   if (isReviewer(issue) && issue.status === 'resolved') return ['open']
-  if (isReviewer(issue) && issue.status === 'disagreed') return ['open', 'resolved', 'pending_discussion']
+  if (isReviewer(issue) && issue.status === 'disagreed') return ['open', 'resolved', 'pending_discussion', 'internal_resolved']
   return []
 }
 
@@ -103,6 +104,8 @@ function quickActionLabel(status: IssueStatus): string {
   switch (status) {
     case 'resolved':
       return t('issueDetail.markFixed')
+    case 'internal_resolved':
+      return t('issueDetail.markInternalResolved')
     case 'disagreed':
       return t('issueDetail.disagree')
     case 'open':
@@ -116,6 +119,8 @@ function quickActionClass(status: IssueStatus): string {
   switch (status) {
     case 'resolved':
       return 'bg-success-bg text-success hover:border-success/40'
+    case 'internal_resolved':
+      return 'bg-info-bg text-info hover:border-info/40'
     case 'disagreed':
       return 'bg-info-bg text-info hover:border-info/40'
     case 'open':

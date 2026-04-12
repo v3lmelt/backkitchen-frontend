@@ -172,6 +172,7 @@
     "rejected": "Rejected",
     "open": "Open",
     "pending_discussion": "Pending Discussion",
+    "internal_resolved": "Internally Resolved",
     "disagreed": "Disagreed",
     "resolved": "Resolved",
     "critical": "Critical",
@@ -546,6 +547,7 @@
       "issueCommented": "{name} commented on issue #{num}",
       "issueUpdated": "{name} updated issue #{num}",
       "issueResolved": "{name} closed issue #{num}",
+      "issueInternalResolved": "{name} marked issue #{num} internally resolved",
       "issueReopened": "{name} reopened issue #{num}",
       "issuePendingDiscussion": "{name} marked issue #{num} pending discussion",
       "issueDisagreed": "{name} disputed issue #{num}"
@@ -579,6 +581,8 @@
     "finalApprovals": "Final approvals",
     "producer": "Producer",
     "discussionsHeading": "Discussion ({count})",
+    "internalDiscussionHint": "Contains reviewer-only discussions that remain hidden from submitters.",
+    "internalDiscussionBadge": "Reviewers Only",
     "noDiscussions": "No discussions yet.",
     "discussionPlaceholder": "Write a discussion message…",
     "postDiscussion": "Post",
@@ -702,6 +706,7 @@
     "open": "Open",
     "resolved": "Resolved",
     "checklistPassed": "Checklist Passed",
+    "checklistReviewers": "Reviews Submitted",
     "intakeHeading": "Submission Intake",
     "intakeDesc": "Choose a review path: send to peer review, or review directly yourself; or reject the submission.",
     "acceptAndAssign": "Send to Peer Review",
@@ -750,6 +755,7 @@
     "created": "Created {date}",
     "markFixed": "Resolved",
     "markPendingDiscussion": "Mark Pending Discussion",
+    "markInternalResolved": "Mark Internally Resolved",
     "disagree": "Disagree",
     "reopen": "Reopen",
     "publish": "Publish",
@@ -993,9 +999,10 @@
     "visibilityPublic": "Public",
     "visibilityInternal": "Internal",
     "visibilityPublicHint": "This issue will be visible to the submitter",
-    "visibilityInternalHint": "This issue is only visible to reviewers; discarded at review end if not published",
+    "visibilityInternalHint": "This issue is reviewer-only and can later be published or closed internally",
     "status": {
       "resolved": "Resolved",
+      "internal_resolved": "Internally Resolved",
       "pending_discussion": "Pending Discussion",
       "disagreed": "Disagreed"
     }

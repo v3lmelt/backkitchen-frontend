@@ -22,6 +22,8 @@ function actionLabel(status: IssueStatus): string {
   switch (status) {
     case 'resolved':
       return t('issueDetail.markFixed')
+    case 'internal_resolved':
+      return t('issueDetail.markInternalResolved')
     case 'disagreed':
       return t('issueDetail.disagree')
     case 'open':
@@ -35,6 +37,8 @@ function actionClass(status: IssueStatus): string {
   switch (status) {
     case 'resolved':
       return 'bg-success-bg text-success hover:border-success/40'
+    case 'internal_resolved':
+      return 'bg-info-bg text-info hover:border-info/40'
     case 'disagreed':
       return 'bg-info-bg text-info hover:border-info/40'
     case 'open':

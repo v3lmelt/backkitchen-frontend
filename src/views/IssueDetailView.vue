@@ -102,6 +102,16 @@ const isReviewer = computed(() => {
     && canUserReviewIssue(appStore.currentUser?.id, cachedTrack.value, issue.value, reviewAssignments.value)
 })
 
+const shouldHideInternalComments = computed(() =>
+  Boolean(cachedTrack.value && appStore.currentUser?.id === cachedTrack.value.submitter_id),
+)
+
+const visibleComments = computed(() =>
+  (issue.value?.comments ?? []).filter(
+    comment => !(shouldHideInternalComments.value && comment.visibility === 'internal'),
+  ),
+)
+
 
 const loadError = ref(false)
 
@@ -157,7 +167,7 @@ const siblingIssues = computed(() => {
 
 const visibleSiblingIssues = computed(() => {
   if (!showUnresolvedOnly.value) return siblingIssues.value
-  return siblingIssues.value.filter(i => i.status !== 'resolved')
+  return siblingIssues.value.filter(i => i.status !== 'resolved' && i.status !== 'internal_resolved')
 })
 
 const currentSiblingIndex = computed(() =>
@@ -339,9 +349,10 @@ function availableStatusActions(currentStatus: IssueStatus): IssueStatus[] {
 
   if (!isReviewer.value) return []
   if (currentStatus === 'open') return ['resolved', 'pending_discussion']
-  if (currentStatus === 'pending_discussion') return ['open', 'resolved']
+  if (currentStatus === 'pending_discussion') return ['open', 'resolved', 'internal_resolved']
+  if (currentStatus === 'internal_resolved') return ['open', 'resolved']
   if (currentStatus === 'resolved') return ['open']
-  if (currentStatus === 'disagreed') return ['open', 'resolved', 'pending_discussion']
+  if (currentStatus === 'disagreed') return ['open', 'resolved', 'pending_discussion', 'internal_resolved']
   return []
 }
 
@@ -351,12 +362,14 @@ const statusActions = computed<IssueStatus[]>(() => {
 })
 
 function statusActionLabel(status: IssueStatus): string {
-  if (status === 'open' && issue.value?.status === 'pending_discussion') {
+  if (status === 'open' && (issue.value?.status === 'pending_discussion' || issue.value?.status === 'internal_resolved')) {
     return t('issueDetail.publish')
   }
   switch (status) {
     case 'resolved':
       return t('issueDetail.markFixed')
+    case 'internal_resolved':
+      return t('issueDetail.markInternalResolved')
     case 'disagreed':
       return t('issueDetail.disagree')
     case 'open':
@@ -369,6 +382,7 @@ function statusActionLabel(status: IssueStatus): string {
 function statusActionClass(status: IssueStatus): string {
   if (pendingStatus.value === status) {
     if (status === 'resolved') return 'bg-primary text-black'
+    if (status === 'internal_resolved') return 'bg-info-bg text-info border border-info/30'
     if (status === 'disagreed') return 'bg-error-bg text-error border border-error/30'
     return 'bg-warning-bg text-warning border border-warning/30'
   }
@@ -523,8 +537,8 @@ function openVersionCompare() {
         <div :key="issue.id" class="min-w-0 space-y-6">
           <!-- Waveform -->
           <div class="card overflow-hidden !p-0">
-            <div class="px-4 pt-3 pb-2 border-b border-border flex items-center justify-between">
-              <div class="flex items-center gap-2">
+            <div class="px-4 pt-3 pb-2 border-b border-border flex flex-wrap items-center gap-2">
+              <div class="flex items-center gap-2 mr-auto">
                 <span class="text-xs font-mono font-medium text-muted-foreground">{{ t('issueDetail.audioContext') }}</span>
                 <span
                   v-if="displayedAudioVersionNumber != null"
@@ -533,12 +547,23 @@ function openVersionCompare() {
                   v{{ displayedAudioVersionNumber }}
                 </span>
               </div>
-              <span v-if="issue.markers.length > 0" class="text-xs text-muted-foreground font-mono">
-                <template v-for="(m, mi) in issue.markers" :key="mi">
-                  <span v-if="mi > 0" class="mx-1 opacity-50">·</span>
-                  {{ formatTimestampShort(m.time_start) }}<span v-if="m.time_end"> – {{ formatTimestampShort(m.time_end) }}</span>
-                </template>
-              </span>
+              <template v-if="issue.markers.length > 0">
+                <span
+                  v-for="(m, mi) in issue.markers"
+                  :key="mi"
+                  class="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-mono text-muted-foreground"
+                >
+                  <span
+                    v-if="m.marker_type === 'point'"
+                    class="h-1.5 w-1.5 rounded-full bg-primary flex-shrink-0"
+                  />
+                  <span
+                    v-else
+                    class="h-[3px] w-2.5 rounded-full bg-primary flex-shrink-0"
+                  />
+                  {{ formatTimestampShort(m.time_start) }}<span v-if="m.time_end" class="opacity-50 mx-0.5">–</span><span v-if="m.time_end">{{ formatTimestampShort(m.time_end) }}</span>
+                </span>
+              </template>
               <span v-else class="text-xs text-muted-foreground italic">{{ t('issue.generalIssue') }}</span>
             </div>
             <WaveformPlayer
@@ -626,14 +651,14 @@ function openVersionCompare() {
         <!-- Comments -->
         <div class="space-y-4">
           <h3 class="text-sm font-sans font-semibold text-foreground">
-            {{ t('issueDetail.commentsHeading', { count: issue.comments?.length || 0 }) }}
+            {{ t('issueDetail.commentsHeading', { count: visibleComments.length }) }}
           </h3>
 
-          <p v-if="!issue.comments?.length" class="text-sm text-muted-foreground italic">
+          <p v-if="!visibleComments.length" class="text-sm text-muted-foreground italic">
             {{ t('issueDetail.commentsEmptyHint') }}
           </p>
 
-          <template v-for="comment in issue.comments" :key="comment.id">
+          <template v-for="comment in visibleComments" :key="comment.id">
             <div v-if="comment.is_status_note" class="rounded-lg bg-warning-bg border border-warning/20 px-3 py-2">
               <div class="flex items-center gap-2 mb-2 flex-wrap">
                 <span class="text-xs font-semibold text-warning">{{ t('issue.revisionNote') }}</span>

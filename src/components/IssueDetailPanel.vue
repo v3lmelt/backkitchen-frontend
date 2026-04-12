@@ -49,9 +49,10 @@ function availableStatusActions(currentStatus: IssueStatus): IssueStatus[] {
 
   if (!isReviewer.value) return []
   if (currentStatus === 'open') return ['resolved', 'pending_discussion']
-  if (currentStatus === 'pending_discussion') return ['open', 'resolved']
+  if (currentStatus === 'pending_discussion') return ['open', 'resolved', 'internal_resolved']
+  if (currentStatus === 'internal_resolved') return ['open', 'resolved']
   if (currentStatus === 'resolved') return ['open']
-  if (currentStatus === 'disagreed') return ['open', 'resolved', 'pending_discussion']
+  if (currentStatus === 'disagreed') return ['open', 'resolved', 'pending_discussion', 'internal_resolved']
   return []
 }
 
@@ -62,12 +63,14 @@ const statusActions = computed<IssueStatus[]>(() => {
 
 function statusActionLabel(status: IssueStatus): string {
   // When transitioning from pending_discussion to open, use "Publish" instead of "Reopen"
-  if (status === 'open' && fullIssue.value?.status === 'pending_discussion') {
+  if (status === 'open' && (fullIssue.value?.status === 'pending_discussion' || fullIssue.value?.status === 'internal_resolved')) {
     return t('issueDetail.publish')
   }
   switch (status) {
     case 'resolved':
       return t('issueDetail.markFixed')
+    case 'internal_resolved':
+      return t('issueDetail.markInternalResolved')
     case 'disagreed':
       return t('issueDetail.disagree')
     case 'open':
@@ -84,9 +87,20 @@ function statusTransitionLabel(oldStatus: string | null | undefined, newStatus: 
   return `${oldLabel} → ${newLabel}`
 }
 
+const shouldHideInternalComments = computed(() =>
+  Boolean(props.track && appStore.currentUser?.id === props.track.submitter_id),
+)
+
+const visibleComments = computed(() =>
+  (fullIssue.value?.comments ?? []).filter(
+    comment => !(shouldHideInternalComments.value && comment.visibility === 'internal'),
+  ),
+)
+
 function statusActionClass(status: IssueStatus): string {
   if (pendingStatus.value === status) {
     if (status === 'resolved') return 'bg-primary text-black'
+    if (status === 'internal_resolved') return 'bg-info-bg text-info border border-info/30'
     if (status === 'disagreed') return 'bg-error-bg text-error border border-error/30'
     return 'bg-warning-bg text-warning border border-warning/30'
   }
@@ -384,10 +398,10 @@ async function deleteComment(comment: Comment) {
           <!-- Comments -->
           <div class="space-y-3">
             <p class="text-xs font-mono font-semibold text-muted-foreground">
-              {{ t('issueDetail.commentsHeading', { count: fullIssue.comments?.length ?? 0 }) }}
+              {{ t('issueDetail.commentsHeading', { count: visibleComments.length }) }}
             </p>
 
-            <template v-for="comment in fullIssue.comments" :key="comment.id">
+            <template v-for="comment in visibleComments" :key="comment.id">
               <div
                 v-if="comment.is_status_note"
                 class="rounded-lg bg-warning-bg border border-warning/20 px-3 py-2"

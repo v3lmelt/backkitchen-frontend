@@ -172,6 +172,7 @@
     "rejected": "已拒绝",
     "open": "待处理",
     "pending_discussion": "待讨论",
+    "internal_resolved": "内部结案",
     "disagreed": "有异议",
     "resolved": "已解决",
     "critical": "严重",
@@ -546,6 +547,7 @@
       "issueCommented": "{name} 回应了问题 #{num}",
       "issueUpdated": "{name} 更新了问题 #{num}",
       "issueResolved": "{name} 关闭了问题 #{num}",
+      "issueInternalResolved": "{name} 将问题 #{num} 标记为内部结案",
       "issueReopened": "{name} 重新打开了问题 #{num}",
       "issuePendingDiscussion": "{name} 将问题 #{num} 标记为待讨论",
       "issueDisagreed": "{name} 对问题 #{num} 提出异议"
@@ -579,6 +581,8 @@
     "finalApprovals": "终审批准",
     "producer": "制作人",
     "discussionsHeading": "讨论 ({count})",
+    "internalDiscussionHint": "包含「仅评审可见」讨论，曲师不可见。",
+    "internalDiscussionBadge": "仅评审可见",
     "noDiscussions": "暂无讨论。",
     "discussionPlaceholder": "输入讨论内容…",
     "postDiscussion": "发送",
@@ -702,6 +706,7 @@
     "open": "待处理",
     "resolved": "已解决",
     "checklistPassed": "清单通过",
+    "checklistReviewers": "已提交评审",
     "intakeHeading": "曲目接收",
     "intakeDesc": "选择审核路径：送同行评审，或由制作人直接审核；也可以立即拒绝。",
     "acceptAndAssign": "送同行评审",
@@ -750,6 +755,7 @@
     "created": "创建于 {date}",
     "markFixed": "已解决",
     "markPendingDiscussion": "标记为待讨论",
+    "markInternalResolved": "内部结案",
     "disagree": "有异议",
     "reopen": "重新打开",
     "publish": "公开发布",
@@ -1039,9 +1045,10 @@
     "visibilityPublic": "公开",
     "visibilityInternal": "仅内部",
     "visibilityPublicHint": "此问题将对曲师可见",
-    "visibilityInternalHint": "此问题仅评审者可见，评审结束时若未公开则自动丢弃",
+    "visibilityInternalHint": "此问题仅评审者可见，可后续公开或内部结案",
     "status": {
       "resolved": "已解决",
+      "internal_resolved": "内部结案",
       "pending_discussion": "待讨论",
       "disagreed": "有异议"
     }

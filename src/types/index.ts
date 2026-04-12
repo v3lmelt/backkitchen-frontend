@@ -16,7 +16,7 @@ export type TrackStatus = LegacyTrackStatus | (string & {})
 export type RejectionMode = 'final' | 'resubmittable'
 export type MarkerType = 'point' | 'range'
 export type IssueSeverity = 'critical' | 'major' | 'minor' | 'suggestion'
-export type IssueStatus = 'open' | 'pending_discussion' | 'disagreed' | 'resolved'
+export type IssueStatus = 'open' | 'pending_discussion' | 'internal_resolved' | 'disagreed' | 'resolved'
 export type IssuePhase = string
 export type UserRole = 'member' | 'producer'
 
@@ -296,6 +296,7 @@ export interface Comment {
   author_id: number
   author?: User | null
   content: string
+  visibility?: 'public' | 'internal'
   is_status_note: boolean
   old_status?: IssueStatus | null
   new_status?: IssueStatus | null
@@ -413,6 +414,7 @@ export interface Discussion {
   id: number
   track_id: number
   author_id: number
+  visibility?: 'public' | 'internal'
   content: string
   created_at: string
   edited_at?: string | null
