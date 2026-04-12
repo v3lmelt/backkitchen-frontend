@@ -668,6 +668,10 @@ function openVersionCompare() {
                   <span class="text-xs text-muted-foreground">→</span>
                   <StatusBadge :status="comment.new_status" type="issue" />
                 </template>
+                <span
+                  v-if="comment.visibility === 'internal'"
+                  class="inline-flex items-center rounded-full bg-info-bg px-2 py-0.5 text-[10px] font-mono text-info"
+                >{{ t('issueDetail.internalCommentBadge') }}</span>
               </div>
                 <TimestampText
                   :text="comment.content"
@@ -726,6 +730,10 @@ function openVersionCompare() {
                   {{ comment.author?.display_name || t('issueDetail.unknown') }}
                 </span>
                 <span class="text-xs text-muted-foreground">{{ fmtDate(comment.created_at) }}</span>
+                <span
+                  v-if="comment.visibility === 'internal'"
+                  class="inline-flex items-center rounded-full bg-info-bg px-2 py-0.5 text-[10px] font-mono text-info"
+                >{{ t('issueDetail.internalCommentBadge') }}</span>
                 <button
                   v-if="comment.edited_at"
                   class="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
@@ -802,6 +810,10 @@ function openVersionCompare() {
           </template>
 
           <!-- New Comment -->
+          <p
+            v-if="issue?.status === 'pending_discussion' || issue?.status === 'internal_resolved'"
+            class="rounded-none border border-info/30 bg-info-bg px-3 py-2 text-xs text-info"
+          >{{ t('issueDetail.internalCommentHint') }}</p>
           <CommentInput
             ref="commentInputRef"
             :placeholder="t('issueDetail.addCommentPlaceholder')"

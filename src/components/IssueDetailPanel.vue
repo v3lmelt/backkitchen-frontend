@@ -412,6 +412,10 @@ async function deleteComment(comment: Comment) {
                     v-if="statusTransitionLabel(comment.old_status, comment.new_status)"
                     class="text-[11px] font-mono text-muted-foreground"
                   >{{ statusTransitionLabel(comment.old_status, comment.new_status) }}</span>
+                  <span
+                    v-if="comment.visibility === 'internal'"
+                    class="inline-flex items-center rounded-full bg-info-bg px-2 py-0.5 text-[10px] font-mono text-info"
+                  >{{ t('issueDetail.internalCommentBadge') }}</span>
                 </div>
                 <TimestampText
                   :text="comment.content"
@@ -468,6 +472,10 @@ async function deleteComment(comment: Comment) {
                     {{ comment.author?.display_name ?? t('issueDetail.unknown') }}
                   </span>
                   <span class="text-xs text-muted-foreground">{{ formatDate(comment.created_at) }}</span>
+                  <span
+                    v-if="comment.visibility === 'internal'"
+                    class="inline-flex items-center rounded-full bg-info-bg px-2 py-0.5 text-[10px] font-mono text-info"
+                  >{{ t('issueDetail.internalCommentBadge') }}</span>
                   <template v-if="comment.author_id === appStore.currentUser?.id && !comment.is_status_note">
                     <button @click="startEditComment(comment)" class="text-muted-foreground hover:text-foreground transition-colors ml-auto">
                       <Pencil class="w-3 h-3" :stroke-width="2" />
@@ -530,6 +538,10 @@ async function deleteComment(comment: Comment) {
 
           <!-- Add comment -->
           <div class="border-t border-border pt-4">
+            <p
+              v-if="fullIssue?.status === 'pending_discussion' || fullIssue?.status === 'internal_resolved'"
+              class="rounded-none border border-info/30 bg-info-bg px-3 py-2 text-xs text-info mb-3"
+            >{{ t('issueDetail.internalCommentHint') }}</p>
             <CommentInput
               ref="commentInputRef"
               :placeholder="t('issueDetail.addCommentPlaceholder')"

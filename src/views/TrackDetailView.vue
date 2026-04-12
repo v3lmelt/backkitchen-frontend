@@ -320,29 +320,6 @@ const currentStepAssignments = computed(() => {
   return reviewAssignments.value.filter(a => a.stage_id === step.id && a.status !== 'cancelled')
 })
 
-const shouldHideInternalDiscussions = computed(() =>
-  Boolean(track.value && appStore.currentUser?.id === track.value.submitter_id),
-)
-
-const visibleDiscussions = computed(() =>
-  discussions.value.filter(
-    discussion => !(shouldHideInternalDiscussions.value && discussion.visibility === 'internal'),
-  ),
-)
-const internalDiscussionMode = computed(() =>
-  Boolean(
-    track.value
-    && appStore.currentUser?.id !== track.value.submitter_id
-    && issues.value.some(issue => issue.status === 'pending_discussion' || issue.status === 'internal_resolved'),
-  ),
-)
-const hasVisibleInternalDiscussions = computed(() =>
-  visibleDiscussions.value.some(discussion => discussion.visibility === 'internal'),
-)
-const showInternalDiscussionHint = computed(() =>
-  internalDiscussionMode.value || hasVisibleInternalDiscussions.value,
-)
-
 const hasMultipleReviewers = computed(() => currentStepAssignments.value.length > 0)
 const completedReviewCount = computed(() => currentStepAssignments.value.filter(a => a.status === 'completed').length)
 const totalReviewCount = computed(() => currentStepAssignments.value.length)
@@ -908,22 +885,16 @@ watch(selectedCompareMasterDelivery, (delivery) => {
           <!-- Discussions -->
           <div
             class="card space-y-4"
-            :class="visibleDiscussions.length > 0 ? 'lg:flex-1 lg:flex lg:flex-col' : ''"
+            :class="discussions.length > 0 ? 'lg:flex-1 lg:flex lg:flex-col' : ''"
           >
             <h3 class="text-sm font-sans font-semibold text-foreground">
-              {{ t('trackDetail.discussionsHeading', { count: visibleDiscussions.length }) }}
+              {{ t('trackDetail.discussionsHeading', { count: discussions.length }) }}
             </h3>
-            <p
-              v-if="showInternalDiscussionHint"
-              class="rounded-none border border-info/30 bg-info-bg px-3 py-2 text-xs text-info"
-            >
-              {{ t('trackDetail.internalDiscussionHint') }}
-            </p>
-            <div v-if="visibleDiscussions.length === 0" class="text-sm text-muted-foreground">
+            <div v-if="discussions.length === 0" class="text-sm text-muted-foreground">
               {{ t('trackDetail.noDiscussions') }}
             </div>
             <div v-else class="space-y-3 lg:flex-1">
-              <div v-for="d in visibleDiscussions" :key="d.id" class="flex gap-3 py-3 border-b border-border last:border-0">
+              <div v-for="d in discussions" :key="d.id" class="flex gap-3 py-3 border-b border-border last:border-0">
                 <div
                   class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
                   :style="{ backgroundColor: d.author?.avatar_color || '#6366f1' }"
@@ -934,12 +905,6 @@ watch(selectedCompareMasterDelivery, (delivery) => {
                   <div class="flex items-center gap-2">
                     <span class="text-sm font-medium text-foreground">{{ d.author?.display_name || '?' }}</span>
                     <span class="text-xs text-muted-foreground">{{ fmtDate(d.created_at) }}</span>
-                    <span
-                      v-if="d.visibility === 'internal'"
-                      class="inline-flex items-center rounded-full bg-info-bg px-2 py-0.5 text-[10px] font-mono text-info"
-                    >
-                      {{ t('trackDetail.internalDiscussionBadge') }}
-                    </span>
                     <button
                       v-if="d.edited_at"
                       class="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
