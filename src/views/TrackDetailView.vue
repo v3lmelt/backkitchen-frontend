@@ -1189,7 +1189,7 @@ watch(selectedCompareMasterDelivery, (delivery) => {
               <div class="flex gap-2">
                 <button
                   @click="doReassign(reassignSelectedUserIds)"
-                  :disabled="reassigning || reassignSelectedUserIds.length < reassignReviewerLimit.value"
+                  :disabled="reassigning || reassignSelectedUserIds.length < reassignReviewerLimit"
                   class="flex-1 btn-primary h-9 text-sm disabled:opacity-50"
                 >
                   {{ reassigning ? t('trackDetail.reassigning') : t('common.confirm') }}
