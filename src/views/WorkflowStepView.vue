@@ -585,12 +585,11 @@ function canCurrentUserSubmitIssue(issue: Issue): boolean {
 
 function availableBatchActionsForIssue(issue: Issue): Issue['status'][] {
   if (canCurrentUserSubmitIssue(issue) && issue.status === 'open') return ['resolved', 'disagreed']
-  if (canCurrentUserSubmitIssue(issue) && issue.status === 'disagreed') return ['resolved']
   if (canCurrentUserReviewIssue(issue) && issue.status === 'open') return ['resolved', 'pending_discussion']
   if (canCurrentUserReviewIssue(issue) && issue.status === 'pending_discussion') return ['open', 'internal_resolved']
   if (canCurrentUserReviewIssue(issue) && issue.status === 'internal_resolved') return ['open']
   if (canCurrentUserReviewIssue(issue) && issue.status === 'resolved') return ['open']
-  if (canCurrentUserReviewIssue(issue) && issue.status === 'disagreed') return ['open', 'resolved', 'pending_discussion', 'internal_resolved']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'disagreed') return ['open']
   return []
 }
 

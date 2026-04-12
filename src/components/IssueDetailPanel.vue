@@ -43,7 +43,6 @@ const isReviewer = computed(() => {
 function availableStatusActions(currentStatus: IssueStatus): IssueStatus[] {
   if (isSubmitter.value) {
     if (currentStatus === 'open') return ['resolved', 'disagreed']
-    if (currentStatus === 'disagreed') return ['resolved']
     return []
   }
 
@@ -52,7 +51,7 @@ function availableStatusActions(currentStatus: IssueStatus): IssueStatus[] {
   if (currentStatus === 'pending_discussion') return ['open', 'internal_resolved']
   if (currentStatus === 'internal_resolved') return ['open']
   if (currentStatus === 'resolved') return ['open']
-  if (currentStatus === 'disagreed') return ['open', 'resolved', 'pending_discussion', 'internal_resolved']
+  if (currentStatus === 'disagreed') return ['open']
   return []
 }
 
