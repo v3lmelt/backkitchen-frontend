@@ -1292,5 +1292,17 @@
     "version": "Version {n}",
     "editedBy": "Edited by {name}",
     "noHistory": "No edit history"
+  },
+  "export": {
+    "title": "Export Album",
+    "preparing": "Preparing export…",
+    "downloading": "Downloading track ({index}/{total}): {title}",
+    "reading": "Reading track ({index}/{total}): {title}",
+    "metadata": "Embedding metadata ({index}/{total}): {title}",
+    "skipped": "Skipped: {title}",
+    "zipping": "Creating ZIP…",
+    "downloadingZip": "Downloading export file…",
+    "done": "Export complete!",
+    "error": "Export failed"
   }
 }

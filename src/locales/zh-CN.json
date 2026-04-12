@@ -1292,5 +1292,17 @@
     "version": "版本 {n}",
     "editedBy": "{name} 编辑",
     "noHistory": "暂无编辑记录"
+  },
+  "export": {
+    "title": "导出专辑",
+    "preparing": "正在准备导出…",
+    "downloading": "正���下载曲目 ({index}/{total})：{title}",
+    "reading": "正在读取曲目 ({index}/{total})：{title}",
+    "metadata": "正在写入元数据 ({index}/{total})：{title}",
+    "skipped": "已跳过：{title}",
+    "zipping": "正在打包 ZIP…",
+    "downloadingZip": "正在下载导出文件…",
+    "done": "导出完成！",
+    "error": "导出失败"
   }
 }

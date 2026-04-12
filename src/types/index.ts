@@ -481,3 +481,12 @@ export interface PresignedUploadResponse {
 export interface AppConfig {
   r2_enabled: boolean
 }
+
+export type ExportProgressEvent =
+  | { type: 'start'; total: number }
+  | { type: 'track_progress'; index: number; total: number; title: string; step: 'downloading' | 'reading' | 'metadata' }
+  | { type: 'track_done'; index: number; total: number; title: string }
+  | { type: 'track_skipped'; index: number; total: number; title: string }
+  | { type: 'zipping'; total: number }
+  | { type: 'complete'; download_id: string; total: number; processed: number }
+  | { type: 'error'; message: string }

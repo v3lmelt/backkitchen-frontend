@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Album, AlbumStats, Track, TrackStatus, WorkflowEvent } from '@/types'
+import type { Album, AlbumStats, ExportProgressEvent, Track, TrackStatus, WorkflowEvent } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -40,6 +40,15 @@ const loadError = ref(false)
 const filterStatus = ref<TrackStatus | ''>('')
 const searchQuery = ref('')
 const exportingAlbum = ref<number | null>(null)
+const exportProgress = ref<{
+  total: number
+  index: number
+  title: string
+  step: string
+  done: boolean
+  error: string | null
+} | null>(null)
+let exportCancel: (() => void) | null = null
 const showPinnedOnly = ref(false)
 const { hasAnyPins, isPinned, togglePin } = useDashboardPins(() => appStore.currentUser?.id ?? null)
 
@@ -270,23 +279,50 @@ function deadlineInfo(albumId: number): { text: string; overdue: boolean } | nul
   return { text: t('dashboard.deadlineDaysLeft', { days: diffDays }), overdue: false }
 }
 
-async function handleExport(albumId: number) {
+function handleExport(albumId: number) {
   exportingAlbum.value = albumId
-  try {
-    const blob = await albumApi.export(albumId)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${albums.value.find(al => al.id === albumId)?.title ?? 'album'}.zip`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  } catch {
-    // error is shown by the request layer
-  } finally {
-    exportingAlbum.value = null
-  }
+  exportProgress.value = { total: 0, index: 0, title: '', step: 'start', done: false, error: null }
+
+  const { cancel } = albumApi.exportStream(albumId, async (event: ExportProgressEvent) => {
+    if (event.type === 'start') {
+      exportProgress.value = { total: event.total, index: 0, title: '', step: 'start', done: false, error: null }
+    } else if (event.type === 'track_progress') {
+      exportProgress.value = { total: event.total, index: event.index, title: event.title, step: event.step, done: false, error: null }
+    } else if (event.type === 'track_done') {
+      exportProgress.value = { total: event.total, index: event.index, title: event.title, step: 'done', done: false, error: null }
+    } else if (event.type === 'track_skipped') {
+      exportProgress.value = { total: event.total, index: event.index, title: event.title, step: 'skipped', done: false, error: null }
+    } else if (event.type === 'zipping') {
+      exportProgress.value = { ...exportProgress.value!, step: 'zipping' }
+    } else if (event.type === 'complete') {
+      exportProgress.value = { ...exportProgress.value!, step: 'downloading_zip', done: false }
+      try {
+        const blob = await albumApi.exportDownload(albumId, event.download_id)
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${albums.value.find(al => al.id === albumId)?.title ?? 'album'}.zip`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        exportProgress.value = { ...exportProgress.value!, done: true }
+      } catch {
+        exportProgress.value = { ...exportProgress.value!, error: 'Download failed' }
+      }
+      setTimeout(() => {
+        exportingAlbum.value = null
+        exportProgress.value = null
+      }, 1500)
+    } else if (event.type === 'error') {
+      exportProgress.value = { ...exportProgress.value!, error: event.message }
+      setTimeout(() => {
+        exportingAlbum.value = null
+        exportProgress.value = null
+      }, 3000)
+    }
+  })
+  exportCancel = cancel
 }
 
 function openAlbumSettings(albumId: number) {
@@ -742,5 +778,46 @@ function openTrack(trackId: number) {
       </div>
     </div>
   </div>
+
+  <!-- Export progress overlay -->
+  <Teleport to="body">
+    <div v-if="exportProgress" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div class="bg-card border border-border rounded-none p-6 w-full max-w-md space-y-4">
+        <h3 class="font-mono font-semibold text-foreground">{{ t('export.title') }}</h3>
+
+        <!-- Progress bar -->
+        <div class="w-full h-2 bg-background rounded-full overflow-hidden">
+          <div
+            class="h-full bg-primary transition-all duration-300"
+            :style="{ width: exportProgress.total > 0 ? `${(exportProgress.index / exportProgress.total) * 100}%` : '0%' }"
+          ></div>
+        </div>
+
+        <!-- Status text -->
+        <div class="text-sm text-muted-foreground space-y-1">
+          <p v-if="exportProgress.error" class="text-error">{{ exportProgress.error }}</p>
+          <p v-else-if="exportProgress.done" class="text-success">{{ t('export.done') }}</p>
+          <p v-else-if="exportProgress.step === 'start'">{{ t('export.preparing') }}</p>
+          <p v-else-if="exportProgress.step === 'downloading'">
+            {{ t('export.downloading', { index: exportProgress.index, total: exportProgress.total, title: exportProgress.title }) }}
+          </p>
+          <p v-else-if="exportProgress.step === 'reading'">
+            {{ t('export.reading', { index: exportProgress.index, total: exportProgress.total, title: exportProgress.title }) }}
+          </p>
+          <p v-else-if="exportProgress.step === 'metadata'">
+            {{ t('export.metadata', { index: exportProgress.index, total: exportProgress.total, title: exportProgress.title }) }}
+          </p>
+          <p v-else-if="exportProgress.step === 'skipped'">
+            {{ t('export.skipped', { title: exportProgress.title }) }}
+          </p>
+          <p v-else-if="exportProgress.step === 'zipping'">{{ t('export.zipping') }}</p>
+          <p v-else-if="exportProgress.step === 'downloading_zip'">{{ t('export.downloadingZip') }}</p>
+          <template v-if="!exportProgress.done && !exportProgress.error && exportProgress.total > 0">
+            <p class="text-xs">{{ exportProgress.index }} / {{ exportProgress.total }}</p>
+          </template>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
 </template>

@@ -11,6 +11,7 @@ import type {
   Comment,
   Discussion,
   EditHistory,
+  ExportProgressEvent,
   Invitation,
   InviteCode,
   PresignedUploadResponse,
@@ -305,14 +306,52 @@ export const albumApi = {
     const qs = q.toString()
     return request<WorkflowEvent[]>(`/albums/${id}/activity${qs ? `?${qs}` : ''}`)
   },
-  export: async (id: number): Promise<Blob> => {
+  exportStream: (id: number, onEvent: (event: ExportProgressEvent) => void): { cancel: () => void } => {
     const token = localStorage.getItem(TOKEN_KEY)
-    const res = await fetch(`${BASE}/albums/${id}/export`, {
+    const controller = new AbortController()
+    ;(async () => {
+      try {
+        const res = await fetch(`${BASE}/albums/${id}/export/stream`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          onEvent({ type: 'error', message: parseErrorDetail(body.detail) || `Export failed: ${res.status}` })
+          return
+        }
+        const reader = res.body!.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() ?? ''
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                onEvent(JSON.parse(line.slice(6)))
+              } catch { /* ignore malformed */ }
+            }
+          }
+        }
+      } catch (e: unknown) {
+        if (e instanceof DOMException && e.name === 'AbortError') return
+        onEvent({ type: 'error', message: String(e) })
+      }
+    })()
+    return { cancel: () => controller.abort() }
+  },
+  exportDownload: async (id: number, downloadId: string): Promise<Blob> => {
+    const token = localStorage.getItem(TOKEN_KEY)
+    const res = await fetch(`${BASE}/albums/${id}/export/download/${downloadId}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw new Error(parseErrorDetail(body.detail) || `Export failed: ${res.status}`)
+      throw new Error(parseErrorDetail(body.detail) || `Download failed: ${res.status}`)
     }
     return res.blob()
   },
