@@ -322,7 +322,13 @@ const currentStepAssignments = computed(() => {
 
 const hasMultipleReviewers = computed(() => currentStepAssignments.value.length > 0)
 const completedReviewCount = computed(() => currentStepAssignments.value.filter(a => a.status === 'completed').length)
-const totalReviewCount = computed(() => currentStepAssignments.value.length)
+const totalReviewCount = computed(() => {
+  const step = track.value?.workflow_step
+  if (step?.required_reviewer_count != null && step.required_reviewer_count > 0) {
+    return step.required_reviewer_count
+  }
+  return currentStepAssignments.value.length
+})
 
 const customWorkflowActionLabel = computed(() => {
   const step = track.value?.workflow_step
@@ -1183,7 +1189,7 @@ watch(selectedCompareMasterDelivery, (delivery) => {
               <div class="flex gap-2">
                 <button
                   @click="doReassign(reassignSelectedUserIds)"
-                  :disabled="reassigning || reassignSelectedUserIds.length === 0"
+                  :disabled="reassigning || reassignSelectedUserIds.length < reassignReviewerLimit.value"
                   class="flex-1 btn-primary h-9 text-sm disabled:opacity-50"
                 >
                   {{ reassigning ? t('trackDetail.reassigning') : t('common.confirm') }}
