@@ -4,7 +4,7 @@ import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { issueApi, commentApi, r2Api, uploadToR2, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Comment, Issue, IssueStatus } from '@/types'
+import type { Comment, Issue, IssueStatus, StageAssignment } from '@/types'
 import TimestampText from '@/components/common/TimestampText.vue'
 import CommentInput from '@/components/common/CommentInput.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
@@ -12,8 +12,13 @@ import { formatTimestamp, formatDuration, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import type { TimeReference, TimestampTarget } from '@/utils/timestamps'
 import { X, Music, Pencil, Trash2 } from 'lucide-vue-next'
+import { canUserReviewIssue } from '@/utils/reviewAssignments'
 
-const props = defineProps<{ issue: Issue | null; track?: import('@/types').Track | null }>()
+const props = defineProps<{
+  issue: Issue | null
+  track?: import('@/types').Track | null
+  assignments?: StageAssignment[]
+}>()
 
 const emit = defineEmits<{
   close: []
@@ -31,17 +36,8 @@ const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
 const isSubmitter = computed(() => appStore.currentUser?.id === props.track?.submitter_id)
 
 const isReviewer = computed(() => {
-  const uid = appStore.currentUser?.id
-  const trk = props.track
-  const iss = fullIssue.value
-  if (!uid || !trk || !iss) return false
-  if (uid === iss.author_id) return true
-  switch (iss.phase) {
-    case 'peer': return uid === trk.peer_reviewer_id
-    case 'producer': case 'final_review': return uid === trk.producer_id
-    case 'mastering': return uid === trk.mastering_engineer_id
-    default: return false
-  }
+  return fullIssue.value != null
+    && canUserReviewIssue(appStore.currentUser?.id, props.track, fullIssue.value, props.assignments ?? [])
 })
 
 function availableStatusActions(currentStatus: IssueStatus): IssueStatus[] {

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   pushMock: vi.fn(),
   openMock: vi.fn(),
   trackGetMock: vi.fn(),
+  listAssignmentsMock: vi.fn(),
   trackReopenMock: vi.fn(),
   trackRequestReopenMock: vi.fn(),
   discussionCreateMock: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('@/api', () => ({
   API_ORIGIN: '',
   trackApi: {
     get: mocks.trackGetMock,
+    listAssignments: mocks.listAssignmentsMock,
     reopen: mocks.trackReopenMock,
     requestReopen: mocks.trackRequestReopenMock,
   },
@@ -77,6 +79,24 @@ vi.mock('@/components/common/CustomSelect.vue', () => ({
   },
 }))
 
+vi.mock('@/components/common/CommentInput.vue', () => ({
+  default: {
+    emits: ['submit'],
+    data: () => ({ content: '' }),
+    methods: {
+      reset(this: { content: string }) {
+        this.content = ''
+      },
+    },
+    template: `
+      <div>
+        <textarea v-model="content"></textarea>
+        <button class="comment-submit" @click="$emit('submit', { content, images: [], audios: [] })">submit</button>
+      </div>
+    `,
+  },
+}))
+
 import TrackDetailView from './TrackDetailView.vue'
 
 describe('TrackDetailView', () => {
@@ -86,11 +106,13 @@ describe('TrackDetailView', () => {
     mocks.openMock.mockReset()
     mocks.discussionCreateMock.mockReset()
     mocks.trackGetMock.mockReset()
+    mocks.listAssignmentsMock.mockReset()
     mocks.trackReopenMock.mockReset()
     mocks.trackRequestReopenMock.mockReset()
     vi.stubGlobal('open', mocks.openMock)
     mocks.trackReopenMock.mockResolvedValue({})
     mocks.trackRequestReopenMock.mockResolvedValue({})
+    mocks.listAssignmentsMock.mockResolvedValue([])
     mocks.trackGetMock.mockResolvedValue({
       track: {
         id: 7,
@@ -139,10 +161,14 @@ describe('TrackDetailView', () => {
     expect(wrapper.find('.waveform').text()).toContain('compare:none')
 
     await wrapper.find('textarea').setValue(' Fresh discussion ')
-    await wrapper.find('button.btn-primary.text-sm').trigger('click')
+    await wrapper.find('button.comment-submit').trigger('click')
     await flushPromises()
 
-    expect(mocks.discussionCreateMock).toHaveBeenCalledWith(7, { content: 'Fresh discussion' })
+    expect(mocks.discussionCreateMock).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ content: 'Fresh discussion' }),
+      expect.any(Function),
+    )
     expect(wrapper.text()).toContain('Fresh discussion')
   })
 

@@ -195,6 +195,7 @@ export interface StageAssignment {
   user_id: number
   status: 'pending' | 'completed' | 'cancelled'
   decision?: string | null
+  cancellation_reason?: string | null
   assigned_at: string
   completed_at: string | null
   user?: User | null

@@ -7,6 +7,7 @@ import type {
   ChecklistItem,
   ChecklistTemplateItem,
   Issue,
+  StageAssignment,
   Track,
   TrackSourceVersion,
   WorkflowConfig,
@@ -35,6 +36,7 @@ import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { translateStepLabel } from '@/utils/workflow'
 import { hashId } from '@/utils/hash'
 import { extractAudioDuration } from '@/utils/audio'
+import { activeAssignmentsForStep, canUserReviewIssue } from '@/utils/reviewAssignments'
 
 const route = useRoute()
 const router = useRouter()
@@ -64,6 +66,7 @@ const workflowConfig = ref<WorkflowConfig | null>(null)
 const checklistItems = ref<ChecklistItem[]>([])
 const templateItems = ref<ChecklistTemplateItem[]>([])
 const checklistDraft = ref<{ label: string; passed: boolean; note: string }[]>([])
+const reviewAssignments = ref<StageAssignment[]>([])
 const loading = ref(true)
 const acting = ref(false)
 const uploadFile = ref<File | null>(null)
@@ -133,6 +136,23 @@ onBeforeRouteLeave(() => {
 
 const currentStep = computed<WorkflowStepDef | null>(() => track.value?.workflow_step ?? null)
 const transitions = computed<WorkflowTransitionOption[]>(() => track.value?.workflow_transitions ?? [])
+const currentStepAssignments = computed(() => activeAssignmentsForStep(reviewAssignments.value, currentStep.value?.id))
+const completedReviewCount = computed(() => currentStepAssignments.value.filter(assignment => assignment.status === 'completed').length)
+const requiredReviewCount = computed(() => Math.max(1, currentStep.value?.required_reviewer_count ?? 1))
+const currentUserAssignment = computed(() => {
+  const userId = appStore.currentUser?.id
+  if (!userId) return null
+  return currentStepAssignments.value.find(assignment => assignment.user_id === userId) ?? null
+})
+const reviewQuorumReached = computed(() => completedReviewCount.value >= requiredReviewCount.value)
+const reviewRequiresGroupFinalization = computed(() => currentStep.value?.type === 'review' && requiredReviewCount.value > 1)
+const reviewWaitingForAssignment = computed(() => currentStep.value?.type === 'review' && currentStepAssignments.value.length === 0)
+const currentUserCanFinalizeReview = computed(() =>
+  currentUserAssignment.value?.status === 'completed'
+  && reviewRequiresGroupFinalization.value
+  && reviewQuorumReached.value,
+)
+const currentUserCanSubmitReview = computed(() => currentUserAssignment.value?.status === 'pending')
 
 function inferClassicVariant(step: WorkflowStepDef | null) {
   if (!step) return 'generic'
@@ -417,6 +437,11 @@ async function loadPage() {
       selectedIssue.value = issues.value.find(issue => issue.id === selectedIssue.value?.id) ?? null
     }
     checklistItems.value = detail.checklist_items
+    try {
+      reviewAssignments.value = await trackApi.listAssignments(trackId.value)
+    } catch {
+      reviewAssignments.value = []
+    }
 
     if (inferClassicVariant(detail.track.workflow_step ?? null) === 'peer_review') {
       await loadPeerChecklist(detail.track.album_id)
@@ -524,23 +549,7 @@ async function onQuickIssueStatusChange({ issue, status }: { issue: Issue; statu
 }
 
 function canCurrentUserReviewIssue(issue: Issue): boolean {
-  if (!track.value) return false
-  const userId = appStore.currentUser?.id
-  if (!userId) return false
-  if (userId === issue.author_id) return true
-  switch (issue.phase) {
-    case 'peer':
-    case 'peer_review':
-      return userId === track.value.peer_reviewer_id
-    case 'producer':
-    case 'producer_gate':
-    case 'final_review':
-      return userId === track.value.producer_id
-    case 'mastering':
-      return userId === track.value.mastering_engineer_id
-    default:
-      return false
-  }
+  return canUserReviewIssue(appStore.currentUser?.id, track.value, issue, reviewAssignments.value)
 }
 
 function canCurrentUserSubmitIssue(issue: Issue): boolean {
@@ -675,6 +684,7 @@ function pushToTrackDetail() {
 
 async function executeTransition(decision: string) {
   if (!track.value) return
+  const previousStatus = track.value.status
   if (decision === 'reject_final') {
     const confirmed = window.confirm(t('producer.rejectFinalConfirm'))
     if (!confirmed) return
@@ -685,7 +695,11 @@ async function executeTransition(decision: string) {
     if (activeVariant.value === 'peer_review' && checklistDraft.value.length > 0) {
       await persistChecklist()
     }
-    await trackApi.workflowTransition(trackId.value, decision)
+    const updatedTrack = await trackApi.workflowTransition(trackId.value, decision)
+    if (updatedTrack.status === previousStatus) {
+      await loadPage()
+      return
+    }
     pushToTrackDetail()
   } catch (err: any) {
     error.value = err.message || t('workflowStep.transitionFailed')
@@ -790,6 +804,16 @@ function onFileChange(event: Event) {
 function transitionLabel(decision: string, fallbackLabel: string) {
   if (activeVariant.value === 'producer_gate' && decision === 'approve') {
     return t('producer.sendToMastering')
+  }
+  if (currentStep.value?.type === 'review') {
+    if (currentUserCanFinalizeReview.value) {
+      if (decision === 'pass' || decision === 'approve') return t('workflowStep.reviewFinalizeApprove')
+      if (decision.includes('revision') || decision.includes('reject')) return t('workflowStep.reviewFinalizeRevision')
+    }
+    if (currentUserCanSubmitReview.value) {
+      if (decision === 'pass' || decision === 'approve') return t('workflowStep.reviewSubmitApprove')
+      if (decision.includes('revision') || decision.includes('reject')) return t('workflowStep.reviewSubmitRevision')
+    }
   }
   if (decision.startsWith('reject_to_')) {
     const targetStepId = decision.slice('reject_to_'.length)
@@ -900,6 +924,16 @@ const genericApprovalActions = computed<WorkflowAction[]>(() =>
     handler: () => executeTransition(tr.decision),
   })),
 )
+
+const peerReviewActionHint = computed(() => {
+  if (reviewWaitingForAssignment.value) return t('workflowStep.reviewWaitingForAssignment')
+  if (currentUserCanFinalizeReview.value) return t('workflowStep.reviewFinalizeHint')
+  if (reviewRequiresGroupFinalization.value && currentUserAssignment.value?.status === 'completed' && !reviewQuorumReached.value) {
+    return t('workflowStep.reviewWaitingForQuorum', { completed: completedReviewCount.value, required: requiredReviewCount.value })
+  }
+  if (currentUserCanSubmitReview.value) return t('workflowStep.reviewSubmitHint')
+  return t('peerReview.actionHint')
+})
 
 function canUseWaveformShortcuts(): boolean {
   return ['peer_review', 'producer_gate', 'mastering', 'final_review'].includes(activeVariant.value)
@@ -1037,6 +1071,57 @@ function handleIssueLeave() {
         {{ error }}
       </div>
 
+      <div class="card space-y-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="space-y-1">
+            <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('workflowStep.reviewTeamHeading') }}</h3>
+            <p class="text-xs text-muted-foreground">
+              <template v-if="reviewWaitingForAssignment">
+                {{ t('workflowStep.reviewWaitingForAssignment') }}
+              </template>
+              <template v-else-if="currentUserCanFinalizeReview">
+                {{ t('workflowStep.reviewFinalizeReady') }}
+              </template>
+              <template v-else-if="reviewRequiresGroupFinalization && currentUserAssignment?.status === 'completed' && !reviewQuorumReached">
+                {{ t('workflowStep.reviewWaitingForQuorum', { completed: completedReviewCount, required: requiredReviewCount }) }}
+              </template>
+              <template v-else>
+                {{ t('workflowStep.reviewSubmitHint') }}
+              </template>
+            </p>
+          </div>
+          <div class="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-mono text-muted-foreground">
+            <span class="text-foreground">{{ completedReviewCount }}/{{ requiredReviewCount }}</span>
+            <span>{{ t('workflowStep.reviewProgress') }}</span>
+          </div>
+        </div>
+
+        <div v-if="currentStepAssignments.length > 0" class="space-y-2">
+          <div
+            v-for="assignment in currentStepAssignments"
+            :key="assignment.id"
+            class="flex items-center justify-between gap-3 border border-border bg-background px-3 py-2 text-sm"
+          >
+            <span class="text-foreground">
+              {{ assignment.user?.display_name ?? `#${assignment.user_id}` }}
+            </span>
+            <div class="flex items-center gap-2 text-xs font-mono">
+              <span
+                class="rounded-full px-2.5 py-1"
+                :class="assignment.status === 'completed' ? 'bg-success-bg text-success' : 'bg-border text-muted-foreground'"
+              >
+                {{ assignment.status === 'completed' ? t('workflowStep.reviewSubmitted') : t('workflowStep.reviewPending') }}
+              </span>
+              <span v-if="assignment.decision" class="rounded-full bg-info-bg px-2.5 py-1 text-info">
+                {{ assignment.decision === 'pass' || assignment.decision === 'approve'
+                  ? t('workflowStep.reviewDecisionApprove')
+                  : t('workflowStep.reviewDecisionRevision') }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div v-if="audioUrl">
         <div class="flex items-start justify-between gap-3 mb-2">
           <p class="text-xs text-muted-foreground leading-relaxed">{{ t('peerReview.waveformHint') }}</p>
@@ -1156,7 +1241,7 @@ function handleIssueLeave() {
       </div>
     </div>
 
-    <WorkflowActionBar :actions="classicActions.map(action => ({ ...action, disabled: action.disabled || !checklistSaved }))" :hint="t('peerReview.actionHint')" />
+    <WorkflowActionBar :actions="classicActions.map(action => ({ ...action, disabled: action.disabled || !checklistSaved }))" :hint="peerReviewActionHint" />
   </div>
 
   <div v-else-if="activeVariant === 'producer_gate'" class="max-w-4xl mx-auto min-h-full flex flex-col">
@@ -1359,6 +1444,7 @@ function handleIssueLeave() {
         <IssueDetailPanel
           :issue="selectedIssue"
           :track="track"
+          :assignments="reviewAssignments"
           @close="closeIssueDrawer"
           @updated="onIssueUpdated"
         />
@@ -1977,7 +2063,7 @@ function handleIssueLeave() {
         />
       </div>
 
-      <WorkflowActionBar :actions="genericReviewActions" :hint="t('common.actions')" />
+      <WorkflowActionBar :actions="genericReviewActions" :hint="peerReviewActionHint" />
     </template>
 
     <template v-if="currentStep.type === 'revision'">
@@ -2111,6 +2197,7 @@ function handleIssueLeave() {
       <IssueDetailPanel
         :issue="selectedIssue"
         :track="track"
+        :assignments="reviewAssignments"
         @close="closeIssueDrawer"
         @updated="onIssueUpdated"
       />

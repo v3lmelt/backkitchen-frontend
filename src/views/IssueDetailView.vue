@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { issueApi, commentApi, r2Api, uploadToR2, trackApi, API_ORIGIN, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Comment, EditHistory, Issue, IssueStatus } from '@/types'
+import type { Comment, EditHistory, Issue, IssueStatus, StageAssignment } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import TimestampText from '@/components/common/TimestampText.vue'
@@ -14,6 +14,7 @@ import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
 import { formatTimestamp, formatTimestampShort, formatLocaleDate, formatDuration } from '@/utils/time'
 import type { MarkerIndexReference, TimeReference, TimestampTarget } from '@/utils/timestamps'
 import { ChevronLeft, ChevronRight, Music, Pencil, Trash2 } from 'lucide-vue-next'
+import { canUserReviewIssue } from '@/utils/reviewAssignments'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,6 +28,7 @@ const loading = ref(true)
 const showUnresolvedOnly = ref(false)
 const currentSourceVersionNumber = ref<number | null>(null)
 const cachedTrack = ref<import('@/types').Track | null>(null)
+const reviewAssignments = ref<StageAssignment[]>([])
 
 const issueIsOutdated = computed(() => {
   if (!issue.value || issue.value.source_version_number == null || currentSourceVersionNumber.value == null) return false
@@ -96,17 +98,8 @@ const pendingStatus = ref<IssueStatus | null>(null)
 const isSubmitter = computed(() => appStore.currentUser?.id === cachedTrack.value?.submitter_id)
 
 const isReviewer = computed(() => {
-  const uid = appStore.currentUser?.id
-  const trk = cachedTrack.value
-  const iss = issue.value
-  if (!uid || !trk || !iss) return false
-  if (uid === iss.author_id) return true
-  switch (iss.phase) {
-    case 'peer': return uid === trk.peer_reviewer_id
-    case 'producer': case 'final_review': return uid === trk.producer_id
-    case 'mastering': return uid === trk.mastering_engineer_id
-    default: return false
-  }
+  return issue.value != null
+    && canUserReviewIssue(appStore.currentUser?.id, cachedTrack.value, issue.value, reviewAssignments.value)
 })
 
 
@@ -121,12 +114,16 @@ async function loadIssue(id: number) {
     if (token !== loadCount) return
     issue.value = fetched
     if (fetched.track_id !== cachedTrackId) {
-      const all = await issueApi.listForTrack(fetched.track_id)
-      const detail = await trackApi.get(fetched.track_id)
+      const [all, detail, assignments] = await Promise.all([
+        issueApi.listForTrack(fetched.track_id),
+        trackApi.get(fetched.track_id),
+        trackApi.listAssignments(fetched.track_id).catch(() => []),
+      ])
       if (token !== loadCount) return
       allTrackIssues.value = all
       currentSourceVersionNumber.value = detail.track.version
       cachedTrack.value = detail.track
+      reviewAssignments.value = assignments
       cachedTrackId = fetched.track_id
     }
   } catch {

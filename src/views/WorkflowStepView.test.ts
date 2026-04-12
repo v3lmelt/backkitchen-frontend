@@ -7,6 +7,7 @@ import { mountWithPlugins } from '@/tests/utils'
 const mocks = vi.hoisted(() => ({
   pushMock: vi.fn(),
   trackGetMock: vi.fn(),
+  listAssignmentsMock: vi.fn(),
   issueUpdateMock: vi.fn(),
   workflowTransitionMock: vi.fn(),
   approveFinalReviewMock: vi.fn(),
@@ -37,6 +38,7 @@ vi.mock('@/api', () => ({
   },
   trackApi: {
     get: mocks.trackGetMock,
+    listAssignments: mocks.listAssignmentsMock,
     workflowTransition: mocks.workflowTransitionMock,
     approveFinalReview: mocks.approveFinalReviewMock,
     confirmDelivery: mocks.confirmDeliveryMock,
@@ -124,6 +126,7 @@ vi.mock('@/composables/useAudioDownload', () => ({
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({
     success: vi.fn(),
+    error: vi.fn(),
   }),
 }))
 
@@ -133,6 +136,7 @@ describe('WorkflowStepView', () => {
   beforeEach(() => {
     mocks.pushMock.mockReset()
     mocks.trackGetMock.mockReset()
+    mocks.listAssignmentsMock.mockReset()
     mocks.issueUpdateMock.mockReset()
     mocks.workflowTransitionMock.mockReset()
     mocks.approveFinalReviewMock.mockReset()
@@ -142,6 +146,7 @@ describe('WorkflowStepView', () => {
     mocks.downloadTrackAudioMock.mockReset()
     mocks.downloadAudioAssetMock.mockReset()
     mocks.workflowTransitionMock.mockResolvedValue({})
+    mocks.listAssignmentsMock.mockResolvedValue([])
     mocks.issueUpdateMock.mockImplementation(async (id: number, data: { status?: string }) => ({ id, status: data.status ?? 'open' }))
     mocks.approveFinalReviewMock.mockResolvedValue({})
     mocks.confirmDeliveryMock.mockResolvedValue({})

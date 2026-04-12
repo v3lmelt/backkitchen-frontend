@@ -2,10 +2,11 @@
 import { useI18n } from 'vue-i18n'
 import { Globe, MessageSquare } from 'lucide-vue-next'
 import { useAppStore } from '@/stores/app'
-import type { Issue, IssueStatus, Track } from '@/types'
+import type { Issue, IssueStatus, StageAssignment, Track } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatLocaleDate, formatTimestampShort } from '@/utils/time'
 import { hashId } from '@/utils/hash'
+import { canUserReviewIssue } from '@/utils/reviewAssignments'
 
 const props = withDefaults(defineProps<{
   issues: Issue[]
@@ -14,6 +15,7 @@ const props = withDefaults(defineProps<{
   currentSourceVersionNumber?: number | null
   hoveredIssueId?: number | null
   track?: Track | null
+  assignments?: StageAssignment[]
   showActivity?: boolean
   enableQuickActions?: boolean
 }>(), {
@@ -22,6 +24,7 @@ const props = withDefaults(defineProps<{
   currentSourceVersionNumber: null,
   hoveredIssueId: null,
   track: null,
+  assignments: () => [],
   showActivity: false,
   enableQuickActions: false,
 })
@@ -82,23 +85,7 @@ function isSubmitter(): boolean {
 }
 
 function isReviewer(issue: Issue): boolean {
-  if (!props.track) return false
-  const uid = appStore.currentUser?.id
-  if (!uid) return false
-  if (uid === issue.author_id) return true
-  switch (issue.phase) {
-    case 'peer':
-    case 'peer_review':
-      return uid === props.track.peer_reviewer_id
-    case 'producer':
-    case 'producer_gate':
-    case 'final_review':
-      return uid === props.track.producer_id
-    case 'mastering':
-      return uid === props.track.mastering_engineer_id
-    default:
-      return false
-  }
+  return canUserReviewIssue(appStore.currentUser?.id, props.track, issue, props.assignments)
 }
 
 function availableQuickActions(issue: Issue): IssueStatus[] {
