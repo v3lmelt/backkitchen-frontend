@@ -41,6 +41,7 @@ const activeTab = ref<Tab>('profile')
 const profileForm = reactive({
   display_name: appStore.currentUser?.display_name ?? '',
   email: appStore.currentUser?.email ?? '',
+  feishu_contact: appStore.currentUser?.feishu_contact ?? '',
 })
 
 const avatarUploading = ref(false)
@@ -133,6 +134,7 @@ async function saveProfile() {
     const updated = await authApi.updateProfile({
       display_name: profileForm.display_name,
       email: profileForm.email || undefined,
+      feishu_contact: profileForm.feishu_contact || null,
     })
     appStore.setAuth(updated, appStore.token!)
     profileSuccess.value = t('profile.saveSuccess')
@@ -265,6 +267,12 @@ async function changePassword() {
           <div>
             <label class="block text-xs text-muted-foreground mb-1">{{ t('profile.email') }}</label>
             <input v-model="profileForm.email" type="email" class="input-field w-full" />
+          </div>
+
+          <div>
+            <label class="block text-xs text-muted-foreground mb-1">{{ t('profile.feishuContact') }}</label>
+            <input v-model="profileForm.feishu_contact" class="input-field w-full" :placeholder="t('profile.feishuContactPlaceholder')" />
+            <p class="text-[11px] text-muted-foreground mt-1">{{ t('profile.feishuContactHint') }}</p>
           </div>
 
           <div v-if="profileError" class="text-xs text-destructive">{{ profileError }}</div>

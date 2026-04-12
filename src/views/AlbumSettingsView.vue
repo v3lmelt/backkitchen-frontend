@@ -106,7 +106,11 @@ const archivedTracks = ref<Track[]>([])
 const restoringTrackId = ref<number | null>(null)
 
 // Webhook state
-const webhookState = reactive({ url: '', enabled: false, events: [] as string[] })
+const webhookState = reactive({ url: '', enabled: false, events: [] as string[], type: 'generic', secret: '', app_id: '', app_secret: '', filter_user_ids: [] as number[] })
+const WEBHOOK_TYPES = [
+  { value: 'generic', label: 'Generic' },
+  { value: 'feishu', label: '飞书 / Feishu' },
+]
 const savingWebhook = ref(false)
 const testingWebhook = ref(false)
 const webhookTestResult = ref<boolean | null>(null)
@@ -299,11 +303,21 @@ onMounted(async () => {
           webhookState.url = cfg.url
           webhookState.enabled = cfg.enabled
           webhookState.events = [...cfg.events]
+          webhookState.type = cfg.type || 'generic'
+          webhookState.secret = cfg.secret || ''
+          webhookState.app_id = cfg.app_id || ''
+          webhookState.app_secret = cfg.app_secret || ''
+          webhookState.filter_user_ids = cfg.filter_user_ids || []
         }).catch(() => {
           console.warn('[AlbumSettings] Failed to load webhook config')
           webhookState.url = ''
           webhookState.enabled = false
           webhookState.events = []
+          webhookState.type = 'generic'
+          webhookState.secret = ''
+          webhookState.app_id = ''
+          webhookState.app_secret = ''
+          webhookState.filter_user_ids = []
         }),
         albumApi.getWebhookDeliveries(albumData.id).then(d => { webhookDeliveries.value = d }).catch(() => {}),
       )
@@ -642,6 +656,12 @@ function toggleWebhookEvent(event: string) {
   else webhookState.events.push(event)
 }
 
+function toggleWebhookFilterUser(userId: number) {
+  const idx = webhookState.filter_user_ids.indexOf(userId)
+  if (idx >= 0) webhookState.filter_user_ids.splice(idx, 1)
+  else webhookState.filter_user_ids.push(userId)
+}
+
 async function saveWebhook() {
   if (!album.value) return
   savingWebhook.value = true
@@ -650,6 +670,11 @@ async function saveWebhook() {
     webhookState.url = result.url
     webhookState.enabled = result.enabled
     webhookState.events = [...result.events]
+    webhookState.type = result.type || 'generic'
+    webhookState.secret = result.secret || ''
+    webhookState.app_id = result.app_id || ''
+    webhookState.app_secret = result.app_secret || ''
+    webhookState.filter_user_ids = result.filter_user_ids || []
     toastSuccess(t('settings.webhookSaved'))
   } finally {
     savingWebhook.value = false
@@ -1316,8 +1341,30 @@ async function refreshDeliveries() {
 
       <div v-else-if="activeTab === 'webhook'" class="card space-y-5">
         <div>
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.webhookType') }}</label>
+          <select v-model="webhookState.type" class="select-field w-full text-sm">
+            <option v-for="wt in WEBHOOK_TYPES" :key="wt.value" :value="wt.value">{{ wt.label }}</option>
+          </select>
+        </div>
+        <div>
           <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.webhookUrl') }}</label>
-          <input v-model="webhookState.url" class="input-field w-full text-sm" placeholder="https://..." />
+          <input v-model="webhookState.url" class="input-field w-full text-sm" :placeholder="webhookState.type === 'feishu' ? 'https://open.feishu.cn/open-apis/bot/v2/hook/...' : 'https://...'" />
+        </div>
+        <div v-if="webhookState.type === 'feishu'">
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.webhookSecret') }}</label>
+          <input v-model="webhookState.secret" type="password" class="input-field w-full text-sm" :placeholder="t('settings.webhookSecretPlaceholder')" />
+        </div>
+        <div v-if="webhookState.type === 'feishu'" class="space-y-4 p-4 bg-background border border-border rounded-none">
+          <div class="text-xs text-muted-foreground">{{ t('settings.feishuMentionTitle') }}</div>
+          <div>
+            <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.feishuAppId') }}</label>
+            <input v-model="webhookState.app_id" class="input-field w-full text-sm" placeholder="cli_xxxxxxxx" />
+          </div>
+          <div>
+            <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.feishuAppSecret') }}</label>
+            <input v-model="webhookState.app_secret" type="password" class="input-field w-full text-sm" />
+          </div>
+          <p class="text-[11px] text-muted-foreground">{{ t('settings.feishuMentionHint') }}</p>
         </div>
         <label class="flex items-center gap-2 text-sm text-foreground cursor-pointer">
           <input type="checkbox" class="checkbox" v-model="webhookState.enabled" />
@@ -1334,6 +1381,22 @@ async function refreshDeliveries() {
                 @change="toggleWebhookEvent(evt)"
               />
               <span class="font-mono text-xs">{{ evt }}</span>
+            </label>
+          </div>
+        </div>
+        <div>
+          <div class="text-xs text-muted-foreground mb-2">{{ t('settings.webhookFilterUsers') }}</div>
+          <p class="text-[11px] text-muted-foreground mb-2">{{ t('settings.webhookFilterUsersHint') }}</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <label v-for="u in users" :key="u.id" class="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                class="checkbox"
+                :checked="webhookState.filter_user_ids.includes(u.id)"
+                @change="toggleWebhookFilterUser(u.id)"
+              />
+              <span class="text-xs">{{ u.display_name }}</span>
+              <span class="text-[11px] text-muted-foreground">@{{ u.username }}</span>
             </label>
           </div>
         </div>
