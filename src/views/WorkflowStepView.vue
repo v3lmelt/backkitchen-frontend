@@ -448,7 +448,7 @@ async function loadPeerChecklist(albumId: number) {
 }
 
 async function loadPage() {
-  loading.value = true
+  if (!track.value) loading.value = true
   error.value = ''
   try {
     const detail = await trackApi.get(trackId.value)
@@ -770,7 +770,6 @@ async function handleUpload(kind: 'revision' | 'delivery') {
     if (kind === 'delivery') {
       uploadFile.value = null
       resetDeliveryPreview()
-      await loadPage()
       toastSuccess(t('workflowStep.deliveryUploaded'))
       return
     }
@@ -786,12 +785,17 @@ async function handleUpload(kind: 'revision' | 'delivery') {
 
 async function confirmDelivery() {
   if (!track.value || !masterDelivery.value) return
+  const previousStatus = track.value.status
   acting.value = true
   error.value = ''
   try {
-    await trackApi.confirmDelivery(track.value.id, masterDelivery.value.id)
-    await loadPage()
+    const updatedTrack = await trackApi.confirmDelivery(track.value.id, masterDelivery.value.id)
     toastSuccess(t('trackDetail.actions.confirm_delivery', 'Confirm Delivery'))
+    if (updatedTrack.status !== previousStatus) {
+      pushToTrackDetail()
+      return
+    }
+    await loadPage()
   } catch (err: any) {
     error.value = err.message || t('workflowStep.transitionFailed')
   } finally {
@@ -801,10 +805,15 @@ async function confirmDelivery() {
 
 async function approveFinal() {
   if (!track.value) return
+  const previousStatus = track.value.status
   acting.value = true
   error.value = ''
   try {
-    await trackApi.approveFinalReview(track.value.id)
+    const updatedTrack = await trackApi.approveFinalReview(track.value.id)
+    if (updatedTrack.status !== previousStatus) {
+      pushToTrackDetail()
+      return
+    }
     await loadPage()
   } catch (err: any) {
     error.value = err.message || t('workflowStep.transitionFailed')

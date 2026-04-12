@@ -40,6 +40,7 @@ const artistError = ref('')
 const draftRestored = ref(false)
 const needsFileReselect = ref(false)
 const savedFileName = ref('')
+const submitted = ref(false)
 
 function validateTitle() {
   titleError.value = form.value.title.trim() ? '' : t('upload.titleRequired')
@@ -145,7 +146,7 @@ onBeforeUnmount(() => {
 })
 
 onBeforeRouteLeave(() => {
-  if (!hasDraft.value && !uploading.value) {
+  if (submitted.value || (!hasDraft.value && !uploading.value)) {
     return true
   }
   return window.confirm(t('upload.leaveConfirm'))
@@ -253,6 +254,7 @@ async function upload() {
     }
     toastSuccess(t('upload.uploadSuccess'))
     clearDraft()
+    submitted.value = true
     router.push({ path: `/tracks/${track.id}`, query: { returnTo: route.path } })
   } catch (err: any) {
     toastError(err.message || t('upload.uploadFailed'))

@@ -1210,7 +1210,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
       <div
         v-if="hasPointIssues"
         class="pointer-events-none absolute inset-x-0 top-0 z-20 overflow-visible"
-        :style="{ height: `${overlayHeight + 14}px` }"
+        :style="{ height: `${overlayHeight + 14 + (hasRangeIssues && markerTimelineDuration > 0 ? rangeRulerHeight + 4 : 0)}px` }"
       >
         <div
           v-for="group in pointGroups"
@@ -1227,6 +1227,11 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
             @mouseenter="emitPointGroupHover(group)"
             @mouseleave="emitIssueLeave"
           >
+            <span
+              v-if="hasRangeIssues && markerTimelineDuration > 0"
+              class="shrink-0"
+              :style="{ height: `${rangeRulerHeight + 4}px` }"
+            />
             <span
               class="h-2.5 w-2.5 shrink-0 rounded-full transition-transform duration-150"
               :style="pointGroupDotStyle(group)"

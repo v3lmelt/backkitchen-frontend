@@ -48,7 +48,6 @@ const exportProgress = ref<{
   done: boolean
   error: string | null
 } | null>(null)
-let exportCancel: (() => void) | null = null
 const showPinnedOnly = ref(false)
 const { hasAnyPins, isPinned, togglePin } = useDashboardPins(() => appStore.currentUser?.id ?? null)
 
@@ -283,7 +282,7 @@ function handleExport(albumId: number) {
   exportingAlbum.value = albumId
   exportProgress.value = { total: 0, index: 0, title: '', step: 'start', done: false, error: null }
 
-  const { cancel } = albumApi.exportStream(albumId, async (event: ExportProgressEvent) => {
+  albumApi.exportStream(albumId, async (event: ExportProgressEvent) => {
     if (event.type === 'start') {
       exportProgress.value = { total: event.total, index: 0, title: '', step: 'start', done: false, error: null }
     } else if (event.type === 'track_progress') {
@@ -322,7 +321,6 @@ function handleExport(albumId: number) {
       }, 3000)
     }
   })
-  exportCancel = cancel
 }
 
 function openAlbumSettings(albumId: number) {
