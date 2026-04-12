@@ -87,6 +87,7 @@
     "submitIssue": "提交问题",
     "cancel": "取消",
     "confirm": "确认",
+    "edit": "编辑",
     "save": "保存",
     "saved": "已保存",
     "newIssueAt": "在 {time} 处添加新问题",

@@ -428,6 +428,19 @@ const versionOptions = computed<SelectOption[]>(() =>
   }))
 )
 
+const currentVersionRevisionNotes = computed(() => {
+  const cv = track.value?.current_source_version
+  if (!cv) return null
+  const sv = sourceVersions.value.find(v => v.id === cv.id)
+  return sv?.revision_notes ?? cv.revision_notes ?? null
+})
+
+const selectedCompareVersionNotes = computed(() => {
+  if (!selectedCompareVersionId.value) return null
+  const sv = sourceVersions.value.find(v => v.id === selectedCompareVersionId.value)
+  return sv?.revision_notes ?? null
+})
+
 function masterDeliveryOptionLabel(delivery: MasterDelivery): string {
   const version = `v${delivery.delivery_number}`
   const cycle = track.value && delivery.workflow_cycle !== track.value.workflow_cycle
@@ -497,6 +510,54 @@ async function saveMetadata() {
     toastError(t('trackDetail.metadataSaveFailed'))
   } finally {
     savingMetadata.value = false
+  }
+}
+
+// ── Edit author notes / mastering notes ──────────────────────────────────
+const editingAuthorNotes = ref(false)
+const authorNotesForm = ref('')
+const savingAuthorNotes = ref(false)
+const editingMasteringNotes = ref(false)
+const masteringNotesForm = ref('')
+const savingMasteringNotes = ref(false)
+
+function startEditAuthorNotes() {
+  authorNotesForm.value = track.value?.author_notes ?? ''
+  editingAuthorNotes.value = true
+}
+
+async function saveAuthorNotes() {
+  if (!track.value) return
+  savingAuthorNotes.value = true
+  try {
+    const updated = await trackApi.updateAuthorNotes(track.value.id, authorNotesForm.value.trim() || null)
+    track.value = { ...track.value, author_notes: updated.author_notes }
+    editingAuthorNotes.value = false
+    toastSuccess(t('trackDetail.notesSaved'))
+  } catch {
+    toastError(t('common.error'))
+  } finally {
+    savingAuthorNotes.value = false
+  }
+}
+
+function startEditMasteringNotes() {
+  masteringNotesForm.value = track.value?.mastering_notes ?? ''
+  editingMasteringNotes.value = true
+}
+
+async function saveMasteringNotes() {
+  if (!track.value) return
+  savingMasteringNotes.value = true
+  try {
+    const updated = await trackApi.updateMasteringNotes(track.value.id, masteringNotesForm.value.trim() || null)
+    track.value = { ...track.value, mastering_notes: updated.mastering_notes }
+    editingMasteringNotes.value = false
+    toastSuccess(t('trackDetail.notesSaved'))
+  } catch {
+    toastError(t('common.error'))
+  } finally {
+    savingMasteringNotes.value = false
   }
 }
 
@@ -842,6 +903,14 @@ watch(selectedCompareMasterDelivery, (delivery) => {
               :compare-version-id="selectedCompareVersionId"
               @regionClick="onIssueSelect"
             />
+            <div v-if="currentVersionRevisionNotes" class="mt-2 px-3 py-2 border border-border rounded-none bg-card">
+              <p class="text-xs font-mono text-muted-foreground mb-0.5">{{ t('trackDetail.revisionNotesLabel', { version: track.version }) }}</p>
+              <p class="text-sm text-foreground whitespace-pre-wrap">{{ currentVersionRevisionNotes }}</p>
+            </div>
+            <div v-if="selectedCompareVersionNotes" class="mt-2 px-3 py-2 border border-border rounded-none bg-card">
+              <p class="text-xs font-mono text-muted-foreground mb-0.5">{{ t('trackDetail.revisionNotesLabel', { version: sourceVersions.find(v => v.id === selectedCompareVersionId)?.version_number }) }}</p>
+              <p class="text-sm text-foreground whitespace-pre-wrap">{{ selectedCompareVersionNotes }}</p>
+            </div>
           </div>
           <div v-else class="card text-center text-muted-foreground py-8">
             {{ t('trackDetail.noAudioFile') }}
@@ -1074,6 +1143,44 @@ watch(selectedCompareMasterDelivery, (delivery) => {
               </span>
             </div>
           </div>
+        </div>
+
+        <!-- Author Notes -->
+        <div v-if="track.author_notes || isSubmitter" class="card space-y-2">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('trackDetail.authorNotes') }}</h3>
+            <button v-if="isSubmitter && !editingAuthorNotes" @click="startEditAuthorNotes" class="text-xs text-primary hover:text-primary-hover font-mono">
+              {{ t('common.edit') }}
+            </button>
+          </div>
+          <template v-if="editingAuthorNotes">
+            <textarea v-model="authorNotesForm" class="textarea-field w-full" rows="3" :placeholder="t('trackDetail.authorNotesPlaceholder')"></textarea>
+            <div class="flex gap-2">
+              <button @click="saveAuthorNotes" :disabled="savingAuthorNotes" class="btn-primary text-xs px-3 py-1.5">{{ t('common.save') }}</button>
+              <button @click="editingAuthorNotes = false" class="btn-secondary text-xs px-3 py-1.5">{{ t('common.cancel') }}</button>
+            </div>
+          </template>
+          <p v-else-if="track.author_notes" class="text-sm text-muted-foreground whitespace-pre-wrap">{{ track.author_notes }}</p>
+          <p v-else class="text-xs text-muted-foreground italic">{{ t('trackDetail.noAuthorNotes') }}</p>
+        </div>
+
+        <!-- Mastering Notes -->
+        <div v-if="track.mastering_notes || isSubmitter" class="card space-y-2">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('trackDetail.masteringNotes') }}</h3>
+            <button v-if="isSubmitter && !editingMasteringNotes" @click="startEditMasteringNotes" class="text-xs text-primary hover:text-primary-hover font-mono">
+              {{ t('common.edit') }}
+            </button>
+          </div>
+          <template v-if="editingMasteringNotes">
+            <textarea v-model="masteringNotesForm" class="textarea-field w-full" rows="3" :placeholder="t('trackDetail.masteringNotesPlaceholder')"></textarea>
+            <div class="flex gap-2">
+              <button @click="saveMasteringNotes" :disabled="savingMasteringNotes" class="btn-primary text-xs px-3 py-1.5">{{ t('common.save') }}</button>
+              <button @click="editingMasteringNotes = false" class="btn-secondary text-xs px-3 py-1.5">{{ t('common.cancel') }}</button>
+            </div>
+          </template>
+          <p v-else-if="track.mastering_notes" class="text-sm text-muted-foreground whitespace-pre-wrap">{{ track.mastering_notes }}</p>
+          <p v-else class="text-xs text-muted-foreground italic">{{ t('trackDetail.noMasteringNotes') }}</p>
         </div>
 
         <div class="card space-y-3 lg:flex-1 lg:flex lg:flex-col">

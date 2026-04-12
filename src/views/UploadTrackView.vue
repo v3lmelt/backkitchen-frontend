@@ -32,6 +32,7 @@ const form = ref({
   bpm: '',
   original_title: '',
   original_artist: '',
+  author_notes: '',
 })
 const selectedFile = ref<File | null>(null)
 const audioDuration = ref<number | null>(null)
@@ -78,7 +79,8 @@ const hasDraft = computed(() => {
     || form.value.artist.trim()
     || form.value.bpm.trim()
     || form.value.original_title.trim()
-    || form.value.original_artist.trim(),
+    || form.value.original_artist.trim()
+    || form.value.author_notes.trim(),
   )
 })
 
@@ -119,6 +121,7 @@ function restoreDraft() {
       bpm: typeof draft.bpm === 'string' ? draft.bpm : '',
       original_title: typeof draft.original_title === 'string' ? draft.original_title : '',
       original_artist: typeof draft.original_artist === 'string' ? draft.original_artist : '',
+      author_notes: typeof draft.author_notes === 'string' ? draft.author_notes : '',
     }
     savedFileName.value = typeof draft.saved_file_name === 'string' ? draft.saved_file_name : ''
     needsFileReselect.value = Boolean(savedFileName.value)
@@ -221,6 +224,7 @@ async function upload() {
           bpm: form.value.bpm || null,
           original_title: form.value.original_title || null,
           original_artist: form.value.original_artist || null,
+          author_notes: form.value.author_notes || null,
         }),
         extractAudioDuration(file).catch(() => null),
       ])
@@ -237,6 +241,7 @@ async function upload() {
         bpm: form.value.bpm || null,
         original_title: form.value.original_title || null,
         original_artist: form.value.original_artist || null,
+        author_notes: form.value.author_notes || null,
       })
     } else {
       // Legacy FormData upload
@@ -248,6 +253,7 @@ async function upload() {
       if (form.value.bpm) formData.append('bpm', form.value.bpm)
       if (form.value.original_title) formData.append('original_title', form.value.original_title)
       if (form.value.original_artist) formData.append('original_artist', form.value.original_artist)
+      if (form.value.author_notes) formData.append('author_notes', form.value.author_notes)
       track = await uploadWithProgress<Track>(
         '/tracks', formData, (p) => { uploadProgress.value = p }
       )
@@ -340,6 +346,11 @@ function formatFileSize(bytes: number): string {
           <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.originalArtist') }}</label>
           <input v-model="form.original_artist" type="text" class="input-field w-full" :placeholder="t('upload.originalArtistPlaceholder')" />
         </div>
+      </div>
+
+      <div>
+        <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.authorNotes') }}</label>
+        <textarea v-model="form.author_notes" class="textarea-field w-full" rows="3" :placeholder="t('upload.authorNotesPlaceholder')"></textarea>
       </div>
 
       <div class="flex gap-3">

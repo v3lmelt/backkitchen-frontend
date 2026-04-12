@@ -72,6 +72,7 @@ const loading = ref(true)
 const acting = ref(false)
 const uploadFile = ref<File | null>(null)
 const localDeliveryPreviewUrl = ref('')
+const revisionNotes = ref('')
 const uploading = ref(false)
 const error = ref('')
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
@@ -756,13 +757,17 @@ async function handleUpload(kind: 'revision' | 'delivery') {
       await uploadToR2(presigned.upload_url, file, file.type || 'application/octet-stream', (p) => {
         uploadProgress.value = p
       })
-      await confirmFn(trackId.value, {
+      const confirmParams: { upload_id: string; object_key: string; duration: number | null; revision_notes?: string | null } = {
         upload_id: presigned.upload_id,
         object_key: presigned.object_key,
         duration,
-      })
+      }
+      if (kind === 'revision' && revisionNotes.value.trim()) {
+        confirmParams.revision_notes = revisionNotes.value.trim()
+      }
+      await confirmFn(trackId.value, confirmParams)
     } else if (kind === 'revision') {
-      await trackApi.uploadSourceVersion(trackId.value, file, undefined, (percent) => {
+      await trackApi.uploadSourceVersion(trackId.value, file, revisionNotes.value.trim() || undefined, (percent) => {
         uploadProgress.value = percent
       })
     } else {
@@ -778,6 +783,7 @@ async function handleUpload(kind: 'revision' | 'delivery') {
       return
     }
     uploadFile.value = null
+    revisionNotes.value = ''
     resetDeliveryPreview()
     pushToTrackDetail()
   } catch (err: any) {
@@ -2221,6 +2227,10 @@ function handleIssueLeave() {
             <p class="text-sm text-muted-foreground">{{ t('workflowStep.revisedPreviewNotice') }}</p>
           </div>
           <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" />
+          <div>
+            <label class="block text-sm text-muted-foreground mb-1">{{ t('workflowStep.revisionNotes') }}</label>
+            <textarea v-model="revisionNotes" class="textarea-field w-full" rows="3" :placeholder="t('workflowStep.revisionNotesPlaceholder')"></textarea>
+          </div>
           <div class="flex flex-wrap gap-2">
             <button
               @click="handleUpload('revision')"
@@ -2231,7 +2241,7 @@ function handleIssueLeave() {
               {{ uploading ? t('workflowStep.uploading') : t('workflowStep.uploadRevision') }}
             </button>
             <button
-              @click="uploadFile = null; resetDeliveryPreview()"
+              @click="uploadFile = null; revisionNotes = ''; resetDeliveryPreview()"
               :disabled="uploading"
               class="btn-secondary text-sm"
             >
