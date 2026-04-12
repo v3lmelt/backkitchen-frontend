@@ -570,6 +570,7 @@
     "reassignReviewerTitle": "重新分配审稿人",
     "reassignReviewerAuto": "将从评审人池中自动重新分配。",
     "reassignReviewerManual": "为该阶段选择一位或多位审稿人：",
+    "reassignSelectionSummary": "已选择 {selected}/{limit} 位审稿人",
     "reassigning": "分配中…",
     "reassignDone": "已重新分配审稿人",
     "reassignNoPool": "自动分配失败：当前阶段无可用审核人",

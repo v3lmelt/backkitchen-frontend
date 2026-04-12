@@ -534,6 +534,8 @@ const showReassignModal = ref(false)
 const reassignMembers = ref<AlbumMember[]>([])
 const reassignSelectedUserIds = ref<number[]>([])
 const reassigning = ref(false)
+const reassignReviewerLimit = computed(() => Math.max(1, track.value?.workflow_step?.required_reviewer_count ?? 1))
+const canSelectMoreReassignReviewers = computed(() => reassignSelectedUserIds.value.length < reassignReviewerLimit.value)
 
 async function openReassignModal() {
   if (isAutoAssign.value) {
@@ -552,10 +554,21 @@ function toggleReassignMember(userId: number) {
   const exists = reassignSelectedUserIds.value.includes(userId)
   if (exists) {
     reassignSelectedUserIds.value = reassignSelectedUserIds.value.filter(id => id !== userId)
-  } else {
-    reassignSelectedUserIds.value = [...reassignSelectedUserIds.value, userId]
+    return
   }
+  if (!canSelectMoreReassignReviewers.value) return
+  reassignSelectedUserIds.value = [...reassignSelectedUserIds.value, userId]
 }
+
+function isReassignMemberSelectionDisabled(userId: number): boolean {
+  if (reassignSelectedUserIds.value.includes(userId)) return false
+  return !canSelectMoreReassignReviewers.value
+}
+
+const reassignSelectionSummary = computed(() => t('trackDetail.reassignSelectionSummary', {
+  selected: reassignSelectedUserIds.value.length,
+  limit: reassignReviewerLimit.value,
+}))
 
 async function doReassign(userIds?: number[]) {
   if (!track.value) return
@@ -1141,17 +1154,22 @@ watch(selectedCompareMasterDelivery, (delivery) => {
         <div v-if="showReassignModal" class="card space-y-3">
           <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('trackDetail.reassignReviewerTitle') }}</h4>
           <p class="text-xs text-muted-foreground">{{ t('trackDetail.reassignReviewerManual') }}</p>
+          <p class="text-xs text-muted-foreground">{{ reassignSelectionSummary }}</p>
           <div class="space-y-1 max-h-48 overflow-y-auto">
             <label
               v-for="m in reassignMembers"
               :key="m.user_id"
               class="flex items-center gap-2 px-3 py-2 border border-border rounded-none cursor-pointer hover:bg-background/60 transition-colors"
-              :class="reassignSelectedUserIds.includes(m.user_id) ? 'border-primary bg-background' : ''"
+              :class="[
+                reassignSelectedUserIds.includes(m.user_id) ? 'border-primary bg-background' : '',
+                isReassignMemberSelectionDisabled(m.user_id) ? 'opacity-50 cursor-not-allowed hover:bg-transparent' : '',
+              ]"
             >
               <input
                 type="checkbox"
                 class="checkbox"
                 :checked="reassignSelectedUserIds.includes(m.user_id)"
+                :disabled="isReassignMemberSelectionDisabled(m.user_id)"
                 @change="toggleReassignMember(m.user_id)"
               />
               <span class="text-sm text-foreground">{{ m.user.display_name }}</span>

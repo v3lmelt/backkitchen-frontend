@@ -570,6 +570,7 @@
     "reassignReviewerTitle": "Reassign Reviewer",
     "reassignReviewerAuto": "A new reviewer will be automatically selected from the reviewer pool.",
     "reassignReviewerManual": "Select one or more reviewers for this stage:",
+    "reassignSelectionSummary": "Selected {selected}/{limit} reviewers",
     "reassigning": "Assigning…",
     "reassignDone": "Reviewer reassigned successfully",
     "reassignNoPool": "Auto-assignment failed: no eligible reviewers for this stage",
