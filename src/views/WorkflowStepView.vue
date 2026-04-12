@@ -761,9 +761,12 @@ async function handleUpload(kind: 'revision' | 'delivery') {
         object_key: presigned.object_key,
         duration,
       })
+    } else if (kind === 'revision') {
+      await trackApi.uploadSourceVersion(trackId.value, file, undefined, (percent) => {
+        uploadProgress.value = percent
+      })
     } else {
-      const fn = kind === 'revision' ? trackApi.uploadSourceVersion : trackApi.uploadMasterDelivery
-      await fn(trackId.value, file, (percent) => {
+      await trackApi.uploadMasterDelivery(trackId.value, file, (percent) => {
         uploadProgress.value = percent
       })
     }

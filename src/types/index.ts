@@ -74,6 +74,7 @@ export interface User {
   avatar_image?: string | null
   email?: string
   email_verified?: boolean
+  feishu_contact?: string | null
   is_admin: boolean
   created_at: string
 }
@@ -177,6 +178,7 @@ export interface TrackSourceVersion {
   file_path: string
   duration: number | null
   uploaded_by_id: number | null
+  revision_notes: string | null
   created_at: string
 }
 
@@ -351,6 +353,8 @@ export interface Track {
   peer_reviewer_id: number | null
   producer_id: number | null
   mastering_engineer_id: number | null
+  author_notes: string | null
+  mastering_notes: string | null
   created_at: string
   updated_at: string
   archived_at: string | null
@@ -449,6 +453,11 @@ export interface WebhookConfig {
   url: string
   enabled: boolean
   events: string[]
+  type: string
+  secret: string
+  app_id: string
+  app_secret: string
+  filter_user_ids: number[]
 }
 
 export interface WebhookDelivery {

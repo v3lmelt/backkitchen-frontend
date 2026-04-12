@@ -625,7 +625,13 @@ const canRequestReopen = computed(() => track.value?.status === 'completed' && i
 const showReopenModal = ref(false)
 const reopenTargetStage = ref('')
 const reopenReason = ref('')
+const reopenMasteringNotes = ref('')
 const reopening = ref(false)
+
+const reopenTargetIsMastering = computed(() => {
+  const id = reopenTargetStage.value
+  return id.includes('mastering') || id.includes('master')
+})
 
 const reopenableStages = computed<WorkflowStepDef[]>(() => {
   if (!workflowConfig.value) return []
@@ -656,11 +662,12 @@ async function handleReopen() {
     if (canDirectReopen.value) {
       await trackApi.reopen(track.value.id, reopenTargetStage.value)
     } else {
-      await trackApi.requestReopen(track.value.id, reopenTargetStage.value, reopenReason.value)
+      await trackApi.requestReopen(track.value.id, reopenTargetStage.value, reopenReason.value, reopenMasteringNotes.value.trim() || undefined)
     }
     showReopenModal.value = false
     reopenTargetStage.value = ''
     reopenReason.value = ''
+    reopenMasteringNotes.value = ''
     await loadTrack()
   } finally {
     reopening.value = false
@@ -1142,6 +1149,11 @@ watch(selectedCompareMasterDelivery, (delivery) => {
             <div v-if="canRequestReopen" class="space-y-2">
               <label class="text-xs text-muted-foreground mb-1 block">{{ t('trackDetail.reopenReason') }}</label>
               <textarea v-model="reopenReason" class="textarea-field w-full text-sm h-20" :placeholder="t('trackDetail.reopenReasonPlaceholder')" />
+            </div>
+            <div v-if="reopenTargetIsMastering" class="space-y-2">
+              <label class="text-xs text-muted-foreground mb-1 block">{{ t('trackDetail.reopenMasteringNotesLabel') }}</label>
+              <textarea v-model="reopenMasteringNotes" class="textarea-field w-full text-sm h-20" :placeholder="t('trackDetail.reopenMasteringNotesPlaceholder')" />
+              <p class="text-xs text-muted-foreground">{{ t('trackDetail.reopenMasteringNotesHint') }}</p>
             </div>
             <div class="flex gap-2">
               <button

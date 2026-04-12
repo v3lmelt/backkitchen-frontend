@@ -411,9 +411,10 @@ export const trackApi = {
   },
   get: (id: number) => request<TrackDetailResponse>(`/tracks/${id}`),
   upload: (formData: FormData) => request<Track>('/tracks', { method: 'POST', body: formData }),
-  uploadSourceVersion: (id: number, file: File, onProgress?: (percent: number) => void) => {
+  uploadSourceVersion: (id: number, file: File, revisionNotes?: string, onProgress?: (percent: number) => void) => {
     const form = new FormData()
     form.append('file', file)
+    if (revisionNotes) form.append('revision_notes', revisionNotes)
     return uploadWithProgress<Track>(`/tracks/${id}/source-versions`, form, onProgress)
   },
   uploadMasterDelivery: (id: number, file: File, onProgress?: (percent: number) => void) => {
@@ -450,10 +451,10 @@ export const trackApi = {
   confirmDelivery: (trackId: number, deliveryId: number) =>
     request<Track>(`/tracks/${trackId}/master-deliveries/${deliveryId}/confirm`, { method: 'POST' }),
   // Track reopen
-  requestReopen: (trackId: number, targetStageId: string, reason: string) =>
+  requestReopen: (trackId: number, targetStageId: string, reason: string, masteringNotes?: string) =>
     request<ReopenRequest>(`/tracks/${trackId}/reopen-request`, {
       method: 'POST',
-      body: JSON.stringify({ target_stage_id: targetStageId, reason }),
+      body: JSON.stringify({ target_stage_id: targetStageId, reason, mastering_notes: masteringNotes || undefined }),
     }),
   reopen: (trackId: number, targetStageId: string) =>
     request<Track>(`/tracks/${trackId}/reopen`, {
@@ -480,6 +481,16 @@ export const trackApi = {
     request<Track>(`/tracks/${trackId}/metadata`, {
       method: 'PATCH',
       body: JSON.stringify(data),
+    }),
+  updateAuthorNotes: (trackId: number, authorNotes: string | null) =>
+    request<Track>(`/tracks/${trackId}/author-notes`, {
+      method: 'PATCH',
+      body: JSON.stringify({ author_notes: authorNotes }),
+    }),
+  updateMasteringNotes: (trackId: number, masteringNotes: string | null) =>
+    request<Track>(`/tracks/${trackId}/mastering-notes`, {
+      method: 'PATCH',
+      body: JSON.stringify({ mastering_notes: masteringNotes }),
     }),
   getPlaybackPreference: (trackId: number, scope: TrackPlaybackPreferenceScope) =>
     request<TrackPlaybackPreference>(`/tracks/${trackId}/playback-preferences/${scope}`),
@@ -653,7 +664,7 @@ export const authApi = {
       body: JSON.stringify({ token, new_password }),
     }),
   me: () => request<User>('/auth/me'),
-  updateProfile: (data: { display_name?: string; email?: string }) =>
+  updateProfile: (data: { display_name?: string; email?: string; feishu_contact?: string | null }) =>
     request<User>('/auth/me', { method: 'PATCH', body: JSON.stringify(data) }),
   changePassword: (data: { current_password: string; new_password: string }) =>
     request<void>('/auth/me/change-password', { method: 'POST', body: JSON.stringify(data) }),
@@ -734,6 +745,7 @@ export const r2Api = {
     bpm?: string | null
     original_title?: string | null
     original_artist?: string | null
+    author_notes?: string | null
   }) => request<PresignedUploadResponse>('/tracks/request-upload', { method: 'POST', body: JSON.stringify(params) }),
 
   confirmTrackUpload: (params: {
@@ -746,6 +758,7 @@ export const r2Api = {
     bpm?: string | null
     original_title?: string | null
     original_artist?: string | null
+    author_notes?: string | null
   }) => request<Track>('/tracks/confirm-upload', { method: 'POST', body: JSON.stringify(params) }),
 
   // Source version
@@ -759,6 +772,7 @@ export const r2Api = {
     upload_id: string
     object_key: string
     duration?: number | null
+    revision_notes?: string | null
   }) => request<Track>(`/tracks/${trackId}/source-versions/confirm-upload`, { method: 'POST', body: JSON.stringify(params) }),
 
   // Master delivery
