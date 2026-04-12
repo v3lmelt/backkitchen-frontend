@@ -11,7 +11,7 @@ import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatTimestamp, formatDuration, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import type { TimeReference, TimestampTarget } from '@/utils/timestamps'
-import { X, Music, Pencil, Trash2 } from 'lucide-vue-next'
+import { ArrowDownUp, X, Music, Pencil, Trash2 } from 'lucide-vue-next'
 import { canUserReviewIssue } from '@/utils/reviewAssignments'
 
 const props = defineProps<{
@@ -90,11 +90,17 @@ const shouldHideInternalComments = computed(() =>
   Boolean(props.track && appStore.currentUser?.id === props.track.submitter_id),
 )
 
-const visibleComments = computed(() =>
-  (fullIssue.value?.comments ?? []).filter(
+const commentSortOrder = ref<'desc' | 'asc'>('desc')
+
+const visibleComments = computed(() => {
+  const filtered = (fullIssue.value?.comments ?? []).filter(
     comment => !(shouldHideInternalComments.value && comment.visibility === 'internal'),
-  ),
-)
+  )
+  if (commentSortOrder.value === 'desc') {
+    return [...filtered].reverse()
+  }
+  return filtered
+})
 
 function statusActionClass(status: IssueStatus): string {
   if (pendingStatus.value === status) {
@@ -396,9 +402,19 @@ async function deleteComment(comment: Comment) {
 
           <!-- Comments -->
           <div class="space-y-3">
-            <p class="text-xs font-mono font-semibold text-muted-foreground">
-              {{ t('issueDetail.commentsHeading', { count: visibleComments.length }) }}
-            </p>
+            <div class="flex items-center justify-between">
+              <p class="text-xs font-mono font-semibold text-muted-foreground">
+                {{ t('issueDetail.commentsHeading', { count: visibleComments.length }) }}
+              </p>
+              <button
+                v-if="visibleComments.length > 1"
+                @click="commentSortOrder = commentSortOrder === 'desc' ? 'asc' : 'desc'"
+                class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowDownUp class="w-3 h-3" />
+                {{ commentSortOrder === 'desc' ? t('issueDetail.sortNewestFirst') : t('issueDetail.sortOldestFirst') }}
+              </button>
+            </div>
 
             <template v-for="comment in visibleComments" :key="comment.id">
               <div
