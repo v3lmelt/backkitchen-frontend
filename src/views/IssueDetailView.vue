@@ -13,7 +13,7 @@ import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
 import { formatTimestamp, formatTimestampShort, formatLocaleDate, formatDuration } from '@/utils/time'
 import type { MarkerIndexReference, TimeReference, TimestampTarget } from '@/utils/timestamps'
-import { ChevronLeft, ChevronRight, Music, Pencil, Trash2 } from 'lucide-vue-next'
+import { ArrowDownUp, ChevronLeft, ChevronRight, Music, Pencil, Trash2 } from 'lucide-vue-next'
 import { canUserReviewIssue } from '@/utils/reviewAssignments'
 
 const route = useRoute()
@@ -106,11 +106,17 @@ const shouldHideInternalComments = computed(() =>
   Boolean(cachedTrack.value && appStore.currentUser?.id === cachedTrack.value.submitter_id),
 )
 
-const visibleComments = computed(() =>
-  (issue.value?.comments ?? []).filter(
+const commentSortOrder = ref<'desc' | 'asc'>('desc')
+
+const visibleComments = computed(() => {
+  const filtered = (issue.value?.comments ?? []).filter(
     comment => !(shouldHideInternalComments.value && comment.visibility === 'internal'),
-  ),
-)
+  )
+  if (commentSortOrder.value === 'desc') {
+    return [...filtered].reverse()
+  }
+  return filtered
+})
 
 
 const loadError = ref(false)
@@ -649,9 +655,19 @@ function openVersionCompare() {
 
         <!-- Comments -->
         <div class="space-y-4">
-          <h3 class="text-sm font-sans font-semibold text-foreground">
-            {{ t('issueDetail.commentsHeading', { count: visibleComments.length }) }}
-          </h3>
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-sans font-semibold text-foreground">
+              {{ t('issueDetail.commentsHeading', { count: visibleComments.length }) }}
+            </h3>
+            <button
+              v-if="visibleComments.length > 1"
+              @click="commentSortOrder = commentSortOrder === 'desc' ? 'asc' : 'desc'"
+              class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowDownUp class="w-3.5 h-3.5" />
+              {{ commentSortOrder === 'desc' ? t('issueDetail.sortNewestFirst') : t('issueDetail.sortOldestFirst') }}
+            </button>
+          </div>
 
           <p v-if="!visibleComments.length" class="text-sm text-muted-foreground italic">
             {{ t('issueDetail.commentsEmptyHint') }}

@@ -759,6 +759,8 @@
     "publish": "Publish",
     "markResolved": "Mark Resolved",
     "commentsHeading": "Comments ({count})",
+    "sortNewestFirst": "Newest first",
+    "sortOldestFirst": "Oldest first",
     "unknown": "Unknown",
     "addCommentPlaceholder": "Add a comment...",
     "image": "Image",

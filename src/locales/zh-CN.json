@@ -759,6 +759,8 @@
     "publish": "公开发布",
     "markResolved": "标记为已解决",
     "commentsHeading": "评论 ({count})",
+    "sortNewestFirst": "最新在前",
+    "sortOldestFirst": "最早在前",
     "unknown": "未知",
     "addCommentPlaceholder": "添加评论…",
     "image": "图片",
