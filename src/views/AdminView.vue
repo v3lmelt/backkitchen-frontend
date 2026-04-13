@@ -36,11 +36,14 @@ const tabs: { key: TabKey; labelKey: string; icon: any }[] = [
 // ─── Dashboard ───────────────────────────────────────────────────────────────
 const dashboardStats = ref<AdminDashboardStats | null>(null)
 const dashboardLoading = ref(true)
+const dashboardLoaded = ref(false)
 
 async function loadDashboard() {
+  if (dashboardLoaded.value) return
   dashboardLoading.value = true
   try {
     dashboardStats.value = await adminApi.dashboard()
+    dashboardLoaded.value = true
   } catch (e: any) {
     toast.error(e.message)
   } finally {
@@ -185,7 +188,7 @@ const activityFilterAlbumId = ref<number | null>(null)
 async function loadActivity(append = false) {
   activityLoading.value = true
   try {
-    const params: any = { limit: 50 }
+    const params: { limit: number; offset?: number; event_type?: string; album_id?: number } = { limit: 50 }
     if (append) params.offset = activityLog.value.length
     if (activityFilterType.value) params.event_type = activityFilterType.value
     if (activityFilterAlbumId.value) params.album_id = activityFilterAlbumId.value
@@ -209,8 +212,6 @@ watch([activityFilterType, activityFilterAlbumId], () => {
 })
 
 // ─── Workflow Intervention ───────────────────────────────────────────────────
-const wfAlbums = ref<Album[]>([])
-const wfAlbumsLoaded = ref(false)
 const wfSelectedAlbumId = ref<number | null>(null)
 const wfTracks = ref<Track[]>([])
 const wfTracksLoading = ref(false)
@@ -220,16 +221,6 @@ const wfNewStatus = ref('')
 const wfReason = ref('')
 const wfTargetUserId = ref<number | null>(null)
 const wfSubmitting = ref(false)
-
-async function loadWfAlbums() {
-  if (wfAlbumsLoaded.value) return
-  try {
-    wfAlbums.value = await adminApi.listAlbums({ include_archived: true })
-    wfAlbumsLoaded.value = true
-  } catch (e: any) {
-    toast.error(e.message)
-  }
-}
 
 async function loadWfTracks() {
   if (!wfSelectedAlbumId.value) return
@@ -246,9 +237,9 @@ async function loadWfTracks() {
 
 watch(wfSelectedAlbumId, () => loadWfTracks())
 
-const wfAlbumOptions = computed(() => [
-  ...wfAlbums.value.map(a => ({ value: String(a.id), label: a.title }))
-])
+const wfAlbumOptions = computed(() =>
+  albums.value.map(a => ({ value: String(a.id), label: a.title }))
+)
 
 const wfUserOptions = computed(() =>
   users.value.map(u => ({ value: String(u.id), label: u.display_name }))
@@ -299,7 +290,7 @@ function switchTab(tab: TabKey) {
   if (tab === 'users') loadUsers()
   if (tab === 'albums') loadAlbums()
   if (tab === 'activity') { if (!activityLoaded.value) loadActivity() }
-  if (tab === 'workflow') { loadWfAlbums(); if (!usersLoaded.value) loadUsers() }
+  if (tab === 'workflow') { loadAlbums(); if (!usersLoaded.value) loadUsers() }
 }
 
 // ─── Init ────────────────────────────────────────────────────────────────────
