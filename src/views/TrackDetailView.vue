@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Track, Issue, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember, MasterDelivery, StageAssignment } from '@/types'
+import type { Track, Issue, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember, StageAssignment } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
@@ -164,7 +164,6 @@ const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
 const events = ref<WorkflowEvent[]>([])
 const sourceVersions = ref<TrackSourceVersion[]>([])
-const masterDeliveries = ref<MasterDelivery[]>([])
 const reviewAssignments = ref<StageAssignment[]>([])
 const workflowConfig = ref<WorkflowConfig | null>(null)
 const loading = ref(true)
@@ -216,8 +215,6 @@ const canSeeMasteringDiscussion = computed(() => {
 })
 const showVersionCompare = ref(false)
 const selectedCompareVersionId = ref<number | null>(null)
-const showMasterCompare = ref(false)
-const selectedCompareMasterDeliveryId = ref<number | null>(null)
 
 onMounted(loadTrack)
 onMounted(async () => {
@@ -261,7 +258,6 @@ async function loadTrack() {
     masteringDiscussion.discussions.value = allDiscussions.filter(d => d.phase === 'mastering')
     events.value = detail.events
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
-    masterDeliveries.value = detail.master_deliveries ?? []
     workflowConfig.value = detail.workflow_config ?? null
     try {
       reviewAssignments.value = await trackApi.listAssignments(trackId.value)
@@ -280,35 +276,6 @@ const audioUrl = computed(() => {
   const t = track.value
   if (!t?.file_path) return ''
   return `${API_ORIGIN}/api/tracks/${trackId.value}/audio?v=${t.version ?? 0}`
-})
-const masterAudioUrl = computed(() => {
-  const d = track.value?.current_master_delivery
-  if (!d) return ''
-  return `${API_ORIGIN}/api/tracks/${trackId.value}/master-audio?v=${d.delivery_number}&c=${d.workflow_cycle ?? 1}`
-})
-const sortedMasterDeliveries = computed(() =>
-  [...masterDeliveries.value].sort((a, b) => {
-    if (a.workflow_cycle !== b.workflow_cycle) return b.workflow_cycle - a.workflow_cycle
-    return b.delivery_number - a.delivery_number
-  }),
-)
-const olderMasterDeliveries = computed(() => {
-  const currentId = track.value?.current_master_delivery?.id ?? null
-  return sortedMasterDeliveries.value.filter(delivery => delivery.id !== currentId)
-})
-const masterCompareOptions = computed<SelectOption[]>(() =>
-  olderMasterDeliveries.value.map((delivery) => ({
-    value: delivery.id,
-    label: masterDeliveryOptionLabel(delivery),
-  })),
-)
-const selectedCompareMasterDelivery = computed(() =>
-  olderMasterDeliveries.value.find(delivery => delivery.id === selectedCompareMasterDeliveryId.value) ?? null,
-)
-const selectedCompareMasterAudioUrl = computed(() => {
-  const delivery = selectedCompareMasterDelivery.value
-  if (!delivery) return ''
-  return `${API_ORIGIN}/api/tracks/${trackId.value}/master-deliveries/${delivery.id}/audio?v=${delivery.delivery_number}&c=${delivery.workflow_cycle}`
 })
 const { downloading, downloadProgress, downloadTrackAudio } = useAudioDownload()
 const handleDownload = () => downloadTrackAudio(audioUrl, track)
@@ -358,7 +325,6 @@ function openPrimaryAction(_action: string) {
 }
 
 
-
 const currentVersionId = computed(() => track.value?.current_source_version?.id ?? null)
 const olderVersions = computed(() =>
   sourceVersions.value
@@ -386,22 +352,14 @@ const selectedCompareVersionNotes = computed(() => {
   return sv?.revision_notes ?? null
 })
 
-function masterDeliveryOptionLabel(delivery: MasterDelivery): string {
-  const version = `v${delivery.delivery_number}`
-  const cycle = track.value && delivery.workflow_cycle !== track.value.workflow_cycle
-    ? ` · C${delivery.workflow_cycle}`
-    : ''
-  return `${version}${cycle} · ${fmtDate(delivery.created_at)}`
-}
-
-function toggleMasterCompare() {
-  showMasterCompare.value = !showMasterCompare.value
-  if (!showMasterCompare.value) {
-    selectedCompareMasterDeliveryId.value = null
-  }
-}
-
 const isProducer = computed(() => track.value?.producer_id === appStore.currentUser?.id)
+const canSeeMastering = computed(() => {
+  const userId = appStore.currentUser?.id
+  if (!userId || !track.value) return false
+  return userId === track.value.submitter_id
+    || userId === track.value.producer_id
+    || userId === track.value.mastering_engineer_id
+})
 const archiving = ref(false)
 const showArchiveConfirm = ref(false)
 const togglingVisibility = ref(false)
@@ -462,9 +420,6 @@ async function saveMetadata() {
 const editingAuthorNotes = ref(false)
 const authorNotesForm = ref('')
 const savingAuthorNotes = ref(false)
-const editingMasteringNotes = ref(false)
-const masteringNotesForm = ref('')
-const savingMasteringNotes = ref(false)
 
 function startEditAuthorNotes() {
   authorNotesForm.value = track.value?.author_notes ?? ''
@@ -483,26 +438,6 @@ async function saveAuthorNotes() {
     toastError(t('common.error'))
   } finally {
     savingAuthorNotes.value = false
-  }
-}
-
-function startEditMasteringNotes() {
-  masteringNotesForm.value = track.value?.mastering_notes ?? ''
-  editingMasteringNotes.value = true
-}
-
-async function saveMasteringNotes() {
-  if (!track.value) return
-  savingMasteringNotes.value = true
-  try {
-    const updated = await trackApi.updateMasteringNotes(track.value.id, masteringNotesForm.value.trim() || null)
-    track.value = { ...track.value, mastering_notes: updated.mastering_notes }
-    editingMasteringNotes.value = false
-    toastSuccess(t('trackDetail.notesSaved'))
-  } catch {
-    toastError(t('common.error'))
-  } finally {
-    savingMasteringNotes.value = false
   }
 }
 
@@ -691,16 +626,6 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
     selectedCompareVersionId.value = parsed
   }
 })
-
-watch(olderMasterDeliveries, (deliveries) => {
-  if (deliveries.length > 0) return
-  showMasterCompare.value = false
-  selectedCompareMasterDeliveryId.value = null
-})
-
-watch(selectedCompareMasterDelivery, (delivery) => {
-  if (!delivery) selectedCompareMasterDeliveryId.value = null
-})
 </script>
 
 <template>
@@ -859,46 +784,6 @@ watch(selectedCompareMasterDelivery, (delivery) => {
           </div>
           <div v-else class="card text-center text-muted-foreground py-8">
             {{ t('trackDetail.noAudioFile') }}
-          </div>
-
-          <!-- Master audio player -->
-          <div v-if="masterAudioUrl">
-            <div class="flex items-center justify-between mb-2">
-              <h3 class="text-sm font-medium text-muted-foreground">
-                {{ t('trackDetail.masterAudio') }}
-                <span v-if="track.current_master_delivery" class="text-xs text-muted-foreground ml-1">v{{ track.current_master_delivery.delivery_number }}</span>
-              </h3>
-              <button
-                v-if="olderMasterDeliveries.length > 0"
-                @click="toggleMasterCompare"
-                class="text-xs btn-secondary px-3 py-1"
-              >
-                {{ t('compare.title') }}
-              </button>
-            </div>
-            <div v-if="showMasterCompare && olderMasterDeliveries.length > 0" class="flex items-center gap-2 mb-3">
-              <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
-              <CustomSelect
-                v-model="selectedCompareMasterDeliveryId"
-                :options="masterCompareOptions"
-                :placeholder="`-- ${t('compare.selectVersion')} --`"
-                size="sm"
-              />
-              <button
-                v-if="selectedCompareMasterDeliveryId"
-                @click="selectedCompareMasterDeliveryId = null"
-                class="text-xs text-muted-foreground hover:text-foreground"
-              >
-                {{ t('compare.clear') }}
-              </button>
-            </div>
-            <WaveformPlayer
-              :audio-url="masterAudioUrl"
-              :issues="[]"
-              :track-id="trackId"
-              playback-scope="master"
-              :compare-audio-url="selectedCompareMasterAudioUrl"
-            />
           </div>
 
           <div id="issues">
@@ -1060,6 +945,15 @@ watch(selectedCompareMasterDelivery, (delivery) => {
               </span>
             </div>
           </div>
+          <div v-if="canSeeMastering" class="pt-2 border-t border-border">
+            <router-link
+              :to="{ path: `/tracks/${trackId}/mastering`, query: { returnTo: $route.fullPath } }"
+              class="w-full flex items-center justify-center gap-2 rounded-full border border-primary/40 text-primary hover:bg-primary/10 transition-colors h-9 text-sm font-mono"
+            >
+              {{ t('trackDetail.goToMastering') }}
+              <ChevronRight class="w-4 h-4" :stroke-width="2" />
+            </router-link>
+          </div>
         </div>
 
         <!-- Author Notes -->
@@ -1079,25 +973,6 @@ watch(selectedCompareMasterDelivery, (delivery) => {
           </template>
           <p v-else-if="track.author_notes" class="text-sm text-muted-foreground whitespace-pre-wrap">{{ track.author_notes }}</p>
           <p v-else class="text-xs text-muted-foreground italic">{{ t('trackDetail.noAuthorNotes') }}</p>
-        </div>
-
-        <!-- Mastering Notes -->
-        <div v-if="track.mastering_notes || isSubmitter" class="card space-y-2">
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('trackDetail.masteringNotes') }}</h3>
-            <button v-if="isSubmitter && !editingMasteringNotes" @click="startEditMasteringNotes" class="text-xs text-primary hover:text-primary-hover font-mono">
-              {{ t('common.edit') }}
-            </button>
-          </div>
-          <template v-if="editingMasteringNotes">
-            <textarea v-model="masteringNotesForm" class="textarea-field w-full" rows="3" :placeholder="t('trackDetail.masteringNotesPlaceholder')"></textarea>
-            <div class="flex gap-2">
-              <button @click="saveMasteringNotes" :disabled="savingMasteringNotes" class="btn-primary text-xs px-3 py-1.5">{{ t('common.save') }}</button>
-              <button @click="editingMasteringNotes = false" class="btn-secondary text-xs px-3 py-1.5">{{ t('common.cancel') }}</button>
-            </div>
-          </template>
-          <p v-else-if="track.mastering_notes" class="text-sm text-muted-foreground whitespace-pre-wrap">{{ track.mastering_notes }}</p>
-          <p v-else class="text-xs text-muted-foreground italic">{{ t('trackDetail.noMasteringNotes') }}</p>
         </div>
 
         <div class="card space-y-3 lg:flex-1 lg:flex lg:flex-col">

@@ -583,6 +583,7 @@
     "openIssues": "Open Issues",
     "currentMaster": "Current Master",
     "finalApprovals": "Final approvals",
+    "goToMastering": "Go to Mastering",
     "producer": "Producer",
     "discussionsHeading": "Discussion ({count})",
     "noDiscussions": "No discussions yet.",
@@ -715,6 +716,21 @@
     "noDiscussions": "No mastering discussions yet. Authors and mastering engineers can discuss mastering requirements here.",
     "discussionPlaceholder": "Type your mastering discussion…",
     "postDiscussion": "Send"
+  },
+  "masteringPage": {
+    "heading": "Mastering Communication",
+    "currentDelivery": "Current Master Delivery",
+    "approvalStatus": "Approval Status",
+    "approveDelivery": "Approve Delivery",
+    "confirmDelivery": "Confirm Delivery",
+    "deliveryConfirmed": "Delivery confirmed",
+    "approved": "Approved",
+    "uploadDelivery": "Upload Master Delivery",
+    "uploadHint": "Select and upload the mastered audio file.",
+    "discussionsHeading": "Mastering Discussion ({count})",
+    "noDiscussions": "No mastering discussions yet. Use this space to communicate mastering details with the engineer and producer.",
+    "discussionPlaceholder": "Write a mastering discussion message…",
+    "postDiscussion": "Post"
   },
   "producer": {
     "heading": "Producer Workspace: {title}",
