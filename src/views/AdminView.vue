@@ -1,93 +1,69 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminApi } from '@/api'
 import { useToast } from '@/composables/useToast'
-import { Check, ChevronRight, Music, Search } from 'lucide-vue-next'
+import {
+  Check, ChevronRight, Music, Search, Users, BarChart3, Activity, Wrench, Disc3,
+  AlertCircle, CircleCheckBig,
+} from 'lucide-vue-next'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
-import type { Album, Track, User, UserRole } from '@/types'
+import type { Album, Track, User, UserRole, AdminDashboardStats, AdminActivityLogEntry } from '@/types'
+import { formatRelativeTime } from '@/utils/time'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
 const toast = useToast()
 
 // --- Tab state ---
-const activeTab = ref<'users' | 'albums'>('users')
+type TabKey = 'dashboard' | 'users' | 'albums' | 'activity' | 'workflow'
+const activeTab = ref<TabKey>('dashboard')
 
-// --- Users ---
+const tabs: { key: TabKey; labelKey: string; icon: any }[] = [
+  { key: 'dashboard', labelKey: 'admin.dashboard', icon: BarChart3 },
+  { key: 'users', labelKey: 'admin.userManagement', icon: Users },
+  { key: 'albums', labelKey: 'admin.albumManagement', icon: Disc3 },
+  { key: 'activity', labelKey: 'admin.activityLog', icon: Activity },
+  { key: 'workflow', labelKey: 'admin.workflow', icon: Wrench },
+]
+
+// ─── Dashboard ───────────────────────────────────────────────────────────────
+const dashboardStats = ref<AdminDashboardStats | null>(null)
+const dashboardLoading = ref(true)
+
+async function loadDashboard() {
+  dashboardLoading.value = true
+  try {
+    dashboardStats.value = await adminApi.dashboard()
+  } catch (e: any) {
+    toast.error(e.message)
+  } finally {
+    dashboardLoading.value = false
+  }
+}
+
+// ─── Users ───────────────────────────────────────────────────────────────────
 const users = ref<User[]>([])
-const loading = ref(true)
+const usersLoading = ref(false)
+const usersLoaded = ref(false)
 const deletingId = ref<number | null>(null)
 const confirmDeleteUser = ref<User | null>(null)
 
-// --- Albums ---
-const albums = ref<Album[]>([])
-const albumsLoading = ref(false)
-const albumsLoaded = ref(false)
-const albumSearch = ref('')
-const expandedAlbumId = ref<number | null>(null)
-const albumTracks = ref<Record<number, Track[]>>({})
-const albumTracksLoading = ref<number | null>(null)
-
-onMounted(async () => {
-  if (!appStore.currentUser?.is_admin) {
-    router.replace('/')
-    return
-  }
+async function loadUsers() {
+  if (usersLoaded.value) return
+  usersLoading.value = true
   try {
     users.value = await adminApi.listUsers()
+    usersLoaded.value = true
   } finally {
-    loading.value = false
+    usersLoading.value = false
   }
-})
-
-async function loadAlbums(force = false) {
-  if (!force && albumsLoaded.value) return
-  albumsLoading.value = true
-  expandedAlbumId.value = null
-  try {
-    albums.value = await adminApi.listAlbums({
-      include_archived: true,
-      search: albumSearch.value || undefined,
-    })
-    albumsLoaded.value = true
-  } catch (e: any) {
-    toast.error(e.message)
-  } finally {
-    albumsLoading.value = false
-  }
-}
-
-function switchTab(tab: 'users' | 'albums') {
-  activeTab.value = tab
-  if (tab === 'albums') loadAlbums()
-}
-
-async function toggleAlbumTracks(albumId: number) {
-  if (expandedAlbumId.value === albumId) {
-    expandedAlbumId.value = null
-    return
-  }
-  expandedAlbumId.value = albumId
-  if (albumTracks.value[albumId]) return
-  albumTracksLoading.value = albumId
-  try {
-    albumTracks.value[albumId] = await adminApi.listAlbumTracks(albumId)
-  } catch (e: any) {
-    toast.error(e.message)
-  } finally {
-    albumTracksLoading.value = null
-  }
-}
-
-function goToTrack(albumId: number, trackId: number) {
-  router.push(`/albums/${albumId}/tracks/${trackId}`)
 }
 
 async function onRoleChange(user: User, newRole: UserRole) {
@@ -150,6 +126,190 @@ const roleOptions: { value: UserRole; labelKey: string }[] = [
 const roleSelectOptions = computed(() =>
   roleOptions.map((o) => ({ value: o.value, label: t(o.labelKey) }))
 )
+
+// ─── Albums ──────────────────────────────────────────────────────────────────
+const albums = ref<Album[]>([])
+const albumsLoading = ref(false)
+const albumsLoaded = ref(false)
+const albumSearch = ref('')
+const expandedAlbumId = ref<number | null>(null)
+const albumTracks = ref<Record<number, Track[]>>({})
+const albumTracksLoading = ref<number | null>(null)
+
+async function loadAlbums(force = false) {
+  if (!force && albumsLoaded.value) return
+  albumsLoading.value = true
+  expandedAlbumId.value = null
+  try {
+    albums.value = await adminApi.listAlbums({
+      include_archived: true,
+      search: albumSearch.value || undefined,
+    })
+    albumsLoaded.value = true
+  } catch (e: any) {
+    toast.error(e.message)
+  } finally {
+    albumsLoading.value = false
+  }
+}
+
+async function toggleAlbumTracks(albumId: number) {
+  if (expandedAlbumId.value === albumId) {
+    expandedAlbumId.value = null
+    return
+  }
+  expandedAlbumId.value = albumId
+  if (albumTracks.value[albumId]) return
+  albumTracksLoading.value = albumId
+  try {
+    albumTracks.value[albumId] = await adminApi.listAlbumTracks(albumId)
+  } catch (e: any) {
+    toast.error(e.message)
+  } finally {
+    albumTracksLoading.value = null
+  }
+}
+
+function goToTrack(albumId: number, trackId: number) {
+  router.push(`/albums/${albumId}/tracks/${trackId}`)
+}
+
+// ─── Activity Log ────────────────────────────────────────────────────────────
+const activityLog = ref<AdminActivityLogEntry[]>([])
+const activityLoading = ref(false)
+const activityLoaded = ref(false)
+const activityHasMore = ref(true)
+const activityFilterType = ref('')
+const activityFilterAlbumId = ref<number | null>(null)
+
+async function loadActivity(append = false) {
+  activityLoading.value = true
+  try {
+    const params: any = { limit: 50 }
+    if (append) params.offset = activityLog.value.length
+    if (activityFilterType.value) params.event_type = activityFilterType.value
+    if (activityFilterAlbumId.value) params.album_id = activityFilterAlbumId.value
+    const results = await adminApi.activityLog(params)
+    if (append) {
+      activityLog.value.push(...results)
+    } else {
+      activityLog.value = results
+    }
+    activityHasMore.value = results.length >= 50
+    activityLoaded.value = true
+  } catch (e: any) {
+    toast.error(e.message)
+  } finally {
+    activityLoading.value = false
+  }
+}
+
+watch([activityFilterType, activityFilterAlbumId], () => {
+  if (activeTab.value === 'activity') loadActivity()
+})
+
+// ─── Workflow Intervention ───────────────────────────────────────────────────
+const wfAlbums = ref<Album[]>([])
+const wfAlbumsLoaded = ref(false)
+const wfSelectedAlbumId = ref<number | null>(null)
+const wfTracks = ref<Track[]>([])
+const wfTracksLoading = ref(false)
+const wfSelectedTrack = ref<Track | null>(null)
+const wfAction = ref<'force' | 'reassign'>('force')
+const wfNewStatus = ref('')
+const wfReason = ref('')
+const wfTargetUserId = ref<number | null>(null)
+const wfSubmitting = ref(false)
+
+async function loadWfAlbums() {
+  if (wfAlbumsLoaded.value) return
+  try {
+    wfAlbums.value = await adminApi.listAlbums({ include_archived: true })
+    wfAlbumsLoaded.value = true
+  } catch (e: any) {
+    toast.error(e.message)
+  }
+}
+
+async function loadWfTracks() {
+  if (!wfSelectedAlbumId.value) return
+  wfTracksLoading.value = true
+  wfSelectedTrack.value = null
+  try {
+    wfTracks.value = await adminApi.listAlbumTracks(wfSelectedAlbumId.value)
+  } catch (e: any) {
+    toast.error(e.message)
+  } finally {
+    wfTracksLoading.value = false
+  }
+}
+
+watch(wfSelectedAlbumId, () => loadWfTracks())
+
+const wfAlbumOptions = computed(() => [
+  ...wfAlbums.value.map(a => ({ value: String(a.id), label: a.title }))
+])
+
+const wfUserOptions = computed(() =>
+  users.value.map(u => ({ value: String(u.id), label: u.display_name }))
+)
+
+async function submitForceStatus() {
+  if (!wfSelectedTrack.value || !wfNewStatus.value || !wfReason.value) return
+  wfSubmitting.value = true
+  try {
+    await adminApi.forceStatus(wfSelectedTrack.value.id, {
+      new_status: wfNewStatus.value,
+      reason: wfReason.value,
+    })
+    toast.success(t('admin.forceStatusSuccess'))
+    wfReason.value = ''
+    wfNewStatus.value = ''
+    await loadWfTracks()
+  } catch (e: any) {
+    toast.error(e.message)
+  } finally {
+    wfSubmitting.value = false
+  }
+}
+
+async function submitReassign() {
+  if (!wfSelectedTrack.value || !wfTargetUserId.value || !wfReason.value) return
+  wfSubmitting.value = true
+  try {
+    await adminApi.reassign(wfSelectedTrack.value.id, {
+      user_id: wfTargetUserId.value,
+      reason: wfReason.value,
+    })
+    toast.success(t('admin.reassignSuccess'))
+    wfReason.value = ''
+    wfTargetUserId.value = null
+    await loadWfTracks()
+  } catch (e: any) {
+    toast.error(e.message)
+  } finally {
+    wfSubmitting.value = false
+  }
+}
+
+// ─── Tab switching logic ─────────────────────────────────────────────────────
+function switchTab(tab: TabKey) {
+  activeTab.value = tab
+  if (tab === 'dashboard') loadDashboard()
+  if (tab === 'users') loadUsers()
+  if (tab === 'albums') loadAlbums()
+  if (tab === 'activity') { if (!activityLoaded.value) loadActivity() }
+  if (tab === 'workflow') { loadWfAlbums(); if (!usersLoaded.value) loadUsers() }
+}
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+onMounted(async () => {
+  if (!appStore.currentUser?.is_admin) {
+    router.replace('/')
+    return
+  }
+  loadDashboard()
+})
 </script>
 
 <template>
@@ -157,26 +317,111 @@ const roleSelectOptions = computed(() =>
     <h1 class="text-2xl font-mono font-bold text-foreground">{{ t('admin.title') }}</h1>
 
     <!-- Tabs -->
-    <div class="flex gap-1 border-b border-border">
+    <div class="flex gap-1 border-b border-border overflow-x-auto">
       <button
-        class="px-4 py-2 text-sm font-mono font-medium transition-colors"
-        :class="activeTab === 'users' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'"
-        @click="switchTab('users')"
+        v-for="tab in tabs"
+        :key="tab.key"
+        class="flex items-center gap-1.5 px-4 py-2 text-sm font-mono font-medium transition-colors whitespace-nowrap"
+        :class="activeTab === tab.key ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'"
+        @click="switchTab(tab.key)"
       >
-        {{ t('admin.userManagement') }}
-      </button>
-      <button
-        class="px-4 py-2 text-sm font-mono font-medium transition-colors"
-        :class="activeTab === 'albums' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'"
-        @click="switchTab('albums')"
-      >
-        {{ t('admin.albumManagement') }}
+        <component :is="tab.icon" class="w-4 h-4" />
+        {{ t(tab.labelKey) }}
       </button>
     </div>
 
-    <!-- Users Tab -->
+    <!-- ═══════════ Dashboard Tab ═══════════ -->
+    <template v-if="activeTab === 'dashboard'">
+      <div v-if="dashboardLoading"><SkeletonLoader :rows="4" :card="true" /></div>
+      <template v-else-if="dashboardStats">
+        <!-- KPI cards -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div class="card text-center">
+            <p class="text-xs text-muted-foreground mb-1">{{ t('admin.totalUsers') }}</p>
+            <p class="text-2xl font-mono font-bold text-foreground">{{ dashboardStats.total_users }}</p>
+          </div>
+          <div class="card text-center">
+            <p class="text-xs text-muted-foreground mb-1">{{ t('admin.activeAlbums') }}</p>
+            <p class="text-2xl font-mono font-bold text-foreground">{{ dashboardStats.active_albums }}</p>
+          </div>
+          <div class="card text-center">
+            <p class="text-xs text-muted-foreground mb-1">{{ t('admin.totalTracks') }}</p>
+            <p class="text-2xl font-mono font-bold text-foreground">{{ dashboardStats.total_tracks }}</p>
+          </div>
+          <div class="card text-center">
+            <p class="text-xs text-muted-foreground mb-1">{{ t('admin.openIssues') }}</p>
+            <p class="text-2xl font-mono font-bold text-primary">{{ dashboardStats.open_issues }}</p>
+          </div>
+          <div class="card text-center col-span-2 md:col-span-1">
+            <p class="text-xs text-muted-foreground mb-1">{{ t('admin.totalAlbums') }}</p>
+            <p class="text-2xl font-mono font-bold text-foreground">{{ dashboardStats.total_albums }}</p>
+          </div>
+        </div>
+
+        <!-- Status distribution -->
+        <div class="grid md:grid-cols-2 gap-6">
+          <div class="card">
+            <h2 class="text-sm font-mono font-semibold text-foreground mb-4">{{ t('admin.tracksByStatus') }}</h2>
+            <div class="space-y-2">
+              <div
+                v-for="(count, st) in dashboardStats.tracks_by_status"
+                :key="st"
+                class="flex items-center justify-between"
+              >
+                <StatusBadge :status="String(st)" type="track" />
+                <span class="text-sm font-mono text-foreground">{{ count }}</span>
+              </div>
+              <p v-if="Object.keys(dashboardStats.tracks_by_status).length === 0" class="text-sm text-muted-foreground">—</p>
+            </div>
+          </div>
+          <div class="card">
+            <h2 class="text-sm font-mono font-semibold text-foreground mb-4">{{ t('admin.usersByRole') }}</h2>
+            <div class="space-y-2">
+              <div
+                v-for="(count, role) in dashboardStats.users_by_role"
+                :key="role"
+                class="flex items-center justify-between"
+              >
+                <span class="text-sm text-muted-foreground">{{ t(`roles.${role}`, String(role)) }}</span>
+                <span class="text-sm font-mono text-foreground">{{ count }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent events -->
+        <div class="card">
+          <h2 class="text-sm font-mono font-semibold text-foreground mb-4">{{ t('admin.recentEvents') }}</h2>
+          <div v-if="dashboardStats.recent_events.length === 0" class="text-sm text-muted-foreground py-4 text-center">
+            {{ t('admin.noEvents') }}
+          </div>
+          <div v-else class="space-y-2">
+            <div
+              v-for="event in dashboardStats.recent_events"
+              :key="event.id"
+              class="flex items-center gap-3 py-2 border-b border-border last:border-0 text-sm"
+            >
+              <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-mono bg-border text-foreground flex-shrink-0">
+                {{ event.event_type }}
+              </span>
+              <span v-if="event.actor" class="text-muted-foreground truncate flex-shrink-0">
+                {{ event.actor.display_name }}
+              </span>
+              <span v-if="event.from_status || event.to_status" class="text-muted-foreground flex-shrink-0">
+                {{ event.from_status || '—' }} → {{ event.to_status || '—' }}
+              </span>
+              <span class="ml-auto text-xs text-muted-foreground flex-shrink-0">
+                {{ formatRelativeTime(event.created_at, locale) }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </template>
+    </template>
+
+    <!-- ═══════════ Users Tab ═══════════ -->
     <template v-if="activeTab === 'users'">
-    <div v-if="loading"><SkeletonLoader :rows="5" :card="true" /></div>
+    <div v-if="usersLoading"><SkeletonLoader :rows="5" :card="true" /></div>
 
     <div v-else class="card">
       <h2 class="text-sm font-mono font-semibold text-foreground mb-4">{{ t('admin.userManagement') }}</h2>
@@ -328,7 +573,7 @@ const roleSelectOptions = computed(() =>
     />
     </template>
 
-    <!-- Albums Tab -->
+    <!-- ═══════════ Albums Tab ═══════════ -->
     <template v-if="activeTab === 'albums'">
       <div v-if="albumsLoading && !albumsLoaded"><SkeletonLoader :rows="5" :card="true" /></div>
 
@@ -340,7 +585,7 @@ const roleSelectOptions = computed(() =>
             <input
               v-model="albumSearch"
               class="input-field pl-9"
-              :placeholder="t('admin.loadAlbums(true)')"
+              :placeholder="t('admin.searchAlbums')"
               @keyup.enter="loadAlbums(true)"
             />
           </div>
@@ -416,6 +661,248 @@ const roleSelectOptions = computed(() =>
           </div>
         </div>
       </template>
+    </template>
+
+    <!-- ═══════════ Activity Log Tab ═══════════ -->
+    <template v-if="activeTab === 'activity'">
+      <!-- Filters -->
+      <div class="flex flex-wrap gap-3">
+        <input
+          v-model="activityFilterType"
+          class="input-field w-48"
+          :placeholder="t('admin.filterByType')"
+        />
+        <CustomSelect
+          :model-value="activityFilterAlbumId ? String(activityFilterAlbumId) : ''"
+          :options="[{ value: '', label: t('admin.allAlbums') }, ...wfAlbumOptions]"
+          size="sm"
+          @update:model-value="(v: any) => activityFilterAlbumId = v ? Number(v) : null"
+        />
+      </div>
+
+      <div v-if="activityLoading && !activityLoaded"><SkeletonLoader :rows="8" :card="true" /></div>
+
+      <div v-else-if="activityLog.length === 0" class="card text-center text-muted-foreground text-sm py-8">
+        {{ t('admin.noEvents') }}
+      </div>
+
+      <template v-else>
+        <div class="card !p-0">
+          <!-- Desktop table -->
+          <div class="hidden md:block overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-border text-left text-xs text-muted-foreground">
+                  <th class="p-3">{{ t('admin.eventType') }}</th>
+                  <th class="p-3">{{ t('admin.eventActor') }}</th>
+                  <th class="p-3">{{ t('admin.eventTrack') }}</th>
+                  <th class="p-3">{{ t('admin.eventAlbum') }}</th>
+                  <th class="p-3">{{ t('admin.eventFrom') }}</th>
+                  <th class="p-3">{{ t('admin.eventTo') }}</th>
+                  <th class="p-3">{{ t('admin.eventTime') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="entry in activityLog"
+                  :key="entry.id"
+                  class="border-b border-border last:border-0 hover:bg-background/50"
+                >
+                  <td class="p-3">
+                    <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-mono bg-border text-foreground">
+                      {{ entry.event_type }}
+                    </span>
+                  </td>
+                  <td class="p-3 text-muted-foreground">{{ entry.actor?.display_name || '—' }}</td>
+                  <td class="p-3">
+                    <button
+                      v-if="entry.track_title && entry.album_id && entry.track_id"
+                      class="text-primary hover:underline truncate max-w-[160px] block text-left"
+                      @click="goToTrack(entry.album_id!, entry.track_id!)"
+                    >
+                      {{ entry.track_title }}
+                    </button>
+                    <span v-else class="text-muted-foreground">—</span>
+                  </td>
+                  <td class="p-3 text-muted-foreground truncate max-w-[140px]">{{ entry.album_title || '—' }}</td>
+                  <td class="p-3">
+                    <StatusBadge v-if="entry.from_status" :status="entry.from_status" type="track" />
+                    <span v-else class="text-muted-foreground">—</span>
+                  </td>
+                  <td class="p-3">
+                    <StatusBadge v-if="entry.to_status" :status="entry.to_status" type="track" />
+                    <span v-else class="text-muted-foreground">—</span>
+                  </td>
+                  <td class="p-3 text-xs text-muted-foreground whitespace-nowrap">
+                    {{ formatRelativeTime(entry.created_at, locale) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Mobile cards -->
+          <div class="md:hidden divide-y divide-border">
+            <div v-for="entry in activityLog" :key="'m-' + entry.id" class="p-4 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-mono bg-border text-foreground">
+                  {{ entry.event_type }}
+                </span>
+                <span class="text-xs text-muted-foreground">{{ formatRelativeTime(entry.created_at, locale) }}</span>
+              </div>
+              <p v-if="entry.track_title" class="text-sm text-foreground">{{ entry.track_title }}</p>
+              <div class="flex items-center gap-2 text-xs text-muted-foreground">
+                <span v-if="entry.actor">{{ entry.actor.display_name }}</span>
+                <template v-if="entry.from_status || entry.to_status">
+                  <span>{{ entry.from_status || '?' }} → {{ entry.to_status || '?' }}</span>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          v-if="activityHasMore"
+          class="btn-secondary font-mono text-sm w-full"
+          :disabled="activityLoading"
+          @click="loadActivity(true)"
+        >
+          {{ t('admin.loadMore') }}
+        </button>
+      </template>
+    </template>
+
+    <!-- ═══════════ Workflow Tab ═══════════ -->
+    <template v-if="activeTab === 'workflow'">
+      <!-- Album & track selection -->
+      <div class="card space-y-4">
+        <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('admin.selectTrack') }}</h2>
+
+        <div class="flex flex-wrap gap-3">
+          <CustomSelect
+            :model-value="wfSelectedAlbumId ? String(wfSelectedAlbumId) : ''"
+            :options="[{ value: '', label: t('admin.allAlbums') }, ...wfAlbumOptions]"
+            @update:model-value="(v: any) => wfSelectedAlbumId = v ? Number(v) : null"
+          />
+        </div>
+
+        <div v-if="wfTracksLoading"><SkeletonLoader :rows="3" /></div>
+        <div v-else-if="wfTracks.length === 0 && wfSelectedAlbumId" class="text-sm text-muted-foreground py-2">
+          {{ t('admin.noTracks') }}
+        </div>
+        <div v-else-if="wfTracks.length > 0" class="space-y-1 max-h-64 overflow-y-auto">
+          <button
+            v-for="track in wfTracks"
+            :key="track.id"
+            class="w-full flex items-center gap-3 px-3 py-2 text-left transition-colors"
+            :class="wfSelectedTrack?.id === track.id ? 'bg-primary/10 border border-primary' : 'hover:bg-background/50 border border-transparent'"
+            @click="wfSelectedTrack = track"
+          >
+            <Music class="w-4 h-4 text-muted-foreground flex-shrink-0" />
+            <div class="flex-1 min-w-0">
+              <p class="text-sm text-foreground truncate">{{ track.title }}</p>
+              <p class="text-xs text-muted-foreground truncate">{{ track.artist }}</p>
+            </div>
+            <StatusBadge :status="track.status" type="track" :variant="track.workflow_variant" />
+          </button>
+        </div>
+      </div>
+
+      <!-- Action panel -->
+      <div v-if="wfSelectedTrack" class="card space-y-4">
+        <div class="flex items-center gap-3 mb-2">
+          <Music class="w-5 h-5 text-primary" />
+          <div>
+            <p class="text-sm font-mono font-semibold text-foreground">{{ wfSelectedTrack.title }}</p>
+            <p class="text-xs text-muted-foreground">
+              {{ t('admin.currentStatus') }}:
+              <StatusBadge :status="wfSelectedTrack.status" type="track" :variant="wfSelectedTrack.workflow_variant" class="ml-1 inline-flex" />
+            </p>
+          </div>
+        </div>
+
+        <!-- Action toggle -->
+        <div class="flex gap-2">
+          <button
+            class="px-3 py-1.5 text-xs font-mono rounded-full transition-colors"
+            :class="wfAction === 'force' ? 'bg-primary text-[#111111]' : 'bg-card border border-border text-foreground'"
+            @click="wfAction = 'force'"
+          >
+            <AlertCircle class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+            {{ t('admin.forceStatus') }}
+          </button>
+          <button
+            class="px-3 py-1.5 text-xs font-mono rounded-full transition-colors"
+            :class="wfAction === 'reassign' ? 'bg-primary text-[#111111]' : 'bg-card border border-border text-foreground'"
+            @click="wfAction = 'reassign'"
+          >
+            <Users class="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+            {{ t('admin.reassign') }}
+          </button>
+        </div>
+
+        <!-- Force status form -->
+        <template v-if="wfAction === 'force'">
+          <div class="space-y-3">
+            <div>
+              <label class="text-xs text-muted-foreground mb-1 block">{{ t('admin.newStatus') }}</label>
+              <input
+                v-model="wfNewStatus"
+                class="input-field"
+                placeholder="e.g. peer_review, mastering, completed"
+              />
+            </div>
+            <div>
+              <label class="text-xs text-muted-foreground mb-1 block">{{ t('admin.reason') }}</label>
+              <textarea
+                v-model="wfReason"
+                class="textarea-field"
+                rows="2"
+                :placeholder="t('admin.reason')"
+              />
+            </div>
+            <button
+              class="btn-primary font-mono text-sm"
+              :disabled="!wfNewStatus || !wfReason || wfSubmitting"
+              @click="submitForceStatus"
+            >
+              <CircleCheckBig class="w-4 h-4 inline -mt-0.5 mr-1" />
+              {{ t('admin.confirm') }}
+            </button>
+          </div>
+        </template>
+
+        <!-- Reassign form -->
+        <template v-if="wfAction === 'reassign'">
+          <div class="space-y-3">
+            <div>
+              <label class="text-xs text-muted-foreground mb-1 block">{{ t('admin.targetUser') }}</label>
+              <CustomSelect
+                :model-value="wfTargetUserId ? String(wfTargetUserId) : ''"
+                :options="wfUserOptions"
+                @update:model-value="(v: any) => wfTargetUserId = v ? Number(v) : null"
+              />
+            </div>
+            <div>
+              <label class="text-xs text-muted-foreground mb-1 block">{{ t('admin.reason') }}</label>
+              <textarea
+                v-model="wfReason"
+                class="textarea-field"
+                rows="2"
+                :placeholder="t('admin.reason')"
+              />
+            </div>
+            <button
+              class="btn-primary font-mono text-sm"
+              :disabled="!wfTargetUserId || !wfReason || wfSubmitting"
+              @click="submitReassign"
+            >
+              <CircleCheckBig class="w-4 h-4 inline -mt-0.5 mr-1" />
+              {{ t('admin.confirm') }}
+            </button>
+          </div>
+        </template>
+      </div>
     </template>
   </div>
 </template>

@@ -512,3 +512,28 @@ export type ExportProgressEvent =
   | { type: 'zipping'; total: number }
   | { type: 'complete'; download_id: string; total: number; processed: number }
   | { type: 'error'; message: string }
+
+export interface AdminDashboardStats {
+  total_users: number
+  users_by_role: Record<string, number>
+  total_albums: number
+  active_albums: number
+  total_tracks: number
+  tracks_by_status: Record<string, number>
+  open_issues: number
+  recent_events: WorkflowEvent[]
+}
+
+export interface AdminActivityLogEntry {
+  id: number
+  event_type: string
+  from_status: string | null
+  to_status: string | null
+  payload: Record<string, unknown> | null
+  created_at: string
+  actor: User | null
+  track_id: number | null
+  track_title: string | null
+  album_id: number | null
+  album_title: string | null
+}

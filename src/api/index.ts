@@ -1,4 +1,6 @@
 import type {
+  AdminActivityLogEntry,
+  AdminDashboardStats,
   Album,
   AlbumStats,
   AppConfig,
@@ -701,6 +703,27 @@ export const adminApi = {
     return request<Album[]>(`/admin/albums${qs ? `?${qs}` : ''}`)
   },
   listAlbumTracks: (albumId: number) => request<Track[]>(`/admin/albums/${albumId}/tracks`),
+  dashboard: () => request<AdminDashboardStats>('/admin/dashboard'),
+  activityLog: (params?: {
+    album_id?: number
+    event_type?: string
+    actor_user_id?: number
+    limit?: number
+    offset?: number
+  }) => {
+    const sp = new URLSearchParams()
+    if (params?.album_id) sp.set('album_id', String(params.album_id))
+    if (params?.event_type) sp.set('event_type', params.event_type)
+    if (params?.actor_user_id) sp.set('actor_user_id', String(params.actor_user_id))
+    if (params?.limit) sp.set('limit', String(params.limit))
+    if (params?.offset) sp.set('offset', String(params.offset))
+    const qs = sp.toString()
+    return request<AdminActivityLogEntry[]>(`/admin/activity-log${qs ? `?${qs}` : ''}`)
+  },
+  forceStatus: (trackId: number, data: { new_status: string; reason: string }) =>
+    request<Track>(`/admin/tracks/${trackId}/force-status`, { method: 'POST', body: JSON.stringify(data) }),
+  reassign: (trackId: number, data: { user_id: number; reason: string }) =>
+    request<Track>(`/admin/tracks/${trackId}/reassign`, { method: 'POST', body: JSON.stringify(data) }),
 }
 
 export const invitationApi = {
