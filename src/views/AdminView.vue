@@ -5,21 +5,35 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminApi } from '@/api'
 import { useToast } from '@/composables/useToast'
-import { Check } from 'lucide-vue-next'
+import { Check, ChevronRight, Music, Search } from 'lucide-vue-next'
+import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
-import type { User, UserRole } from '@/types'
+import type { Album, Track, User, UserRole } from '@/types'
 
 const { t } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
 const toast = useToast()
 
+// --- Tab state ---
+const activeTab = ref<'users' | 'albums'>('users')
+
+// --- Users ---
 const users = ref<User[]>([])
 const loading = ref(true)
 const deletingId = ref<number | null>(null)
 const confirmDeleteUser = ref<User | null>(null)
+
+// --- Albums ---
+const albums = ref<Album[]>([])
+const albumsLoading = ref(false)
+const albumsLoaded = ref(false)
+const albumSearch = ref('')
+const expandedAlbumId = ref<number | null>(null)
+const albumTracks = ref<Record<number, Track[]>>({})
+const albumTracksLoading = ref<number | null>(null)
 
 onMounted(async () => {
   if (!appStore.currentUser?.is_admin) {
@@ -32,6 +46,49 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
+async function loadAlbums(force = false) {
+  if (!force && albumsLoaded.value) return
+  albumsLoading.value = true
+  expandedAlbumId.value = null
+  try {
+    albums.value = await adminApi.listAlbums({
+      include_archived: true,
+      search: albumSearch.value || undefined,
+    })
+    albumsLoaded.value = true
+  } catch (e: any) {
+    toast.error(e.message)
+  } finally {
+    albumsLoading.value = false
+  }
+}
+
+function switchTab(tab: 'users' | 'albums') {
+  activeTab.value = tab
+  if (tab === 'albums') loadAlbums()
+}
+
+async function toggleAlbumTracks(albumId: number) {
+  if (expandedAlbumId.value === albumId) {
+    expandedAlbumId.value = null
+    return
+  }
+  expandedAlbumId.value = albumId
+  if (albumTracks.value[albumId]) return
+  albumTracksLoading.value = albumId
+  try {
+    albumTracks.value[albumId] = await adminApi.listAlbumTracks(albumId)
+  } catch (e: any) {
+    toast.error(e.message)
+  } finally {
+    albumTracksLoading.value = null
+  }
+}
+
+function goToTrack(albumId: number, trackId: number) {
+  router.push(`/albums/${albumId}/tracks/${trackId}`)
+}
 
 async function onRoleChange(user: User, newRole: UserRole) {
   try {
@@ -99,6 +156,26 @@ const roleSelectOptions = computed(() =>
   <div class="max-w-5xl mx-auto space-y-6">
     <h1 class="text-2xl font-mono font-bold text-foreground">{{ t('admin.title') }}</h1>
 
+    <!-- Tabs -->
+    <div class="flex gap-1 border-b border-border">
+      <button
+        class="px-4 py-2 text-sm font-mono font-medium transition-colors"
+        :class="activeTab === 'users' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'"
+        @click="switchTab('users')"
+      >
+        {{ t('admin.userManagement') }}
+      </button>
+      <button
+        class="px-4 py-2 text-sm font-mono font-medium transition-colors"
+        :class="activeTab === 'albums' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'"
+        @click="switchTab('albums')"
+      >
+        {{ t('admin.albumManagement') }}
+      </button>
+    </div>
+
+    <!-- Users Tab -->
+    <template v-if="activeTab === 'users'">
     <div v-if="loading"><SkeletonLoader :rows="5" :card="true" /></div>
 
     <div v-else class="card">
@@ -249,5 +326,96 @@ const roleSelectOptions = computed(() =>
       @confirm="doDelete"
       @cancel="confirmDeleteUser = null"
     />
+    </template>
+
+    <!-- Albums Tab -->
+    <template v-if="activeTab === 'albums'">
+      <div v-if="albumsLoading && !albumsLoaded"><SkeletonLoader :rows="5" :card="true" /></div>
+
+      <template v-else>
+        <!-- Search -->
+        <div class="flex gap-3">
+          <div class="relative flex-1">
+            <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              v-model="albumSearch"
+              class="input-field pl-9"
+              :placeholder="t('admin.loadAlbums(true)')"
+              @keyup.enter="loadAlbums(true)"
+            />
+          </div>
+          <button class="btn-secondary font-mono text-sm" @click="loadAlbums(true)">
+            {{ t('admin.search') }}
+          </button>
+        </div>
+
+        <div v-if="albums.length === 0" class="card text-center text-muted-foreground text-sm py-8">
+          {{ t('admin.noAlbums') }}
+        </div>
+
+        <!-- Album list -->
+        <div v-else class="space-y-3">
+          <div v-for="album in albums" :key="album.id" class="card !p-0">
+            <!-- Album header row -->
+            <button
+              class="w-full flex items-center gap-4 p-4 text-left hover:bg-background/50 transition-colors"
+              @click="toggleAlbumTracks(album.id)"
+            >
+              <ChevronRight
+                class="w-4 h-4 text-muted-foreground transition-transform flex-shrink-0"
+                :class="{ 'rotate-90': expandedAlbumId === album.id }"
+              />
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-sm font-mono font-semibold text-foreground truncate">{{ album.title }}</span>
+                  <span v-if="album.archived_at" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-border text-muted-foreground">
+                    {{ t('albums.archivedBadge') }}
+                  </span>
+                </div>
+                <div class="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span v-if="album.producer">{{ t('roles.producer') }}: {{ album.producer.display_name }}</span>
+                  <span>{{ t('albums.trackCount', { n: album.track_count }) }}</span>
+                  <span v-if="album.circle_name">{{ album.circle_name }}</span>
+                </div>
+              </div>
+              <span class="text-xs text-muted-foreground flex-shrink-0">
+                {{ new Date(album.created_at).toLocaleDateString() }}
+              </span>
+            </button>
+
+            <!-- Expanded tracks -->
+            <div v-if="expandedAlbumId === album.id" class="border-t border-border">
+              <div v-if="albumTracksLoading === album.id" class="p-4">
+                <SkeletonLoader :rows="3" />
+              </div>
+              <div v-else-if="!albumTracks[album.id]?.length" class="p-4 text-sm text-muted-foreground text-center">
+                {{ t('admin.noTracks') }}
+              </div>
+              <div v-else>
+                <div
+                  v-for="track in albumTracks[album.id]"
+                  :key="track.id"
+                  class="flex items-center gap-3 px-4 py-3 border-b border-border last:border-0 hover:bg-background/50 transition-colors cursor-pointer"
+                  @click="goToTrack(album.id, track.id)"
+                >
+                  <Music class="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  <span v-if="track.track_number" class="text-xs text-muted-foreground w-6 text-right flex-shrink-0">
+                    {{ String(track.track_number).padStart(2, '0') }}
+                  </span>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm text-foreground truncate">{{ track.title }}</p>
+                    <p class="text-xs text-muted-foreground truncate">{{ track.artist }}</p>
+                  </div>
+                  <StatusBadge :status="track.status" type="track" :variant="track.workflow_variant" />
+                  <span v-if="track.submitter" class="text-xs text-muted-foreground flex-shrink-0 hidden sm:block">
+                    {{ track.submitter.display_name }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </template>
   </div>
 </template>

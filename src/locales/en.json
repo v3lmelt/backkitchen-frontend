@@ -1301,7 +1301,12 @@
     "confirmDelete": "Delete user {name}? This cannot be undone.",
     "updateSuccess": "User updated",
     "deleteSuccess": "User deleted",
-    "noAccess": "No access to admin panel"
+    "noAccess": "No access to admin panel",
+    "albumManagement": "Album Management",
+    "searchAlbums": "Search albums…",
+    "search": "Search",
+    "noAlbums": "No albums found",
+    "noTracks": "No tracks in this album"
   },
   "shortcuts": {
     "title": "Keyboard Shortcuts",

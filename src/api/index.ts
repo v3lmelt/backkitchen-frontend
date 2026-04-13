@@ -693,6 +693,14 @@ export const adminApi = {
   updateUser: (id: number, data: { role?: UserRole; is_admin?: boolean; email_verified?: boolean }) =>
     request<User>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteUser: (id: number) => request<void>(`/admin/users/${id}`, { method: 'DELETE' }),
+  listAlbums: (params?: { include_archived?: boolean; search?: string }) => {
+    const sp = new URLSearchParams()
+    if (params?.include_archived) sp.set('include_archived', 'true')
+    if (params?.search) sp.set('search', params.search)
+    const qs = sp.toString()
+    return request<Album[]>(`/admin/albums${qs ? `?${qs}` : ''}`)
+  },
+  listAlbumTracks: (albumId: number) => request<Track[]>(`/admin/albums/${albumId}/tracks`),
 }
 
 export const invitationApi = {

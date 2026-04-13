@@ -1301,7 +1301,12 @@
     "confirmDelete": "确认删除用户 {name}？此操作不可撤销。",
     "updateSuccess": "用户已更新",
     "deleteSuccess": "用户已删除",
-    "noAccess": "无权访问管理后台"
+    "noAccess": "无权访问管理后台",
+    "albumManagement": "专辑管理",
+    "searchAlbums": "搜索专辑…",
+    "search": "搜索",
+    "noAlbums": "暂无专辑",
+    "noTracks": "暂无曲目"
   },
   "shortcuts": {
     "title": "键盘快捷键",
