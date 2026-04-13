@@ -722,7 +722,7 @@ export const adminApi = {
   },
   forceStatus: (trackId: number, data: { new_status: string; reason: string }) =>
     request<Track>(`/admin/tracks/${trackId}/force-status`, { method: 'POST', body: JSON.stringify(data) }),
-  reassign: (trackId: number, data: { user_id: number; reason: string }) =>
+  reassign: (trackId: number, data: { user_ids: number[]; reason: string }) =>
     request<Track>(`/admin/tracks/${trackId}/reassign`, { method: 'POST', body: JSON.stringify(data) }),
 }
 

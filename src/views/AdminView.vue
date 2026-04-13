@@ -173,8 +173,8 @@ async function toggleAlbumTracks(albumId: number) {
   }
 }
 
-function goToTrack(albumId: number, trackId: number) {
-  router.push(`/albums/${albumId}/tracks/${trackId}`)
+function goToTrack(_albumId: number, trackId: number) {
+  router.push(`/tracks/${trackId}`)
 }
 
 // ─── Activity Log ────────────────────────────────────────────────────────────
@@ -219,7 +219,7 @@ const wfSelectedTrack = ref<Track | null>(null)
 const wfAction = ref<'force' | 'reassign'>('force')
 const wfNewStatus = ref('')
 const wfReason = ref('')
-const wfTargetUserId = ref<number | null>(null)
+const wfTargetUserIds = ref<number[]>([])
 const wfSubmitting = ref(false)
 
 async function loadWfTracks() {
@@ -241,9 +241,18 @@ const wfAlbumOptions = computed(() =>
   albums.value.map(a => ({ value: String(a.id), label: a.title }))
 )
 
-const wfUserOptions = computed(() =>
-  users.value.map(u => ({ value: String(u.id), label: u.display_name }))
-)
+const LEGACY_STATUSES = [
+  'submitted', 'peer_review', 'peer_revision', 'producer_mastering_gate',
+  'mastering', 'mastering_revision', 'final_review', 'completed', 'rejected',
+]
+
+const wfStatusOptions = computed(() => {
+  const album = albums.value.find(a => a.id === wfSelectedAlbumId.value)
+  if (album?.workflow_config?.steps?.length) {
+    return album.workflow_config.steps.map(s => ({ value: s.id, label: `${s.label} (${s.id})` }))
+  }
+  return LEGACY_STATUSES.map(s => ({ value: s, label: s }))
+})
 
 async function submitForceStatus() {
   if (!wfSelectedTrack.value || !wfNewStatus.value || !wfReason.value) return
@@ -265,16 +274,16 @@ async function submitForceStatus() {
 }
 
 async function submitReassign() {
-  if (!wfSelectedTrack.value || !wfTargetUserId.value || !wfReason.value) return
+  if (!wfSelectedTrack.value || wfTargetUserIds.value.length === 0 || !wfReason.value) return
   wfSubmitting.value = true
   try {
     await adminApi.reassign(wfSelectedTrack.value.id, {
-      user_id: wfTargetUserId.value,
+      user_ids: wfTargetUserIds.value,
       reason: wfReason.value,
     })
     toast.success(t('admin.reassignSuccess'))
     wfReason.value = ''
-    wfTargetUserId.value = null
+    wfTargetUserIds.value = []
     await loadWfTracks()
   } catch (e: any) {
     toast.error(e.message)
@@ -837,10 +846,11 @@ onMounted(async () => {
           <div class="space-y-3">
             <div>
               <label class="text-xs text-muted-foreground mb-1 block">{{ t('admin.newStatus') }}</label>
-              <input
-                v-model="wfNewStatus"
-                class="input-field"
-                placeholder="e.g. peer_review, mastering, completed"
+              <CustomSelect
+                :model-value="wfNewStatus"
+                :options="wfStatusOptions"
+                :placeholder="t('admin.selectStatus')"
+                @update:model-value="(v: any) => wfNewStatus = v ?? ''"
               />
             </div>
             <div>
@@ -868,11 +878,31 @@ onMounted(async () => {
           <div class="space-y-3">
             <div>
               <label class="text-xs text-muted-foreground mb-1 block">{{ t('admin.targetUser') }}</label>
-              <CustomSelect
-                :model-value="wfTargetUserId ? String(wfTargetUserId) : ''"
-                :options="wfUserOptions"
-                @update:model-value="(v: any) => wfTargetUserId = v ? Number(v) : null"
-              />
+              <div class="border border-border bg-background max-h-48 overflow-y-auto">
+                <label
+                  v-for="user in users"
+                  :key="user.id"
+                  class="flex items-center gap-3 px-3 py-2 hover:bg-card transition-colors cursor-pointer border-b border-border last:border-0"
+                >
+                  <input
+                    type="checkbox"
+                    :value="user.id"
+                    v-model="wfTargetUserIds"
+                    class="accent-primary w-4 h-4 flex-shrink-0"
+                  />
+                  <div
+                    class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
+                    :style="{ backgroundColor: user.avatar_color }"
+                  >
+                    {{ user.display_name.charAt(0) }}
+                  </div>
+                  <span class="text-sm text-foreground truncate">{{ user.display_name }}</span>
+                  <span class="text-xs text-muted-foreground ml-auto">@{{ user.username }}</span>
+                </label>
+              </div>
+              <p v-if="wfTargetUserIds.length > 0" class="text-xs text-muted-foreground mt-1">
+                {{ t('admin.selectedCount', { n: wfTargetUserIds.length }) }}
+              </p>
             </div>
             <div>
               <label class="text-xs text-muted-foreground mb-1 block">{{ t('admin.reason') }}</label>
@@ -885,7 +915,7 @@ onMounted(async () => {
             </div>
             <button
               class="btn-primary font-mono text-sm"
-              :disabled="!wfTargetUserId || !wfReason || wfSubmitting"
+              :disabled="wfTargetUserIds.length === 0 || !wfReason || wfSubmitting"
               @click="submitReassign"
             >
               <CircleCheckBig class="w-4 h-4 inline -mt-0.5 mr-1" />
