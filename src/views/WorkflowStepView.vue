@@ -471,6 +471,12 @@ async function loadPage() {
       reviewAssignments.value = []
     }
 
+    // Redirect mastering steps to the dedicated mastering page
+    if (inferClassicVariant(detail.track.workflow_step ?? null) === 'mastering') {
+      router.replace({ path: `/tracks/${trackId.value}/mastering`, query: route.query })
+      return
+    }
+
     if (inferClassicVariant(detail.track.workflow_step ?? null) === 'peer_review') {
       await loadPeerChecklist(detail.track.album_id)
     } else {

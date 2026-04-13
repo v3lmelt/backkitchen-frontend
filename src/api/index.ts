@@ -613,14 +613,18 @@ export const checklistApi = {
 }
 
 export const discussionApi = {
-  list: (trackId: number) => request<Discussion[]>(`/tracks/${trackId}/discussions`),
-  create: (trackId: number, data: { content: string; images?: File[] }, onProgress?: (percent: number) => void) => {
+  list: (trackId: number, phase?: string) => request<Discussion[]>(`/tracks/${trackId}/discussions${phase ? `?phase=${phase}` : ''}`),
+  create: (trackId: number, data: { content: string; phase?: string; images?: File[]; audios?: File[] }, onProgress?: (percent: number) => void) => {
     const form = new FormData()
     form.append('content', data.content)
+    if (data.phase) form.append('phase', data.phase)
     if (data.images) {
       for (const img of data.images) form.append('images', img)
     }
-    if (onProgress && data.images?.length) {
+    if (data.audios) {
+      for (const audio of data.audios) form.append('audios', audio)
+    }
+    if (onProgress && (data.images?.length || data.audios?.length)) {
       return uploadWithProgress<Discussion>(`/tracks/${trackId}/discussions`, form, onProgress)
     }
     return request<Discussion>(`/tracks/${trackId}/discussions`, { method: 'POST', body: form })

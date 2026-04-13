@@ -582,6 +582,7 @@
     "openIssues": "未解决问题",
     "currentMaster": "当前母带",
     "finalApprovals": "终审批准",
+    "goToMastering": "前往母带交流",
     "producer": "制作人",
     "discussionsHeading": "讨论 ({count})",
     "noDiscussions": "暂无讨论。",
@@ -710,6 +711,21 @@
     "uploading": "上传中…",
     "uploadMaster": "上传母带交付物",
     "actionHint": "上传母带交付物，或请求作者修改源文件"
+  },
+  "masteringPage": {
+    "heading": "母带交流",
+    "currentDelivery": "当前母带交付",
+    "approvalStatus": "签收状态",
+    "approveDelivery": "签收母带",
+    "confirmDelivery": "确认提交",
+    "deliveryConfirmed": "交付已确认",
+    "approved": "已签收",
+    "uploadDelivery": "上传母带交付物",
+    "uploadHint": "选择母带音频文件后上传。",
+    "discussionsHeading": "母带讨论 ({count})",
+    "noDiscussions": "暂无母带讨论。可在此与母带师、制作人沟通母带细节。",
+    "discussionPlaceholder": "输入母带相关讨论…",
+    "postDiscussion": "发送"
   },
   "producer": {
     "heading": "制作人工作台：{title}",

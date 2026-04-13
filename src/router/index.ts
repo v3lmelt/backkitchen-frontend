@@ -47,6 +47,11 @@ const router = createRouter({
       component: () => import('@/views/IssueDetailView.vue'),
     },
     {
+      path: '/tracks/:id/mastering',
+      name: 'mastering',
+      component: () => import('@/views/MasteringView.vue'),
+    },
+    {
       path: '/tracks/:id/step/:stepId',
       name: 'workflow-step',
       component: () => import('@/views/WorkflowStepView.vue'),
