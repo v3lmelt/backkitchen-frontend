@@ -1353,6 +1353,7 @@
     "selectStatus": "选择目标状态",
     "reason": "操作原因",
     "targetUser": "目标用户",
+    "noAlbumMembers": "该专辑暂无可分配的成员",
     "selectedCount": "已选择 {n} 人",
     "confirm": "确认执行",
     "forceStatusSuccess": "状态已变更",

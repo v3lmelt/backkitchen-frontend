@@ -246,6 +246,14 @@ const LEGACY_STATUSES = [
   'mastering', 'mastering_revision', 'final_review', 'completed', 'rejected',
 ]
 
+const wfAlbumMembers = computed(() => {
+  const album = albums.value.find(a => a.id === wfSelectedAlbumId.value)
+  if (!album) return []
+  return album.members
+    .filter(m => m.user_id !== wfSelectedTrack.value?.submitter_id)
+    .map(m => m.user)
+})
+
 const wfStatusOptions = computed(() => {
   const album = albums.value.find(a => a.id === wfSelectedAlbumId.value)
   if (album?.workflow_config?.steps?.length) {
@@ -796,7 +804,7 @@ onMounted(async () => {
             :key="track.id"
             class="w-full flex items-center gap-3 px-3 py-2 text-left transition-colors"
             :class="wfSelectedTrack?.id === track.id ? 'bg-primary/10 border border-primary' : 'hover:bg-background/50 border border-transparent'"
-            @click="wfSelectedTrack = track"
+            @click="wfSelectedTrack = track; wfTargetUserIds = []"
           >
             <Music class="w-4 h-4 text-muted-foreground flex-shrink-0" />
             <div class="flex-1 min-w-0">
@@ -879,8 +887,11 @@ onMounted(async () => {
             <div>
               <label class="text-xs text-muted-foreground mb-1 block">{{ t('admin.targetUser') }}</label>
               <div class="border border-border bg-background max-h-48 overflow-y-auto">
+                <template v-if="wfAlbumMembers.length === 0">
+                  <p class="text-xs text-muted-foreground px-3 py-3">{{ t('admin.noAlbumMembers') }}</p>
+                </template>
                 <label
-                  v-for="user in users"
+                  v-for="user in wfAlbumMembers"
                   :key="user.id"
                   class="flex items-center gap-3 px-3 py-2 hover:bg-card transition-colors cursor-pointer border-b border-border last:border-0"
                 >

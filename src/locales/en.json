@@ -1353,6 +1353,7 @@
     "selectStatus": "Select target status",
     "reason": "Reason",
     "targetUser": "Target User",
+    "noAlbumMembers": "No assignable members in this album",
     "selectedCount": "{n} selected",
     "confirm": "Confirm",
     "forceStatusSuccess": "Status updated",
