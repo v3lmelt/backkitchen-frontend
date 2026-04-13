@@ -261,7 +261,7 @@ describe('WorkflowStepView', () => {
     const buttons = wrapper.findAll('button')
     expect(buttons.filter(button => button.text() === 'Approve').length).toBe(0)
     expect(buttons.some(button => button.text() === 'Approve Current Master')).toBe(true)
-    expect(buttons.some(button => button.text() === 'Request Re-mastering')).toBe(true)
+    expect(buttons.some(button => button.text() === 'Return to Mastering')).toBe(true)
   })
 
   it('shows master delivery history with compare and per-version download actions', async () => {

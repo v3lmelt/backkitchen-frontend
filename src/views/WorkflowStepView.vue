@@ -847,9 +847,21 @@ function onFileChange(event: Event) {
   }
 }
 
+function resolveForwardTargetLabel(decision: string): string | null {
+  const targetStepId = currentStep.value?.transitions?.[decision]
+  if (!targetStepId) return null
+  const targetStep = workflowConfig.value?.steps.find(step => step.id === targetStepId)
+  return targetStep ? translateStepLabel(targetStep, t) : null
+}
+
 function transitionLabel(decision: string, fallbackLabel: string) {
+  if (activeVariant.value === 'intake' && decision === 'accept') {
+    const label = resolveForwardTargetLabel('accept')
+    if (label) return t('workflowStep.forwardToStep', { step: label })
+  }
   if (activeVariant.value === 'producer_gate' && decision === 'approve') {
-    return t('producer.sendToMastering')
+    const label = resolveForwardTargetLabel('approve')
+    if (label) return t('workflowStep.forwardToStep', { step: label })
   }
   if (currentStep.value?.type === 'review') {
     if (currentUserCanFinalizeReview.value) {
@@ -935,7 +947,7 @@ const finalReviewActions = computed<WorkflowAction[]>(() => {
   const actions = transitions.value
     .filter(tr => tr.decision !== 'approve' && tr.decision !== 'reject_final' && tr.decision !== 'reject_resubmittable')
     .map((tr) => ({
-    label: tr.decision === 'reject_to_mastering' ? t('finalReview.requestRemastering') : transitionLabel(tr.decision, tr.label),
+    label: transitionLabel(tr.decision, tr.label),
     type: actionTypeForTransition(tr.decision),
     disabled: acting.value,
     handler: () => executeTransition(tr.decision),
