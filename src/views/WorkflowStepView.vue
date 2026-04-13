@@ -28,8 +28,10 @@ import BatchIssueActions from '@/components/workflow/BatchIssueActions.vue'
 import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
+import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
 import { ChevronLeft, Upload } from 'lucide-vue-next'
 import { useAudioDownload } from '@/composables/useAudioDownload'
+import { useDiscussions } from '@/composables/useDiscussions'
 import { useToast } from '@/composables/useToast'
 import { useAppStore } from '@/stores/app'
 import { useTrackStore } from '@/stores/tracks'
@@ -91,6 +93,9 @@ const isIssueFormOpen = ref(false)
 const waveformMode = computed<'seek' | 'annotate'>(() => (isIssueFormOpen.value ? 'annotate' : 'seek'))
 const showSourceCompare = ref(false)
 const selectedCompareSourceVersionId = ref<number | null>(null)
+
+// ── Mastering discussion (composable) ──────────────────────────────────────
+const masteringDiscussion = useDiscussions(trackId, 'mastering')
 
 function isIssueUnresolved(status: Issue['status']): boolean {
   return status === 'open' || status === 'pending_discussion' || status === 'disagreed'
@@ -476,6 +481,9 @@ async function loadPage() {
     } else {
       templateItems.value = []
       checklistDraft.value = []
+    }
+    if (inferClassicVariant(detail.track.workflow_step ?? null) === 'mastering') {
+      masteringDiscussion.discussions.value = (detail.discussions ?? []).filter(d => d.phase === 'mastering')
     }
   } catch (err) {
     trackStore.setCurrentTrack(null)
@@ -1810,6 +1818,31 @@ function handleIssueLeave() {
           </div>
         </div>
       </div>
+
+      <!-- Mastering Discussion -->
+      <DiscussionPanel
+        :discussions="masteringDiscussion.discussions.value"
+        :heading="t('mastering.discussionHeading', { count: masteringDiscussion.discussions.value.length })"
+        :empty-text="t('mastering.noDiscussions')"
+        :placeholder="t('mastering.discussionPlaceholder')"
+        :submit-label="t('mastering.postDiscussion')"
+        :posting="masteringDiscussion.posting.value"
+        :posting-progress="masteringDiscussion.postingProgress.value"
+        :editing-id="masteringDiscussion.editingId.value"
+        :editing-content="masteringDiscussion.editingContent.value"
+        :history-items="masteringDiscussion.historyItems.value"
+        :show-history-for-id="masteringDiscussion.showHistoryForId.value"
+        :enable-audio="true"
+        @submit="masteringDiscussion.submit"
+        @start-edit="masteringDiscussion.startEdit"
+        @save-edit="masteringDiscussion.saveEdit"
+        @cancel-edit="masteringDiscussion.cancelEdit"
+        @remove="masteringDiscussion.remove"
+        @show-history="masteringDiscussion.showHistory"
+        @close-history="masteringDiscussion.closeHistory"
+        @open-image="masteringDiscussion.openImage"
+        @update:editing-content="masteringDiscussion.editingContent.value = $event"
+      />
     </div>
 
       <WorkflowActionBar :actions="deliveryActions" :hint="t('mastering.actionHint')" />
@@ -2377,4 +2410,5 @@ function handleIssueLeave() {
       <WorkflowActionBar v-if="deliveryActions.length" :actions="deliveryActions" :hint="t('common.actions')" />
     </template>
   </div>
+
 </template>

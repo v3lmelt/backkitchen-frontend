@@ -710,7 +710,11 @@
     "uploadReady": "准备好后上传母带交付物。",
     "uploading": "上传中…",
     "uploadMaster": "上传母带交付物",
-    "actionHint": "上传母带交付物，或请求作者修改源文件"
+    "actionHint": "上传母带交付物，或请求作者修改源文件",
+    "discussionHeading": "母带沟通 ({count})",
+    "noDiscussions": "暂无母带沟通记录。曲师和母带师可在此讨论母带制作需求。",
+    "discussionPlaceholder": "输入母带沟通内容…",
+    "postDiscussion": "发送"
   },
   "producer": {
     "heading": "制作人工作台：{title}",

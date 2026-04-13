@@ -414,16 +414,29 @@ export interface DiscussionImage {
   created_at: string
 }
 
+export type DiscussionPhase = 'general' | 'mastering'
+
+export interface DiscussionAudio {
+  id: number
+  discussion_id: number
+  audio_url: string
+  original_filename: string
+  duration: number | null
+  created_at: string
+}
+
 export interface Discussion {
   id: number
   track_id: number
   author_id: number
   visibility?: 'public' | 'internal'
+  phase?: DiscussionPhase
   content: string
   created_at: string
   edited_at?: string | null
   author?: User | null
   images?: DiscussionImage[]
+  audios?: DiscussionAudio[]
 }
 
 export interface EditHistory {

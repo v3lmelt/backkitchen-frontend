@@ -2,9 +2,9 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, albumApi, discussionApi, API_ORIGIN, resolveAssetUrl } from '@/api'
+import { trackApi, albumApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Track, Issue, Discussion, EditHistory, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember, MasterDelivery, StageAssignment } from '@/types'
+import type { Track, Issue, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember, MasterDelivery, StageAssignment } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
@@ -12,12 +12,12 @@ import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
-import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
-import CommentInput from '@/components/common/CommentInput.vue'
-import { Archive, Check, ChevronRight, UserRoundCog, Pencil, Trash2 } from 'lucide-vue-next'
+import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
+import { Archive, Check, ChevronRight, UserRoundCog, Pencil } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
+import { useDiscussions } from '@/composables/useDiscussions'
 import { useToast } from '@/composables/useToast'
 import { translateStepLabel } from '@/utils/workflow'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
@@ -162,7 +162,6 @@ const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
-const discussions = ref<Discussion[]>([])
 const events = ref<WorkflowEvent[]>([])
 const sourceVersions = ref<TrackSourceVersion[]>([])
 const masterDeliveries = ref<MasterDelivery[]>([])
@@ -206,9 +205,15 @@ const filteredEvents = computed(() => {
     return sorted.filter(e => e.event_type.includes('upload') || e.event_type.includes('deliver'))
   return sorted
 })
-const postingDiscussion = ref(false)
-const postingDiscussionProgress = ref(0)
-const discussionInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
+const generalDiscussion = useDiscussions(trackId)
+const masteringDiscussion = useDiscussions(trackId, 'mastering')
+const canSeeMasteringDiscussion = computed(() => {
+  const userId = appStore.currentUser?.id
+  if (!userId || !track.value) return false
+  return userId === track.value.submitter_id
+    || userId === track.value.producer_id
+    || userId === track.value.mastering_engineer_id
+})
 const showVersionCompare = ref(false)
 const selectedCompareVersionId = ref<number | null>(null)
 const showMasterCompare = ref(false)
@@ -251,12 +256,13 @@ async function loadTrack() {
     track.value = detail.track
     trackStore.setCurrentTrack(detail.track)
     issues.value = detail.issues
-    discussions.value = detail.discussions ?? []
+    const allDiscussions = detail.discussions ?? []
+    generalDiscussion.discussions.value = allDiscussions.filter(d => d.phase !== 'mastering')
+    masteringDiscussion.discussions.value = allDiscussions.filter(d => d.phase === 'mastering')
     events.value = detail.events
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
     masterDeliveries.value = detail.master_deliveries ?? []
     workflowConfig.value = detail.workflow_config ?? null
-    // Fetch review assignments for multi-reviewer progress display
     try {
       reviewAssignments.value = await trackApi.listAssignments(trackId.value)
     } catch {
@@ -352,67 +358,6 @@ function openPrimaryAction(_action: string) {
 }
 
 
-async function handleDiscussionSubmit(payload: { content: string; images: File[]; audios: File[] }) {
-  postingDiscussion.value = true
-  postingDiscussionProgress.value = 0
-  try {
-    const d = await discussionApi.create(trackId.value, {
-      content: payload.content.trim(),
-      images: payload.images.length ? payload.images : undefined,
-    }, (p) => { postingDiscussionProgress.value = p })
-    discussions.value.push(d)
-    discussionInputRef.value?.reset()
-  } finally {
-    postingDiscussion.value = false
-  }
-}
-
-function openImage(url: string) {
-  window.open(resolveAssetUrl(url), '_blank')
-}
-
-// Discussion edit/delete
-const editingDiscussionId = ref<number | null>(null)
-const editingDiscussionContent = ref('')
-
-function startEditDiscussion(d: Discussion) {
-  editingDiscussionId.value = d.id
-  editingDiscussionContent.value = d.content
-}
-
-async function saveEditDiscussion(d: Discussion) {
-  const content = editingDiscussionContent.value.trim()
-  if (!content) return
-  try {
-    const updated = await discussionApi.update(d.id, content)
-    const idx = discussions.value.findIndex(x => x.id === d.id)
-    if (idx !== -1) discussions.value[idx] = updated
-    editingDiscussionId.value = null
-  } catch { toastError(t('common.error')) }
-}
-
-async function deleteDiscussion(d: Discussion) {
-  try {
-    await discussionApi.delete(d.id)
-    discussions.value = discussions.value.filter(x => x.id !== d.id)
-  } catch { toastError(t('common.error')) }
-}
-
-// Discussion edit history
-const discussionHistoryItems = ref<EditHistory[]>([])
-const showHistoryForDiscussionId = ref<number | null>(null)
-
-async function showDiscussionHistory(discussionId: number) {
-  showHistoryForDiscussionId.value = discussionId
-  try {
-    discussionHistoryItems.value = await discussionApi.history(discussionId)
-  } catch { discussionHistoryItems.value = [] }
-}
-
-function closeDiscussionHistory() {
-  showHistoryForDiscussionId.value = null
-  discussionHistoryItems.value = []
-}
 
 const currentVersionId = computed(() => track.value?.current_source_version?.id ?? null)
 const olderVersions = computed(() =>
@@ -963,83 +908,55 @@ watch(selectedCompareMasterDelivery, (delivery) => {
             <IssueMarkerList :issues="currentCycleIssues" :current-source-version-number="track.version" @select="onIssueSelect" />
           </div>
 
-          <!-- Discussions -->
-          <div
-            class="card space-y-4"
-            :class="discussions.length > 0 ? 'lg:flex-1 lg:flex lg:flex-col' : ''"
-          >
-            <h3 class="text-sm font-sans font-semibold text-foreground">
-              {{ t('trackDetail.discussionsHeading', { count: discussions.length }) }}
-            </h3>
-            <div v-if="discussions.length === 0" class="text-sm text-muted-foreground">
-              {{ t('trackDetail.noDiscussions') }}
-            </div>
-            <div v-else class="space-y-3 lg:flex-1">
-              <div v-for="d in discussions" :key="d.id" class="flex gap-3 py-3 border-b border-border last:border-0">
-                <div
-                  class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                  :style="{ backgroundColor: d.author?.avatar_color || '#6366f1' }"
-                >
-                  {{ d.author?.display_name?.charAt(0) || '?' }}
-                </div>
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2">
-                    <span class="text-sm font-medium text-foreground">{{ d.author?.display_name || '?' }}</span>
-                    <span class="text-xs text-muted-foreground">{{ fmtDate(d.created_at) }}</span>
-                    <button
-                      v-if="d.edited_at"
-                      class="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                      @click="showDiscussionHistory(d.id)"
-                    >
-                      ({{ t('editHistory.edited') }})
-                    </button>
-                    <template v-if="d.author_id === appStore.currentUser?.id">
-                      <button @click="startEditDiscussion(d)" class="text-muted-foreground hover:text-foreground transition-colors ml-auto">
-                        <Pencil class="w-3.5 h-3.5" :stroke-width="2" />
-                      </button>
-                      <button @click="deleteDiscussion(d)" class="text-muted-foreground hover:text-error transition-colors">
-                        <Trash2 class="w-3.5 h-3.5" :stroke-width="2" />
-                      </button>
-                    </template>
-                  </div>
-                  <template v-if="editingDiscussionId === d.id">
-                    <textarea
-                      v-model="editingDiscussionContent"
-                      class="textarea-field w-full text-sm mt-1"
-                      rows="3"
-                      @keydown.ctrl.enter="saveEditDiscussion(d)"
-                      @keydown.meta.enter="saveEditDiscussion(d)"
-                    />
-                    <div class="flex gap-2 mt-1">
-                      <button @click="saveEditDiscussion(d)" class="btn-primary text-xs">{{ t('common.save') }}</button>
-                      <button @click="editingDiscussionId = null" class="btn-secondary text-xs">{{ t('common.cancel') }}</button>
-                    </div>
-                  </template>
-                  <template v-else>
-                    <p class="text-sm text-foreground mt-1 whitespace-pre-wrap">{{ d.content }}</p>
-                  </template>
-                  <div v-if="d.images?.length" class="flex gap-2 mt-2">
-                    <img
-                      v-for="img in d.images"
-                      :key="img.id"
-                      :src="resolveAssetUrl(img.image_url)"
-                      class="h-20 rounded border border-border object-cover cursor-pointer"
-                      @click="openImage(img.image_url)"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-            <CommentInput
-              ref="discussionInputRef"
-              :placeholder="t('trackDetail.discussionPlaceholder')"
-              :submit-label="t('trackDetail.postDiscussion')"
-              :submitting="postingDiscussion"
-              :upload-progress="postingDiscussionProgress"
-              :enable-audio="false"
-              @submit="handleDiscussionSubmit"
-            />
-          </div>
+          <!-- Mastering Discussion (confidential: submitter + mastering engineer + producer) -->
+          <DiscussionPanel
+            v-if="canSeeMasteringDiscussion"
+            :discussions="masteringDiscussion.discussions.value"
+            :heading="t('mastering.discussionHeading', { count: masteringDiscussion.discussions.value.length })"
+            :empty-text="t('mastering.noDiscussions')"
+            :placeholder="t('mastering.discussionPlaceholder')"
+            :submit-label="t('mastering.postDiscussion')"
+            :posting="masteringDiscussion.posting.value"
+            :posting-progress="masteringDiscussion.postingProgress.value"
+            :editing-id="masteringDiscussion.editingId.value"
+            :editing-content="masteringDiscussion.editingContent.value"
+            :history-items="masteringDiscussion.historyItems.value"
+            :show-history-for-id="masteringDiscussion.showHistoryForId.value"
+            :enable-audio="true"
+            @submit="masteringDiscussion.submit"
+            @start-edit="masteringDiscussion.startEdit"
+            @save-edit="masteringDiscussion.saveEdit"
+            @cancel-edit="masteringDiscussion.cancelEdit"
+            @remove="masteringDiscussion.remove"
+            @show-history="masteringDiscussion.showHistory"
+            @close-history="masteringDiscussion.closeHistory"
+            @open-image="masteringDiscussion.openImage"
+            @update:editing-content="masteringDiscussion.editingContent.value = $event"
+          />
+
+          <!-- General Discussions -->
+          <DiscussionPanel
+            :discussions="generalDiscussion.discussions.value"
+            :heading="t('trackDetail.discussionsHeading', { count: generalDiscussion.discussions.value.length })"
+            :empty-text="t('trackDetail.noDiscussions')"
+            :placeholder="t('trackDetail.discussionPlaceholder')"
+            :submit-label="t('trackDetail.postDiscussion')"
+            :posting="generalDiscussion.posting.value"
+            :posting-progress="generalDiscussion.postingProgress.value"
+            :editing-id="generalDiscussion.editingId.value"
+            :editing-content="generalDiscussion.editingContent.value"
+            :history-items="generalDiscussion.historyItems.value"
+            :show-history-for-id="generalDiscussion.showHistoryForId.value"
+            @submit="generalDiscussion.submit"
+            @start-edit="generalDiscussion.startEdit"
+            @save-edit="generalDiscussion.saveEdit"
+            @cancel-edit="generalDiscussion.cancelEdit"
+            @remove="generalDiscussion.remove"
+            @show-history="generalDiscussion.showHistory"
+            @close-history="generalDiscussion.closeHistory"
+            @open-image="generalDiscussion.openImage"
+            @update:editing-content="generalDiscussion.editingContent.value = $event"
+          />
         </div>
 
         <div class="space-y-4 lg:sticky lg:top-0 self-start">
@@ -1382,11 +1299,6 @@ watch(selectedCompareMasterDelivery, (delivery) => {
     </div>
   </div>
 
-  <EditHistoryModal
-    v-if="showHistoryForDiscussionId !== null"
-    :items="discussionHistoryItems"
-    @close="closeDiscussionHistory"
-  />
 </template>
 
 <style scoped>

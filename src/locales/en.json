@@ -710,7 +710,11 @@
     "uploadReady": "Upload mastered delivery when ready.",
     "uploading": "Uploading...",
     "uploadMaster": "Upload Master Delivery",
-    "actionHint": "Upload the mastered delivery, or request the author to revise the source"
+    "actionHint": "Upload the mastered delivery, or request the author to revise the source",
+    "discussionHeading": "Mastering Discussion ({count})",
+    "noDiscussions": "No mastering discussions yet. Authors and mastering engineers can discuss mastering requirements here.",
+    "discussionPlaceholder": "Type your mastering discussion…",
+    "postDiscussion": "Send"
   },
   "producer": {
     "heading": "Producer Workspace: {title}",
