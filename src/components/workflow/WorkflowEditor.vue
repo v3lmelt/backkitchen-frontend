@@ -168,6 +168,17 @@ function revisionLabel(label: string) {
   return t('workflowEditor.defaultLabels.revision', { stage: label })
 }
 
+function findLastStage(
+  stages: readonly EditorStage[],
+  predicate: (stage: EditorStage) => boolean,
+): EditorStage | undefined {
+  for (let index = stages.length - 1; index >= 0; index -= 1) {
+    const stage = stages[index]
+    if (stage && predicate(stage)) return stage
+  }
+  return undefined
+}
+
 function inferStageKind(step: WorkflowStepDef, index: number): StageKind {
   if (step.ui_variant && STAGE_KINDS.includes(step.ui_variant as StageKind)) {
     return step.ui_variant as StageKind
@@ -369,7 +380,7 @@ const fullConfig = computed<WorkflowConfig>(() => {
       }
       // final_review without revision: auto-add reject_to_mastering if a mastering stage exists
       if (stage.kind === 'final_review' && !stage.has_revision && stage.extra_reject_targets.length === 0) {
-        const masteringStage = stages.value.slice(0, index).findLast(s => s.kind === 'mastering')
+        const masteringStage = findLastStage(stages.value.slice(0, index), stageItem => stageItem.kind === 'mastering')
         if (masteringStage) {
           transitions[`reject_to_${masteringStage.id}`] = masteringStage.id
         }
@@ -662,7 +673,7 @@ function addStage(kind: StageKind) {
   const stage = createStage(kind, stages.value.map(item => item.id))
   // Auto-add mastering as reject target for final_review (since it has no revision step)
   if (kind === 'final_review') {
-    const masteringStage = stages.value.findLast(s => s.kind === 'mastering')
+    const masteringStage = findLastStage(stages.value, stageItem => stageItem.kind === 'mastering')
     if (masteringStage) {
       stage.extra_reject_targets = [masteringStage.id]
     }
@@ -761,7 +772,7 @@ function updateSelectedKind(kind: StageKind) {
   stage.revision_assignee_role = meta.default_revision_assignee_role
   // Auto-add mastering as reject target for final_review
   if (kind === 'final_review') {
-    const masteringStage = stages.value.findLast(s => s.kind === 'mastering' && s.id !== stage.id)
+    const masteringStage = findLastStage(stages.value, stageItem => stageItem.kind === 'mastering' && stageItem.id !== stage.id)
     stage.extra_reject_targets = masteringStage ? [masteringStage.id] : []
   } else {
     stage.extra_reject_targets = []

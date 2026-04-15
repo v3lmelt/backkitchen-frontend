@@ -144,8 +144,36 @@ const selectedCompareMasterAudioUrl = computed(() => {
   return `${API_ORIGIN}/api/tracks/${trackId.value}/master-deliveries/${d.id}/audio?v=${d.delivery_number}&c=${d.workflow_cycle}`
 })
 
+const currentStep = computed(() => track.value?.workflow_step ?? null)
+const deliveryAssigneeUserId = computed<number | null>(() => {
+  const step = currentStep.value
+  if (!step || step.type !== 'delivery' || !track.value) return null
+  if (step.assignee_user_id != null) return step.assignee_user_id
+  switch (step.assignee_role) {
+    case 'submitter':
+      return track.value.submitter_id ?? null
+    case 'producer':
+      return track.value.producer_id ?? null
+    case 'peer_reviewer':
+      return track.value.peer_reviewer_id ?? null
+    case 'mastering_engineer':
+      return track.value.mastering_engineer_id ?? null
+    default:
+      return null
+  }
+})
+const isDeliveryAssignee = computed(() => {
+  const assigneeId = deliveryAssigneeUserId.value
+  const userId = appStore.currentUser?.id
+  return assigneeId != null && userId != null && assigneeId === userId
+})
+const isFinalReviewStep = computed(() => {
+  const step = currentStep.value
+  if (!step || step.type !== 'approval') return false
+  return step.ui_variant === 'final_review' || step.id === 'final_review'
+})
 const canApproveFinal = computed(() => {
-  if (!track.value?.current_master_delivery) return false
+  if (!track.value?.current_master_delivery?.confirmed_at || !isFinalReviewStep.value) return false
   const userId = appStore.currentUser?.id
   if (!userId) return false
   if (userId === track.value.producer_id) return !track.value.current_master_delivery.producer_approved_at
@@ -199,7 +227,6 @@ const finalReviewIssues = computed(() => {
 })
 
 // Review assignments
-const currentStep = computed(() => track.value?.workflow_step ?? null)
 const currentStepAssignments = computed(() => activeAssignmentsForStep(reviewAssignments.value, currentStep.value?.id))
 const reviewAllowsInternalIssueVisibility = computed(() => {
   if (currentStep.value?.type !== 'review') return false
@@ -279,7 +306,7 @@ const selectedStageIssues = computed(() =>
 )
 const stageBatchActions = computed(() => intersectBatchActions(selectedStageIssues.value))
 
-const canUploadDelivery = computed(() => isMasteringEngineer.value && track.value != null)
+const canUploadDelivery = computed(() => currentStep.value?.type === 'delivery' && isDeliveryAssignee.value)
 
 const { downloading, downloadProgress, downloadTrackAudio, downloadAudioAsset } = useAudioDownload()
 const handleDownload = () => downloadTrackAudio(audioUrl, track)
@@ -463,9 +490,10 @@ async function handleConfirmDelivery() {
 }
 
 const canConfirmDelivery = computed(() => {
+  if (currentStep.value?.type !== 'delivery' || !currentStep.value.require_confirmation) return false
   if (!track.value?.current_master_delivery) return false
   if (track.value.current_master_delivery.confirmed_at) return false
-  return isMasteringEngineer.value
+  return isDeliveryAssignee.value
 })
 
 // Workflow transition
