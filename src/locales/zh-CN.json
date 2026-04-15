@@ -348,7 +348,9 @@
       "reviewerPoolRequired": "阶段「{label}」设置了自动分配，但未选择任何候选审核人。",
       "reviewerPoolTooSmall": "阶段「{label}」的自动分配候选人数少于所需审阅人数。",
       "rejectTargetMustBeEarlier": "阶段「{label}」存在无效打回目标：只能打回到当前阶段之前的阶段。",
-      "directProducerTargetMissing": "阶段「{label}」启用了主催直接审核，但后面没有可跳转的主催审批阶段。"
+      "directProducerTargetMissing": "阶段「{label}」启用了主催直接审核，但后面没有可跳转的主催审批阶段。",
+      "finalReviewMustBeLast": "阶段「{label}」（终审）必须是最后一个主阶段，否则后续阶段将无法执行。",
+      "finalReviewNoRollback": "阶段「{label}」（终审）没有退回路径。请添加打回目标或修订步骤，以便发现问题时可以退回。"
     }
   },
   "workflowTemplate": {

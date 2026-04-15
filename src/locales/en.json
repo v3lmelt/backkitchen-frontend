@@ -348,7 +348,9 @@
       "reviewerPoolRequired": "Stage \"{label}\" uses auto-assignment but has no reviewer candidates selected.",
       "reviewerPoolTooSmall": "Stage \"{label}\" has fewer auto-assignment candidates than required reviewers.",
       "rejectTargetMustBeEarlier": "Stage \"{label}\" has invalid reject targets: it can only reject to earlier stages.",
-      "directProducerTargetMissing": "Stage \"{label}\" has direct producer review enabled, but there is no later producer review stage to jump to."
+      "directProducerTargetMissing": "Stage \"{label}\" has direct producer review enabled, but there is no later producer review stage to jump to.",
+      "finalReviewMustBeLast": "Stage \"{label}\" (final review) must be the last main stage — any stages after it will be unreachable.",
+      "finalReviewNoRollback": "Stage \"{label}\" (final review) has no rollback path. Add a reject target or revision step so reviewers can return the track when issues are found."
     }
   },
   "workflowTemplate": {

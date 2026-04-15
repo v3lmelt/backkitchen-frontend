@@ -514,6 +514,27 @@ const validationErrors = computed<string[]>(() => {
         label: stage.label || stage.id,
       }))
     }
+
+    // final_review must be the last main stage
+    if (stage.kind === 'final_review' && index < stages.value.length - 1) {
+      errors.push(t('workflowEditor.validation.finalReviewMustBeLast', {
+        label: stage.label || stage.id,
+      }))
+    }
+
+    // final_review must have at least one rollback path
+    if (stage.kind === 'final_review') {
+      const hasRejectTarget = stage.extra_reject_targets.length > 0
+      const hasRevision = stage.has_revision
+      // Also check auto-generated reject_to_mastering fallback
+      const hasMasteringFallback = !hasRevision && !hasRejectTarget
+        && stages.value.slice(0, index).some(s => s.kind === 'mastering')
+      if (!hasRejectTarget && !hasRevision && !hasMasteringFallback) {
+        errors.push(t('workflowEditor.validation.finalReviewNoRollback', {
+          label: stage.label || stage.id,
+        }))
+      }
+    }
   }
 
   return errors
