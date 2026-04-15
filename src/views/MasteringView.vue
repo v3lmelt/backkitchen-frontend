@@ -2,23 +2,32 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, discussionApi, r2Api, uploadToR2, API_ORIGIN, resolveAssetUrl } from '@/api'
+import { trackApi, issueApi, r2Api, uploadToR2, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useTrackStore } from '@/stores/tracks'
-import type { Track, Discussion, EditHistory, MasterDelivery, WorkflowConfig } from '@/types'
+import type {
+  Track, MasterDelivery, WorkflowConfig,
+  Issue, TrackSourceVersion, StageAssignment, WorkflowTransitionOption,
+} from '@/types'
 import { formatLocaleDate } from '@/utils/time'
 import { extractAudioDuration } from '@/utils/audio'
+import { translateStepLabel } from '@/utils/workflow'
+import { activeAssignmentsForStep, canUserReviewIssue } from '@/utils/reviewAssignments'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
+import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
+import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
+import WorkflowActionBar from '@/components/workflow/WorkflowActionBar.vue'
+import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue'
+import BatchIssueActions from '@/components/workflow/BatchIssueActions.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
-import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
-import CommentInput from '@/components/common/CommentInput.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
+import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useToast } from '@/composables/useToast'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
-import { ChevronLeft, Upload, Pencil, Trash2, Check, Play } from 'lucide-vue-next'
+import { ChevronLeft, ChevronDown, Upload, Check } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -33,24 +42,40 @@ const MAX_AUDIO_SIZE = 200 * 1024 * 1024
 const trackId = computed(() => Number(route.params.id))
 const track = ref<Track | null>(null)
 const masterDeliveries = ref<MasterDelivery[]>([])
-const discussions = ref<Discussion[]>([])
 const workflowConfig = ref<WorkflowConfig | null>(null)
+const issues = ref<Issue[]>([])
+const sourceVersions = ref<TrackSourceVersion[]>([])
+const reviewAssignments = ref<StageAssignment[]>([])
 const loading = ref(true)
 const loadError = ref(false)
+const acting = ref(false)
+const actionError = ref('')
 
 // Mastering notes editing
 const editingMasteringNotes = ref(false)
 const masteringNotesForm = ref('')
 const savingMasteringNotes = ref(false)
+const masteringNotesExpanded = ref(false)
 
-// Discussions
-const postingDiscussion = ref(false)
-const postingDiscussionProgress = ref(0)
-const discussionInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
-const editingDiscussionId = ref<number | null>(null)
-const editingDiscussionContent = ref('')
-const discussionHistoryItems = ref<EditHistory[]>([])
-const showHistoryForDiscussionId = ref<number | null>(null)
+// Chat sidebar
+const chatSidebarRef = ref<InstanceType<typeof MasteringChatSidebar> | null>(null)
+
+// Collapsible version history
+const versionHistoryExpanded = ref(false)
+
+// Issues / waveform annotation
+const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
+const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
+const hoveredIssueId = ref<number | null>(null)
+const selectedStageIssueIds = ref<number[]>([])
+const stageBatchNote = ref('')
+const batchUpdatingIssues = ref(false)
+const isIssueFormOpen = ref(false)
+const waveformMode = computed<'seek' | 'annotate'>(() => (isIssueFormOpen.value ? 'annotate' : 'seek'))
+
+// Source version comparison
+const showSourceCompare = ref(false)
+const selectedCompareSourceVersionId = ref<number | null>(null)
 
 // Delivery upload
 const uploadFile = ref<File | null>(null)
@@ -118,9 +143,133 @@ const canApproveFinal = computed(() => {
   return false
 })
 
+// Source audio
+const audioUrl = computed(() =>
+  track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio?v=${track.value.version ?? 0}` : '',
+)
+const currentSourceVersionId = computed(() => track.value?.current_source_version?.id ?? null)
+const olderSourceVersions = computed(() =>
+  sourceVersions.value
+    .filter(v => v.id !== currentSourceVersionId.value)
+    .sort((a, b) => b.version_number - a.version_number),
+)
+const sourceCompareOptions = computed<SelectOption[]>(() =>
+  olderSourceVersions.value.map(v => ({
+    value: v.id,
+    label: `v${v.version_number} · ${fmtDate(v.created_at)}`,
+  })),
+)
+const selectedCompareSourceVersion = computed(() =>
+  olderSourceVersions.value.find(v => v.id === selectedCompareSourceVersionId.value) ?? null,
+)
+const isSourceCompareActive = computed(() => selectedCompareSourceVersion.value !== null)
+const displayedSourceVersionNumber = computed(() =>
+  selectedCompareSourceVersion.value?.version_number ?? track.value?.version ?? null,
+)
+
+// Issues
+const fallbackStepIssues = computed(() => {
+  const fallbackPhases = ['peer', 'producer', 'mastering', 'final_review']
+  return issues.value.filter(i => fallbackPhases.includes(i.phase))
+})
+function filterIssuesForDisplayedSourceVersion(list: Issue[]): Issue[] {
+  const version = displayedSourceVersionNumber.value
+  if (version == null) return list
+  return list.filter(issue => issue.source_version_number == null || issue.source_version_number === version)
+}
+const fallbackWaveformIssues = computed(() => filterIssuesForDisplayedSourceVersion(fallbackStepIssues.value))
+const stepIssues = computed(() => {
+  const step = track.value?.workflow_step
+  if (!step) return []
+  return issues.value.filter(i => i.phase === step.id || i.phase === track.value?.status)
+})
+const waveformIssues = computed(() => filterIssuesForDisplayedSourceVersion(stepIssues.value))
+
+// Review assignments
+const currentStep = computed(() => track.value?.workflow_step ?? null)
+const currentStepAssignments = computed(() => activeAssignmentsForStep(reviewAssignments.value, currentStep.value?.id))
+const reviewAllowsInternalIssueVisibility = computed(() => {
+  if (currentStep.value?.type !== 'review') return false
+  const assignmentCount = currentStepAssignments.value.length
+  const requiredCount = Math.max(1, currentStep.value?.required_reviewer_count ?? 1)
+  return Math.max(requiredCount, assignmentCount) > 1
+})
+
+// Workflow transitions
+const transitions = computed<WorkflowTransitionOption[]>(() => track.value?.workflow_transitions ?? [])
+
+function actionTypeForTransition(decision: string): WorkflowAction['type'] {
+  if (decision === 'reject_final') return 'reject'
+  if (decision.includes('reject') || decision.includes('revision') || decision === 'return') return 'return'
+  return 'advance'
+}
+
+function transitionLabel(decision: string, fallbackLabel: string) {
+  if (decision.startsWith('reject_to_')) {
+    const targetStepId = decision.slice('reject_to_'.length)
+    const targetStep = workflowConfig.value?.steps.find(step => step.id === targetStepId)
+    const label = targetStep ? translateStepLabel(targetStep, t) : targetStepId
+    return t('workflowStep.rejectToStep', { step: label })
+  }
+  return t(`trackDetail.actions.${decision}`, fallbackLabel)
+}
+
+const deliveryActions = computed<WorkflowAction[]>(() => {
+  const actions = transitions.value.map((tr) => ({
+    label: transitionLabel(tr.decision, tr.label),
+    type: actionTypeForTransition(tr.decision),
+    disabled: acting.value,
+    handler: () => executeTransition(tr.decision),
+  }))
+  if (canConfirmDelivery.value) {
+    actions.unshift({
+      label: t('trackDetail.actions.confirm_delivery', 'Confirm Delivery'),
+      type: 'advance' as const,
+      disabled: acting.value,
+      handler: handleConfirmDelivery,
+    })
+  }
+  return actions
+})
+
+// Batch issue actions
+const stageBatchIssueList = computed(() => fallbackWaveformIssues.value)
+
+function canCurrentUserReviewIssue(issue: Issue): boolean {
+  return canUserReviewIssue(appStore.currentUser?.id, track.value, issue, reviewAssignments.value)
+}
+
+function canCurrentUserSubmitIssue(issue: Issue): boolean {
+  return Boolean(track.value && appStore.currentUser?.id === track.value.submitter_id && ['open', 'disagreed'].includes(issue.status))
+}
+
+function availableBatchActionsForIssue(issue: Issue): Issue['status'][] {
+  if (canCurrentUserSubmitIssue(issue) && issue.status === 'open') return ['resolved', 'disagreed']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'open') return ['resolved', 'pending_discussion']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'pending_discussion') return ['open', 'internal_resolved']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'internal_resolved') return ['open']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'resolved') return ['open']
+  if (canCurrentUserReviewIssue(issue) && issue.status === 'disagreed') return ['open']
+  return []
+}
+
+function intersectBatchActions(selectedIssues: Issue[]): Issue['status'][] {
+  if (!selectedIssues.length) return []
+  const [firstIssue, ...rest] = selectedIssues
+  return availableBatchActionsForIssue(firstIssue).filter(status =>
+    rest.every(issue => availableBatchActionsForIssue(issue).includes(status)),
+  )
+}
+
+const selectedStageIssues = computed(() =>
+  stageBatchIssueList.value.filter(issue => selectedStageIssueIds.value.includes(issue.id)),
+)
+const stageBatchActions = computed(() => intersectBatchActions(selectedStageIssues.value))
+
 const canUploadDelivery = computed(() => isMasteringEngineer.value && track.value != null)
 
 const { downloading, downloadProgress, downloadTrackAudio, downloadAudioAsset } = useAudioDownload()
+const handleDownload = () => downloadTrackAudio(audioUrl, track)
 const handleMasterDownload = () => downloadTrackAudio(masterAudioUrl, track, '_master')
 
 // WebSocket
@@ -132,6 +281,10 @@ const { connected: wsConnected } = useTrackWebSocket(trackId.value, async () => 
   await nextTick()
   await loadData()
   wsReloading.value = false
+}, {
+  onDiscussionEvent: (event, discussionId) => {
+    chatSidebarRef.value?.handleDiscussionEvent(event, discussionId)
+  },
 })
 
 watch(wsConnected, (val) => {
@@ -139,7 +292,13 @@ watch(wsConnected, (val) => {
 })
 
 onMounted(loadData)
-onBeforeUnmount(() => resetDeliveryPreview())
+onMounted(() => {
+  window.addEventListener('keydown', handleWaveformHotkeys)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleWaveformHotkeys)
+  resetDeliveryPreview()
+})
 
 onBeforeRouteLeave(() => {
   if (!uploading.value && !uploadFile.value) return true
@@ -155,9 +314,14 @@ async function loadData() {
     trackStore.setCurrentTrack(detail.track)
     masterDeliveries.value = detail.master_deliveries ?? []
     workflowConfig.value = detail.workflow_config ?? null
-
-    if (canSeeMasteringDiscussion.value) {
-      discussions.value = await discussionApi.list(trackId.value, 'mastering')
+    sourceVersions.value = detail.source_versions ?? []
+    issues.value = (detail.issues ?? []).filter(
+      (issue: Issue) => issue.workflow_cycle === detail.track.workflow_cycle,
+    )
+    try {
+      reviewAssignments.value = await trackApi.listAssignments(trackId.value)
+    } catch {
+      reviewAssignments.value = []
     }
   } catch {
     trackStore.setCurrentTrack(null)
@@ -195,63 +359,6 @@ async function saveMasteringNotes() {
   } finally {
     savingMasteringNotes.value = false
   }
-}
-
-// Discussion CRUD
-async function handleDiscussionSubmit(payload: { content: string; images: File[]; audios: File[] }) {
-  postingDiscussion.value = true
-  postingDiscussionProgress.value = 0
-  try {
-    const d = await discussionApi.create(trackId.value, {
-      content: payload.content.trim(),
-      phase: 'mastering',
-      images: payload.images.length ? payload.images : undefined,
-      audios: payload.audios.length ? payload.audios : undefined,
-    }, (p) => { postingDiscussionProgress.value = p })
-    discussions.value.push(d)
-    discussionInputRef.value?.reset()
-  } finally {
-    postingDiscussion.value = false
-  }
-}
-
-function startEditDiscussion(d: Discussion) {
-  editingDiscussionId.value = d.id
-  editingDiscussionContent.value = d.content
-}
-
-async function saveEditDiscussion(d: Discussion) {
-  const content = editingDiscussionContent.value.trim()
-  if (!content) return
-  try {
-    const updated = await discussionApi.update(d.id, content)
-    const idx = discussions.value.findIndex(x => x.id === d.id)
-    if (idx !== -1) discussions.value[idx] = updated
-    editingDiscussionId.value = null
-  } catch { toastError(t('common.error')) }
-}
-
-async function deleteDiscussion(d: Discussion) {
-  try {
-    await discussionApi.delete(d.id)
-    discussions.value = discussions.value.filter(x => x.id !== d.id)
-  } catch { toastError(t('common.error')) }
-}
-
-async function showDiscussionHistory(discussionId: number) {
-  showHistoryForDiscussionId.value = discussionId
-  try {
-    discussionHistoryItems.value = await discussionApi.history(discussionId)
-  } catch { discussionHistoryItems.value = [] }
-}
-
-function closeDiscussionHistory() {
-  showHistoryForDiscussionId.value = null
-  discussionHistoryItems.value = []
-}
-
-function openImage(url: string) {
-  window.open(resolveAssetUrl(url), '_blank')
 }
 
 // Delivery upload
@@ -348,6 +455,141 @@ const canConfirmDelivery = computed(() => {
   return isMasteringEngineer.value
 })
 
+// Workflow transition
+async function executeTransition(decision: string) {
+  if (!track.value) return
+  if (decision === 'reject_final') {
+    const confirmed = window.confirm(t('producer.rejectFinalConfirm'))
+    if (!confirmed) return
+  }
+  acting.value = true
+  actionError.value = ''
+  try {
+    const previousStatus = track.value.status
+    const updatedTrack = await trackApi.workflowTransition(trackId.value, decision)
+    if (updatedTrack.status === previousStatus) {
+      await loadData()
+      return
+    }
+    router.push(`/tracks/${trackId.value}`)
+  } catch (err: any) {
+    actionError.value = err.message || t('workflowStep.transitionFailed')
+  } finally {
+    acting.value = false
+  }
+}
+
+// Issue handlers
+function onIssueSelect(issue: Issue) {
+  router.push(`/issues/${issue.id}`)
+}
+
+function onIssueCreated(issue: Issue) {
+  issues.value.push(issue)
+}
+
+function handleIssueHover(issue: Issue) {
+  hoveredIssueId.value = issue.id
+}
+
+function handleIssueLeave() {
+  hoveredIssueId.value = null
+}
+
+function onRequestWaveformMode(next: 'seek' | 'annotate') {
+  if (next === 'annotate' && isSourceCompareActive.value) return
+  if (next === 'annotate') issueFormRef.value?.openForm?.()
+  else issueFormRef.value?.closeForm?.()
+}
+
+// Batch issue actions
+async function applyBatchIssueStatusChange(status: Issue['status']) {
+  if (!track.value || !selectedStageIssues.value.length) return
+  batchUpdatingIssues.value = true
+  try {
+    const updatedIssues = await issueApi.batchUpdate(trackId.value, {
+      issue_ids: selectedStageIssues.value.map(issue => issue.id),
+      status,
+      status_note: stageBatchNote.value.trim() || undefined,
+    })
+    const updatedById = new Map(updatedIssues.map(issue => [issue.id, issue]))
+    issues.value = issues.value.map(issue => {
+      const updated = updatedById.get(issue.id)
+      return updated ? { ...issue, ...updated } : issue
+    })
+    selectedStageIssueIds.value = []
+    stageBatchNote.value = ''
+  } catch (err: any) {
+    toastError(err.message || t('workflowStep.transitionFailed'))
+  } finally {
+    batchUpdatingIssues.value = false
+  }
+}
+
+// Source compare
+function toggleSourceCompare() {
+  showSourceCompare.value = !showSourceCompare.value
+  if (!showSourceCompare.value) selectedCompareSourceVersionId.value = null
+}
+
+// Waveform hotkeys
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable) return true
+  return !!target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]')
+}
+
+function handleWaveformHotkeys(event: KeyboardEvent) {
+  if (isEditableTarget(event.target)) return
+  if (!issueFormRef.value || !waveformRef.value) return
+
+  if (event.key === ' ') {
+    event.preventDefault()
+    waveformRef.value.togglePlay?.()
+    return
+  }
+  if (event.key === '[') {
+    event.preventDefault()
+    const time = waveformRef.value.getCurrentTime?.() ?? 0
+    issueFormRef.value.setRangeAnchorAt?.(time)
+    return
+  }
+  if (event.key === ']') {
+    event.preventDefault()
+    const time = waveformRef.value.getCurrentTime?.() ?? 0
+    issueFormRef.value.commitRangeFromAnchorTo?.(time)
+    return
+  }
+  if (event.key === 'Backspace') {
+    event.preventDefault()
+    issueFormRef.value.removeLastMarker?.()
+    return
+  }
+  if (event.key === 'Escape') {
+    issueFormRef.value.clearRangeAnchor?.()
+  }
+}
+
+// Watchers for source compare
+watch(olderSourceVersions, (versions) => {
+  if (!versions.some(v => v.id === selectedCompareSourceVersionId.value)) {
+    selectedCompareSourceVersionId.value = null
+  }
+  if (versions.length === 0) showSourceCompare.value = false
+})
+
+watch(isSourceCompareActive, (active) => {
+  if (!active) return
+  issueFormRef.value?.closeForm?.()
+  hoveredIssueId.value = null
+})
+
+watch([stageBatchIssueList], ([issuesList]) => {
+  const validIds = new Set(issuesList.map(issue => issue.id))
+  selectedStageIssueIds.value = selectedStageIssueIds.value.filter(id => validIds.has(id))
+  if (selectedStageIssueIds.value.length === 0) stageBatchNote.value = ''
+})
+
 // Master compare
 function toggleMasterCompare() {
   showMasterCompare.value = !showMasterCompare.value
@@ -388,7 +630,8 @@ watch(olderMasterDeliveries, (deliveries) => {
     <p class="text-sm text-error">{{ t('common.loadFailed') }}</p>
     <button @click="loadData" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
   </div>
-  <div v-else-if="track" class="max-w-4xl mx-auto space-y-6">
+  <div v-else-if="track" class="max-w-4xl mx-auto min-h-full flex flex-col">
+  <div class="space-y-6">
     <!-- WebSocket disconnect banner -->
     <div
       v-if="wsHadConnection && !wsConnected"
@@ -398,7 +641,7 @@ watch(olderMasterDeliveries, (deliveries) => {
       {{ t('trackDetail.liveDisconnected') }}
     </div>
 
-    <!-- Header -->
+    <!-- ① Header (compact) -->
     <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
       <div class="min-w-0">
         <div class="flex items-center gap-2 mb-1">
@@ -417,26 +660,103 @@ watch(olderMasterDeliveries, (deliveries) => {
       </button>
     </div>
 
-    <!-- Mastering Notes -->
-    <div class="card space-y-3">
-      <div class="flex items-center justify-between">
+    <!-- ② Mastering Notes (collapsible, default collapsed) -->
+    <div class="card">
+      <button
+        class="w-full flex items-center justify-between"
+        @click="masteringNotesExpanded = !masteringNotesExpanded"
+      >
         <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('trackDetail.masteringNotes') }}</h3>
-        <button v-if="isSubmitter && !editingMasteringNotes" @click="startEditMasteringNotes" class="text-xs text-primary hover:text-primary-hover font-mono">
-          {{ t('common.edit') }}
-        </button>
+        <ChevronDown
+          class="w-4 h-4 text-muted-foreground transition-transform"
+          :class="{ 'rotate-180': masteringNotesExpanded }"
+          :stroke-width="2"
+        />
+      </button>
+      <div v-if="masteringNotesExpanded" class="mt-3 space-y-3">
+        <template v-if="editingMasteringNotes">
+          <textarea v-model="masteringNotesForm" class="textarea-field w-full" rows="3" :placeholder="t('trackDetail.masteringNotesPlaceholder')"></textarea>
+          <div class="flex gap-2">
+            <button @click="saveMasteringNotes" :disabled="savingMasteringNotes" class="btn-primary text-xs px-3 py-1.5">{{ t('common.save') }}</button>
+            <button @click="editingMasteringNotes = false" class="btn-secondary text-xs px-3 py-1.5">{{ t('common.cancel') }}</button>
+          </div>
+        </template>
+        <template v-else>
+          <p v-if="track.mastering_notes" class="text-sm text-muted-foreground whitespace-pre-wrap">{{ track.mastering_notes }}</p>
+          <p v-else class="text-xs text-muted-foreground italic">{{ t('trackDetail.noMasteringNotes') }}</p>
+          <button v-if="isSubmitter" @click="startEditMasteringNotes" class="text-xs text-primary hover:text-primary-hover font-mono">
+            {{ t('common.edit') }}
+          </button>
+        </template>
       </div>
-      <template v-if="editingMasteringNotes">
-        <textarea v-model="masteringNotesForm" class="textarea-field w-full" rows="3" :placeholder="t('trackDetail.masteringNotesPlaceholder')"></textarea>
-        <div class="flex gap-2">
-          <button @click="saveMasteringNotes" :disabled="savingMasteringNotes" class="btn-primary text-xs px-3 py-1.5">{{ t('common.save') }}</button>
-          <button @click="editingMasteringNotes = false" class="btn-secondary text-xs px-3 py-1.5">{{ t('common.cancel') }}</button>
-        </div>
-      </template>
-      <p v-else-if="track.mastering_notes" class="text-sm text-muted-foreground whitespace-pre-wrap">{{ track.mastering_notes }}</p>
-      <p v-else class="text-xs text-muted-foreground italic">{{ t('trackDetail.noMasteringNotes') }}</p>
     </div>
 
-    <!-- Current master delivery player -->
+    <!-- Error banner -->
+    <div v-if="actionError" class="card border border-error/40 bg-error-bg text-sm text-error">
+      {{ actionError }}
+    </div>
+
+    <!-- ③ Audio comparison zone -->
+    <!-- Source audio -->
+    <div v-if="audioUrl" class="space-y-4">
+      <div class="flex items-start justify-between gap-3">
+        <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.waveformHint') }}</h3>
+        <div class="flex items-center gap-2 shrink-0">
+          <button
+            v-if="olderSourceVersions.length > 0"
+            @click="toggleSourceCompare"
+            class="btn-secondary text-xs px-3 py-1"
+          >
+            {{ t('compare.title') }}
+          </button>
+          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+          </button>
+        </div>
+      </div>
+      <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="space-y-2">
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+          <CustomSelect
+            v-model="selectedCompareSourceVersionId"
+            :options="sourceCompareOptions"
+            :placeholder="`-- ${t('compare.selectVersion')} --`"
+            size="sm"
+          />
+          <button
+            v-if="selectedCompareSourceVersionId"
+            @click="selectedCompareSourceVersionId = null"
+            class="text-xs text-muted-foreground hover:text-foreground"
+          >
+            {{ t('compare.clear') }}
+          </button>
+        </div>
+        <p v-if="isSourceCompareActive" class="text-xs text-warning">
+          {{ t('workflowStep.sourceCompareReadonlyHint') }}
+        </p>
+      </div>
+      <WaveformPlayer
+        ref="waveformRef"
+        :audio-url="audioUrl"
+        :issues="waveformIssues"
+        :track-id="trackId"
+        :compare-version-id="selectedCompareSourceVersionId"
+        :selectable="isMasteringEngineer"
+        :mode="waveformMode"
+        :selected-range="issueFormRef?.selectedRange ?? null"
+        :draft-markers="issueFormRef?.markers ?? []"
+        :draft-range-anchor="issueFormRef?.rangeAnchor ?? null"
+        :hovered-issue-id="hoveredIssueId"
+        @click="(time: number) => issueFormRef?.handleClick(time)"
+        @regionClick="onIssueSelect"
+        @rangeSelect="(start: number, end: number, isUpdate: boolean) => isUpdate ? issueFormRef?.handleRangeUpdate?.(start, end) : issueFormRef?.handleRangeSelect(start, end)"
+        @issueHover="handleIssueHover"
+        @issueLeave="handleIssueLeave"
+        @requestModeChange="onRequestWaveformMode"
+      />
+    </div>
+
+    <!-- Master delivery audio -->
     <div v-if="masterAudioUrl" class="space-y-3">
       <div class="flex items-center justify-between">
         <h3 class="text-sm font-mono font-semibold text-foreground">
@@ -489,7 +809,7 @@ watch(olderMasterDeliveries, (deliveries) => {
       </div>
     </div>
 
-    <!-- Upload delivery -->
+    <!-- Upload delivery (mastering engineer only, inside audio comparison zone) -->
     <div v-if="canUploadDelivery" class="card space-y-4">
       <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('masteringPage.uploadDelivery') }}</h3>
       <p class="text-sm text-muted-foreground">{{ t('masteringPage.uploadHint') }}</p>
@@ -519,13 +839,74 @@ watch(olderMasterDeliveries, (deliveries) => {
       <div v-if="uploadError" class="text-sm text-error">{{ uploadError }}</div>
     </div>
 
-    <!-- Master delivery version history -->
-    <div v-if="sortedMasterDeliveries.length > 0" class="card space-y-3">
-      <div class="flex items-center justify-between gap-3">
+    <!-- ④ Issues zone -->
+    <div v-if="isMasteringEngineer" class="space-y-4">
+      <IssueCreatePanel
+        ref="issueFormRef"
+        :track-id="trackId"
+        phase="mastering"
+        :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
+        @created="onIssueCreated"
+        @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
+      >
+        <template #heading>
+          <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.issuesHeading', { count: fallbackWaveformIssues.length }) }}</h3>
+        </template>
+      </IssueCreatePanel>
+
+      <BatchIssueActions
+        :selected-count="selectedStageIssueIds.length"
+        :statuses="stageBatchActions"
+        :note="stageBatchNote"
+        :loading="batchUpdatingIssues"
+        @update:note="stageBatchNote = $event"
+        @clear="selectedStageIssueIds = []; stageBatchNote = ''"
+        @apply="applyBatchIssueStatusChange($event)"
+      />
+
+      <IssueMarkerList
+        :issues="fallbackWaveformIssues"
+        :selectable="true"
+        :selected-ids="selectedStageIssueIds"
+        :current-source-version-number="displayedSourceVersionNumber"
+        :hovered-issue-id="hoveredIssueId"
+        @select="onIssueSelect"
+        @update:selectedIds="selectedStageIssueIds = $event"
+        @hover="handleIssueHover"
+        @leave="handleIssueLeave"
+      />
+    </div>
+
+    <!-- Non-mastering-engineer: read-only issue list -->
+    <div v-if="!isMasteringEngineer" class="space-y-4">
+      <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.issuesHeading', { count: fallbackWaveformIssues.length }) }}</h3>
+      <IssueMarkerList
+        :issues="fallbackWaveformIssues"
+        :current-source-version-number="displayedSourceVersionNumber"
+        :hovered-issue-id="hoveredIssueId"
+        @select="onIssueSelect"
+        @hover="handleIssueHover"
+        @leave="handleIssueLeave"
+      />
+    </div>
+
+    <!-- ⑤ Version history (collapsible) -->
+    <div v-if="sortedMasterDeliveries.length > 0" class="card">
+      <button
+        class="w-full flex items-center justify-between"
+        @click="versionHistoryExpanded = !versionHistoryExpanded"
+      >
         <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.masterVersionHistory') }}</h3>
-        <span class="text-xs text-muted-foreground">{{ sortedMasterDeliveries.length }}</span>
-      </div>
-      <div class="space-y-2">
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-muted-foreground">{{ sortedMasterDeliveries.length }}</span>
+          <ChevronDown
+            class="w-4 h-4 text-muted-foreground transition-transform"
+            :class="{ 'rotate-180': versionHistoryExpanded }"
+            :stroke-width="2"
+          />
+        </div>
+      </button>
+      <div v-if="versionHistoryExpanded" class="mt-3 space-y-2">
         <div
           v-for="delivery in sortedMasterDeliveries"
           :key="delivery.id"
@@ -553,97 +934,16 @@ watch(olderMasterDeliveries, (deliveries) => {
         </div>
       </div>
     </div>
-
-    <!-- Mastering Discussion -->
-    <div v-if="canSeeMasteringDiscussion" class="card space-y-4">
-      <h3 class="text-sm font-mono font-semibold text-foreground">
-        {{ t('masteringPage.discussionsHeading', { count: discussions.length }) }}
-      </h3>
-      <div v-if="discussions.length === 0" class="text-sm text-muted-foreground">
-        {{ t('masteringPage.noDiscussions') }}
-      </div>
-      <div v-else class="space-y-3">
-        <div v-for="d in discussions" :key="d.id" class="flex gap-3 py-3 border-b border-border last:border-0">
-          <div
-            class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-            :style="{ backgroundColor: d.author?.avatar_color || '#6366f1' }"
-          >
-            {{ d.author?.display_name?.charAt(0) || '?' }}
-          </div>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2">
-              <span class="text-sm font-medium text-foreground">{{ d.author?.display_name || '?' }}</span>
-              <span class="text-xs text-muted-foreground">{{ fmtDate(d.created_at) }}</span>
-              <button
-                v-if="d.edited_at"
-                class="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                @click="showDiscussionHistory(d.id)"
-              >
-                ({{ t('editHistory.edited') }})
-              </button>
-              <template v-if="d.author_id === appStore.currentUser?.id">
-                <button @click="startEditDiscussion(d)" class="text-muted-foreground hover:text-foreground transition-colors ml-auto">
-                  <Pencil class="w-3.5 h-3.5" :stroke-width="2" />
-                </button>
-                <button @click="deleteDiscussion(d)" class="text-muted-foreground hover:text-error transition-colors">
-                  <Trash2 class="w-3.5 h-3.5" :stroke-width="2" />
-                </button>
-              </template>
-            </div>
-            <template v-if="editingDiscussionId === d.id">
-              <textarea
-                v-model="editingDiscussionContent"
-                class="textarea-field w-full text-sm mt-1"
-                rows="3"
-                @keydown.ctrl.enter="saveEditDiscussion(d)"
-                @keydown.meta.enter="saveEditDiscussion(d)"
-              />
-              <div class="flex gap-2 mt-1">
-                <button @click="saveEditDiscussion(d)" class="btn-primary text-xs">{{ t('common.save') }}</button>
-                <button @click="editingDiscussionId = null" class="btn-secondary text-xs">{{ t('common.cancel') }}</button>
-              </div>
-            </template>
-            <template v-else>
-              <p class="text-sm text-foreground mt-1 whitespace-pre-wrap">{{ d.content }}</p>
-            </template>
-            <div v-if="d.images?.length" class="flex gap-2 mt-2">
-              <img
-                v-for="img in d.images"
-                :key="img.id"
-                :src="resolveAssetUrl(img.image_url)"
-                class="h-20 rounded border border-border object-cover cursor-pointer"
-                @click="openImage(img.image_url)"
-              />
-            </div>
-            <div v-if="d.audios?.length" class="space-y-2 mt-2">
-              <div v-for="audio in d.audios" :key="audio.id" class="flex items-center gap-2 px-3 py-2 border border-border bg-background rounded-none">
-                <Play class="w-4 h-4 text-primary flex-shrink-0" :stroke-width="2" />
-                <a :href="resolveAssetUrl(audio.audio_url)" target="_blank" class="text-sm text-primary hover:text-primary-hover truncate">
-                  {{ audio.original_filename }}
-                </a>
-                <span v-if="audio.duration" class="text-xs text-muted-foreground ml-auto shrink-0">
-                  {{ Math.floor(audio.duration / 60) }}:{{ String(Math.floor(audio.duration % 60)).padStart(2, '0') }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <CommentInput
-        ref="discussionInputRef"
-        :placeholder="t('masteringPage.discussionPlaceholder')"
-        :submit-label="t('masteringPage.postDiscussion')"
-        :submitting="postingDiscussion"
-        :upload-progress="postingDiscussionProgress"
-        :enable-audio="true"
-        @submit="handleDiscussionSubmit"
-      />
-    </div>
   </div>
 
-  <EditHistoryModal
-    v-if="showHistoryForDiscussionId !== null"
-    :items="discussionHistoryItems"
-    @close="closeDiscussionHistory"
+    <WorkflowActionBar v-if="deliveryActions.length" :actions="deliveryActions" :hint="t('mastering.actionHint')" />
+  </div>
+
+  <!-- Chat sidebar -->
+  <MasteringChatSidebar
+    v-if="canSeeMasteringDiscussion && track"
+    ref="chatSidebarRef"
+    :track-id="trackId"
+    :track-completed="track.status === 'completed'"
   />
 </template>

@@ -9,7 +9,11 @@ const TOKEN_KEY = 'backkitchen_token'
  * on disconnect. Calls `onTrackUpdated` whenever the server broadcasts a
  * `track_updated` message for this track.
  */
-export function useTrackWebSocket(trackId: number, onTrackUpdated: () => void) {
+export interface TrackWebSocketOptions {
+  onDiscussionEvent?: (event: string, discussionId: number) => void
+}
+
+export function useTrackWebSocket(trackId: number, onTrackUpdated: () => void, options?: TrackWebSocketOptions) {
   const connected = ref(false)
   let ws: WebSocket | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -37,6 +41,9 @@ export function useTrackWebSocket(trackId: number, onTrackUpdated: () => void) {
         const msg = JSON.parse(event.data as string)
         if (msg.type === 'track_updated' && msg.track_id === trackId) {
           onTrackUpdated()
+        }
+        if (msg.type === 'discussion_event' && msg.track_id === trackId && options?.onDiscussionEvent) {
+          options.onDiscussionEvent(msg.event, msg.discussion_id)
         }
       } catch {
         // Ignore malformed messages

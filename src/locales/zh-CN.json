@@ -1400,5 +1400,14 @@
     "downloadingZip": "正在下载导出文件…",
     "done": "导出完成！",
     "error": "导出失败"
+  },
+  "chat": {
+    "title": "母带沟通",
+    "openChat": "打开母带聊天",
+    "placeholder": "输入消息…",
+    "send": "发送",
+    "empty": "暂无消息。曲师、母带师和制作人可在此沟通母带细节。",
+    "loadOlder": "加载更早消息",
+    "archived": "曲目已完结，聊天已归档"
   }
 }

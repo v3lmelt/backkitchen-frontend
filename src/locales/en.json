@@ -1400,5 +1400,14 @@
     "downloadingZip": "Downloading export file…",
     "done": "Export complete!",
     "error": "Export failed"
+  },
+  "chat": {
+    "title": "Mastering Chat",
+    "openChat": "Open mastering chat",
+    "placeholder": "Type a message…",
+    "send": "Send",
+    "empty": "No messages yet. Submitter, mastering engineer, and producer can discuss mastering details here.",
+    "loadOlder": "Load older messages",
+    "archived": "Track completed — chat is archived"
   }
 }

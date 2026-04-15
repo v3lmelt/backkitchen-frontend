@@ -13,6 +13,7 @@ import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
+import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
 import { Archive, Check, ChevronRight, UserRoundCog, Pencil } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
@@ -205,7 +206,7 @@ const filteredEvents = computed(() => {
   return sorted
 })
 const generalDiscussion = useDiscussions(trackId)
-const masteringDiscussion = useDiscussions(trackId, 'mastering')
+const chatSidebarRef = ref<InstanceType<typeof MasteringChatSidebar> | null>(null)
 const canSeeMasteringDiscussion = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId || !track.value) return false
@@ -239,6 +240,10 @@ const { connected: wsConnected } = useTrackWebSocket(trackId.value, async () => 
   await nextTick()
   await loadTrack()
   wsReloading.value = false
+}, {
+  onDiscussionEvent: (event, discussionId) => {
+    chatSidebarRef.value?.handleDiscussionEvent(event, discussionId)
+  },
 })
 
 watch(wsConnected, (val) => {
@@ -255,7 +260,6 @@ async function loadTrack() {
     issues.value = detail.issues
     const allDiscussions = detail.discussions ?? []
     generalDiscussion.discussions.value = allDiscussions.filter(d => d.phase !== 'mastering')
-    masteringDiscussion.discussions.value = allDiscussions.filter(d => d.phase === 'mastering')
     events.value = detail.events
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
     workflowConfig.value = detail.workflow_config ?? null
@@ -279,6 +283,15 @@ const audioUrl = computed(() => {
 })
 const { downloading, downloadProgress, downloadTrackAudio } = useAudioDownload()
 const handleDownload = () => downloadTrackAudio(audioUrl, track)
+
+const masterAudioUrl = computed(() => {
+  const d = track.value?.current_master_delivery
+  if (!d) return ''
+  return `${API_ORIGIN}/api/tracks/${trackId.value}/master-audio?v=${d.delivery_number}&c=${d.workflow_cycle ?? 1}`
+})
+const { downloading: masterDownloading, downloadProgress: masterDownloadProgress, downloadTrackAudio: downloadMasterAudio } = useAudioDownload()
+const handleMasterDownload = () => downloadMasterAudio(masterAudioUrl, track, '_master')
+
 const currentCycleIssues = computed(() => issues.value.filter(issue => issue.workflow_cycle === track.value?.workflow_cycle))
 const currentWaveformIssues = computed(() => {
   const currentVersion = track.value?.version
@@ -786,38 +799,26 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             {{ t('trackDetail.noAudioFile') }}
           </div>
 
+          <!-- Master delivery audio (read-only preview) -->
+          <div v-if="masterAudioUrl && canSeeMastering">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-sm font-medium text-muted-foreground">
+                {{ t('trackDetail.masterAudio') }}
+                <span v-if="track.current_master_delivery" class="text-xs ml-1">v{{ track.current_master_delivery.delivery_number }}</span>
+              </h3>
+              <button @click="handleMasterDownload" :disabled="masterDownloading" class="btn-secondary text-xs px-3 py-1">
+                {{ masterDownloading ? `${masterDownloadProgress}%` : t('common.downloadAudio') }}
+              </button>
+            </div>
+            <WaveformPlayer :audio-url="masterAudioUrl" :issues="[]" :track-id="trackId" playback-scope="master" />
+          </div>
+
           <div id="issues">
             <h3 class="text-sm font-sans font-semibold text-foreground mb-3">
               {{ t('trackDetail.issuesHeading', { count: currentCycleIssues.length }) }}
             </h3>
             <IssueMarkerList :issues="currentCycleIssues" :current-source-version-number="track.version" @select="onIssueSelect" />
           </div>
-
-          <!-- Mastering Discussion (confidential: submitter + mastering engineer + producer) -->
-          <DiscussionPanel
-            v-if="canSeeMasteringDiscussion"
-            :discussions="masteringDiscussion.discussions.value"
-            :heading="t('mastering.discussionHeading', { count: masteringDiscussion.discussions.value.length })"
-            :empty-text="t('mastering.noDiscussions')"
-            :placeholder="t('mastering.discussionPlaceholder')"
-            :submit-label="t('mastering.postDiscussion')"
-            :posting="masteringDiscussion.posting.value"
-            :posting-progress="masteringDiscussion.postingProgress.value"
-            :editing-id="masteringDiscussion.editingId.value"
-            :editing-content="masteringDiscussion.editingContent.value"
-            :history-items="masteringDiscussion.historyItems.value"
-            :show-history-for-id="masteringDiscussion.showHistoryForId.value"
-            :enable-audio="true"
-            @submit="masteringDiscussion.submit"
-            @start-edit="masteringDiscussion.startEdit"
-            @save-edit="masteringDiscussion.saveEdit"
-            @cancel-edit="masteringDiscussion.cancelEdit"
-            @remove="masteringDiscussion.remove"
-            @show-history="masteringDiscussion.showHistory"
-            @close-history="masteringDiscussion.closeHistory"
-            @open-image="masteringDiscussion.openImage"
-            @update:editing-content="masteringDiscussion.editingContent.value = $event"
-          />
 
           <!-- General Discussions -->
           <DiscussionPanel
@@ -1174,6 +1175,13 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
     </div>
   </div>
 
+  <!-- Mastering chat sidebar -->
+  <MasteringChatSidebar
+    v-if="canSeeMasteringDiscussion && track"
+    ref="chatSidebarRef"
+    :track-id="trackId"
+    :track-completed="track.status === 'completed'"
+  />
 </template>
 
 <style scoped>
