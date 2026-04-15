@@ -189,10 +189,10 @@ function filterIssuesForDisplayedSourceVersion(list: Issue[]): Issue[] {
 }
 const fallbackWaveformIssues = computed(() => filterIssuesForDisplayedSourceVersion(fallbackStepIssues.value))
 const masteringWaveformPhases = ['mastering', 'final_review']
-const masteringWaveformStepIssues = computed(() =>
+const masteringWaveformIssues = computed(() =>
   issues.value.filter(i => masteringWaveformPhases.includes(i.phase)),
 )
-const waveformIssues = computed(() => filterIssuesForDisplayedSourceVersion(masteringWaveformStepIssues.value))
+const waveformIssues = computed(() => filterIssuesForDisplayedSourceVersion(masteringWaveformIssues.value))
 
 // Review assignments
 const currentStep = computed(() => track.value?.workflow_step ?? null)
