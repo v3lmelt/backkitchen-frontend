@@ -968,12 +968,14 @@ const finalReviewActions = computed<WorkflowAction[]>(() => {
     disabled: acting.value,
     handler: () => executeTransition(tr.decision),
     }))
-  actions.unshift({
-    label: t('finalReview.approveMaster'),
-    type: 'advance',
-    disabled: acting.value || !canApproveFinal.value,
-    handler: approveFinal,
-  })
+  if (canApproveFinal.value) {
+    actions.unshift({
+      label: t('finalReview.approveMaster'),
+      type: 'advance',
+      disabled: acting.value,
+      handler: approveFinal,
+    })
+  }
   return actions
 })
 
