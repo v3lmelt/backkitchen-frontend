@@ -15,11 +15,13 @@ import { formatTimestamp, formatTimestampShort, formatLocaleDate, formatDuration
 import type { MarkerIndexReference, TimeReference, TimestampTarget } from '@/utils/timestamps'
 import { ArrowDownUp, ChevronLeft, ChevronRight, Music, Pencil, Trash2 } from 'lucide-vue-next'
 import { canUserReviewIssue } from '@/utils/reviewAssignments'
+import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
 const router = useRouter()
 const { t, locale } = useI18n()
 const appStore = useAppStore()
+const { success: toastSuccess } = useToast()
 const issueId = computed(() => Number(route.params.id))
 
 const issue = ref<Issue | null>(null)
@@ -314,6 +316,7 @@ async function saveEditComment(comment: Comment) {
     const idx = issue.value.comments.findIndex(c => c.id === comment.id)
     if (idx !== -1) issue.value.comments[idx] = updated
     editingCommentId.value = null
+    toastSuccess(t('issueDetail.commentUpdated'))
   } catch { /* handled by request wrapper */ }
 }
 
@@ -322,6 +325,7 @@ async function deleteComment(comment: Comment) {
   try {
     await commentApi.delete(comment.id)
     issue.value.comments = issue.value.comments.filter(c => c.id !== comment.id)
+    toastSuccess(t('issueDetail.commentDeleted'))
   } catch { /* handled by request wrapper */ }
 }
 

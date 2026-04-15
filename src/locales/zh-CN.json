@@ -396,6 +396,8 @@
     "deliveryPendingConfirmation": "已上传，等待母带师最终确认。",
     "deliveryConfirmed": "已由母带师确认提交。",
     "deliveryUploaded": "交付物已上传",
+    "revisionUploaded": "修订版已上传",
+    "finalApproved": "最终审核已通过",
     "currentAudio": "当前音频",
     "issuesToAddress": "待解决问题 ({count})",
     "sourceAudio": "源音频",
@@ -823,7 +825,9 @@
     "outdatedWaveformHint": "当前波形已切换到问题所属的旧版本音频，并显示该问题标记。",
     "outdatedWaveformUnavailable": "无法加载该问题所属的旧版本音频，因此这里不显示问题标记。",
     "commentsEmptyHint": "暂无评论，率先发表看法吧。",
-    "keyboardHint": "空格 播放/暂停 · ←/→ 快退/快进 5s · J/K 上/下一问题"
+    "keyboardHint": "空格 播放/暂停 · ←/→ 快退/快进 5s · J/K 上/下一问题",
+    "commentUpdated": "评论已更新。",
+    "commentDeleted": "评论已删除。"
   },
   "upload": {
     "heading": "提交曲目",
@@ -887,6 +891,8 @@
     "cancelInvitation": "取消",
     "invitationSent": "邀请已发送。",
     "invitationCancelled": "邀请已取消。",
+    "teamSaved": "团队配置已保存。",
+    "memberAdded": "成员已添加。",
     "inviteErrorAlreadyMember": "用户已是成员。",
     "inviteErrorAlreadyInvited": "用户已有待处理的邀请。",
     "checklistTemplate": "审核清单模板",
@@ -986,6 +992,8 @@
     "preferences": "偏好设置",
     "preferencesDesc": "个性化你的使用体验",
     "preferencesComingSoon": "更多偏好设置即将推出。",
+    "avatarUpdated": "头像已更新。",
+    "avatarRemoved": "头像已移除。",
     "avatarError": "头像上传失败，请重试。",
     "danger": {
       "title": "危险区域",
@@ -1280,6 +1288,8 @@
     "expires": "到期",
     "revoke": "撤销",
     "noInvites": "暂无邀请码",
+    "inviteCodeCreated": "邀请码已生成",
+    "inviteCodeRevoked": "邀请码已撤销",
     "codeCopied": "邀请码已复制",
     "danger": {
       "title": "危险区域",
