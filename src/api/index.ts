@@ -453,6 +453,8 @@ export const trackApi = {
   confirmDelivery: (trackId: number, deliveryId: number) =>
     request<Track>(`/tracks/${trackId}/master-deliveries/${deliveryId}/confirm`, { method: 'POST' }),
   // Track reopen
+  previewReopen: (trackId: number, targetStageId: string) =>
+    request<{ resets: string[] }>(`/tracks/${trackId}/reopen-preview?target_stage_id=${encodeURIComponent(targetStageId)}`),
   requestReopen: (trackId: number, targetStageId: string, reason: string, masteringNotes?: string) =>
     request<ReopenRequest>(`/tracks/${trackId}/reopen-request`, {
       method: 'POST',

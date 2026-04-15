@@ -593,6 +593,8 @@ const reopenTargetStage = ref('')
 const reopenReason = ref('')
 const reopenMasteringNotes = ref('')
 const reopening = ref(false)
+const reopenResets = ref<string[]>([])
+const loadingResets = ref(false)
 
 const reopenTargetIsMastering = computed(() => {
   const id = reopenTargetStage.value
@@ -621,6 +623,29 @@ function reopenStageOptionLabel(step: WorkflowStepDef): string {
   return base
 }
 
+function reopenResetLabel(reset: string): string {
+  if (reset.startsWith('stage_assignments:')) {
+    const stages = reset.slice('stage_assignments:'.length)
+    return t('trackDetail.reopenResets.stageAssignments', { stages })
+  }
+  const key = `trackDetail.reopenResets.${reset}`
+  return t(key)
+}
+
+watch(reopenTargetStage, async (stageId) => {
+  reopenResets.value = []
+  if (!stageId || !track.value) return
+  loadingResets.value = true
+  try {
+    const res = await trackApi.previewReopen(track.value.id, stageId)
+    reopenResets.value = res.resets
+  } catch {
+    reopenResets.value = []
+  } finally {
+    loadingResets.value = false
+  }
+})
+
 async function handleReopen() {
   if (!track.value || !reopenTargetStage.value) return
   reopening.value = true
@@ -634,6 +659,7 @@ async function handleReopen() {
     reopenTargetStage.value = ''
     reopenReason.value = ''
     reopenMasteringNotes.value = ''
+    reopenResets.value = []
     await loadTrack()
   } finally {
     reopening.value = false
@@ -1066,6 +1092,14 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
               <label class="text-xs text-muted-foreground mb-1 block">{{ t('trackDetail.reopenMasteringNotesLabel') }}</label>
               <textarea v-model="reopenMasteringNotes" class="textarea-field w-full text-sm h-20" :placeholder="t('trackDetail.reopenMasteringNotesPlaceholder')" />
               <p class="text-xs text-muted-foreground">{{ t('trackDetail.reopenMasteringNotesHint') }}</p>
+            </div>
+            <!-- Reset warnings -->
+            <div v-if="loadingResets" class="text-xs text-muted-foreground">{{ t('common.loading') }}</div>
+            <div v-else-if="reopenResets.length > 0" class="bg-warning-bg border border-warning/20 p-3 space-y-1.5">
+              <p class="text-xs font-mono font-semibold text-warning">{{ t('trackDetail.reopenResetsTitle') }}</p>
+              <ul class="text-xs text-warning/80 space-y-0.5 list-disc list-inside">
+                <li v-for="reset in reopenResets" :key="reset">{{ reopenResetLabel(reset) }}</li>
+              </ul>
             </div>
             <div class="flex gap-2">
               <button

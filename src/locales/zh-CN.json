@@ -633,6 +633,12 @@
       "mastering": "{stage}（重新做母带）",
       "mastering_revision": "{stage}（先改源文件再重新做母带）"
     },
+    "reopenResetsTitle": "以下状态将被重置",
+    "reopenResets": {
+      "stageAssignments": "评审分配（{stages}）",
+      "checklist_items": "审核清单",
+      "master_delivery_approvals": "终审批准状态"
+    },
     "confirmDelivery": "确认提交",
     "reupload": "重新上传",
     "deliveryPreview": "请试听并确认上传的母带文件",

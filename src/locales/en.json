@@ -633,6 +633,12 @@
       "mastering": "{stage} (remaster current delivery)",
       "mastering_revision": "{stage} (revise source first, then remaster)"
     },
+    "reopenResetsTitle": "The following states will be reset",
+    "reopenResets": {
+      "stageAssignments": "Review assignments ({stages})",
+      "checklist_items": "Review checklists",
+      "master_delivery_approvals": "Final review approval status"
+    },
     "confirmDelivery": "Confirm Delivery",
     "reupload": "Re-upload",
     "deliveryPreview": "Preview and confirm the uploaded master file",
