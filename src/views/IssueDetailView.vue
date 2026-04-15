@@ -14,7 +14,7 @@ import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
 import { formatTimestamp, formatTimestampShort, formatLocaleDate, formatDuration } from '@/utils/time'
 import type { MarkerIndexReference, TimeReference, TimestampTarget } from '@/utils/timestamps'
 import { ArrowDownUp, ChevronLeft, ChevronRight, Music, Pencil, Trash2 } from 'lucide-vue-next'
-import { canUserReviewIssue } from '@/utils/reviewAssignments'
+import { canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
 import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
@@ -97,11 +97,14 @@ watch(issueId, () => {
 watch(audioUrl, (url) => { prevAudioUrl = url })
 const pendingStatus = ref<IssueStatus | null>(null)
 
-const isSubmitter = computed(() => appStore.currentUser?.id === cachedTrack.value?.submitter_id)
-
-const isReviewer = computed(() => {
+const canSubmitIssueStatus = computed(() => {
   return issue.value != null
-    && canUserReviewIssue(appStore.currentUser?.id, cachedTrack.value, issue.value, reviewAssignments.value)
+    && canUserSubmitIssueStatus(appStore.currentUser?.id, cachedTrack.value, issue.value)
+})
+
+const canChangeIssueStatus = computed(() => {
+  return issue.value != null
+    && canUserChangeIssueStatus(appStore.currentUser?.id, cachedTrack.value, issue.value, reviewAssignments.value)
 })
 
 const shouldHideInternalComments = computed(() =>
@@ -351,12 +354,12 @@ function selectStatus(status: IssueStatus) {
 }
 
 function availableStatusActions(currentStatus: IssueStatus): IssueStatus[] {
-  if (isSubmitter.value) {
+  if (canSubmitIssueStatus.value) {
     if (currentStatus === 'open') return ['resolved', 'disagreed']
     return []
   }
 
-  if (!isReviewer.value) return []
+  if (!canChangeIssueStatus.value) return []
   if (currentStatus === 'open') return ['resolved', 'pending_discussion']
   if (currentStatus === 'pending_discussion') return ['open', 'internal_resolved']
   if (currentStatus === 'internal_resolved') return ['open']

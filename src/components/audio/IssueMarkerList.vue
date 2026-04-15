@@ -6,7 +6,7 @@ import type { Issue, IssueStatus, StageAssignment, Track } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatLocaleDate, formatTimestampShort } from '@/utils/time'
 import { hashId } from '@/utils/hash'
-import { canUserReviewIssue } from '@/utils/reviewAssignments'
+import { canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
 
 const props = withDefaults(defineProps<{
   issues: Issue[]
@@ -80,22 +80,22 @@ function formatUpdatedAt(value: string): string {
   return formatLocaleDate(value, locale.value)
 }
 
-function isSubmitter(): boolean {
-  return !!props.track && appStore.currentUser?.id === props.track.submitter_id
+function canSubmitIssueStatus(issue: Issue): boolean {
+  return canUserSubmitIssueStatus(appStore.currentUser?.id, props.track, issue)
 }
 
-function isReviewer(issue: Issue): boolean {
-  return canUserReviewIssue(appStore.currentUser?.id, props.track, issue, props.assignments)
+function canChangeIssueStatus(issue: Issue): boolean {
+  return canUserChangeIssueStatus(appStore.currentUser?.id, props.track, issue, props.assignments)
 }
 
 function availableQuickActions(issue: Issue): IssueStatus[] {
   if (!props.enableQuickActions || !props.track) return []
-  if (isSubmitter() && issue.status === 'open') return ['resolved', 'disagreed']
-  if (isReviewer(issue) && issue.status === 'open') return ['resolved', 'pending_discussion']
-  if (isReviewer(issue) && issue.status === 'pending_discussion') return ['open', 'internal_resolved']
-  if (isReviewer(issue) && issue.status === 'internal_resolved') return ['open']
-  if (isReviewer(issue) && issue.status === 'resolved') return ['open']
-  if (isReviewer(issue) && issue.status === 'disagreed') return ['open']
+  if (canSubmitIssueStatus(issue) && issue.status === 'open') return ['resolved', 'disagreed']
+  if (canChangeIssueStatus(issue) && issue.status === 'open') return ['resolved', 'pending_discussion']
+  if (canChangeIssueStatus(issue) && issue.status === 'pending_discussion') return ['open', 'internal_resolved']
+  if (canChangeIssueStatus(issue) && issue.status === 'internal_resolved') return ['open']
+  if (canChangeIssueStatus(issue) && issue.status === 'resolved') return ['open']
+  if (canChangeIssueStatus(issue) && issue.status === 'disagreed') return ['open']
   return []
 }
 

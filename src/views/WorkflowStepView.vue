@@ -39,7 +39,7 @@ import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { translateStepLabel } from '@/utils/workflow'
 import { hashId } from '@/utils/hash'
 import { extractAudioDuration } from '@/utils/audio'
-import { activeAssignmentsForStep, canUserReviewIssue } from '@/utils/reviewAssignments'
+import { activeAssignmentsForStep, canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
 
 const route = useRoute()
 const router = useRouter()
@@ -590,21 +590,21 @@ async function onQuickIssueStatusChange({ issue, status }: { issue: Issue; statu
   }
 }
 
-function canCurrentUserReviewIssue(issue: Issue): boolean {
-  return canUserReviewIssue(appStore.currentUser?.id, track.value, issue, reviewAssignments.value)
+function canCurrentUserChangeIssueStatus(issue: Issue): boolean {
+  return canUserChangeIssueStatus(appStore.currentUser?.id, track.value, issue, reviewAssignments.value)
 }
 
-function canCurrentUserSubmitIssue(issue: Issue): boolean {
-  return Boolean(track.value && appStore.currentUser?.id === track.value.submitter_id && ['open', 'disagreed'].includes(issue.status))
+function canCurrentUserSubmitIssueStatus(issue: Issue): boolean {
+  return canUserSubmitIssueStatus(appStore.currentUser?.id, track.value, issue)
 }
 
 function availableBatchActionsForIssue(issue: Issue): Issue['status'][] {
-  if (canCurrentUserSubmitIssue(issue) && issue.status === 'open') return ['resolved', 'disagreed']
-  if (canCurrentUserReviewIssue(issue) && issue.status === 'open') return ['resolved', 'pending_discussion']
-  if (canCurrentUserReviewIssue(issue) && issue.status === 'pending_discussion') return ['open', 'internal_resolved']
-  if (canCurrentUserReviewIssue(issue) && issue.status === 'internal_resolved') return ['open']
-  if (canCurrentUserReviewIssue(issue) && issue.status === 'resolved') return ['open']
-  if (canCurrentUserReviewIssue(issue) && issue.status === 'disagreed') return ['open']
+  if (canCurrentUserSubmitIssueStatus(issue) && issue.status === 'open') return ['resolved', 'disagreed']
+  if (canCurrentUserChangeIssueStatus(issue) && issue.status === 'open') return ['resolved', 'pending_discussion']
+  if (canCurrentUserChangeIssueStatus(issue) && issue.status === 'pending_discussion') return ['open', 'internal_resolved']
+  if (canCurrentUserChangeIssueStatus(issue) && issue.status === 'internal_resolved') return ['open']
+  if (canCurrentUserChangeIssueStatus(issue) && issue.status === 'resolved') return ['open']
+  if (canCurrentUserChangeIssueStatus(issue) && issue.status === 'disagreed') return ['open']
   return []
 }
 
