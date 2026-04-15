@@ -1083,6 +1083,7 @@ function saveConfig() {
               />
               <span>{{ t('workflowEditor.allowPermanentReject') }}</span>
             </label>
+            <p class="text-xs text-muted-foreground mt-1">{{ t('workflowEditor.permanentRejectHint') }}</p>
           </div>
 
           <div v-if="selectedStage.kind === 'intake'" class="border border-border bg-background rounded-none p-4 space-y-3">
