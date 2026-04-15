@@ -12,7 +12,7 @@ import { formatTimestamp, formatDuration, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import type { TimeReference, TimestampTarget } from '@/utils/timestamps'
 import { ArrowDownUp, X, Music, Pencil, Trash2 } from 'lucide-vue-next'
-import { canUserReviewIssue } from '@/utils/reviewAssignments'
+import { canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
 
 const props = defineProps<{
   issue: Issue | null
@@ -33,20 +33,23 @@ const loading = ref(false)
 const pendingStatus = ref<IssueStatus | null>(null)
 const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
 
-const isSubmitter = computed(() => appStore.currentUser?.id === props.track?.submitter_id)
-
-const isReviewer = computed(() => {
+const canSubmitIssueStatus = computed(() => {
   return fullIssue.value != null
-    && canUserReviewIssue(appStore.currentUser?.id, props.track, fullIssue.value, props.assignments ?? [])
+    && canUserSubmitIssueStatus(appStore.currentUser?.id, props.track, fullIssue.value)
+})
+
+const canChangeIssueStatus = computed(() => {
+  return fullIssue.value != null
+    && canUserChangeIssueStatus(appStore.currentUser?.id, props.track, fullIssue.value, props.assignments ?? [])
 })
 
 function availableStatusActions(currentStatus: IssueStatus): IssueStatus[] {
-  if (isSubmitter.value) {
+  if (canSubmitIssueStatus.value) {
     if (currentStatus === 'open') return ['resolved', 'disagreed']
     return []
   }
 
-  if (!isReviewer.value) return []
+  if (!canChangeIssueStatus.value) return []
   if (currentStatus === 'open') return ['resolved', 'pending_discussion']
   if (currentStatus === 'pending_discussion') return ['open', 'internal_resolved']
   if (currentStatus === 'internal_resolved') return ['open']

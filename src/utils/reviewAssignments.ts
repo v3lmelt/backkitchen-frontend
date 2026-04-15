@@ -51,6 +51,18 @@ export function reviewerIdsForIssue(
   return reviewerIdsForPhase(track, issue.phase, assignments)
 }
 
+export function statusHandlerIdsForIssue(
+  track: Track | null | undefined,
+  issue: Issue,
+  assignments: StageAssignment[] = [],
+): number[] {
+  if (!track) return []
+  if (issue.phase === 'final_review') {
+    return track.mastering_engineer_id != null ? [track.mastering_engineer_id] : []
+  }
+  return reviewerIdsForIssue(track, issue, assignments)
+}
+
 export function canUserReviewIssue(
   userId: number | null | undefined,
   track: Track | null | undefined,
@@ -60,4 +72,24 @@ export function canUserReviewIssue(
   if (!userId || !track) return false
   if (userId === issue.author_id) return true
   return reviewerIdsForIssue(track, issue, assignments).includes(userId)
+}
+
+export function canUserChangeIssueStatus(
+  userId: number | null | undefined,
+  track: Track | null | undefined,
+  issue: Issue,
+  assignments: StageAssignment[] = [],
+): boolean {
+  if (!userId || !track) return false
+  if (issue.phase !== 'final_review' && userId === issue.author_id) return true
+  return statusHandlerIdsForIssue(track, issue, assignments).includes(userId)
+}
+
+export function canUserSubmitIssueStatus(
+  userId: number | null | undefined,
+  track: Track | null | undefined,
+  issue: Issue,
+): boolean {
+  if (!userId || !track) return false
+  return issue.phase !== 'final_review' && userId === track.submitter_id
 }
