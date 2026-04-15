@@ -429,8 +429,8 @@
     "clearSelectedDelivery": "取消选择",
     "deliveryUploaded": "母带交付物已上传",
     "currentDelivery": "当前交付物",
-    "deliveryPendingConfirmation": "待制作人确认",
-    "deliveryConfirmed": "已确认",
+    "deliveryPendingConfirmation": "待母带师确认提交",
+    "deliveryConfirmed": "母带师已确认提交",
     "masterVersionHistory": "母带版本历史",
     "leaveUploadConfirm": "当前已选择待上传文件，离开后需要重新选择。确认离开吗？"
   },
@@ -705,6 +705,7 @@
     "heading": "母带制作：{title}",
     "subheading": "检查当前源音频，必要时请求作者修订，然后上传母带交付物。",
     "waveformHint": "默认只移动播放头，切到「标注」模式后点击或拖选以添加母带问题。",
+    "listenOnlyHint": "此处仅供审听源音频。如需标注问题，请切换到「问题反馈」标签。",
     "issuesHeading": "母带问题 ({count})",
     "actionsHeading": "母带操作",
     "requestRevision": "请求源版本修订",

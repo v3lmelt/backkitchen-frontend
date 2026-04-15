@@ -733,7 +733,7 @@ watch(olderMasterDeliveries, (deliveries) => {
       <!-- Source audio -->
       <div v-if="audioUrl" class="space-y-4">
         <div class="flex items-start justify-between gap-3">
-          <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.waveformHint') }}</h3>
+          <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.listenOnlyHint') }}</h3>
           <div class="flex items-center gap-2 shrink-0">
             <button
               v-if="olderSourceVersions.length > 0"

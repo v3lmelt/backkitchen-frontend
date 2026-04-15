@@ -129,13 +129,13 @@ const STAGE_META: Record<StageKind, StageMeta> = {
     default_role: 'producer',
     ui_variant: 'final_review',
     default_label_key: 'workflowEditor.stageKinds.final_review.name',
-    supports_revision: true,
+    supports_revision: false,
     supports_assignee_override: true,
     supports_review_settings: false,
     supports_permanent_reject: false,
     supports_reject_targets: true,
     supports_confirmation: false,
-    default_has_revision: true,
+    default_has_revision: false,
     default_allow_permanent_reject: false,
     default_require_confirmation: false,
     default_revision_assignee_role: 'mastering_engineer',
@@ -253,7 +253,7 @@ function parseConfigToStages(config: WorkflowConfig | null): EditorStage[] {
       required_reviewer_count: step.required_reviewer_count ?? 1,
       allow_permanent_reject: step.allow_permanent_reject ?? meta.default_allow_permanent_reject,
       require_confirmation: step.require_confirmation ?? meta.default_require_confirmation,
-      has_revision: !!revisionTarget,
+      has_revision: meta.supports_revision && !!revisionTarget,
       revision_id: revisionTarget?.id ?? `${step.id}_revision`,
       revision_label: revisionTarget?.label ?? revisionLabel(step.label),
       revision_assignee_role: revisionTarget?.assignee_role ?? meta.default_revision_assignee_role,
@@ -367,6 +367,13 @@ const fullConfig = computed<WorkflowConfig>(() => {
       for (const targetStageId of stage.extra_reject_targets) {
         transitions[`reject_to_${targetStageId}`] = targetStageId
       }
+      // final_review without revision: auto-add reject_to_mastering if a mastering stage exists
+      if (stage.kind === 'final_review' && !stage.has_revision && stage.extra_reject_targets.length === 0) {
+        const masteringStage = stages.value.slice(0, index).findLast(s => s.kind === 'mastering')
+        if (masteringStage) {
+          transitions[`reject_to_${masteringStage.id}`] = masteringStage.id
+        }
+      }
       if (stage.allow_permanent_reject) {
         transitions.reject_final = '__rejected'
         transitions.reject_resubmittable = '__rejected_resubmittable'
@@ -404,6 +411,9 @@ const fullConfig = computed<WorkflowConfig>(() => {
       step.allow_permanent_reject = stage.allow_permanent_reject
       if (meta.supports_assignee_override && stage.assignee_user_id !== null) {
         step.assignee_user_id = stage.assignee_user_id
+      }
+      if (stage.kind === 'final_review') {
+        step.actor_roles = ['submitter']
       }
     }
 
@@ -650,6 +660,13 @@ watch(
 
 function addStage(kind: StageKind) {
   const stage = createStage(kind, stages.value.map(item => item.id))
+  // Auto-add mastering as reject target for final_review (since it has no revision step)
+  if (kind === 'final_review') {
+    const masteringStage = stages.value.findLast(s => s.kind === 'mastering')
+    if (masteringStage) {
+      stage.extra_reject_targets = [masteringStage.id]
+    }
+  }
   stages.value.push(stage)
   selectedStageId.value = stage.id
   addingStage.value = false
@@ -742,7 +759,13 @@ function updateSelectedKind(kind: StageKind) {
   stage.has_revision = meta.default_has_revision
   stage.revision_label = revisionLabel(stage.label)
   stage.revision_assignee_role = meta.default_revision_assignee_role
-  stage.extra_reject_targets = []
+  // Auto-add mastering as reject target for final_review
+  if (kind === 'final_review') {
+    const masteringStage = stages.value.findLast(s => s.kind === 'mastering' && s.id !== stage.id)
+    stage.extra_reject_targets = masteringStage ? [masteringStage.id] : []
+  } else {
+    stage.extra_reject_targets = []
+  }
   markChanged()
 }
 

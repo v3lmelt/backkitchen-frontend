@@ -429,8 +429,8 @@
     "clearSelectedDelivery": "Clear Selection",
     "deliveryUploaded": "Mastering delivery uploaded",
     "currentDelivery": "Current Delivery",
-    "deliveryPendingConfirmation": "Pending Producer Confirmation",
-    "deliveryConfirmed": "Confirmed",
+    "deliveryPendingConfirmation": "Pending engineer confirmation",
+    "deliveryConfirmed": "Confirmed by engineer",
     "masterVersionHistory": "Master Delivery History",
     "leaveUploadConfirm": "A file is selected for upload. If you leave now, you'll need to choose it again. Leave this page?"
   },
@@ -705,6 +705,7 @@
     "heading": "Mastering: {title}",
     "subheading": "Check the current source audio, request a source revision when needed, then upload the mastered delivery.",
     "waveformHint": "Clicks only move the play head. Switch to Annotate mode to add mastering issues.",
+    "listenOnlyHint": "Listen-only preview of the source audio. Switch to the Issues tab to annotate.",
     "issuesHeading": "Mastering Issues ({count})",
     "actionsHeading": "Mastering Actions",
     "requestRevision": "Request Source Revision",
