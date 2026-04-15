@@ -706,9 +706,10 @@
   "mastering": {
     "heading": "Mastering: {title}",
     "subheading": "Check the current source audio, request a source revision when needed, then upload the mastered delivery.",
-    "waveformHint": "Clicks only move the play head. Switch to Annotate mode to add mastering issues.",
+    "waveformHint": "Annotating the pre-mastering source audio. Clicks move the play head; switch to Annotate mode to mark issues. Request a revision to have the author fix the source.",
     "listenOnlyHint": "Listen-only preview of the source audio. Switch to the Issues tab to annotate.",
-    "issuesHeading": "Mastering Issues ({count})",
+    "issuesHeading": "Source Issues ({count})",
+    "finalReviewIssuesHeading": "Final Review Issues ({count})",
     "actionsHeading": "Mastering Actions",
     "requestRevision": "Request Source Revision",
     "uploadReady": "Upload mastered delivery when ready.",
@@ -781,7 +782,7 @@
   "finalReview": {
     "heading": "Final Review: {title}",
     "subheading": "Producer and submitter both need to approve the current master delivery.",
-    "waveformHint": "Clicks only move the play head. Switch to Annotate mode to add final-review issues.",
+    "waveformHint": "Annotating the master delivery audio. Clicks move the play head; switch to Annotate mode to add final-review issues.",
     "issuesHeading": "Final Review Issues ({count})",
     "approvalStatus": "Approval Status",
     "producer": "Producer",

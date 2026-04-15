@@ -706,9 +706,10 @@
   "mastering": {
     "heading": "母带制作：{title}",
     "subheading": "检查当前源音频，必要时请求作者修订，然后上传母带交付物。",
-    "waveformHint": "默认只移动播放头，切到「标注」模式后点击或拖选以添加母带问题。",
+    "waveformHint": "此处标注的是母带前源音频。默认只移动播放头，切到「标注」模式后点击或拖选。如需修改源文件，请打回给曲师修订。",
     "listenOnlyHint": "此处仅供审听源音频。如需标注问题，请切换到「问题反馈」标签。",
-    "issuesHeading": "母带问题 ({count})",
+    "issuesHeading": "源文件问题 ({count})",
+    "finalReviewIssuesHeading": "终审问题 ({count})",
     "actionsHeading": "母带操作",
     "requestRevision": "请求源版本修订",
     "uploadReady": "准备好后上传母带交付物。",
@@ -781,7 +782,7 @@
   "finalReview": {
     "heading": "终审：{title}",
     "subheading": "制作人与提交者须共同批准当前母带交付物。",
-    "waveformHint": "默认只移动播放头，切到「标注」模式后点击或拖选以添加终审问题。",
+    "waveformHint": "当前标注的是母带交付音频。默认只移动播放头，切到「标注」模式后点击或拖选以添加终审问题。",
     "issuesHeading": "终审问题 ({count})",
     "approvalStatus": "批准状态",
     "producer": "制作人",

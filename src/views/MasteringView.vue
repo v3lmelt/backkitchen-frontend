@@ -179,7 +179,7 @@ const displayedSourceVersionNumber = computed(() =>
 
 // Issues
 const fallbackStepIssues = computed(() => {
-  const fallbackPhases = ['peer', 'producer', 'mastering', 'final_review']
+  const fallbackPhases = ['peer', 'producer', 'mastering']
   return issues.value.filter(i => fallbackPhases.includes(i.phase))
 })
 function filterIssuesForDisplayedSourceVersion(list: Issue[]): Issue[] {
@@ -188,11 +188,15 @@ function filterIssuesForDisplayedSourceVersion(list: Issue[]): Issue[] {
   return list.filter(issue => issue.source_version_number == null || issue.source_version_number === version)
 }
 const fallbackWaveformIssues = computed(() => filterIssuesForDisplayedSourceVersion(fallbackStepIssues.value))
-const masteringWaveformPhases = ['mastering', 'final_review']
 const masteringWaveformIssues = computed(() =>
-  issues.value.filter(i => masteringWaveformPhases.includes(i.phase)),
+  issues.value.filter(i => i.phase === 'mastering'),
 )
 const waveformIssues = computed(() => filterIssuesForDisplayedSourceVersion(masteringWaveformIssues.value))
+const finalReviewIssues = computed(() => {
+  const deliveryId = track.value?.current_master_delivery?.id ?? null
+  if (!deliveryId) return []
+  return issues.value.filter(i => i.phase === 'final_review' && i.master_delivery_id === deliveryId)
+})
 
 // Review assignments
 const currentStep = computed(() => track.value?.workflow_step ?? null)
@@ -812,7 +816,17 @@ watch(olderMasterDeliveries, (deliveries) => {
             {{ t('compare.clear') }}
           </button>
         </div>
-        <WaveformPlayer :audio-url="masterAudioUrl" :issues="[]" :track-id="trackId" playback-scope="master" :compare-audio-url="selectedCompareMasterAudioUrl" />
+        <WaveformPlayer :audio-url="masterAudioUrl" :issues="finalReviewIssues" :track-id="trackId" playback-scope="master" :compare-audio-url="selectedCompareMasterAudioUrl" />
+        <div v-if="finalReviewIssues.length > 0" class="mt-3">
+          <h4 class="text-sm font-mono font-semibold text-foreground mb-2">{{ t('mastering.finalReviewIssuesHeading', { count: finalReviewIssues.length }) }}</h4>
+          <IssueMarkerList
+            :issues="finalReviewIssues"
+            :hovered-issue-id="hoveredIssueId"
+            @select="onIssueSelect"
+            @hover="handleIssueHover"
+            @leave="handleIssueLeave"
+          />
+        </div>
       </div>
     </template>
 
