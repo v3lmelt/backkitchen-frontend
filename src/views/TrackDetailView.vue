@@ -303,6 +303,13 @@ const masterWaveformIssues = computed(() => {
   if (!deliveryId) return []
   return currentCycleIssues.value.filter(issue => issue.phase === 'final_review' && issue.master_delivery_id === deliveryId)
 })
+const currentIssueList = computed(() => {
+  const deliveryId = track.value?.current_master_delivery?.id
+  return currentCycleIssues.value.filter(issue => {
+    if (issue.phase === 'final_review') return deliveryId != null && issue.master_delivery_id === deliveryId
+    return true
+  })
+})
 
 // Multi-reviewer: filter assignments to current review step
 const currentStepAssignments = computed(() => {
@@ -815,14 +822,14 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
                 {{ masterDownloading ? `${masterDownloadProgress}%` : t('common.downloadAudio') }}
               </button>
             </div>
-            <WaveformPlayer :audio-url="masterAudioUrl" :issues="masterWaveformIssues" :track-id="trackId" playback-scope="master" />
+            <WaveformPlayer :audio-url="masterAudioUrl" :issues="masterWaveformIssues" :track-id="trackId" playback-scope="master" @regionClick="onIssueSelect" />
           </div>
 
           <div id="issues">
             <h3 class="text-sm font-sans font-semibold text-foreground mb-3">
-              {{ t('trackDetail.issuesHeading', { count: currentCycleIssues.length }) }}
+              {{ t('trackDetail.issuesHeading', { count: currentIssueList.length }) }}
             </h3>
-            <IssueMarkerList :issues="currentCycleIssues" :current-source-version-number="track.version" @select="onIssueSelect" />
+            <IssueMarkerList :issues="currentIssueList" :current-source-version-number="track.version" @select="onIssueSelect" />
           </div>
 
           <!-- General Discussions -->
