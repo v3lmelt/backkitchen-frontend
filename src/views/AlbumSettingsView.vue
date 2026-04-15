@@ -424,6 +424,7 @@ async function saveTeam() {
     const updated = await albumApi.updateTeam(album.value.id, teamState)
     album.value = updated
     syncTeamState()
+    toastSuccess(t('settings.teamSaved'))
   } finally {
     savingTeam.value = false
   }
@@ -473,6 +474,7 @@ async function addMemberToAlbum() {
     album.value = updated
     syncTeamState()
     addMemberUserId.value = null
+    toastSuccess(t('settings.memberAdded'))
   } catch (e: any) {
     toastError(e.message || t('common.requestFailed'))
   } finally {
@@ -505,6 +507,7 @@ async function inviteMember() {
 async function cancelInvitation(invitationId: number) {
   await invitationApi.cancel(invitationId)
   invitations.value = invitations.value.filter(inv => inv.id !== invitationId)
+  toastSuccess(t('settings.invitationCancelled'))
 }
 
 function getUserDisplayName(userId: number): string {

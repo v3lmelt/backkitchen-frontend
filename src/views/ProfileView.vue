@@ -5,11 +5,13 @@ import { useI18n } from 'vue-i18n'
 import { Camera, Trash2 } from 'lucide-vue-next'
 import { authApi } from '@/api'
 import { useAppStore } from '@/stores/app'
+import { useToast } from '@/composables/useToast'
 import { parseUTC } from '@/utils/time'
 
 const { t, locale } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
+const { success: toastSuccess } = useToast()
 
 // Account deletion state
 const showDeleteConfirm = ref(false)
@@ -66,6 +68,7 @@ async function handleAvatarChange(e: Event) {
   try {
     const updated = await authApi.uploadAvatar(file)
     appStore.setAuth(updated, appStore.token!)
+    toastSuccess(t('profile.avatarUpdated'))
   } catch (err: any) {
     avatarError.value = err.message || t('profile.avatarError')
   } finally {
@@ -80,6 +83,7 @@ async function removeAvatar() {
   try {
     const updated = await authApi.deleteAvatar()
     appStore.setAuth(updated, appStore.token!)
+    toastSuccess(t('profile.avatarRemoved'))
   } catch (err: any) {
     avatarError.value = err.message || t('profile.avatarError')
   } finally {

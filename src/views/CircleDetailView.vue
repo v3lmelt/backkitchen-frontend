@@ -487,6 +487,7 @@ async function createInviteCode() {
       expires_in_days: newCodeDays.value,
     })
     inviteCodes.value.unshift(code)
+    toast.success(t('circleDetail.inviteCodeCreated'))
   } catch (e: any) {
     toast.error(e.message)
   } finally {
@@ -500,6 +501,7 @@ async function revokeCode(codeId: number) {
     await circleApi.revokeInviteCode(circle.value.id, codeId)
     const item = inviteCodes.value.find(c => c.id === codeId)
     if (item) item.is_active = false
+    toast.success(t('circleDetail.inviteCodeRevoked'))
   } catch (e: any) {
     toast.error(e.message)
   }

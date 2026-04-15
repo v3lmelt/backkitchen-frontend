@@ -396,6 +396,8 @@
     "deliveryPendingConfirmation": "Uploaded and waiting for the mastering engineer's final confirmation.",
     "deliveryConfirmed": "Confirmed by the mastering engineer.",
     "deliveryUploaded": "Delivery uploaded",
+    "revisionUploaded": "Revision uploaded",
+    "finalApproved": "Final review approved",
     "currentAudio": "Current Audio",
     "issuesToAddress": "Issues to Address ({count})",
     "sourceAudio": "Source Audio",
@@ -824,7 +826,9 @@
     "outdatedWaveformHint": "The waveform is now playing the source-version audio where this issue was originally raised, with the marker restored.",
     "outdatedWaveformUnavailable": "The source-version audio for this issue is unavailable, so the marker is hidden here.",
     "commentsEmptyHint": "No comments yet — be the first to leave a note.",
-    "keyboardHint": "Space play/pause · ←/→ seek ±5s · J/K prev/next issue"
+    "keyboardHint": "Space play/pause · ←/→ seek ±5s · J/K prev/next issue",
+    "commentUpdated": "Comment updated.",
+    "commentDeleted": "Comment deleted."
   },
   "upload": {
     "heading": "Submit Track",
@@ -888,6 +892,8 @@
     "cancelInvitation": "Cancel",
     "invitationSent": "Invitation sent.",
     "invitationCancelled": "Invitation cancelled.",
+    "teamSaved": "Team configuration saved.",
+    "memberAdded": "Member added.",
     "inviteErrorAlreadyMember": "User is already a member.",
     "inviteErrorAlreadyInvited": "User already has a pending invitation.",
     "checklistTemplate": "Review Checklist Template",
@@ -1232,6 +1238,8 @@
     "expires": "Expires",
     "revoke": "Revoke",
     "noInvites": "No invite codes yet",
+    "inviteCodeCreated": "Invite code created",
+    "inviteCodeRevoked": "Invite code revoked",
     "codeCopied": "Code copied",
     "danger": {
       "title": "Danger Zone",
@@ -1296,6 +1304,8 @@
     "preferences": "Preferences",
     "preferencesDesc": "Customize your experience",
     "preferencesComingSoon": "More preferences coming soon.",
+    "avatarUpdated": "Avatar updated.",
+    "avatarRemoved": "Avatar removed.",
     "avatarError": "Failed to upload avatar. Please try again.",
     "danger": {
       "title": "Danger Zone",

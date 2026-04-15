@@ -799,6 +799,7 @@ async function handleUpload(kind: 'revision' | 'delivery') {
     uploadFile.value = null
     revisionNotes.value = ''
     resetDeliveryPreview()
+    toastSuccess(t('workflowStep.revisionUploaded'))
     pushToTrackDetail()
   } catch (err: any) {
     error.value = err.message || t('workflowStep.uploadFailed')
@@ -835,6 +836,7 @@ async function approveFinal() {
   try {
     const updatedTrack = await trackApi.approveFinalReview(track.value.id)
     if (updatedTrack.status !== previousStatus) {
+      toastSuccess(t('workflowStep.finalApproved'))
       pushToTrackDetail()
       return
     }
