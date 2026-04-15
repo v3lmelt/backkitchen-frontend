@@ -296,7 +296,12 @@ const currentCycleIssues = computed(() => issues.value.filter(issue => issue.wor
 const currentWaveformIssues = computed(() => {
   const currentVersion = track.value?.version
   if (currentVersion == null) return currentCycleIssues.value
-  return currentCycleIssues.value.filter(issue => issue.source_version_number == null || issue.source_version_number === currentVersion)
+  return currentCycleIssues.value.filter(issue => issue.phase !== 'final_review' && (issue.source_version_number == null || issue.source_version_number === currentVersion))
+})
+const masterWaveformIssues = computed(() => {
+  const deliveryId = track.value?.current_master_delivery?.id
+  if (!deliveryId) return []
+  return currentCycleIssues.value.filter(issue => issue.phase === 'final_review' && issue.master_delivery_id === deliveryId)
 })
 
 // Multi-reviewer: filter assignments to current review step
@@ -810,7 +815,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
                 {{ masterDownloading ? `${masterDownloadProgress}%` : t('common.downloadAudio') }}
               </button>
             </div>
-            <WaveformPlayer :audio-url="masterAudioUrl" :issues="[]" :track-id="trackId" playback-scope="master" />
+            <WaveformPlayer :audio-url="masterAudioUrl" :issues="masterWaveformIssues" :track-id="trackId" playback-scope="master" />
           </div>
 
           <div id="issues">
