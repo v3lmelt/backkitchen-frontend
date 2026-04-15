@@ -389,6 +389,12 @@ const canApproveFinal = computed(() => {
   if (userId === track.value.submitter_id) return !masterDelivery.value.submitter_approved_at
   return false
 })
+const canRequestReturn = computed(() => {
+  if (!track.value) return false
+  const userId = appStore.currentUser?.id
+  if (!userId) return false
+  return userId === track.value.submitter_id && userId !== track.value.producer_id
+})
 
 // Resolve the user id the current revision step is assigned to.
 // Uses assignee_user_id override if present, otherwise maps the assignee_role
@@ -800,7 +806,7 @@ async function handleUpload(kind: 'revision' | 'delivery') {
     revisionNotes.value = ''
     resetDeliveryPreview()
     toastSuccess(t('workflowStep.revisionUploaded'))
-    pushToTrackDetail()
+    await loadPage()
   } catch (err: any) {
     error.value = err.message || t('workflowStep.uploadFailed')
   } finally {
@@ -841,6 +847,20 @@ async function approveFinal() {
       return
     }
     await loadPage()
+  } catch (err: any) {
+    error.value = err.message || t('workflowStep.transitionFailed')
+  } finally {
+    acting.value = false
+  }
+}
+
+async function requestReturn() {
+  if (!track.value) return
+  acting.value = true
+  error.value = ''
+  try {
+    await trackApi.requestReturnInFinalReview(track.value.id)
+    toastSuccess(t('finalReview.returnRequested'))
   } catch (err: any) {
     error.value = err.message || t('workflowStep.transitionFailed')
   } finally {
@@ -976,6 +996,14 @@ const finalReviewActions = computed<WorkflowAction[]>(() => {
       handler: approveFinal,
     })
   }
+  if (canRequestReturn.value) {
+    actions.push({
+      label: t('finalReview.requestReturn'),
+      type: 'return',
+      disabled: acting.value,
+      handler: requestReturn,
+    })
+  }
   return actions
 })
 
@@ -1003,6 +1031,7 @@ const genericApprovalActions = computed<WorkflowAction[]>(() =>
 
 const peerReviewActionHint = computed(() => {
   if (reviewWaitingForAssignment.value) return t('workflowStep.reviewWaitingForAssignment')
+  if (!checklistSaved.value) return t('peerReview.checklistRequiredHint')
   if (currentUserCanFinalizeReview.value) return t('workflowStep.reviewFinalizeHint')
   if (reviewRequiresGroupFinalization.value && currentUserAssignment.value?.status === 'completed' && !reviewQuorumReached.value) {
     return t('workflowStep.reviewWaitingForQuorum', { completed: completedReviewCount.value, required: requiredReviewCount.value })
@@ -2312,7 +2341,13 @@ function handleIssueLeave() {
         </div>
       </div>
 
-      <!-- 3b. Waiting card (non-assignee) -->
+      <!-- 3b. Waiting card (non-assignee) or unresolved assignee warning -->
+      <div v-else-if="revisionAssigneeUserId == null" class="card border border-warning/40 bg-warning-bg space-y-2">
+        <h3 class="text-sm font-mono font-semibold text-warning">
+          {{ t('workflowStep.revisionAssigneeUnresolved') }}
+        </h3>
+        <p class="text-sm text-muted-foreground">{{ t('workflowStep.revisionAssigneeUnresolvedDesc', { role: revisionAssigneeRoleLabel || t('workflowStep.unknownRole') }) }}</p>
+      </div>
       <div v-else class="card space-y-2">
         <h3 class="text-sm font-mono font-semibold">
           {{ t('workflowStep.waitingForRevision', { assignee: revisionAssigneeRoleLabel }) }}

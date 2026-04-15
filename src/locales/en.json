@@ -409,6 +409,9 @@
     "uploadFailed": "Upload failed",
     "waitingForRevision": "Waiting for {assignee} to upload a new version",
     "waitingForRevisionDesc": "The assignee of this step hasn't submitted a new version yet. You can't upload at this stage.",
+    "revisionAssigneeUnresolved": "Revision assignee not found",
+    "revisionAssigneeUnresolvedDesc": "The role \"{role}\" assigned to this revision step has no matching member. Please ask the producer to assign the role in album settings.",
+    "unknownRole": "unknown role",
     "reviewTeamHeading": "Review Coordination",
     "reviewProgress": "submitted",
     "reviewSubmitted": "Submitted",
@@ -685,7 +688,8 @@
     "requestRevision": "Request Revision",
     "passToProducer": "Pass to Producer",
     "checklistSubmitted": "Checklist submitted.",
-    "actionHint": "After completing the checklist, choose the next step"
+    "actionHint": "After completing the checklist, choose the next step",
+    "checklistRequiredHint": "Please complete and save the review checklist before submitting your decision"
   },
   "revision": {
     "peerRevision": "Peer Revision",
@@ -795,7 +799,9 @@
     "approveMaster": "Approve Current Master",
     "returnToMastering": "Redo Mastering",
     "requestRemastering": "Revise Source & Re-master",
-    "actionHint": "Both producer and submitter must approve to complete the final review"
+    "actionHint": "Both producer and submitter must approve to complete the final review",
+    "requestReturn": "Request Return",
+    "returnRequested": "Return request sent to producer"
   },
   "issueDetail": {
     "back": "Back",

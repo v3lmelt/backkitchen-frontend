@@ -409,6 +409,9 @@
     "uploadFailed": "上传失败",
     "waitingForRevision": "等待 {assignee} 上传新版本",
     "waitingForRevisionDesc": "当前步骤的负责人还没有提交新版本，你暂时无法上传。",
+    "revisionAssigneeUnresolved": "无法确定修订负责人",
+    "revisionAssigneeUnresolvedDesc": "该修订步骤指定的角色「{role}」尚未分配给任何成员。请联系制作人在专辑设置中指定对应成员。",
+    "unknownRole": "未知角色",
     "reviewTeamHeading": "评审协作",
     "reviewProgress": "已提交",
     "reviewSubmitted": "已提交意见",
@@ -685,7 +688,8 @@
     "requestRevision": "请求修订",
     "passToProducer": "提交至主催",
     "checklistSubmitted": "清单已提交。",
-    "actionHint": "完成清单后，选择下一步操作"
+    "actionHint": "完成清单后，选择下一步操作",
+    "checklistRequiredHint": "请先完成并保存评审清单，才能提交审核决策"
   },
   "revision": {
     "peerRevision": "同行修订",
@@ -795,7 +799,9 @@
     "approveMaster": "批准当前母带",
     "returnToMastering": "退回重做母带",
     "requestRemastering": "退回修改源文件",
-    "actionHint": "主催和曲师都需要批准才能完成终审"
+    "actionHint": "主催和曲师都需要批准才能完成终审",
+    "requestReturn": "请求退回",
+    "returnRequested": "已向主催发送退回请求"
   },
   "issueDetail": {
     "back": "返回",

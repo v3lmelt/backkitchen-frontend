@@ -428,6 +428,8 @@ export const trackApi = {
   // to this endpoint for the producer+submitter dual-confirmation step.
   approveFinalReview: (id: number) =>
     request<Track>(`/tracks/${id}/final-review/approve`, { method: 'POST' }),
+  requestReturnInFinalReview: (id: number) =>
+    request<void>(`/tracks/${id}/final-review/request-return`, { method: 'POST' }),
   delete: (id: number) => request<void>(`/tracks/${id}`, { method: 'DELETE' }),
   archive: (id: number) => request<Track>(`/tracks/${id}/archive`, { method: 'POST' }),
   restore: (id: number) => request<Track>(`/tracks/${id}/restore`, { method: 'POST' }),
