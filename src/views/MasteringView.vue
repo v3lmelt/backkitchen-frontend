@@ -60,6 +60,14 @@ const masteringNotesExpanded = ref(false)
 // Chat sidebar
 const chatSidebarRef = ref<InstanceType<typeof MasteringChatSidebar> | null>(null)
 
+// Tabs
+const activeTab = ref<'listen' | 'issues' | 'delivery'>('listen')
+const masteringTabs = computed(() => [
+  { key: 'listen' as const, label: t('masteringPage.tabs.listen') },
+  { key: 'issues' as const, label: t('masteringPage.tabs.issues') },
+  { key: 'delivery' as const, label: t('masteringPage.tabs.delivery') },
+])
+
 // Collapsible version history
 const versionHistoryExpanded = ref(false)
 
@@ -71,7 +79,9 @@ const selectedStageIssueIds = ref<number[]>([])
 const stageBatchNote = ref('')
 const batchUpdatingIssues = ref(false)
 const isIssueFormOpen = ref(false)
-const waveformMode = computed<'seek' | 'annotate'>(() => (isIssueFormOpen.value ? 'annotate' : 'seek'))
+const waveformMode = computed<'seek' | 'annotate'>(() =>
+  activeTab.value === 'issues' && isIssueFormOpen.value ? 'annotate' : 'seek',
+)
 
 // Source version comparison
 const showSourceCompare = ref(false)
@@ -617,6 +627,14 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
   downloadAudioAsset(url, `${track.value?.title ?? 'track'}_master_v${delivery.delivery_number}${cycleSuffix}`, delivery.file_path)
 }
 
+watch(activeTab, () => {
+  showSourceCompare.value = false
+  selectedCompareSourceVersionId.value = null
+  showMasterCompare.value = false
+  selectedCompareMasterDeliveryId.value = null
+  isIssueFormOpen.value = false
+})
+
 watch(olderMasterDeliveries, (deliveries) => {
   if (deliveries.length > 0) return
   showMasterCompare.value = false
@@ -696,93 +714,225 @@ watch(olderMasterDeliveries, (deliveries) => {
       {{ actionError }}
     </div>
 
-    <!-- ③ Audio comparison zone -->
-    <!-- Source audio -->
-    <div v-if="audioUrl" class="space-y-4">
-      <div class="flex items-start justify-between gap-3">
-        <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.waveformHint') }}</h3>
-        <div class="flex items-center gap-2 shrink-0">
-          <button
-            v-if="olderSourceVersions.length > 0"
-            @click="toggleSourceCompare"
-            class="btn-secondary text-xs px-3 py-1"
-          >
-            {{ t('compare.title') }}
+    <!-- Tab bar -->
+    <div class="flex gap-0 border-b border-border overflow-x-auto scrollbar-hide">
+      <button
+        v-for="tab in masteringTabs"
+        :key="tab.key"
+        @click="activeTab = tab.key"
+        class="px-4 py-2.5 text-sm font-mono transition-colors border-b-2 -mb-px whitespace-nowrap flex-shrink-0"
+        :class="activeTab === tab.key
+          ? 'text-foreground border-primary'
+          : 'text-muted-foreground border-transparent hover:text-foreground'"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
+
+    <!-- ═══ Tab: Listen ═══ -->
+    <template v-if="activeTab === 'listen'">
+      <!-- Source audio -->
+      <div v-if="audioUrl" class="space-y-4">
+        <div class="flex items-start justify-between gap-3">
+          <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.waveformHint') }}</h3>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              v-if="olderSourceVersions.length > 0"
+              @click="toggleSourceCompare"
+              class="btn-secondary text-xs px-3 py-1"
+            >
+              {{ t('compare.title') }}
+            </button>
+            <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+            <CustomSelect
+              v-model="selectedCompareSourceVersionId"
+              :options="sourceCompareOptions"
+              :placeholder="`-- ${t('compare.selectVersion')} --`"
+              size="sm"
+            />
+            <button
+              v-if="selectedCompareSourceVersionId"
+              @click="selectedCompareSourceVersionId = null"
+              class="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {{ t('compare.clear') }}
+            </button>
+          </div>
+          <p v-if="isSourceCompareActive" class="text-xs text-warning">
+            {{ t('workflowStep.sourceCompareReadonlyHint') }}
+          </p>
+        </div>
+        <WaveformPlayer
+          ref="waveformRef"
+          :audio-url="audioUrl"
+          :issues="waveformIssues"
+          :track-id="trackId"
+          :compare-version-id="selectedCompareSourceVersionId"
+          :selectable="isMasteringEngineer"
+          :mode="waveformMode"
+          :selected-range="issueFormRef?.selectedRange ?? null"
+          :draft-markers="issueFormRef?.markers ?? []"
+          :draft-range-anchor="issueFormRef?.rangeAnchor ?? null"
+          :hovered-issue-id="hoveredIssueId"
+          @click="(time: number) => issueFormRef?.handleClick(time)"
+          @regionClick="onIssueSelect"
+          @rangeSelect="(start: number, end: number, isUpdate: boolean) => isUpdate ? issueFormRef?.handleRangeUpdate?.(start, end) : issueFormRef?.handleRangeSelect(start, end)"
+          @issueHover="handleIssueHover"
+          @issueLeave="handleIssueLeave"
+          @requestModeChange="onRequestWaveformMode"
+        />
+      </div>
+
+      <!-- Master delivery audio -->
+      <div v-if="masterAudioUrl" class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-mono font-semibold text-foreground">
+            {{ t('masteringPage.currentDelivery') }}
+            <span v-if="track.current_master_delivery" class="text-xs text-muted-foreground ml-1">v{{ track.current_master_delivery.delivery_number }}</span>
+          </h3>
+          <div class="flex items-center gap-2">
+            <button v-if="olderMasterDeliveries.length > 0" @click="toggleMasterCompare" class="btn-secondary text-xs px-3 py-1">
+              {{ t('compare.title') }}
+            </button>
+            <button @click="handleMasterDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="showMasterCompare && olderMasterDeliveries.length > 0" class="flex items-center gap-2">
+          <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+          <CustomSelect v-model="selectedCompareMasterDeliveryId" :options="masterCompareOptions" :placeholder="`-- ${t('compare.selectVersion')} --`" size="sm" />
+          <button v-if="selectedCompareMasterDeliveryId" @click="selectedCompareMasterDeliveryId = null" class="text-xs text-muted-foreground hover:text-foreground">
+            {{ t('compare.clear') }}
           </button>
+        </div>
+        <WaveformPlayer :audio-url="masterAudioUrl" :issues="[]" :track-id="trackId" playback-scope="master" :compare-audio-url="selectedCompareMasterAudioUrl" />
+      </div>
+    </template>
+
+    <!-- ═══ Tab: Issues ═══ -->
+    <template v-if="activeTab === 'issues'">
+      <!-- Source waveform for annotation context -->
+      <div v-if="audioUrl" class="space-y-4">
+        <div class="flex items-start justify-between gap-3">
+          <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.waveformHint') }}</h3>
           <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
             {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
           </button>
         </div>
+        <WaveformPlayer
+          ref="waveformRef"
+          :audio-url="audioUrl"
+          :issues="waveformIssues"
+          :track-id="trackId"
+          :selectable="isMasteringEngineer"
+          :mode="waveformMode"
+          :selected-range="issueFormRef?.selectedRange ?? null"
+          :draft-markers="issueFormRef?.markers ?? []"
+          :draft-range-anchor="issueFormRef?.rangeAnchor ?? null"
+          :hovered-issue-id="hoveredIssueId"
+          @click="(time: number) => issueFormRef?.handleClick(time)"
+          @regionClick="onIssueSelect"
+          @rangeSelect="(start: number, end: number, isUpdate: boolean) => isUpdate ? issueFormRef?.handleRangeUpdate?.(start, end) : issueFormRef?.handleRangeSelect(start, end)"
+          @issueHover="handleIssueHover"
+          @issueLeave="handleIssueLeave"
+          @requestModeChange="onRequestWaveformMode"
+        />
       </div>
-      <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="space-y-2">
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
-          <CustomSelect
-            v-model="selectedCompareSourceVersionId"
-            :options="sourceCompareOptions"
-            :placeholder="`-- ${t('compare.selectVersion')} --`"
-            size="sm"
-          />
-          <button
-            v-if="selectedCompareSourceVersionId"
-            @click="selectedCompareSourceVersionId = null"
-            class="text-xs text-muted-foreground hover:text-foreground"
-          >
-            {{ t('compare.clear') }}
-          </button>
-        </div>
-        <p v-if="isSourceCompareActive" class="text-xs text-warning">
-          {{ t('workflowStep.sourceCompareReadonlyHint') }}
-        </p>
-      </div>
-      <WaveformPlayer
-        ref="waveformRef"
-        :audio-url="audioUrl"
-        :issues="waveformIssues"
-        :track-id="trackId"
-        :compare-version-id="selectedCompareSourceVersionId"
-        :selectable="isMasteringEngineer"
-        :mode="waveformMode"
-        :selected-range="issueFormRef?.selectedRange ?? null"
-        :draft-markers="issueFormRef?.markers ?? []"
-        :draft-range-anchor="issueFormRef?.rangeAnchor ?? null"
-        :hovered-issue-id="hoveredIssueId"
-        @click="(time: number) => issueFormRef?.handleClick(time)"
-        @regionClick="onIssueSelect"
-        @rangeSelect="(start: number, end: number, isUpdate: boolean) => isUpdate ? issueFormRef?.handleRangeUpdate?.(start, end) : issueFormRef?.handleRangeSelect(start, end)"
-        @issueHover="handleIssueHover"
-        @issueLeave="handleIssueLeave"
-        @requestModeChange="onRequestWaveformMode"
-      />
-    </div>
 
-    <!-- Master delivery audio -->
-    <div v-if="masterAudioUrl" class="space-y-3">
-      <div class="flex items-center justify-between">
-        <h3 class="text-sm font-mono font-semibold text-foreground">
-          {{ t('masteringPage.currentDelivery') }}
-          <span v-if="track.current_master_delivery" class="text-xs text-muted-foreground ml-1">v{{ track.current_master_delivery.delivery_number }}</span>
-        </h3>
-        <div class="flex items-center gap-2">
-          <button v-if="olderMasterDeliveries.length > 0" @click="toggleMasterCompare" class="btn-secondary text-xs px-3 py-1">
-            {{ t('compare.title') }}
-          </button>
-          <button @click="handleMasterDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
-            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
-          </button>
+      <!-- Issue create + list (mastering engineer) -->
+      <div v-if="isMasteringEngineer" class="space-y-4">
+        <IssueCreatePanel
+          ref="issueFormRef"
+          :track-id="trackId"
+          phase="mastering"
+          :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
+          @created="onIssueCreated"
+          @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
+        >
+          <template #heading>
+            <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.issuesHeading', { count: fallbackWaveformIssues.length }) }}</h3>
+          </template>
+        </IssueCreatePanel>
+
+        <BatchIssueActions
+          :selected-count="selectedStageIssueIds.length"
+          :statuses="stageBatchActions"
+          :note="stageBatchNote"
+          :loading="batchUpdatingIssues"
+          @update:note="stageBatchNote = $event"
+          @clear="selectedStageIssueIds = []; stageBatchNote = ''"
+          @apply="applyBatchIssueStatusChange($event)"
+        />
+
+        <IssueMarkerList
+          :issues="fallbackWaveformIssues"
+          :selectable="true"
+          :selected-ids="selectedStageIssueIds"
+          :current-source-version-number="displayedSourceVersionNumber"
+          :hovered-issue-id="hoveredIssueId"
+          @select="onIssueSelect"
+          @update:selectedIds="selectedStageIssueIds = $event"
+          @hover="handleIssueHover"
+          @leave="handleIssueLeave"
+        />
+      </div>
+
+      <!-- Non-mastering-engineer: read-only issue list -->
+      <div v-if="!isMasteringEngineer" class="space-y-4">
+        <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.issuesHeading', { count: fallbackWaveformIssues.length }) }}</h3>
+        <IssueMarkerList
+          :issues="fallbackWaveformIssues"
+          :current-source-version-number="displayedSourceVersionNumber"
+          :hovered-issue-id="hoveredIssueId"
+          @select="onIssueSelect"
+          @hover="handleIssueHover"
+          @leave="handleIssueLeave"
+        />
+      </div>
+    </template>
+
+    <!-- ═══ Tab: Delivery ═══ -->
+    <template v-if="activeTab === 'delivery'">
+      <!-- Upload delivery (mastering engineer only) -->
+      <div v-if="canUploadDelivery" class="card space-y-4">
+        <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('masteringPage.uploadDelivery') }}</h3>
+        <p class="text-sm text-muted-foreground">{{ t('masteringPage.uploadHint') }}</p>
+        <input type="file" accept="audio/*" @change="onFileChange" class="input-field w-full" />
+        <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
+          <div class="space-y-1">
+            <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.deliveryPreviewHeading') }}</h4>
+            <p class="text-sm text-muted-foreground">{{ t('workflowStep.deliveryPreviewNotice') }}</p>
+          </div>
+          <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" :compact="true" :height="96" />
+          <div class="flex flex-wrap gap-2">
+            <button @click="handleUploadDelivery" :disabled="uploading" class="btn-primary text-sm h-10 inline-flex items-center justify-center">
+              <Upload class="w-4 h-4 mr-2" />
+              {{ uploading ? t('workflowStep.uploading') : t('workflowStep.confirmUploadDelivery') }}
+            </button>
+            <button @click="uploadFile = null; resetDeliveryPreview()" :disabled="uploading" class="btn-secondary text-sm">
+              {{ t('workflowStep.clearSelectedDelivery') }}
+            </button>
+          </div>
         </div>
+        <div v-if="uploading" class="space-y-1">
+          <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
+            <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
+          </div>
+          <p class="text-xs text-muted-foreground text-right">{{ uploadProgress }}%</p>
+        </div>
+        <div v-if="uploadError" class="text-sm text-error">{{ uploadError }}</div>
       </div>
-      <div v-if="showMasterCompare && olderMasterDeliveries.length > 0" class="flex items-center gap-2">
-        <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
-        <CustomSelect v-model="selectedCompareMasterDeliveryId" :options="masterCompareOptions" :placeholder="`-- ${t('compare.selectVersion')} --`" size="sm" />
-        <button v-if="selectedCompareMasterDeliveryId" @click="selectedCompareMasterDeliveryId = null" class="text-xs text-muted-foreground hover:text-foreground">
-          {{ t('compare.clear') }}
-        </button>
-      </div>
-      <WaveformPlayer :audio-url="masterAudioUrl" :issues="[]" :track-id="trackId" playback-scope="master" :compare-audio-url="selectedCompareMasterAudioUrl" />
 
       <!-- Approval status + actions -->
-      <div class="card space-y-3">
+      <div v-if="masterAudioUrl" class="card space-y-3">
         <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('masteringPage.approvalStatus') }}</h3>
         <div class="flex items-center justify-between text-sm">
           <span class="text-muted-foreground">{{ t('trackDetail.producer') }}</span>
@@ -807,133 +957,52 @@ watch(olderMasterDeliveries, (deliveries) => {
           </button>
         </div>
       </div>
-    </div>
 
-    <!-- Upload delivery (mastering engineer only, inside audio comparison zone) -->
-    <div v-if="canUploadDelivery" class="card space-y-4">
-      <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('masteringPage.uploadDelivery') }}</h3>
-      <p class="text-sm text-muted-foreground">{{ t('masteringPage.uploadHint') }}</p>
-      <input type="file" accept="audio/*" @change="onFileChange" class="input-field w-full" />
-      <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
-        <div class="space-y-1">
-          <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.deliveryPreviewHeading') }}</h4>
-          <p class="text-sm text-muted-foreground">{{ t('workflowStep.deliveryPreviewNotice') }}</p>
-        </div>
-        <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" :compact="true" :height="96" />
-        <div class="flex flex-wrap gap-2">
-          <button @click="handleUploadDelivery" :disabled="uploading" class="btn-primary text-sm h-10 inline-flex items-center justify-center">
-            <Upload class="w-4 h-4 mr-2" />
-            {{ uploading ? t('workflowStep.uploading') : t('workflowStep.confirmUploadDelivery') }}
-          </button>
-          <button @click="uploadFile = null; resetDeliveryPreview()" :disabled="uploading" class="btn-secondary text-sm">
-            {{ t('workflowStep.clearSelectedDelivery') }}
-          </button>
-        </div>
-      </div>
-      <div v-if="uploading" class="space-y-1">
-        <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
-          <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
-        </div>
-        <p class="text-xs text-muted-foreground text-right">{{ uploadProgress }}%</p>
-      </div>
-      <div v-if="uploadError" class="text-sm text-error">{{ uploadError }}</div>
-    </div>
-
-    <!-- ④ Issues zone -->
-    <div v-if="isMasteringEngineer" class="space-y-4">
-      <IssueCreatePanel
-        ref="issueFormRef"
-        :track-id="trackId"
-        phase="mastering"
-        :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
-        @created="onIssueCreated"
-        @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
-      >
-        <template #heading>
-          <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.issuesHeading', { count: fallbackWaveformIssues.length }) }}</h3>
-        </template>
-      </IssueCreatePanel>
-
-      <BatchIssueActions
-        :selected-count="selectedStageIssueIds.length"
-        :statuses="stageBatchActions"
-        :note="stageBatchNote"
-        :loading="batchUpdatingIssues"
-        @update:note="stageBatchNote = $event"
-        @clear="selectedStageIssueIds = []; stageBatchNote = ''"
-        @apply="applyBatchIssueStatusChange($event)"
-      />
-
-      <IssueMarkerList
-        :issues="fallbackWaveformIssues"
-        :selectable="true"
-        :selected-ids="selectedStageIssueIds"
-        :current-source-version-number="displayedSourceVersionNumber"
-        :hovered-issue-id="hoveredIssueId"
-        @select="onIssueSelect"
-        @update:selectedIds="selectedStageIssueIds = $event"
-        @hover="handleIssueHover"
-        @leave="handleIssueLeave"
-      />
-    </div>
-
-    <!-- Non-mastering-engineer: read-only issue list -->
-    <div v-if="!isMasteringEngineer" class="space-y-4">
-      <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.issuesHeading', { count: fallbackWaveformIssues.length }) }}</h3>
-      <IssueMarkerList
-        :issues="fallbackWaveformIssues"
-        :current-source-version-number="displayedSourceVersionNumber"
-        :hovered-issue-id="hoveredIssueId"
-        @select="onIssueSelect"
-        @hover="handleIssueHover"
-        @leave="handleIssueLeave"
-      />
-    </div>
-
-    <!-- ⑤ Version history (collapsible) -->
-    <div v-if="sortedMasterDeliveries.length > 0" class="card">
-      <button
-        class="w-full flex items-center justify-between"
-        @click="versionHistoryExpanded = !versionHistoryExpanded"
-      >
-        <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.masterVersionHistory') }}</h3>
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-muted-foreground">{{ sortedMasterDeliveries.length }}</span>
-          <ChevronDown
-            class="w-4 h-4 text-muted-foreground transition-transform"
-            :class="{ 'rotate-180': versionHistoryExpanded }"
-            :stroke-width="2"
-          />
-        </div>
-      </button>
-      <div v-if="versionHistoryExpanded" class="mt-3 space-y-2">
-        <div
-          v-for="delivery in sortedMasterDeliveries"
-          :key="delivery.id"
-          class="flex flex-col gap-3 border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between"
+      <!-- Version history (collapsible) -->
+      <div v-if="sortedMasterDeliveries.length > 0" class="card">
+        <button
+          class="w-full flex items-center justify-between"
+          @click="versionHistoryExpanded = !versionHistoryExpanded"
         >
-          <div class="space-y-1 min-w-0">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="text-sm font-mono font-semibold text-foreground">{{ masterDeliveryOptionLabel(delivery) }}</span>
-              <span v-if="delivery.id === track.current_master_delivery?.id" class="bg-border text-foreground px-2 py-1 rounded-full text-[11px] font-mono">
-                {{ t('compare.currentVersion') }}
-              </span>
-            </div>
-            <p class="text-xs text-muted-foreground">
-              {{ delivery.confirmed_at ? t('workflowStep.deliveryConfirmed') : t('workflowStep.deliveryPendingConfirmation') }}
-            </p>
+          <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.masterVersionHistory') }}</h3>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground">{{ sortedMasterDeliveries.length }}</span>
+            <ChevronDown
+              class="w-4 h-4 text-muted-foreground transition-transform"
+              :class="{ 'rotate-180': versionHistoryExpanded }"
+              :stroke-width="2"
+            />
           </div>
-          <div class="flex flex-wrap items-center gap-2 shrink-0">
-            <button v-if="delivery.id !== track.current_master_delivery?.id" @click="compareWithMasterDelivery(delivery.id)" class="btn-secondary text-xs px-3 py-1">
-              {{ t('compare.title') }}
-            </button>
-            <button @click="handleMasterVersionDownload(delivery)" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
-              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
-            </button>
+        </button>
+        <div v-if="versionHistoryExpanded" class="mt-3 space-y-2">
+          <div
+            v-for="delivery in sortedMasterDeliveries"
+            :key="delivery.id"
+            class="flex flex-col gap-3 border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div class="space-y-1 min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-sm font-mono font-semibold text-foreground">{{ masterDeliveryOptionLabel(delivery) }}</span>
+                <span v-if="delivery.id === track.current_master_delivery?.id" class="bg-border text-foreground px-2 py-1 rounded-full text-[11px] font-mono">
+                  {{ t('compare.currentVersion') }}
+                </span>
+              </div>
+              <p class="text-xs text-muted-foreground">
+                {{ delivery.confirmed_at ? t('workflowStep.deliveryConfirmed') : t('workflowStep.deliveryPendingConfirmation') }}
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 shrink-0">
+              <button v-if="delivery.id !== track.current_master_delivery?.id" @click="compareWithMasterDelivery(delivery.id)" class="btn-secondary text-xs px-3 py-1">
+                {{ t('compare.title') }}
+              </button>
+              <button @click="handleMasterVersionDownload(delivery)" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+                {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </template>
   </div>
 
     <WorkflowActionBar v-if="deliveryActions.length" :actions="deliveryActions" :hint="t('mastering.actionHint')" />

@@ -730,7 +730,12 @@
     "discussionsHeading": "母带讨论 ({count})",
     "noDiscussions": "暂无母带讨论。可在此与母带师、制作人沟通母带细节。",
     "discussionPlaceholder": "输入母带相关讨论…",
-    "postDiscussion": "发送"
+    "postDiscussion": "发送",
+    "tabs": {
+      "listen": "审听",
+      "issues": "问题反馈",
+      "delivery": "交付管理"
+    }
   },
   "producer": {
     "heading": "制作人工作台：{title}",

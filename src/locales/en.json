@@ -730,7 +730,12 @@
     "discussionsHeading": "Mastering Discussion ({count})",
     "noDiscussions": "No mastering discussions yet. Use this space to communicate mastering details with the engineer and producer.",
     "discussionPlaceholder": "Write a mastering discussion message…",
-    "postDiscussion": "Post"
+    "postDiscussion": "Post",
+    "tabs": {
+      "listen": "Listen",
+      "issues": "Issues",
+      "delivery": "Delivery"
+    }
   },
   "producer": {
     "heading": "Producer Workspace: {title}",
