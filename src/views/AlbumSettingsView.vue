@@ -27,11 +27,24 @@ const { success: toastSuccess, error: toastError } = useToast()
 const albumId = computed(() => Number(route.params.albumId))
 const album = ref<Album | null>(null)
 const users = ref<User[]>([])
+const loadingAssignableUsers = ref(false)
 const userOptions = computed<SelectOption[]>(() =>
   users.value.map((u) => ({ value: u.id, label: u.display_name }))
 )
 const loading = ref(true)
-const activeTab = ref('info')
+type AlbumSettingsTab =
+  | 'info'
+  | 'team'
+  | 'deadlines'
+  | 'activity'
+  | 'checklist'
+  | 'workflow'
+  | 'order'
+  | 'archive'
+  | 'webhook'
+  | 'danger'
+
+const activeTab = ref<AlbumSettingsTab>('info')
 
 // Cover image state
 const coverInputRef = ref<HTMLInputElement | null>(null)
@@ -67,6 +80,7 @@ const teamState = reactive<{ mastering_engineer_id: number | null; member_ids: n
 })
 const savingTeam = ref(false)
 const invitations = ref<Invitation[]>([])
+const loadingInvitations = ref(false)
 const inviteUserId = ref('')
 const inviteError = ref('')
 const inviteSuccess = ref('')
@@ -89,7 +103,23 @@ const loadingActivity = ref(false)
 const activityError = ref('')
 const activityOffset = ref(0)
 const activityHasMore = ref(true)
+const activityEventType = ref('')
 const ACTIVITY_PAGE_SIZE = 30
+const COMMON_ACTIVITY_EVENT_TYPES = [
+  'track_submitted',
+  'source_version_uploaded',
+  'submission_accepted',
+  'submission_rejected',
+  'workflow_transition',
+  'issue_created',
+  'issue_updated',
+  'issue_comment_added',
+  'master_delivery_uploaded',
+  'delivery_confirmed',
+  'workflow_migration',
+  'track_reopened',
+  'reviewer_reassigned',
+]
 
 // Checklist state
 const templateItems = ref<ChecklistTemplateItem[]>([])
@@ -103,6 +133,7 @@ const templateDirty = computed(() => JSON.stringify(templateItems.value) !== sav
 
 // Track order state
 const tracks = ref<Track[]>([])
+const loadingTracks = ref(false)
 const savingOrder = ref(false)
 const orderMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -135,6 +166,16 @@ const WEBHOOK_EVENT_TYPES = [
 // Workflow state
 const savingWorkflow = ref(false)
 const workflowMigrations = ref<Array<{ track_id: number; track_title: string; from_step: string; to_step: string }>>([])
+const tabDataLoaded = reactive({
+  assignableUsers: false,
+  invitations: false,
+  checklist: false,
+  tracks: false,
+  archivedTracks: false,
+  webhookConfig: false,
+  webhookDeliveries: false,
+  activity: false,
+})
 
 async function saveWorkflow(config: WorkflowConfig) {
   if (!album.value) return
@@ -173,7 +214,7 @@ const roleBadgeClass = computed(() => {
 })
 
 const availableTabs = computed(() => {
-  const tabs = [
+  const tabs: Array<{ key: AlbumSettingsTab; label: string }> = [
     { key: 'info', label: t('albumSettings.tabs.info') },
     { key: 'team', label: t('albumSettings.tabs.team') },
     { key: 'deadlines', label: t('albumSettings.tabs.deadlines') },
@@ -190,6 +231,36 @@ const availableTabs = computed(() => {
     tabs.push({ key: 'danger', label: t('albumSettings.tabs.danger') })
   }
   return tabs
+})
+
+const teamTabLoading = computed(() =>
+  isProducerOfAlbum.value &&
+  (!tabDataLoaded.assignableUsers || !tabDataLoaded.invitations) &&
+  (loadingAssignableUsers.value || loadingInvitations.value)
+)
+
+const workflowTabLoading = computed(() =>
+  isProducerOfAlbum.value &&
+  !tabDataLoaded.assignableUsers &&
+  loadingAssignableUsers.value
+)
+
+const orderTabLoading = computed(() =>
+  !tabDataLoaded.tracks &&
+  loadingTracks.value
+)
+
+const activityEventOptions = computed<SelectOption[]>(() => {
+  const eventTypes = new Set<string>(COMMON_ACTIVITY_EVENT_TYPES)
+  for (const event of activityEvents.value) eventTypes.add(event.event_type)
+  if (activityEventType.value) eventTypes.add(activityEventType.value)
+
+  return Array.from(eventTypes)
+    .sort((left, right) => left.localeCompare(right))
+    .map((value) => ({
+      value,
+      label: value.replaceAll('_', ' '),
+    }))
 })
 
 // Album archive state
@@ -305,36 +376,51 @@ function applyWebhookConfig(config: {
   webhookState.filter_user_ids = config.filter_user_ids || []
 }
 
-async function loadAssignableUsers(currentAlbum: Album) {
+async function loadAssignableUsers(currentAlbum: Album): Promise<boolean> {
+  loadingAssignableUsers.value = true
   try {
     users.value = currentAlbum.circle_id
       ? (await circleApi.get(currentAlbum.circle_id)).members.map(m => m.user)
       : await userApi.list()
+    return true
   } catch (e: any) {
     users.value = []
     toastError(e.message || t('common.loadFailed'))
+    return false
+  } finally {
+    loadingAssignableUsers.value = false
   }
 }
 
-async function loadInvitations(currentAlbumId: number) {
+async function loadInvitations(currentAlbumId: number): Promise<boolean> {
+  loadingInvitations.value = true
   try {
     invitations.value = await invitationApi.listForAlbum(currentAlbumId)
+    return true
   } catch (e: any) {
     invitations.value = []
     toastError(e.message || t('common.loadFailed'))
+    return false
+  } finally {
+    loadingInvitations.value = false
   }
 }
 
-async function loadTrackList(currentAlbumId: number) {
+async function loadTrackList(currentAlbumId: number): Promise<boolean> {
+  loadingTracks.value = true
   try {
     tracks.value = await albumApi.tracks(currentAlbumId)
+    return true
   } catch (e: any) {
     tracks.value = []
     toastError(e.message || t('common.loadFailed'))
+    return false
+  } finally {
+    loadingTracks.value = false
   }
 }
 
-async function loadChecklistTemplate(currentAlbumId: number) {
+async function loadChecklistTemplate(currentAlbumId: number): Promise<boolean> {
   loadingTemplate.value = true
   templateLoadError.value = ''
   try {
@@ -342,6 +428,7 @@ async function loadChecklistTemplate(currentAlbumId: number) {
     templateItems.value = tpl.items.map(item => ({ ...item }))
     templateIsDefault.value = tpl.is_default
     savedTemplateSnapshot.value = JSON.stringify(templateItems.value)
+    return true
   } catch (e: any) {
     templateLoadError.value = e.message || t('common.loadFailed')
     if (templateItems.value.length === 0) {
@@ -349,53 +436,121 @@ async function loadChecklistTemplate(currentAlbumId: number) {
       templateIsDefault.value = false
       savedTemplateSnapshot.value = JSON.stringify([])
     }
+    return false
   } finally {
     loadingTemplate.value = false
   }
 }
 
-async function loadArchivedTracks(currentAlbumId: number) {
+async function loadArchivedTracks(currentAlbumId: number): Promise<boolean> {
   loadingArchivedTracks.value = true
   archiveLoadError.value = ''
   try {
     archivedTracks.value = await albumApi.archivedTracks(currentAlbumId)
+    return true
   } catch (e: any) {
     archiveLoadError.value = e.message || t('common.loadFailed')
     if (archivedTracks.value.length === 0) {
       archivedTracks.value = []
     }
+    return false
   } finally {
     loadingArchivedTracks.value = false
   }
 }
 
-async function loadWebhookConfig(currentAlbumId: number) {
+async function loadWebhookConfig(currentAlbumId: number): Promise<boolean> {
   loadingWebhookConfig.value = true
   webhookConfigError.value = ''
   try {
     applyWebhookConfig(await albumApi.getWebhook(currentAlbumId))
+    return true
   } catch (e: any) {
     if (!webhookState.url && webhookState.events.length === 0 && !webhookState.enabled) {
       resetWebhookState()
     }
     webhookConfigError.value = e.message || t('common.loadFailed')
+    return false
   } finally {
     loadingWebhookConfig.value = false
   }
 }
 
-async function loadWebhookDeliveries(currentAlbumId: number) {
+async function loadWebhookDeliveries(currentAlbumId: number): Promise<boolean> {
   loadingDeliveries.value = true
   webhookDeliveriesError.value = ''
   try {
     webhookDeliveries.value = await albumApi.getWebhookDeliveries(currentAlbumId)
+    return true
   } catch (e: any) {
     webhookDeliveriesError.value = e.message || t('common.loadFailed')
     if (webhookDeliveries.value.length === 0) {
       webhookDeliveries.value = []
     }
+    return false
   } finally {
     loadingDeliveries.value = false
+  }
+}
+
+async function ensureTabDataLoaded(tab: AlbumSettingsTab) {
+  if (!album.value) return
+
+  if (tab === 'team') {
+    if (isProducerOfAlbum.value) {
+      if (!tabDataLoaded.assignableUsers) {
+        tabDataLoaded.assignableUsers = await loadAssignableUsers(album.value)
+      }
+      if (!tabDataLoaded.invitations) {
+        tabDataLoaded.invitations = await loadInvitations(album.value.id)
+      }
+    }
+    return
+  }
+
+  if (tab === 'workflow') {
+    if (isProducerOfAlbum.value && !tabDataLoaded.assignableUsers) {
+      tabDataLoaded.assignableUsers = await loadAssignableUsers(album.value)
+    }
+    return
+  }
+
+  if (tab === 'checklist') {
+    if ((isProducerOfAlbum.value || isMemberOfAlbum.value) && !tabDataLoaded.checklist) {
+      tabDataLoaded.checklist = await loadChecklistTemplate(album.value.id)
+    }
+    return
+  }
+
+  if (tab === 'order') {
+    if (isProducerOfAlbum.value && !tabDataLoaded.tracks) {
+      tabDataLoaded.tracks = await loadTrackList(album.value.id)
+    }
+    return
+  }
+
+  if (tab === 'archive') {
+    if (isProducerOfAlbum.value && !tabDataLoaded.archivedTracks) {
+      tabDataLoaded.archivedTracks = await loadArchivedTracks(album.value.id)
+    }
+    return
+  }
+
+  if (tab === 'webhook') {
+    if (isProducerOfAlbum.value && !tabDataLoaded.webhookConfig) {
+      tabDataLoaded.webhookConfig = await loadWebhookConfig(album.value.id)
+    }
+    if (isProducerOfAlbum.value && !tabDataLoaded.webhookDeliveries) {
+      tabDataLoaded.webhookDeliveries = await loadWebhookDeliveries(album.value.id)
+    }
+    return
+  }
+
+  if (tab === 'activity') {
+    if (!tabDataLoaded.activity && !loadingActivity.value) {
+      activityOffset.value = 0
+      tabDataLoaded.activity = await loadActivity({ offset: 0 })
+    }
   }
 }
 
@@ -418,26 +573,6 @@ onMounted(async () => {
     syncDeadlineState()
     syncMetadataState()
     activeTab.value = 'info'
-
-    const loadTasks: Promise<any>[] = []
-
-    if (albumData.producer_id === userId) {
-      loadTasks.push(
-        loadAssignableUsers(albumData),
-        loadInvitations(albumData.id),
-        loadChecklistTemplate(albumData.id),
-        loadTrackList(albumData.id),
-        loadArchivedTracks(albumData.id),
-        loadWebhookConfig(albumData.id),
-        loadWebhookDeliveries(albumData.id),
-      )
-    } else if (albumData.members.some(m => m.user_id === userId)) {
-      loadTasks.push(
-        loadChecklistTemplate(albumData.id),
-      )
-    }
-
-    await Promise.all(loadTasks)
   } catch (e: any) {
     toastError(e.message || t('common.loadFailed'))
     router.replace('/albums')
@@ -451,10 +586,14 @@ onUnmounted(() => {
 })
 
 watch(activeTab, (tab) => {
-  if (tab === 'activity' && activityEvents.value.length === 0 && !loadingActivity.value) {
-    activityOffset.value = 0
-    loadActivity()
-  }
+  void ensureTabDataLoaded(tab)
+})
+
+watch(activityEventType, () => {
+  if (!album.value || activeTab.value !== 'activity') return
+  activityOffset.value = 0
+  tabDataLoaded.activity = true
+  void loadActivity({ offset: 0 })
 })
 
 // Cover image actions
@@ -634,7 +773,11 @@ async function cancelInvitation(invitationId: number) {
 
 function getUserDisplayName(userId: number): string {
   const user = users.value.find(u => u.id === userId)
-  return user?.display_name || `User #${userId}`
+  if (user) return user.display_name
+  if (album.value?.producer?.id === userId) return album.value.producer.display_name
+  if (album.value?.mastering_engineer?.id === userId) return album.value.mastering_engineer.display_name
+  const albumMember = album.value?.members.find(member => member.user_id === userId)?.user
+  return albumMember?.display_name || `User #${userId}`
 }
 
 async function handleLeaveAlbum() {
@@ -653,14 +796,15 @@ async function handleLeaveAlbum() {
 }
 
 // Activity actions
-async function loadActivity(options: { append?: boolean; offset?: number } = {}) {
-  if (!album.value) return
+async function loadActivity(options: { append?: boolean; offset?: number } = {}): Promise<boolean> {
+  if (!album.value) return false
   const append = options.append ?? false
   const targetOffset = options.offset ?? activityOffset.value
   loadingActivity.value = true
   activityError.value = ''
   try {
     const events = await albumApi.activity(album.value.id, {
+      event_type: activityEventType.value || undefined,
       limit: ACTIVITY_PAGE_SIZE,
       offset: targetOffset,
     })
@@ -671,19 +815,21 @@ async function loadActivity(options: { append?: boolean; offset?: number } = {})
     }
     activityOffset.value = targetOffset
     activityHasMore.value = events.length === ACTIVITY_PAGE_SIZE
+    return true
   } catch (e: any) {
     if (!append) {
       activityEvents.value = []
       activityOffset.value = 0
     }
     activityError.value = e.message || t('common.loadFailed')
+    return false
   } finally {
     loadingActivity.value = false
   }
 }
 
 function loadMoreActivity() {
-  loadActivity({ append: true, offset: activityOffset.value + ACTIVITY_PAGE_SIZE })
+  void loadActivity({ append: true, offset: activityOffset.value + ACTIVITY_PAGE_SIZE })
 }
 
 // Deadline actions
@@ -1036,6 +1182,11 @@ async function refreshDeliveries() {
       <!-- Team tab -->
       <div v-if="activeTab === 'team'" class="space-y-4">
         <template v-if="isProducerOfAlbum">
+          <div v-if="teamTabLoading" class="card">
+            <p class="text-sm text-muted-foreground py-4 text-center">{{ t('common.loading') }}</p>
+          </div>
+
+          <template v-else>
           <!-- Mastering engineer selector -->
           <div class="card space-y-3">
             <label class="block text-xs text-muted-foreground">{{ t('settings.masteringEngineerSelect') }}</label>
@@ -1153,6 +1304,7 @@ async function refreshDeliveries() {
               </div>
             </div>
           </div>
+          </template>
         </template>
 
         <template v-else>
@@ -1208,7 +1360,21 @@ async function refreshDeliveries() {
       <!-- Activity tab -->
       <div v-else-if="activeTab === 'activity'">
         <div class="card space-y-4">
-          <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('albumSettings.activity.title') }}</h3>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('albumSettings.activity.title') }}</h3>
+            <div class="sm:w-auto">
+              <select v-model="activityEventType" class="select-field min-w-0 w-full sm:w-56 text-sm">
+                <option value="">{{ t('notifications.filterTypeAll') }}</option>
+                <option
+                  v-for="option in activityEventOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+          </div>
           <div v-if="activityError" class="border border-error/30 bg-error-bg/30 p-3 flex items-center justify-between gap-3">
             <p class="text-sm text-error">{{ activityError }}</p>
             <button @click="loadActivity({ offset: 0 })" class="btn-secondary text-xs flex-shrink-0">
@@ -1392,50 +1558,58 @@ async function refreshDeliveries() {
 
       <!-- Track order tab (producer only) -->
       <div v-else-if="activeTab === 'order'" class="card space-y-4">
-        <p class="text-xs text-muted-foreground">{{ t('settings.dragToReorder') }}</p>
-        <draggable
-          v-if="tracks.length > 0"
-          v-model="tracks"
-          item-key="id"
-          handle=".drag-handle"
-          ghost-class="opacity-30"
-          class="space-y-1"
-        >
-          <template #item="{ element, index }">
-            <div class="flex items-center gap-3 px-3 py-2 border border-border bg-background hover:bg-white/5 transition-colors cursor-move drag-handle">
-              <span class="text-xs text-muted-foreground font-mono w-6 text-right flex-shrink-0">{{ index + 1 }}</span>
-              <span class="text-sm font-medium text-foreground flex-1 truncate">{{ element.title }}</span>
-              <span class="text-xs text-muted-foreground truncate max-w-[120px]">{{ element.artist }}</span>
-               <StatusBadge
-                 :status="element.status"
-                 type="track"
-                 :variant="element.workflow_variant"
-                 :label="element.workflow_step?.label ?? null"
-               />
-            </div>
-          </template>
-        </draggable>
-        <div v-else class="text-sm text-muted-foreground py-4 text-center">{{ t('dashboard.noTracks') }}</div>
-        <div class="flex items-center gap-3">
-          <button
-            @click="saveTrackOrder"
-            :disabled="savingOrder || tracks.length === 0"
-            class="btn-primary text-sm"
+        <template v-if="orderTabLoading">
+          <p class="text-sm text-muted-foreground py-4 text-center">{{ t('common.loading') }}</p>
+        </template>
+        <template v-else>
+          <p class="text-xs text-muted-foreground">{{ t('settings.dragToReorder') }}</p>
+          <draggable
+            v-if="tracks.length > 0"
+            v-model="tracks"
+            item-key="id"
+            handle=".drag-handle"
+            ghost-class="opacity-30"
+            class="space-y-1"
           >
-            {{ savingOrder ? t('settings.saving') : t('settings.saveOrder') }}
-          </button>
-          <span
-            v-if="orderMessage"
-            class="text-xs"
-            :class="orderMessage.type === 'success' ? 'text-success' : 'text-error'"
-          >
-            {{ orderMessage.text }}
-          </span>
-        </div>
+            <template #item="{ element, index }">
+              <div class="flex items-center gap-3 px-3 py-2 border border-border bg-background hover:bg-white/5 transition-colors cursor-move drag-handle">
+                <span class="text-xs text-muted-foreground font-mono w-6 text-right flex-shrink-0">{{ index + 1 }}</span>
+                <span class="text-sm font-medium text-foreground flex-1 truncate">{{ element.title }}</span>
+                <span class="text-xs text-muted-foreground truncate max-w-[120px]">{{ element.artist }}</span>
+                 <StatusBadge
+                   :status="element.status"
+                   type="track"
+                   :variant="element.workflow_variant"
+                   :label="element.workflow_step?.label ?? null"
+                 />
+              </div>
+            </template>
+          </draggable>
+          <div v-else class="text-sm text-muted-foreground py-4 text-center">{{ t('dashboard.noTracks') }}</div>
+          <div class="flex items-center gap-3">
+            <button
+              @click="saveTrackOrder"
+              :disabled="savingOrder || tracks.length === 0"
+              class="btn-primary text-sm"
+            >
+              {{ savingOrder ? t('settings.saving') : t('settings.saveOrder') }}
+            </button>
+            <span
+              v-if="orderMessage"
+              class="text-xs"
+              :class="orderMessage.type === 'success' ? 'text-success' : 'text-error'"
+            >
+              {{ orderMessage.text }}
+            </span>
+          </div>
+        </template>
       </div>
 
       <!-- Workflow editor -->
       <div v-else-if="activeTab === 'workflow'" class="card space-y-5">
+        <div v-if="workflowTabLoading" class="text-sm text-muted-foreground">
+          {{ t('common.loading') }}
+        </div>
         <div v-if="!isProducerOfAlbum" class="text-sm text-muted-foreground">
           {{ t('albumSettings.workflow.viewOnly') }}
         </div>
@@ -1509,6 +1683,9 @@ async function refreshDeliveries() {
       </div>
 
       <div v-else-if="activeTab === 'webhook'" class="card space-y-5">
+        <div v-if="loadingWebhookConfig && !tabDataLoaded.webhookConfig" class="text-sm text-muted-foreground py-4 text-center">
+          {{ t('common.loading') }}
+        </div>
         <div v-if="webhookConfigError" class="border border-error/30 bg-error-bg/30 p-3 space-y-3">
           <p class="text-sm text-error">{{ webhookConfigError }}</p>
           <div>

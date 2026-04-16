@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   pushMock: vi.fn(),
   trackListMock: vi.fn(),
   albumListMock: vi.fn(),
-  albumStatsMock: vi.fn(),
   albumExportStreamMock: vi.fn(),
   albumExportDownloadMock: vi.fn(),
   acceptInvitationMock: vi.fn(),
@@ -28,7 +27,6 @@ vi.mock('@/api', () => ({
   trackApi: { list: mocks.trackListMock },
   albumApi: {
     list: mocks.albumListMock,
-    stats: mocks.albumStatsMock,
     exportStream: mocks.albumExportStreamMock,
     exportDownload: mocks.albumExportDownloadMock,
   },
@@ -55,7 +53,6 @@ describe('DashboardView', () => {
     mocks.pushMock.mockReset()
     mocks.trackListMock.mockReset()
     mocks.albumListMock.mockReset()
-    mocks.albumStatsMock.mockReset()
     mocks.albumExportStreamMock.mockReset()
     mocks.albumExportDownloadMock.mockReset()
     mocks.acceptInvitationMock.mockReset()
@@ -115,16 +112,23 @@ describe('DashboardView', () => {
       ]
     })
     mocks.albumListMock.mockResolvedValue([
-      { id: 1, title: 'Album One', producer_id: 1, track_count: 2, genres: ['Trance'], catalog_number: 'BK-001', circle_name: 'Back Kitchen', cover_image: null },
+      {
+        id: 1,
+        title: 'Album One',
+        producer_id: 1,
+        track_count: 2,
+        total_tracks: 2,
+        by_status: { submitted: 1, peer_review: 1, completed: 1 },
+        open_issues: 1,
+        overdue_track_count: 0,
+        recent_events: [],
+        deadline: null,
+        genres: ['Trance'],
+        catalog_number: 'BK-001',
+        circle_name: 'Back Kitchen',
+        cover_image: null,
+      },
     ])
-    mocks.albumStatsMock.mockResolvedValue({
-      total_tracks: 2,
-      by_status: { submitted: 1, peer_review: 1, completed: 1 },
-      open_issues: 1,
-      overdue_track_count: 0,
-      recent_events: [],
-      deadline: null,
-    })
     mocks.albumExportDownloadMock.mockResolvedValue(new Blob(['zip']))
     mocks.albumExportStreamMock.mockImplementation((_albumId: number, onEvent: (event: any) => Promise<void> | void) => {
       void (async () => {
@@ -144,7 +148,6 @@ describe('DashboardView', () => {
 
     expect(mocks.trackListMock).toHaveBeenCalledTimes(2)
     expect(mocks.albumListMock).toHaveBeenCalledTimes(1)
-    expect(mocks.albumStatsMock).toHaveBeenCalledWith(1)
     expect(wrapper.text()).toContain('Submitted Song')
     expect(wrapper.text()).toContain('Peer Song')
     expect(wrapper.text()).not.toContain('Rejected Song')

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   pushMock: vi.fn(),
   replaceMock: vi.fn(),
   albumGetMock: vi.fn(),
+  albumActivityMock: vi.fn(),
   albumUpdateWorkflowMock: vi.fn(),
   albumTracksMock: vi.fn(),
   albumArchivedTracksMock: vi.fn(),
@@ -49,6 +50,7 @@ vi.mock('@/api', () => ({
   API_ORIGIN: '',
   albumApi: {
     get: mocks.albumGetMock,
+    activity: mocks.albumActivityMock,
     updateWorkflow: mocks.albumUpdateWorkflowMock,
     updateTeam: mocks.albumUpdateTeamMock,
     tracks: mocks.albumTracksMock,
@@ -240,6 +242,7 @@ describe('AlbumSettingsView', () => {
     mocks.pushMock.mockReset()
     mocks.replaceMock.mockReset()
     mocks.albumGetMock.mockReset()
+    mocks.albumActivityMock.mockReset()
     mocks.albumUpdateWorkflowMock.mockReset()
     mocks.albumTracksMock.mockReset()
     mocks.albumArchivedTracksMock.mockReset()
@@ -254,6 +257,7 @@ describe('AlbumSettingsView', () => {
     mocks.invitationListForAlbumMock.mockReset()
     mocks.userListMock.mockReset()
     mocks.circleGetMock.mockReset()
+    mocks.userListMock.mockReset()
     mocks.trackRestoreMock.mockReset()
     mocks.toastSuccessMock.mockReset()
     mocks.toastErrorMock.mockReset()
@@ -261,6 +265,17 @@ describe('AlbumSettingsView', () => {
 
     mocks.albumGetMock.mockResolvedValue(makeAlbum())
     mocks.albumTracksMock.mockResolvedValue([makeTrack(11, 'Track A')])
+    mocks.albumActivityMock.mockResolvedValue([
+      {
+        id: 1,
+        event_type: 'track_submitted',
+        from_status: null,
+        to_status: 'submitted',
+        payload: null,
+        created_at: '2024-01-02T00:00:00Z',
+        actor: makeUser(1, 'Producer'),
+      },
+    ])
     mocks.albumArchivedTracksMock.mockResolvedValue([
       makeTrack(91, 'Archived Track', { archived_at: '2024-01-05T00:00:00Z' }),
     ])
@@ -298,6 +313,7 @@ describe('AlbumSettingsView', () => {
         { id: 2, user_id: 3, role: 'member', joined_at: '2024-01-01T00:00:00Z', user: makeUser(3, 'Member') },
       ],
     })
+    mocks.userListMock.mockResolvedValue([makeUser(1, 'Producer'), makeUser(3, 'Member')])
     mocks.trackRestoreMock.mockResolvedValue(makeTrack(91, 'Archived Track'))
     mocks.albumArchiveMock.mockResolvedValue(makeAlbum({ archived_at: '2024-01-05T00:00:00Z' }))
     mocks.albumRestoreMock.mockResolvedValue(makeAlbum())
@@ -397,6 +413,78 @@ describe('AlbumSettingsView', () => {
 
     expect(mocks.albumArchiveMock).toHaveBeenCalledWith(5)
     expect(mocks.pushMock).toHaveBeenCalledWith('/albums')
+  })
+
+  it('lazy-loads tab data only when the corresponding tab is opened', async () => {
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    expect(mocks.albumTracksMock).not.toHaveBeenCalled()
+    expect(mocks.albumArchivedTracksMock).not.toHaveBeenCalled()
+    expect(mocks.albumGetWebhookMock).not.toHaveBeenCalled()
+    expect(mocks.checklistGetTemplateMock).not.toHaveBeenCalled()
+    expect(mocks.invitationListForAlbumMock).not.toHaveBeenCalled()
+
+    await findButtonByText(wrapper, 'Track Order')!.trigger('click')
+    await flushPromises()
+    expect(mocks.albumTracksMock).toHaveBeenCalledWith(5)
+
+    await findButtonByText(wrapper, 'Checklist Template')!.trigger('click')
+    await flushPromises()
+    expect(mocks.checklistGetTemplateMock).toHaveBeenCalledWith(5)
+
+    await findButtonByText(wrapper, 'Team')!.trigger('click')
+    await flushPromises()
+    expect(mocks.invitationListForAlbumMock).toHaveBeenCalledWith(5)
+    expect(mocks.circleGetMock).toHaveBeenCalledWith(9)
+  })
+
+  it('refetches the activity feed when the event filter changes', async () => {
+    mocks.albumActivityMock
+      .mockResolvedValueOnce([
+        {
+          id: 1,
+          event_type: 'track_submitted',
+          from_status: null,
+          to_status: 'submitted',
+          payload: null,
+          created_at: '2024-01-02T00:00:00Z',
+          actor: makeUser(1, 'Producer'),
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 2,
+          event_type: 'issue_created',
+          from_status: null,
+          to_status: null,
+          payload: null,
+          created_at: '2024-01-03T00:00:00Z',
+          actor: makeUser(1, 'Producer'),
+        },
+      ])
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'Activity')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.albumActivityMock).toHaveBeenLastCalledWith(5, {
+      event_type: undefined,
+      limit: 30,
+      offset: 0,
+    })
+
+    await wrapper.find('select.select-field').setValue('issue_created')
+    await flushPromises()
+
+    expect(mocks.albumActivityMock).toHaveBeenLastCalledWith(5, {
+      event_type: 'issue_created',
+      limit: 30,
+      offset: 0,
+    })
+    expect(wrapper.text()).toContain('issue created')
   })
 
   it('confirms member removal before updating the album team', async () => {

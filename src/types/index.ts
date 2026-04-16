@@ -129,6 +129,11 @@ export interface Album {
   updated_at: string
   archived_at?: string | null
   track_count: number
+  total_tracks?: number
+  by_status?: Partial<Record<TrackStatus, number>>
+  open_issues?: number
+  recent_events?: WorkflowEvent[]
+  overdue_track_count?: number
 }
 
 export interface CircleMember {
