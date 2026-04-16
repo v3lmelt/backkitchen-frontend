@@ -29,11 +29,28 @@ const messageListRef = ref<HTMLElement | null>(null)
 const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
 const pendingDeleteDiscussion = ref<Discussion | null>(null)
 
+const launcherMeta = computed(() => (
+  unreadCount.value > 0
+    ? t('chat.unreadCount', { count: unreadCount.value > 99 ? '99+' : unreadCount.value })
+    : t('chat.launchHint')
+))
+
+function openPanel() {
+  if (open.value) return
+  open.value = true
+  unreadCount.value = 0
+  nextTick(scrollToBottom)
+}
+
+function closePanel() {
+  open.value = false
+}
+
 function toggle() {
-  open.value = !open.value
   if (open.value) {
-    unreadCount.value = 0
-    nextTick(scrollToBottom)
+    closePanel()
+  } else {
+    openPanel()
   }
 }
 
@@ -90,24 +107,30 @@ onMounted(loadDiscussions)
 
 watch(() => props.trackId, loadDiscussions)
 
-defineExpose({ handleDiscussionEvent })
+defineExpose({ handleDiscussionEvent, openPanel, closePanel })
 </script>
 
 <template>
   <!-- Toggle button -->
   <button
     v-if="!open"
-    @click="toggle"
-    class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex items-center justify-center w-10 h-12 bg-card border border-border border-r-0 rounded-l-lg hover:bg-primary/10 transition-colors"
+    @click="openPanel"
+    class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex w-[132px] sm:w-[148px] items-center gap-3 rounded-l-2xl border border-primary/30 border-r-0 bg-card/95 px-3 py-3 text-left shadow-lg backdrop-blur transition-all hover:bg-primary/10"
     :title="t('chat.openChat')"
   >
-    <MessageSquare class="w-5 h-5 text-primary" :stroke-width="2" />
-    <span
-      v-if="unreadCount > 0"
-      class="absolute -top-1.5 -left-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-primary text-[10px] font-mono font-bold text-black px-1"
-    >
-      {{ unreadCount > 99 ? '99+' : unreadCount }}
-    </span>
+    <div class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+      <MessageSquare class="w-5 h-5" :stroke-width="2" />
+      <span
+        v-if="unreadCount > 0"
+        class="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-primary text-[10px] font-mono font-bold text-black px-1"
+      >
+        {{ unreadCount > 99 ? '99+' : unreadCount }}
+      </span>
+    </div>
+    <div class="min-w-0 pr-1">
+      <div class="text-xs font-mono text-primary">{{ t('chat.title') }}</div>
+      <div class="mt-0.5 text-[11px] leading-4 text-muted-foreground">{{ launcherMeta }}</div>
+    </div>
   </button>
 
   <!-- Sidebar panel -->
@@ -122,7 +145,7 @@ defineExpose({ handleDiscussionEvent })
           <MessageSquare class="w-4 h-4 text-primary" :stroke-width="2" />
           {{ t('chat.title') }}
         </h3>
-        <button @click="toggle" class="p-1 text-muted-foreground hover:text-foreground transition-colors">
+        <button @click="closePanel" class="p-1 text-muted-foreground hover:text-foreground transition-colors">
           <X class="w-4 h-4" :stroke-width="2" />
         </button>
       </div>

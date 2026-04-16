@@ -111,8 +111,26 @@ vi.mock('@/components/common/CustomSelect.vue', () => ({
   },
 }))
 
+vi.mock('@/components/common/DiscussionPanel.vue', () => ({
+  default: {
+    props: ['heading', 'discussions'],
+    template: '<div class="discussion-panel">{{ heading }}|{{ discussions.length }}</div>',
+  },
+}))
+
+vi.mock('@/components/mastering/MasteringCommunicationCard.vue', () => ({
+  default: {
+    props: ['ctaLabel'],
+    template: '<div class="mastering-communication-card">{{ ctaLabel }}</div>',
+  },
+}))
+
 vi.mock('@/components/chat/MasteringChatSidebar.vue', () => ({
   default: {
+    methods: {
+      openPanel() {},
+      handleDiscussionEvent() {},
+    },
     template: '<div class="mastering-chat-sidebar" />',
   },
 }))
@@ -277,6 +295,31 @@ describe('MasteringView', () => {
 
     expect(wrapper.text()).toContain('Confirm My Upload')
     expect(wrapper.text()).not.toContain('Approve Delivery')
+  })
+
+  it('opens on the discussion tab and renders mastering communication inline', async () => {
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
+      discussions: [
+        {
+          id: 301,
+          track_id: 9,
+          author_id: 8,
+          phase: 'mastering',
+          visibility: 'public',
+          content: 'Please keep the top end smooth.',
+          created_at: '2024-01-03T00:00:00Z',
+          edited_at: null,
+          author: { id: 8, display_name: 'Producer', avatar_color: '#123456' },
+          images: [],
+          audios: [],
+        },
+      ],
+    }))
+
+    const wrapper = mountWithPlugins(MasteringView)
+    await flushPromises()
+
+    expect(wrapper.find('.discussion-panel').text()).toContain('Mastering Communication (1)|1')
   })
 
   it('shows final approval for the submitter after the confirmed delivery enters final review', async () => {

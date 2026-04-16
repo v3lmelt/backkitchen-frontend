@@ -29,6 +29,7 @@ import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
+import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
 import { ChevronLeft, Upload } from 'lucide-vue-next'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useDiscussions } from '@/composables/useDiscussions'
@@ -51,6 +52,7 @@ const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
 const appStore = useAppStore()
 const trackStore = useTrackStore()
 const trackId = computed(() => Number(route.params.id))
+const chatSidebarRef = ref<InstanceType<typeof MasteringChatSidebar> | null>(null)
 
 const wsReloading = ref(false)
 useTrackWebSocket(trackId.value, async () => {
@@ -59,6 +61,10 @@ useTrackWebSocket(trackId.value, async () => {
   await nextTick()
   await loadPage()
   wsReloading.value = false
+}, {
+  onDiscussionEvent: (event, discussionId) => {
+    chatSidebarRef.value?.handleDiscussionEvent(event, discussionId)
+  },
 })
 
 const track = ref<Track | null>(null)
@@ -400,6 +406,15 @@ const canRequestReturn = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId) return false
   return userId === track.value.submitter_id && userId !== track.value.producer_id
+})
+const canSeeMasteringSidebar = computed(() => {
+  const userId = appStore.currentUser?.id
+  if (!userId || !track.value) return false
+  const isParticipant = userId === track.value.submitter_id
+    || userId === track.value.producer_id
+    || userId === track.value.mastering_engineer_id
+  const supportsSidebar = activeVariant.value === 'mastering' || activeVariant.value === 'final_review'
+  return isParticipant && supportsSidebar
 })
 
 // Resolve the user id the current revision step is assigned to.
@@ -2473,4 +2488,10 @@ function handleIssueLeave() {
     </template>
   </div>
 
+  <MasteringChatSidebar
+    v-if="canSeeMasteringSidebar && track"
+    ref="chatSidebarRef"
+    :track-id="trackId"
+    :track-completed="track.status === 'completed'"
+  />
 </template>

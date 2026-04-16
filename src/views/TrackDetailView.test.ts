@@ -104,6 +104,16 @@ vi.mock('@/components/common/CommentInput.vue', () => ({
   },
 }))
 
+vi.mock('@/components/chat/MasteringChatSidebar.vue', () => ({
+  default: {
+    methods: {
+      openPanel() {},
+      handleDiscussionEvent() {},
+    },
+    template: '<div class="mastering-chat-sidebar" />',
+  },
+}))
+
 import TrackDetailView from './TrackDetailView.vue'
 
 function mountTrackDetailView() {

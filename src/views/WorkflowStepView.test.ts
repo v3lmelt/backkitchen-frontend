@@ -115,6 +115,16 @@ vi.mock('@/components/common/CustomSelect.vue', () => ({
   },
 }))
 
+vi.mock('@/components/chat/MasteringChatSidebar.vue', () => ({
+  default: {
+    methods: {
+      openPanel() {},
+      handleDiscussionEvent() {},
+    },
+    template: '<div class="mastering-chat-sidebar" />',
+  },
+}))
+
 vi.mock('@/composables/useAudioDownload', () => ({
   useAudioDownload: () => ({
     downloading: ref(false),
@@ -128,6 +138,12 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({
     success: vi.fn(),
     error: vi.fn(),
+  }),
+}))
+
+vi.mock('@/composables/useTrackWebSocket', () => ({
+  useTrackWebSocket: () => ({
+    connected: ref(false),
   }),
 }))
 
