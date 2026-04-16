@@ -368,6 +368,7 @@ const finalReviewIssues = computed(() => {
 })
 const canConfirmDelivery = computed(() => {
   if (currentStep.value?.type !== 'delivery' || !track.value || !masterDelivery.value) return false
+  if (!currentStep.value.require_confirmation) return false
   const userId = appStore.currentUser?.id
   if (!userId) return false
   if (masterDelivery.value.confirmed_at) return false

@@ -108,7 +108,7 @@
             <button
               v-if="isOwner && member.user_id !== currentUserId"
               class="text-error text-xs hover:underline"
-              @click="removeMember(member.user_id)"
+              @click="promptRemoveMember(member)"
             >
               {{ t('circleDetail.remove') }}
             </button>
@@ -325,6 +325,16 @@
     </template>
 
     <ConfirmModal
+      v-if="pendingMemberRemoval"
+      :title="t('common.removeMemberTitle')"
+      :message="t('common.removeMemberConfirm', { name: pendingMemberRemoval.displayName })"
+      :confirm-text="t('circleDetail.remove')"
+      :destructive="true"
+      @confirm="removeMember"
+      @cancel="pendingMemberRemoval = null"
+    />
+
+    <ConfirmModal
       v-if="pendingTemplateAction"
       :title="pendingTemplateAction.title"
       :message="pendingTemplateAction.message"
@@ -342,7 +352,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { circleApi, API_ORIGIN } from '@/api'
-import type { Circle, InviteCode, WorkflowConfig, WorkflowTemplate } from '@/types'
+import type { Circle, CircleMember, InviteCode, WorkflowConfig, WorkflowTemplate } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { parseUTC } from '@/utils/time'
 import { Smile, Upload, Plus, Pencil, Trash2 } from 'lucide-vue-next'
@@ -415,6 +425,7 @@ const showDeleteConfirm = ref(false)
 const showLeaveConfirm = ref(false)
 const deletingCircle = ref(false)
 const leavingCircle = ref(false)
+const pendingMemberRemoval = ref<{ userId: number; displayName: string } | null>(null)
 
 async function deleteCircle() {
   if (!circle.value) return
@@ -511,14 +522,23 @@ async function saveInfo() {
   }
 }
 
-async function removeMember(userId: number) {
-  if (!circle.value) return
+function promptRemoveMember(member: CircleMember) {
+  pendingMemberRemoval.value = {
+    userId: member.user_id,
+    displayName: member.user.display_name,
+  }
+}
+
+async function removeMember() {
+  if (!circle.value || !pendingMemberRemoval.value) return
   try {
-    await circleApi.removeMember(circle.value.id, userId)
-    circle.value.members = circle.value.members.filter(m => m.user_id !== userId)
+    await circleApi.removeMember(circle.value.id, pendingMemberRemoval.value.userId)
+    circle.value.members = circle.value.members.filter(m => m.user_id !== pendingMemberRemoval.value!.userId)
     toast.success(t('circleDetail.memberRemoved'))
   } catch (e: any) {
     toast.error(e.message)
+  } finally {
+    pendingMemberRemoval.value = null
   }
 }
 

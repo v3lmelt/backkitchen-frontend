@@ -8,6 +8,7 @@ import type { Comment, Issue, IssueStatus, StageAssignment } from '@/types'
 import TimestampText from '@/components/common/TimestampText.vue'
 import CommentInput from '@/components/common/CommentInput.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { formatTimestamp, formatDuration, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import type { TimeReference, TimestampTarget } from '@/utils/timestamps'
@@ -258,6 +259,7 @@ async function handleCommentSubmit(payload: { content: string; images: File[]; a
 // Comment edit/delete
 const editingCommentId = ref<number | null>(null)
 const editingCommentContent = ref('')
+const pendingDeleteComment = ref<Comment | null>(null)
 
 function startEditComment(comment: Comment) {
   editingCommentId.value = comment.id
@@ -275,12 +277,20 @@ async function saveEditComment(comment: Comment) {
   } catch { /* handled by request wrapper */ }
 }
 
-async function deleteComment(comment: Comment) {
-  if (!fullIssue.value?.comments) return
+function promptDeleteComment(comment: Comment) {
+  pendingDeleteComment.value = comment
+}
+
+async function deleteComment() {
+  const comment = pendingDeleteComment.value
+  if (!comment || !fullIssue.value?.comments) return
   try {
     await commentApi.delete(comment.id)
     fullIssue.value.comments = fullIssue.value.comments.filter(c => c.id !== comment.id)
   } catch { /* handled by request wrapper */ }
+  finally {
+    pendingDeleteComment.value = null
+  }
 }
 
 </script>
@@ -498,7 +508,7 @@ async function deleteComment(comment: Comment) {
                     <button @click="startEditComment(comment)" class="text-muted-foreground hover:text-foreground transition-colors ml-auto">
                       <Pencil class="w-3 h-3" :stroke-width="2" />
                     </button>
-                    <button @click="deleteComment(comment)" class="text-muted-foreground hover:text-error transition-colors">
+                    <button @click="promptDeleteComment(comment)" class="text-muted-foreground hover:text-error transition-colors">
                       <Trash2 class="w-3 h-3" :stroke-width="2" />
                     </button>
                   </template>
@@ -576,6 +586,16 @@ async function deleteComment(comment: Comment) {
       </div>
     </Transition>
   </Teleport>
+
+  <ConfirmModal
+    v-if="pendingDeleteComment"
+    :title="t('issueDetail.deleteCommentTitle')"
+    :message="t('issueDetail.deleteCommentConfirm')"
+    :confirm-text="t('common.delete')"
+    :destructive="true"
+    @confirm="deleteComment"
+    @cancel="pendingDeleteComment = null"
+  />
 </template>
 
 <style scoped>
