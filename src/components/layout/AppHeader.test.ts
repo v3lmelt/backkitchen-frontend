@@ -30,6 +30,7 @@ vi.mock('@/api', () => ({
   configApi: { get: vi.fn() },
   invitationApi: { listMine: vi.fn(), accept: vi.fn(), decline: vi.fn() },
   notificationApi: { list: vi.fn(), markAllRead: vi.fn(), markRead: vi.fn() },
+  onAuthCleared: vi.fn(),
   trackApi: { get: vi.fn(), list: vi.fn() },
   userApi: { list: vi.fn() },
   onAuthCleared: vi.fn(),

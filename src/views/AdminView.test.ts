@@ -57,7 +57,9 @@ vi.mock('@/components/common/CustomSelect.vue', () => ({
 import AdminView from './AdminView.vue'
 
 async function openUsersTab(wrapper: ReturnType<typeof mountWithPlugins>) {
-  await wrapper.findAll('button').find(button => button.text().includes('User Management'))!.trigger('click')
+  const tab = wrapper.findAll('button').find(button => button.text().includes('User Management'))
+  if (!tab) throw new Error('User Management tab not found')
+  await tab.trigger('click')
   await flushPromises()
 }
 

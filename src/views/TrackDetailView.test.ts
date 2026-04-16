@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('vue-router', () => ({
   useRoute: () => mocks.route,
   useRouter: () => ({ push: mocks.pushMock }),
+  RouterLink: { template: '<a><slot /></a>' },
 }))
 
 vi.mock('@/api', () => ({
@@ -43,8 +44,8 @@ vi.mock('@/stores/app', () => ({
 
 vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
   default: {
-    props: ['audioUrl', 'compareVersionId', 'compareAudioUrl'],
-    template: '<div class="waveform">audio:{{ audioUrl ?? "none" }} compare:{{ compareVersionId ?? "none" }} compareAudio:{{ compareAudioUrl ?? "none" }}</div>',
+    props: ['audioUrl', 'compareVersionId', 'compareAudioUrl', 'issues', 'playbackScope'],
+    template: '<div class="waveform">scope:{{ playbackScope ?? "source" }} audio:{{ audioUrl ?? "none" }} compare:{{ compareVersionId ?? "none" }} compareAudio:{{ compareAudioUrl ?? "none" }} issues:{{ issues?.length ?? 0 }}</div>',
   },
 }))
 
@@ -209,7 +210,7 @@ describe('TrackDetailView', () => {
     expect(wrapper.find('.waveform').text()).toContain('compare:201')
   })
 
-  it('renders the master waveform with the current delivery audio', async () => {
+  it('renders current master audio in a separate waveform and filters master issues to the active delivery', async () => {
     mocks.trackGetMock.mockResolvedValueOnce({
       track: {
         id: 7,
@@ -236,7 +237,11 @@ describe('TrackDetailView', () => {
           submitter_approved_at: null,
         },
       },
-      issues: [],
+      issues: [
+        { id: 11, phase: 'final_review', workflow_cycle: 2, master_delivery_id: 21, title: 'Current delivery issue' },
+        { id: 12, phase: 'final_review', workflow_cycle: 2, master_delivery_id: 20, title: 'Older delivery issue' },
+        { id: 13, phase: 'peer', workflow_cycle: 2, source_version_number: 3, title: 'Source issue' },
+      ],
       discussions: [],
       events: [],
       source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
@@ -267,7 +272,9 @@ describe('TrackDetailView', () => {
 
     const waveforms = wrapper.findAll('.waveform')
     expect(waveforms).toHaveLength(2)
+    expect(waveforms[1].text()).toContain('scope:master')
     expect(waveforms[1].text()).toContain('audio:/api/tracks/7/master-audio?v=4&c=2')
+    expect(waveforms[1].text()).toContain('issues:1')
     expect(waveforms[1].text()).toContain('compare:none')
   })
 

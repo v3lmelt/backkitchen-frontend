@@ -22,6 +22,7 @@ vi.mock('@/api', () => ({
     markAllRead: mocks.notificationMarkAllReadMock,
     markRead: mocks.notificationMarkReadMock,
   },
+  onAuthCleared: vi.fn(),
   userApi: { list: mocks.listMock },
   onAuthCleared: mocks.onAuthClearedMock,
 }))
