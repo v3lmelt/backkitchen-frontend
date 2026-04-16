@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Track, Issue, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember, StageAssignment, Discussion } from '@/types'
+import type { Track, Issue, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember, StageAssignment } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
@@ -13,7 +13,6 @@ import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
-import MasteringCommunicationCard from '@/components/mastering/MasteringCommunicationCard.vue'
 import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
 import { Archive, Check, ChevronRight, UserRoundCog, Pencil } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
@@ -67,6 +66,15 @@ function translateWorkflowDecision(decision: string): string {
   const actionKey = `trackDetail.actions.${decision}`
   if (te(actionKey)) return t(actionKey)
   return decision.replaceAll('_', ' ')
+}
+
+function inferTrackWorkflowVariant(trackData: Track | null): 'generic' | 'mastering' | 'final_review' {
+  const step = trackData?.workflow_step
+  if (!step) return 'generic'
+  if (step.ui_variant === 'mastering' || step.ui_variant === 'final_review') return step.ui_variant
+  if (step.id === 'mastering' || step.id === 'mastering_revision') return 'mastering'
+  if (step.id === 'final_review') return 'final_review'
+  return 'generic'
 }
 
 // Anonymize peer reviewer only for the submitter during active peer review phases
@@ -167,7 +175,6 @@ const issues = ref<Issue[]>([])
 const events = ref<WorkflowEvent[]>([])
 const sourceVersions = ref<TrackSourceVersion[]>([])
 const reviewAssignments = ref<StageAssignment[]>([])
-const masteringDiscussions = ref<Discussion[]>([])
 const workflowConfig = ref<WorkflowConfig | null>(null)
 const loading = ref(true)
 const loadError = ref(false)
@@ -255,7 +262,6 @@ async function loadTrack() {
     issues.value = detail.issues
     const allDiscussions = detail.discussions ?? []
     generalDiscussion.discussions.value = allDiscussions.filter(d => d.phase !== 'mastering')
-    masteringDiscussions.value = allDiscussions.filter(d => d.phase === 'mastering')
     events.value = detail.events
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
     workflowConfig.value = detail.workflow_config ?? null
@@ -345,10 +351,6 @@ function openPrimaryAction(_action: string) {
   })
 }
 
-function openMasteringCommunication() {
-  chatSidebarRef.value?.openPanel()
-}
-
 function openMasteringWorkspace() {
   router.push({
     path: `/tracks/${trackId.value}/mastering`,
@@ -392,6 +394,14 @@ const canSeeMastering = computed(() => {
     || userId === track.value.producer_id
     || userId === track.value.mastering_engineer_id
 })
+const hasEnteredMasteringFlow = computed(() => {
+  if (!track.value) return false
+  if (track.value.current_master_delivery) return true
+  const workflowVariant = inferTrackWorkflowVariant(track.value)
+  if (workflowVariant === 'mastering' || workflowVariant === 'final_review') return true
+  return ['mastering', 'mastering_revision', 'final_review', 'completed'].includes(track.value.status)
+})
+const canOpenMastering = computed(() => canSeeMastering.value && hasEnteredMasteringFlow.value)
 const archiving = ref(false)
 const showArchiveConfirm = ref(false)
 const togglingVisibility = ref(false)
@@ -872,14 +882,6 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             <WaveformPlayer :audio-url="masterAudioUrl" :issues="masterWaveformIssues" :track-id="trackId" playback-scope="master" @regionClick="onIssueSelect" />
           </div>
 
-          <MasteringCommunicationCard
-            v-if="canSeeMastering"
-            :track="track"
-            :discussions="masteringDiscussions"
-            :cta-label="t('masteringCommunication.openDiscussion')"
-            @open="openMasteringCommunication"
-          />
-
           <div id="issues">
             <h3 class="text-sm font-sans font-semibold text-foreground mb-3">
               {{ t('trackDetail.issuesHeading', { count: currentIssueList.length }) }}
@@ -1016,7 +1018,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
               </span>
             </div>
           </div>
-          <div v-if="canSeeMastering" class="pt-2 border-t border-border">
+          <div v-if="canOpenMastering" class="pt-2 border-t border-border">
             <button
               type="button"
               class="w-full flex items-center justify-center gap-2 rounded-full border border-primary/40 text-primary hover:bg-primary/10 transition-colors h-9 text-sm font-mono"
@@ -1041,15 +1043,8 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             <div class="flex gap-2">
               <button @click="saveAuthorNotes" :disabled="savingAuthorNotes" class="btn-primary text-xs px-3 py-1.5">{{ t('common.save') }}</button>
               <button @click="editingAuthorNotes = false" class="btn-secondary text-xs px-3 py-1.5">{{ t('common.cancel') }}</button>
-  </div>
-
-  <MasteringChatSidebar
-    v-if="canSeeMastering && track"
-    ref="chatSidebarRef"
-    :track-id="trackId"
-    :track-completed="track.status === 'completed'"
-  />
-</template>
+            </div>
+          </template>
           <p v-else-if="track.author_notes" class="text-sm text-muted-foreground whitespace-pre-wrap">{{ track.author_notes }}</p>
           <p v-else class="text-xs text-muted-foreground italic">{{ t('trackDetail.noAuthorNotes') }}</p>
         </div>
@@ -1263,6 +1258,13 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
         </button>
       </div>
     </div>
+
+    <MasteringChatSidebar
+      v-if="canSeeMastering && track"
+      ref="chatSidebarRef"
+      :track-id="trackId"
+      :track-completed="track.status === 'completed'"
+    />
   </div>
 
 </template>
