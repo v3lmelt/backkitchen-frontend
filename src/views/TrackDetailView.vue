@@ -661,8 +661,10 @@ async function handleReopen() {
   try {
     if (canDirectReopen.value) {
       await trackApi.reopen(track.value.id, reopenTargetStage.value)
+      toastSuccess(t('trackDetail.reopenDone'))
     } else {
       await trackApi.requestReopen(track.value.id, reopenTargetStage.value, reopenReason.value, reopenMasteringNotes.value.trim() || undefined)
+      toastSuccess(t('trackDetail.reopenRequested'))
     }
     showReopenModal.value = false
     reopenTargetStage.value = ''
@@ -670,6 +672,8 @@ async function handleReopen() {
     reopenMasteringNotes.value = ''
     reopenResets.value = []
     await loadTrack()
+  } catch (e: any) {
+    toastError(e?.message || t('trackDetail.reopenFailed'))
   } finally {
     reopening.value = false
   }
@@ -880,6 +884,8 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             :editing-content="generalDiscussion.editingContent.value"
             :history-items="generalDiscussion.historyItems.value"
             :show-history-for-id="generalDiscussion.showHistoryForId.value"
+            :loading="generalDiscussion.loading.value"
+            :load-error="generalDiscussion.loadError.value"
             @submit="generalDiscussion.submit"
             @start-edit="generalDiscussion.startEdit"
             @save-edit="generalDiscussion.saveEdit"
@@ -888,6 +894,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             @show-history="generalDiscussion.showHistory"
             @close-history="generalDiscussion.closeHistory"
             @open-image="generalDiscussion.openImage"
+            @retry="generalDiscussion.load"
             @update:editing-content="generalDiscussion.editingContent.value = $event"
           />
         </div>

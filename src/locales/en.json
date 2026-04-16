@@ -644,6 +644,9 @@
       "checklist_items": "Review checklists",
       "master_delivery_approvals": "Final review approval status"
     },
+    "reopenDone": "Workflow reopened.",
+    "reopenRequested": "Reopen request submitted.",
+    "reopenFailed": "Failed to reopen workflow.",
     "confirmDelivery": "Confirm Delivery",
     "reupload": "Re-upload",
     "deliveryPreview": "Preview and confirm the uploaded master file",
@@ -841,8 +844,12 @@
     "outdatedWaveformUnavailable": "The source-version audio for this issue is unavailable, so the marker is hidden here.",
     "commentsEmptyHint": "No comments yet — be the first to leave a note.",
     "keyboardHint": "Space play/pause · ←/→ seek ±5s · J/K prev/next issue",
+    "statusUpdated": "Issue status updated.",
+    "statusUpdateFailed": "Failed to update issue status.",
     "commentUpdated": "Comment updated.",
-    "commentDeleted": "Comment deleted."
+    "commentDeleted": "Comment deleted.",
+    "deleteCommentTitle": "Delete comment?",
+    "deleteCommentMessage": "This comment will be permanently removed."
   },
   "upload": {
     "heading": "Submit Track",
@@ -1020,6 +1027,10 @@
     "currentVersion": "Current",
     "previousVersion": "Previous",
     "clear": "Clear"
+  },
+  "discussion": {
+    "deleteTitle": "Delete discussion?",
+    "deleteMessage": "This discussion message will be permanently removed."
   },
   "timestamp": {
     "syntaxTitle": "Timestamp Syntax",

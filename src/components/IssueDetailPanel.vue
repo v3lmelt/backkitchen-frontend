@@ -3,8 +3,10 @@ import { ref, computed, watch } from 'vue'
 
 import { useI18n } from 'vue-i18n'
 import { issueApi, commentApi, r2Api, uploadToR2, resolveAssetUrl } from '@/api'
+import { useToast } from '@/composables/useToast'
 import { useAppStore } from '@/stores/app'
 import type { Comment, Issue, IssueStatus, StageAssignment } from '@/types'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import TimestampText from '@/components/common/TimestampText.vue'
 import CommentInput from '@/components/common/CommentInput.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
@@ -27,11 +29,13 @@ const emit = defineEmits<{
 
 const { t, locale } = useI18n()
 const appStore = useAppStore()
+const { success: toastSuccess, error: toastError } = useToast()
 
 const fullIssue = ref<Issue | null>(null)
 const loading = ref(false)
 const pendingStatus = ref<IssueStatus | null>(null)
 const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
+const pendingDeleteComment = ref<Comment | null>(null)
 
 const canSubmitIssueStatus = computed(() => {
   return fullIssue.value != null
@@ -192,12 +196,14 @@ async function confirmStatusChange() {
     })
     fullIssue.value = updated
     emit('updated', updated)
-  } catch {
+    toastSuccess(t('issueDetail.statusUpdated'))
+  } catch (err: any) {
     // Revert on failure
     if (fullIssue.value) {
       fullIssue.value = { ...fullIssue.value, status: previousStatus }
       emit('updated', fullIssue.value)
     }
+    toastError(err?.message || t('issueDetail.statusUpdateFailed'))
   }
 }
 
@@ -250,6 +256,8 @@ async function handleCommentSubmit(payload: { content: string; images: File[]; a
     fullIssue.value.comments.push(comment)
     commentInputRef.value?.reset()
     commentAudioRefs.clear()
+  } catch (err: any) {
+    toastError(err?.message || t('common.requestFailed'))
   } finally {
     submittingComment.value = false
   }
@@ -272,15 +280,28 @@ async function saveEditComment(comment: Comment) {
     const idx = fullIssue.value.comments.findIndex(c => c.id === comment.id)
     if (idx !== -1) fullIssue.value.comments[idx] = updated
     editingCommentId.value = null
-  } catch { /* handled by request wrapper */ }
+    toastSuccess(t('issueDetail.commentUpdated'))
+  } catch (err: any) {
+    toastError(err?.message || t('common.requestFailed'))
+  }
 }
 
-async function deleteComment(comment: Comment) {
-  if (!fullIssue.value?.comments) return
+function requestDeleteComment(comment: Comment) {
+  pendingDeleteComment.value = comment
+}
+
+async function confirmDeleteComment() {
+  const comment = pendingDeleteComment.value
+  if (!comment || !fullIssue.value?.comments) return
   try {
     await commentApi.delete(comment.id)
     fullIssue.value.comments = fullIssue.value.comments.filter(c => c.id !== comment.id)
-  } catch { /* handled by request wrapper */ }
+    toastSuccess(t('issueDetail.commentDeleted'))
+  } catch (err: any) {
+    toastError(err?.message || t('common.requestFailed'))
+  } finally {
+    pendingDeleteComment.value = null
+  }
 }
 
 </script>
@@ -498,7 +519,7 @@ async function deleteComment(comment: Comment) {
                     <button @click="startEditComment(comment)" class="text-muted-foreground hover:text-foreground transition-colors ml-auto">
                       <Pencil class="w-3 h-3" :stroke-width="2" />
                     </button>
-                    <button @click="deleteComment(comment)" class="text-muted-foreground hover:text-error transition-colors">
+                    <button @click="requestDeleteComment(comment)" class="text-muted-foreground hover:text-error transition-colors">
                       <Trash2 class="w-3 h-3" :stroke-width="2" />
                     </button>
                   </template>
@@ -575,6 +596,16 @@ async function deleteComment(comment: Comment) {
         </div>
       </div>
     </Transition>
+
+    <ConfirmModal
+      v-if="pendingDeleteComment"
+      :title="t('issueDetail.deleteCommentTitle')"
+      :message="t('issueDetail.deleteCommentMessage')"
+      :confirm-text="t('common.delete')"
+      destructive
+      @confirm="confirmDeleteComment"
+      @cancel="pendingDeleteComment = null"
+    />
   </Teleport>
 </template>
 

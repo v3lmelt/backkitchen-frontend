@@ -644,6 +644,9 @@
       "checklist_items": "审核清单",
       "master_delivery_approvals": "终审批准状态"
     },
+    "reopenDone": "流程已重新开启。",
+    "reopenRequested": "已提交重新开启申请。",
+    "reopenFailed": "重新开启流程失败。",
     "confirmDelivery": "确认提交",
     "reupload": "重新上传",
     "deliveryPreview": "请试听并确认上传的母带文件",
@@ -841,8 +844,12 @@
     "outdatedWaveformUnavailable": "无法加载该问题所属的旧版本音频，因此这里不显示问题标记。",
     "commentsEmptyHint": "暂无评论，率先发表看法吧。",
     "keyboardHint": "空格 播放/暂停 · ←/→ 快退/快进 5s · J/K 上/下一问题",
+    "statusUpdated": "问题状态已更新。",
+    "statusUpdateFailed": "更新问题状态失败。",
     "commentUpdated": "评论已更新。",
-    "commentDeleted": "评论已删除。"
+    "commentDeleted": "评论已删除。",
+    "deleteCommentTitle": "删除评论？",
+    "deleteCommentMessage": "这条评论将被永久删除。"
   },
   "upload": {
     "heading": "提交曲目",
@@ -1071,6 +1078,10 @@
     "currentVersion": "当前版本",
     "previousVersion": "旧版本",
     "clear": "取消对比"
+  },
+  "discussion": {
+    "deleteTitle": "删除讨论？",
+    "deleteMessage": "这条讨论消息将被永久删除。"
   },
   "timestamp": {
     "syntaxTitle": "时间点语法",

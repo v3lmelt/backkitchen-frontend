@@ -9,6 +9,8 @@ export function useDiscussions(trackId: Ref<number>, phase?: DiscussionPhase) {
   const { error: toastError } = useToast()
 
   const discussions = ref<Discussion[]>([])
+  const loading = ref(false)
+  const loadError = ref('')
   const posting = ref(false)
   const postingProgress = ref(0)
   const editingId = ref<number | null>(null)
@@ -17,9 +19,15 @@ export function useDiscussions(trackId: Ref<number>, phase?: DiscussionPhase) {
   const showHistoryForId = ref<number | null>(null)
 
   async function load() {
+    loading.value = true
+    loadError.value = ''
     try {
       discussions.value = await discussionApi.list(trackId.value, phase)
-    } catch { discussions.value = [] }
+    } catch (err: any) {
+      loadError.value = err?.message || t('common.loadFailed')
+    } finally {
+      loading.value = false
+    }
   }
 
   async function submit(payload: { content: string; images: File[]; audios: File[] }) {
@@ -85,6 +93,8 @@ export function useDiscussions(trackId: Ref<number>, phase?: DiscussionPhase) {
 
   return {
     discussions,
+    loading,
+    loadError,
     posting,
     postingProgress,
     editingId,

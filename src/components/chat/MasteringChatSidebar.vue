@@ -8,6 +8,7 @@ import { formatLocaleDate, formatDuration } from '@/utils/time'
 import { useDiscussions } from '@/composables/useDiscussions'
 import CommentInput from '@/components/common/CommentInput.vue'
 import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { MessageSquare, X, Pencil, Trash2, Music } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -23,10 +24,10 @@ const trackIdRef = computed(() => props.trackId)
 const mastering = useDiscussions(trackIdRef, 'mastering')
 
 const open = ref(false)
-const loading = ref(false)
 const unreadCount = ref(0)
 const messageListRef = ref<HTMLElement | null>(null)
 const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
+const pendingDeleteDiscussion = ref<Discussion | null>(null)
 
 function toggle() {
   open.value = !open.value
@@ -37,9 +38,7 @@ function toggle() {
 }
 
 async function loadDiscussions() {
-  loading.value = true
   await mastering.load()
-  loading.value = false
 }
 
 function scrollToBottom() {
@@ -76,6 +75,16 @@ async function handleDiscussionEvent(event: string, discussionId: number) {
 }
 
 const isOwnMessage = (d: Discussion) => d.author_id === appStore.currentUser?.id
+
+function requestDeleteDiscussion(discussion: Discussion) {
+  pendingDeleteDiscussion.value = discussion
+}
+
+function confirmDeleteDiscussion() {
+  if (!pendingDeleteDiscussion.value) return
+  mastering.remove(pendingDeleteDiscussion.value)
+  pendingDeleteDiscussion.value = null
+}
 
 onMounted(loadDiscussions)
 
@@ -124,8 +133,13 @@ defineExpose({ handleDiscussionEvent })
         class="flex-1 overflow-y-auto px-4 py-3 space-y-4"
       >
         <!-- Loading -->
-        <div v-if="loading" class="flex items-center justify-center py-8">
+        <div v-if="mastering.loading.value" class="flex items-center justify-center py-8">
           <span class="text-sm text-muted-foreground">{{ t('common.loading') }}</span>
+        </div>
+
+        <div v-else-if="mastering.loadError.value && mastering.discussions.value.length === 0" class="flex flex-col items-center justify-center gap-3 py-8 text-center">
+          <p class="text-sm text-error">{{ mastering.loadError.value }}</p>
+          <button class="btn-secondary text-sm" @click="loadDiscussions">{{ t('common.retry') }}</button>
         </div>
 
         <!-- Empty -->
@@ -136,6 +150,15 @@ defineExpose({ handleDiscussionEvent })
 
         <!-- Messages list -->
         <template v-else>
+          <div
+            v-if="mastering.loadError.value"
+            class="rounded-none border border-error/30 bg-error-bg/30 px-3 py-2"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-sm text-error">{{ mastering.loadError.value }}</p>
+              <button class="btn-secondary text-xs flex-shrink-0" @click="loadDiscussions">{{ t('common.retry') }}</button>
+            </div>
+          </div>
           <div
             v-for="d in mastering.discussions.value"
             :key="d.id"
@@ -227,7 +250,7 @@ defineExpose({ handleDiscussionEvent })
                   <button @click="mastering.startEdit(d)" class="text-muted-foreground hover:text-foreground transition-colors">
                     <Pencil class="w-3 h-3" :stroke-width="2" />
                   </button>
-                  <button @click="mastering.remove(d)" class="text-muted-foreground hover:text-error transition-colors">
+                  <button @click="requestDeleteDiscussion(d)" class="text-muted-foreground hover:text-error transition-colors">
                     <Trash2 class="w-3 h-3" :stroke-width="2" />
                   </button>
                 </template>
@@ -260,6 +283,16 @@ defineExpose({ handleDiscussionEvent })
     v-if="mastering.showHistoryForId.value !== null"
     :items="mastering.historyItems.value"
     @close="mastering.closeHistory()"
+  />
+
+  <ConfirmModal
+    v-if="pendingDeleteDiscussion"
+    :title="t('discussion.deleteTitle')"
+    :message="t('discussion.deleteMessage')"
+    :confirm-text="t('common.delete')"
+    destructive
+    @confirm="confirmDeleteDiscussion"
+    @cancel="pendingDeleteDiscussion = null"
   />
 </template>
 
