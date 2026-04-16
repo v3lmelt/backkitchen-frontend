@@ -149,7 +149,11 @@ const requiredReviewCount = computed(() => Math.max(1, currentStep.value?.requir
 const currentUserAssignment = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId) return null
-  return currentStepAssignments.value.find(assignment => assignment.user_id === userId) ?? null
+  // Prefer a pending assignment over a completed one when the same user has
+  // multiple active records for this step (can happen after a reassignment
+  // that re-includes a user who previously completed their review).
+  const mine = currentStepAssignments.value.filter(assignment => assignment.user_id === userId)
+  return mine.find(assignment => assignment.status === 'pending') ?? mine[0] ?? null
 })
 const reviewQuorumReached = computed(() => completedReviewCount.value >= requiredReviewCount.value)
 const reviewRequiresGroupFinalization = computed(() => currentStep.value?.type === 'review' && requiredReviewCount.value > 1)
