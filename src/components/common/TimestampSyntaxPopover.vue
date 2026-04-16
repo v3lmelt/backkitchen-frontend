@@ -6,6 +6,7 @@ import {
   extractMarkerIndexReferences,
   extractTimeReferences,
   resolveTimeReferenceTarget,
+  type TimeReference,
   type TimestampTarget,
 } from '@/utils/timestamps'
 
@@ -43,8 +44,8 @@ const typingTimestamp = computed(() => {
     if (cursor >= start && cursor <= end) return true
   }
   // 2. In-progress partial timestamp ending exactly at the cursor.
-  const snippet = props.text.slice(Math.max(0, cursor - 8), cursor)
-  return /(?:^|[^\w])(?:[ta]:)?\d{1,2}:\d{0,2}$/.test(snippet)
+  const snippet = props.text.slice(Math.max(0, cursor - 16), cursor)
+  return /(?:^|[^\w])(?:(?:t|a\d*):)?\d{1,2}:\d{0,2}$/.test(snippet)
 })
 const matches = computed(() => extractTimeReferences(props.text))
 const markerMatches = computed(() => extractMarkerIndexReferences(props.text))
@@ -70,12 +71,18 @@ function targetLabel(target: TimestampTarget) {
   return target === 'attachment' ? t('timestamp.attachmentAudio') : t('timestamp.trackAudio')
 }
 
+function resolvedTargetLabel(reference: TimeReference) {
+  const target = resolveTimeReferenceTarget(reference, props.defaultTarget)
+  if (target !== 'attachment' || reference.attachmentIndex == null) return targetLabel(target)
+  return `${t('timestamp.attachmentAudio')} A${reference.attachmentIndex}`
+}
+
 const examples = computed(() => ([
   { code: '03:15', description: t('timestamp.examples.point') },
   { code: '03:15-04:12', description: t('timestamp.examples.range') },
   { code: '#1', description: t('timestamp.examples.marker') },
   { code: 't:03:15', description: t('timestamp.examples.track') },
-  { code: 'a:03:15', description: t('timestamp.examples.attachment') },
+  { code: 'a1:03:15', description: t('timestamp.examples.attachment') },
 ]))
 </script>
 
@@ -129,7 +136,7 @@ const examples = computed(() => ([
         >
           {{ match.raw }}
           <span class="text-warning/50">·</span>
-          <span class="text-muted-foreground">{{ targetLabel(resolveTimeReferenceTarget(match, defaultTarget)) }}</span>
+          <span class="text-muted-foreground">{{ resolvedTargetLabel(match) }}</span>
         </span>
       </div>
       <div v-if="markerMatches.length" class="mt-2 flex flex-wrap gap-1.5 border-t border-border pt-2">

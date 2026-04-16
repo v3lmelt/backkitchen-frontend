@@ -4,6 +4,7 @@ import {
   extractMarkerIndexReferences,
   extractTimeReferences,
   parseTimecode,
+  resolveAttachmentReferenceIndex,
   resolveTimeReferenceTarget,
   splitTextWithInlineReferences,
   splitTextWithTimeReferences,
@@ -27,10 +28,12 @@ describe('parseTimecode', () => {
 
 describe('extractTimeReferences', () => {
   it('extracts points and ranges with optional target prefixes', () => {
-    expect(extractTimeReferences('Try 03:15, t:04:20 and a:05:00-05:12.500')).toEqual([
+    expect(extractTimeReferences('Try 03:15, t:04:20 and a2:05:00-05:12.500')).toEqual([
       {
         raw: '03:15',
         prefixTarget: null,
+        attachmentIndex: null,
+        zeroBasedAttachmentIndex: null,
         startSeconds: 195,
         endSeconds: null,
         isRange: false,
@@ -40,6 +43,8 @@ describe('extractTimeReferences', () => {
       {
         raw: 't:04:20',
         prefixTarget: 'track',
+        attachmentIndex: null,
+        zeroBasedAttachmentIndex: null,
         startSeconds: 260,
         endSeconds: null,
         isRange: false,
@@ -47,19 +52,25 @@ describe('extractTimeReferences', () => {
         length: 7,
       },
       {
-        raw: 'a:05:00-05:12.500',
+        raw: 'a2:05:00-05:12.500',
         prefixTarget: 'attachment',
+        attachmentIndex: 2,
+        zeroBasedAttachmentIndex: 1,
         startSeconds: 300,
         endSeconds: 312.5,
         isRange: true,
         index: 23,
-        length: 17,
+        length: 18,
       },
     ])
   })
 
   it('ignores invalid ranges', () => {
     expect(extractTimeReferences('Skip 04:10-03:59')).toEqual([])
+  })
+
+  it('rejects invalid attachment prefixes', () => {
+    expect(extractTimeReferences('Skip a0:03:15')).toEqual([])
   })
 })
 
@@ -72,6 +83,8 @@ describe('splitTextWithTimeReferences', () => {
         value: {
           raw: '03:15',
           prefixTarget: null,
+          attachmentIndex: null,
+          zeroBasedAttachmentIndex: null,
           startSeconds: 195,
           endSeconds: null,
           isRange: false,
@@ -85,6 +98,8 @@ describe('splitTextWithTimeReferences', () => {
         value: {
           raw: '04:10-04:20',
           prefixTarget: null,
+          attachmentIndex: null,
+          zeroBasedAttachmentIndex: null,
           startSeconds: 250,
           endSeconds: 260,
           isRange: true,
@@ -101,6 +116,28 @@ describe('resolveTimeReferenceTarget', () => {
   it('prefers explicit prefixes over context default', () => {
     const [reference] = extractTimeReferences('a:03:15')
     expect(resolveTimeReferenceTarget(reference, 'track')).toBe('attachment')
+  })
+})
+
+describe('resolveAttachmentReferenceIndex', () => {
+  it('uses explicit attachment indices when present', () => {
+    const [reference] = extractTimeReferences('a2:03:15')
+    expect(resolveAttachmentReferenceIndex(reference, 'attachment', 3)).toBe(1)
+  })
+
+  it('keeps legacy single-attachment references working', () => {
+    const [reference] = extractTimeReferences('a:03:15')
+    expect(resolveAttachmentReferenceIndex(reference, 'attachment', 1)).toBe(0)
+  })
+
+  it('treats attachment references as ambiguous when multiple attachments exist without an index', () => {
+    const [reference] = extractTimeReferences('03:15')
+    expect(resolveAttachmentReferenceIndex(reference, 'attachment', 2)).toBeNull()
+  })
+
+  it('returns null for out-of-range explicit attachment indices', () => {
+    const [reference] = extractTimeReferences('a3:03:15')
+    expect(resolveAttachmentReferenceIndex(reference, 'attachment', 2)).toBeNull()
   })
 })
 
@@ -145,6 +182,8 @@ describe('splitTextWithInlineReferences', () => {
         value: {
           raw: '03:15',
           prefixTarget: null,
+          attachmentIndex: null,
+          zeroBasedAttachmentIndex: null,
           startSeconds: 195,
           endSeconds: null,
           isRange: false,

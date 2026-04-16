@@ -12,7 +12,7 @@ import CommentInput from '@/components/common/CommentInput.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatTimestamp, formatDuration, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
-import type { TimeReference, TimestampTarget } from '@/utils/timestamps'
+import { resolveAttachmentReferenceIndex, type TimeReference, type TimestampTarget } from '@/utils/timestamps'
 import { ArrowDownUp, X, Music, Pencil, Trash2 } from 'lucide-vue-next'
 import { canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
 
@@ -149,8 +149,11 @@ function setCommentAudioRef(commentId: number, index: number, element: unknown) 
   else commentAudioRefs.delete(commentId)
 }
 
-async function playAttachmentReference(commentId: number, reference: TimeReference) {
-  const audio = commentAudioRefs.get(commentId)?.[0]
+async function playAttachmentReference(commentId: number, reference: TimeReference, attachmentCount: number) {
+  const attachmentIndex = resolveAttachmentReferenceIndex(reference, 'attachment', attachmentCount)
+  if (attachmentIndex == null) return
+
+  const audio = commentAudioRefs.get(commentId)?.[attachmentIndex]
   if (!audio) return
   audio.currentTime = reference.startSeconds
   await audio.play().catch(() => undefined)
@@ -158,7 +161,7 @@ async function playAttachmentReference(commentId: number, reference: TimeReferen
 
 async function handleCommentReference(comment: Comment, reference: TimeReference, target: TimestampTarget) {
   if (target !== 'attachment' || !comment.audios?.length) return
-  await playAttachmentReference(comment.id, reference)
+  await playAttachmentReference(comment.id, reference, comment.audios.length)
 }
 
 function formatDate(d: string) {

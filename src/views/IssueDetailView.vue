@@ -13,7 +13,7 @@ import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { formatTimestamp, formatTimestampShort, formatLocaleDate, formatDuration } from '@/utils/time'
-import type { MarkerIndexReference, TimeReference, TimestampTarget } from '@/utils/timestamps'
+import { resolveAttachmentReferenceIndex, type MarkerIndexReference, type TimeReference, type TimestampTarget } from '@/utils/timestamps'
 import { ArrowDownUp, ChevronLeft, ChevronRight, Music, Pencil, Trash2 } from 'lucide-vue-next'
 import { canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
 import { useToast } from '@/composables/useToast'
@@ -58,6 +58,7 @@ let cachedTrackId: number | null = null
 const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
 const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
 const statusNoteInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
+const issueAudioRefs = new Map<number, HTMLAudioElement>()
 const commentAudioRefs = new Map<string, HTMLAudioElement>()
 
 const audioUrl = computed(() => {
@@ -211,20 +212,49 @@ function setCommentAudioRef(commentId: number, index: number, element: unknown) 
   commentAudioRefs.set(key, element)
 }
 
+function setIssueAudioRef(index: number, element: unknown) {
+  if (!(element instanceof HTMLAudioElement)) {
+    issueAudioRefs.delete(index)
+    return
+  }
+
+  issueAudioRefs.set(index, element)
+}
+
 async function playTrackReference(reference: TimeReference) {
   if (!waveformRef.value) return
   await waveformRef.value.playFrom(reference.startSeconds)
 }
 
-async function playCommentAttachmentReference(comment: Comment, reference: TimeReference) {
-  const audio = comment.audios?.length ? commentAudioRefs.get(`${comment.id}:0`) : null
-  if (!audio) {
-    await playTrackReference(reference)
-    return
-  }
+async function playIssueAttachmentReference(reference: TimeReference) {
+  const attachmentIndex = resolveAttachmentReferenceIndex(reference, 'attachment', issue.value?.audios?.length ?? 0)
+  if (attachmentIndex == null) return
+
+  const audio = issueAudioRefs.get(attachmentIndex)
+  if (!audio) return
 
   audio.currentTime = reference.startSeconds
   await audio.play().catch(() => undefined)
+}
+
+async function playCommentAttachmentReference(comment: Comment, reference: TimeReference) {
+  const attachmentIndex = resolveAttachmentReferenceIndex(reference, 'attachment', comment.audios?.length ?? 0)
+  if (attachmentIndex == null) return
+
+  const audio = commentAudioRefs.get(`${comment.id}:${attachmentIndex}`)
+  if (!audio) return
+
+  audio.currentTime = reference.startSeconds
+  await audio.play().catch(() => undefined)
+}
+
+async function handleIssueDescriptionReference(reference: TimeReference, target: TimestampTarget) {
+  if (target === 'attachment') {
+    await playIssueAttachmentReference(reference)
+    return
+  }
+
+  await playTrackReference(reference)
 }
 
 async function handleCommentReference(comment: Comment, reference: TimeReference, target: TimestampTarget) {
@@ -609,14 +639,14 @@ function openVersionCompare() {
           <TimestampText
             :text="issue.description"
             class="text-sm text-foreground"
-            @activate="(reference) => playTrackReference(reference)"
+            @activate="(reference, target) => handleIssueDescriptionReference(reference, target)"
             @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
           />
           <div v-if="issue.audios?.length" class="mt-4 space-y-2">
             <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('issue.audioAttachments') }}</h3>
             <div class="flex flex-col gap-2">
               <div
-                v-for="audio in issue.audios"
+                v-for="(audio, index) in issue.audios"
                 :key="audio.id"
                 class="bg-background border border-border rounded-2xl px-4 py-3 space-y-2"
               >
@@ -626,6 +656,7 @@ function openVersionCompare() {
                   <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
                 </div>
                 <audio
+                  :ref="(element) => setIssueAudioRef(index, element)"
                   :src="resolveAssetUrl(audio.audio_url)"
                   controls
                   class="w-full h-8"

@@ -1086,7 +1086,7 @@
       "range": "Time range, plays from the start",
       "marker": "Jump by marker index (in add order)",
       "track": "Explicitly target track audio",
-      "attachment": "Explicitly target attachment audio"
+      "attachment": "Explicitly target attachment audio (a1/a2...)"
     }
   },
   "issue": {

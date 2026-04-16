@@ -22,8 +22,28 @@ describe('TimestampText', () => {
     await buttons[1].trigger('click')
 
     expect(wrapper.emitted('activate')).toEqual([
-      [{ raw: '03:15', prefixTarget: null, startSeconds: 195, endSeconds: null, isRange: false, index: 2, length: 5 }, 'attachment'],
-      [{ raw: 't:04:20-04:30', prefixTarget: 'track', startSeconds: 260, endSeconds: 270, isRange: true, index: 12, length: 13 }, 'track'],
+      [{
+        raw: '03:15',
+        prefixTarget: null,
+        attachmentIndex: null,
+        zeroBasedAttachmentIndex: null,
+        startSeconds: 195,
+        endSeconds: null,
+        isRange: false,
+        index: 2,
+        length: 5,
+      }, 'attachment'],
+      [{
+        raw: 't:04:20-04:30',
+        prefixTarget: 'track',
+        attachmentIndex: null,
+        zeroBasedAttachmentIndex: null,
+        startSeconds: 260,
+        endSeconds: 270,
+        isRange: true,
+        index: 12,
+        length: 13,
+      }, 'track'],
     ])
   })
 

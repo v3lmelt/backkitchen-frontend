@@ -3,6 +3,8 @@ export type TimestampTarget = 'track' | 'attachment'
 export interface TimeReference {
   raw: string
   prefixTarget: TimestampTarget | null
+  attachmentIndex: number | null
+  zeroBasedAttachmentIndex: number | null
   startSeconds: number
   endSeconds: number | null
   isRange: boolean
@@ -29,7 +31,7 @@ export type InlineReferenceSegment =
 
 const TIME_VALUE = '\\d{1,2}:\\d{2}(?::\\d{2})?(?:\\.\\d{1,3})?'
 const TIME_REFERENCE_PATTERN = new RegExp(
-  String.raw`(?<![\w])(?:(?<prefix>[at]):)?(?<start>${TIME_VALUE})(?:\s*-\s*(?<end>${TIME_VALUE}))?(?![\w])`,
+  String.raw`(?<![\w])(?:(?<prefix>a\d*|t):)?(?<start>${TIME_VALUE})(?:\s*-\s*(?<end>${TIME_VALUE}))?(?![\w])`,
   'gi',
 )
 const MARKER_REFERENCE_PATTERN = /(?<![\w])#(?<index>\d{1,3})(?![\w])/g
@@ -70,11 +72,26 @@ export function extractTimeReferences(text: string): TimeReference[] {
     if (endValue && (endSeconds == null || endSeconds <= startSeconds)) continue
 
     const prefix = match.groups?.prefix?.toLowerCase()
-    const prefixTarget = prefix === 'a' ? 'attachment' : prefix === 't' ? 'track' : null
+    let prefixTarget: TimestampTarget | null = null
+    let attachmentIndex: number | null = null
+
+    if (prefix === 't') {
+      prefixTarget = 'track'
+    } else if (prefix?.startsWith('a')) {
+      prefixTarget = 'attachment'
+      const suffix = prefix.slice(1)
+      if (suffix) {
+        const parsedAttachmentIndex = Number(suffix)
+        if (!Number.isInteger(parsedAttachmentIndex) || parsedAttachmentIndex <= 0) continue
+        attachmentIndex = parsedAttachmentIndex
+      }
+    }
 
     references.push({
       raw: match[0],
       prefixTarget,
+      attachmentIndex,
+      zeroBasedAttachmentIndex: attachmentIndex == null ? null : attachmentIndex - 1,
       startSeconds,
       endSeconds,
       isRange: endSeconds != null,
@@ -187,4 +204,16 @@ export function splitTextWithInlineReferences(text: string): InlineReferenceSegm
 
 export function resolveTimeReferenceTarget(reference: TimeReference, defaultTarget: TimestampTarget): TimestampTarget {
   return reference.prefixTarget ?? defaultTarget
+}
+
+export function resolveAttachmentReferenceIndex(
+  reference: TimeReference,
+  target: TimestampTarget,
+  attachmentCount: number,
+): number | null {
+  if (target !== 'attachment' || attachmentCount <= 0) return null
+  if (reference.zeroBasedAttachmentIndex != null) {
+    return reference.zeroBasedAttachmentIndex < attachmentCount ? reference.zeroBasedAttachmentIndex : null
+  }
+  return attachmentCount === 1 ? 0 : null
 }
