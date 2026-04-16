@@ -6,8 +6,8 @@ import { resolveAssetUrl } from '@/api'
 import { formatLocaleDate, formatDuration } from '@/utils/time'
 import { useAppStore } from '@/stores/app'
 import CommentInput from '@/components/common/CommentInput.vue'
-import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
 import { Music, Pencil, Trash2 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -22,6 +22,8 @@ const props = defineProps<{
   editingContent: string
   historyItems: EditHistory[]
   showHistoryForId: number | null
+  loading?: boolean
+  loadError?: string
   enableAudio?: boolean
 }>()
 
@@ -34,6 +36,7 @@ const emit = defineEmits<{
   showHistory: [id: number]
   closeHistory: []
   openImage: [url: string]
+  retry: []
   'update:editingContent': [value: string]
 }>()
 
@@ -41,7 +44,7 @@ const { locale, t } = useI18n()
 const appStore = useAppStore()
 const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
 const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
-const pendingRemovalDiscussion = ref<Discussion | null>(null)
+const pendingDeleteDiscussion = ref<Discussion | null>(null)
 
 const editContent = computed({
   get: () => props.editingContent,
@@ -53,22 +56,37 @@ watch(() => props.discussions.length, (newLen, oldLen) => {
   if (newLen > oldLen) commentInputRef.value?.reset()
 })
 
-function requestRemove(d: Discussion) {
-  pendingRemovalDiscussion.value = d
+function requestDelete(discussion: Discussion) {
+  pendingDeleteDiscussion.value = discussion
 }
 
-function confirmRemove() {
-  if (pendingRemovalDiscussion.value) {
-    emit('remove', pendingRemovalDiscussion.value)
-  }
-  pendingRemovalDiscussion.value = null
+function confirmDelete() {
+  if (!pendingDeleteDiscussion.value) return
+  emit('remove', pendingDeleteDiscussion.value)
+  pendingDeleteDiscussion.value = null
 }
 </script>
 
 <template>
   <div class="card space-y-4">
     <h3 class="text-sm font-sans font-semibold text-foreground">{{ heading }}</h3>
-    <div v-if="discussions.length === 0" class="text-sm text-muted-foreground">
+    <div
+      v-if="loadError && discussions.length > 0"
+      class="flex items-center justify-between gap-3 rounded-none border border-error/30 bg-error-bg/30 px-3 py-2"
+    >
+      <p class="text-sm text-error">{{ loadError }}</p>
+      <button class="btn-secondary text-xs flex-shrink-0" @click="emit('retry')">{{ $t('common.retry') }}</button>
+    </div>
+    <div v-if="loading && discussions.length === 0" class="text-sm text-muted-foreground">
+      {{ $t('common.loading') }}
+    </div>
+    <div v-else-if="loadError && discussions.length === 0" class="space-y-3">
+      <p class="text-sm text-error">{{ loadError }}</p>
+      <div>
+        <button class="btn-secondary text-sm" @click="emit('retry')">{{ $t('common.retry') }}</button>
+      </div>
+    </div>
+    <div v-else-if="discussions.length === 0" class="text-sm text-muted-foreground">
       {{ emptyText }}
     </div>
     <div v-else class="space-y-3">
@@ -94,7 +112,7 @@ function confirmRemove() {
               <button @click="emit('startEdit', d)" class="text-muted-foreground hover:text-foreground transition-colors ml-auto">
                 <Pencil class="w-3.5 h-3.5" :stroke-width="2" />
               </button>
-              <button @click="requestRemove(d)" class="text-muted-foreground hover:text-error transition-colors">
+              <button @click="requestDelete(d)" class="text-muted-foreground hover:text-error transition-colors">
                 <Trash2 class="w-3.5 h-3.5" :stroke-width="2" />
               </button>
             </template>
@@ -164,12 +182,12 @@ function confirmRemove() {
   />
 
   <ConfirmModal
-    v-if="pendingRemovalDiscussion"
+    v-if="pendingDeleteDiscussion"
     :title="t('discussionPanel.deleteTitle')"
     :message="t('discussionPanel.deleteConfirm')"
     :confirm-text="t('common.delete')"
-    :destructive="true"
-    @confirm="confirmRemove"
-    @cancel="pendingRemovalDiscussion = null"
+    destructive
+    @confirm="confirmDelete"
+    @cancel="pendingDeleteDiscussion = null"
   />
 </template>

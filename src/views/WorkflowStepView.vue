@@ -71,6 +71,7 @@ const templateItems = ref<ChecklistTemplateItem[]>([])
 const checklistDraft = ref<{ label: string; passed: boolean; note: string }[]>([])
 const reviewAssignments = ref<StageAssignment[]>([])
 const loading = ref(true)
+const loadError = ref('')
 const acting = ref(false)
 const uploadFile = ref<File | null>(null)
 const localDeliveryPreviewUrl = ref('')
@@ -466,6 +467,7 @@ async function loadPeerChecklist(albumId: number) {
 
 async function loadPage() {
   if (!track.value) loading.value = true
+  loadError.value = ''
   error.value = ''
   try {
     const detail = await trackApi.get(trackId.value)
@@ -502,9 +504,10 @@ async function loadPage() {
     if (inferClassicVariant(detail.track.workflow_step ?? null) === 'mastering') {
       masteringDiscussion.discussions.value = (detail.discussions ?? []).filter(d => d.phase === 'mastering')
     }
-  } catch (err) {
+  } catch (err: any) {
     trackStore.setCurrentTrack(null)
-    throw err
+    track.value = null
+    loadError.value = err?.message || t('common.loadFailed')
   } finally {
     loading.value = false
   }
@@ -1106,8 +1109,13 @@ function handleIssueLeave() {
     <div class="card animate-pulse h-24"></div>
   </div>
 
-  <div v-else-if="!track || !currentStep" class="max-w-4xl mx-auto space-y-6">
-    <div class="card text-muted-foreground">{{ t('common.loading') }}</div>
+  <div v-else-if="loadError || !track || !currentStep" class="max-w-4xl mx-auto space-y-6">
+    <div class="card space-y-3">
+      <p class="text-sm text-error">{{ loadError || t('common.loadFailed') }}</p>
+      <div>
+        <button @click="loadPage" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
+      </div>
+    </div>
   </div>
 
   <div v-else-if="activeVariant === 'intake'" class="max-w-4xl mx-auto min-h-full flex flex-col">
@@ -1877,6 +1885,8 @@ function handleIssueLeave() {
         :editing-content="masteringDiscussion.editingContent.value"
         :history-items="masteringDiscussion.historyItems.value"
         :show-history-for-id="masteringDiscussion.showHistoryForId.value"
+        :loading="masteringDiscussion.loading.value"
+        :load-error="masteringDiscussion.loadError.value"
         :enable-audio="true"
         @submit="masteringDiscussion.submit"
         @start-edit="masteringDiscussion.startEdit"
@@ -1886,6 +1896,7 @@ function handleIssueLeave() {
         @show-history="masteringDiscussion.showHistory"
         @close-history="masteringDiscussion.closeHistory"
         @open-image="masteringDiscussion.openImage"
+        @retry="masteringDiscussion.load"
         @update:editing-content="masteringDiscussion.editingContent.value = $event"
       />
     </div>
