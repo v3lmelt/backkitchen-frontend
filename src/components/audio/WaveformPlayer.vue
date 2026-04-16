@@ -892,7 +892,10 @@ onMounted(async () => {
 
   ws.on('play', () => { isPlaying.value = true })
   ws.on('pause', () => { isPlaying.value = false })
-  ws.on('error', () => { isPrimaryLoading.value = false })
+  ws.on('error', (err: unknown) => {
+    isPrimaryLoading.value = false
+    console.error('WaveformPlayer: wavesurfer primary error', err)
+  })
 
   ws.on('click', () => {
     if (Date.now() - lastSelectionAt.value < 250) return
@@ -1078,8 +1081,9 @@ watch(compareSourceUrl, async (newCompareUrl) => {
   ws.on('loading', (percent: number) => {
     updateCompareLoading(percent)
   })
-  ws.on('error', () => {
+  ws.on('error', (err: unknown) => {
     isCompareLoading.value = false
+    console.error('WaveformPlayer: wavesurfer compare error', err)
   })
   let lastCompareUpdateMs = 0
   ws.on('timeupdate', (t: number) => {
