@@ -19,6 +19,7 @@ export type IssueSeverity = 'critical' | 'major' | 'minor' | 'suggestion'
 export type IssueStatus = 'open' | 'pending_discussion' | 'internal_resolved' | 'disagreed' | 'resolved'
 export type IssuePhase = string
 export type UserRole = 'member' | 'producer'
+export type AdminRole = 'none' | 'viewer' | 'operator' | 'superadmin'
 
 export type WorkflowStepType = 'approval' | 'gate' | 'review' | 'revision' | 'delivery'
 export type TrackPlaybackPreferenceScope = 'source' | 'master'
@@ -76,6 +77,10 @@ export interface User {
   email_verified?: boolean
   feishu_contact?: string | null
   is_admin: boolean
+  admin_role?: AdminRole
+  suspended_at?: string | null
+  suspension_reason?: string | null
+  deleted_at?: string | null
   created_at: string
 }
 
@@ -523,10 +528,18 @@ export interface AdminDashboardStats {
   users_by_role: Record<string, number>
   total_albums: number
   active_albums: number
+  archived_albums: number
   total_tracks: number
   tracks_by_status: Record<string, number>
+  archived_tracks: number
   open_issues: number
+  pending_reopen_requests: number
+  failed_webhook_deliveries: number
+  unverified_users: number
+  suspended_users: number
+  stalled_tracks: number
   recent_events: WorkflowEvent[]
+  recent_audits: AdminAuditLogEntry[]
 }
 
 export interface AdminActivityLogEntry {
@@ -541,4 +554,40 @@ export interface AdminActivityLogEntry {
   track_title: string | null
   album_id: number | null
   album_title: string | null
+}
+
+export interface AdminAuditLogEntry {
+  id: number
+  action: string
+  entity_type: string
+  entity_id: number | null
+  summary: string | null
+  reason: string | null
+  before_state: Record<string, unknown> | null
+  after_state: Record<string, unknown> | null
+  target_user_id: number | null
+  album_id: number | null
+  track_id: number | null
+  circle_id: number | null
+  created_at: string
+  actor: User | null
+  target_user: User | null
+}
+
+export interface AdminReopenRequestEntry {
+  id: number
+  track_id: number
+  track_title: string | null
+  album_id: number | null
+  album_title: string | null
+  requested_by_id: number
+  target_stage_id: string
+  reason: string
+  mastering_notes?: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  decided_by_id: number | null
+  created_at: string
+  decided_at: string | null
+  requested_by?: User | null
+  decided_by?: User | null
 }
