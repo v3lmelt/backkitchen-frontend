@@ -229,13 +229,16 @@ describe('AdminView', () => {
     await flushPromises()
     await openTab(wrapper, 'Users')
 
-    const suspendButton = wrapper.findAll('button').find(button => button.text() === 'Suspend')
+    const memberRow = wrapper.findAll('tr').find(row => row.text().includes('Member') && row.text().includes('@member'))
+    if (!memberRow) throw new Error('Member row not found')
+
+    const suspendButton = memberRow.findAll('button').find(button => button.text() === 'Suspend')
     await suspendButton!.trigger('click')
     await flushPromises()
 
     expect(mocks.suspendUserMock).toHaveBeenCalledWith(2, 'Suspended from admin console')
 
-    const deleteButton = wrapper.findAll('button').find(button => button.text() === 'Soft Delete')
+    const deleteButton = memberRow.findAll('button').find(button => button.text() === 'Soft Delete')
     await deleteButton!.trigger('click')
     await wrapper.find('button.confirm-delete').trigger('click')
     await flushPromises()
