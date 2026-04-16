@@ -30,6 +30,7 @@ vi.mock('@/api', () => ({
   configApi: { get: vi.fn() },
   invitationApi: { listMine: vi.fn(), accept: vi.fn(), decline: vi.fn() },
   notificationApi: { list: vi.fn(), markAllRead: vi.fn(), markRead: vi.fn() },
+  onAuthCleared: vi.fn(),
   trackApi: { get: vi.fn(), list: vi.fn() },
   userApi: { list: vi.fn() },
 }))
@@ -84,7 +85,7 @@ describe('AppHeader', () => {
 
     expect(wrapper.text()).toContain('Home')
     expect(wrapper.text()).toContain('test_audio')
-    expect(wrapper.text()).toContain('Producer Review')
+    expect(wrapper.text()).toContain('Producer Gate')
     expect(wrapper.text()).not.toContain('BACK KITCHEN')
   })
 

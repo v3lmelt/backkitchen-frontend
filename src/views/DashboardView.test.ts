@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => ({
   trackListMock: vi.fn(),
   albumListMock: vi.fn(),
   albumStatsMock: vi.fn(),
-  albumExportMock: vi.fn(),
+  albumExportStreamMock: vi.fn(),
+  albumExportDownloadMock: vi.fn(),
   acceptInvitationMock: vi.fn(),
   declineInvitationMock: vi.fn(),
   loadPendingInvitationsMock: vi.fn(),
@@ -28,7 +29,8 @@ vi.mock('@/api', () => ({
   albumApi: {
     list: mocks.albumListMock,
     stats: mocks.albumStatsMock,
-    export: mocks.albumExportMock,
+    exportStream: mocks.albumExportStreamMock,
+    exportDownload: mocks.albumExportDownloadMock,
   },
 }))
 
@@ -54,7 +56,8 @@ describe('DashboardView', () => {
     mocks.trackListMock.mockReset()
     mocks.albumListMock.mockReset()
     mocks.albumStatsMock.mockReset()
-    mocks.albumExportMock.mockReset()
+    mocks.albumExportStreamMock.mockReset()
+    mocks.albumExportDownloadMock.mockReset()
     mocks.acceptInvitationMock.mockReset()
     mocks.declineInvitationMock.mockReset()
     mocks.loadPendingInvitationsMock.mockReset()
@@ -104,7 +107,11 @@ describe('DashboardView', () => {
       recent_events: [],
       deadline: null,
     })
-    mocks.albumExportMock.mockResolvedValue(new Blob(['zip']))
+    mocks.albumExportStreamMock.mockImplementation((_albumId: number, onEvent: (event: any) => Promise<void> | void) => {
+      void onEvent({ type: 'complete', download_id: 'download-1', total: 1, processed: 1 })
+      return { cancel: vi.fn() }
+    })
+    mocks.albumExportDownloadMock.mockResolvedValue(new Blob(['zip']))
     mocks.acceptInvitationMock.mockResolvedValue(undefined)
     mocks.declineInvitationMock.mockResolvedValue(undefined)
     mocks.loadPendingInvitationsMock.mockResolvedValue(undefined)
@@ -147,7 +154,8 @@ describe('DashboardView', () => {
     await exportButton!.trigger('click')
     await flushPromises()
 
-    expect(mocks.albumExportMock).toHaveBeenCalledWith(1)
+    expect(mocks.albumExportStreamMock).toHaveBeenCalledWith(1, expect.any(Function))
+    expect(mocks.albumExportDownloadMock).toHaveBeenCalledWith(1, 'download-1')
     expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
     expect(appendSpy).toHaveBeenCalled()

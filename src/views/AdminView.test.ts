@@ -54,6 +54,13 @@ vi.mock('@/components/common/CustomSelect.vue', () => ({
 
 import AdminView from './AdminView.vue'
 
+async function openUsersTab(wrapper: ReturnType<typeof mountWithPlugins>) {
+  const tab = wrapper.findAll('button').find(button => button.text().includes('User Management'))
+  if (!tab) throw new Error('User Management tab not found')
+  await tab.trigger('click')
+  await flushPromises()
+}
+
 describe('AdminView', () => {
   beforeEach(() => {
     mocks.replaceMock.mockReset()
@@ -111,6 +118,7 @@ describe('AdminView', () => {
   it('loads users for admins', async () => {
     const wrapper = mountWithPlugins(AdminView)
     await flushPromises()
+    await openUsersTab(wrapper)
 
     expect(mocks.listUsersMock).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('Admin')
@@ -120,6 +128,7 @@ describe('AdminView', () => {
   it('updates role, admin flag, and verification flag', async () => {
     const wrapper = mountWithPlugins(AdminView)
     await flushPromises()
+    await openUsersTab(wrapper)
 
     const selects = wrapper.findAll('select.custom-select')
     await selects[1].setValue('producer')
@@ -136,6 +145,7 @@ describe('AdminView', () => {
   it('deletes a user after confirmation', async () => {
     const wrapper = mountWithPlugins(AdminView)
     await flushPromises()
+    await openUsersTab(wrapper)
 
     await wrapper.findAll('button').find(button => button.text() === 'Delete')!.trigger('click')
     await wrapper.find('button.confirm-delete').trigger('click')

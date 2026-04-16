@@ -6,6 +6,7 @@ import { mountWithPlugins } from '@/tests/utils'
 
 const mocks = vi.hoisted(() => ({
   pushMock: vi.fn(),
+  replaceMock: vi.fn(),
   trackGetMock: vi.fn(),
   listAssignmentsMock: vi.fn(),
   issueUpdateMock: vi.fn(),
@@ -23,7 +24,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { id: '9', stepId: 'intake' }, query: {}, path: '/tracks/9/step/intake', fullPath: '/tracks/9/step/intake' }),
-  useRouter: () => ({ push: mocks.pushMock }),
+  useRouter: () => ({ push: mocks.pushMock, replace: mocks.replaceMock }),
   onBeforeRouteLeave: vi.fn(),
 }))
 
@@ -135,6 +136,7 @@ import WorkflowStepView from './WorkflowStepView.vue'
 describe('WorkflowStepView', () => {
   beforeEach(() => {
     mocks.pushMock.mockReset()
+    mocks.replaceMock.mockReset()
     mocks.trackGetMock.mockReset()
     mocks.listAssignmentsMock.mockReset()
     mocks.issueUpdateMock.mockReset()

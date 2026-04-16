@@ -4,7 +4,7 @@ import { flushPromises } from '@vue/test-utils'
 import { mountWithPlugins } from '@/tests/utils'
 
 const mocks = vi.hoisted(() => ({
-  route: { params: { id: '7' }, query: {} as Record<string, string> },
+  route: { params: { id: '7' }, query: {} as Record<string, string>, path: '/tracks/7', fullPath: '/tracks/7' },
   pushMock: vi.fn(),
   openMock: vi.fn(),
   trackGetMock: vi.fn(),
@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('vue-router', () => ({
   useRoute: () => mocks.route,
   useRouter: () => ({ push: mocks.pushMock }),
+  RouterLink: { template: '<a><slot /></a>' },
 }))
 
 vi.mock('@/api', () => ({
@@ -37,8 +38,8 @@ vi.mock('@/stores/app', () => ({
 
 vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
   default: {
-    props: ['audioUrl', 'compareVersionId', 'compareAudioUrl'],
-    template: '<div class="waveform">audio:{{ audioUrl ?? "none" }} compare:{{ compareVersionId ?? "none" }} compareAudio:{{ compareAudioUrl ?? "none" }}</div>',
+    props: ['audioUrl', 'compareVersionId', 'compareAudioUrl', 'issues', 'playbackScope'],
+    template: '<div class="waveform">scope:{{ playbackScope ?? "source" }} audio:{{ audioUrl ?? "none" }} compare:{{ compareVersionId ?? "none" }} compareAudio:{{ compareAudioUrl ?? "none" }} issues:{{ issues?.length ?? 0 }}</div>',
   },
 }))
 
@@ -99,9 +100,19 @@ vi.mock('@/components/common/CommentInput.vue', () => ({
 
 import TrackDetailView from './TrackDetailView.vue'
 
+function mountTrackDetailView() {
+  return mountWithPlugins(TrackDetailView, {
+    global: {
+      mocks: {
+        $route: mocks.route,
+      },
+    },
+  })
+}
+
 describe('TrackDetailView', () => {
   beforeEach(() => {
-    mocks.route = { params: { id: '7' }, query: {} }
+    mocks.route = { params: { id: '7' }, query: {}, path: '/tracks/7', fullPath: '/tracks/7' }
     mocks.pushMock.mockReset()
     mocks.openMock.mockReset()
     mocks.discussionCreateMock.mockReset()
@@ -154,7 +165,7 @@ describe('TrackDetailView', () => {
   })
 
   it('filters issue lists and posts a discussion', async () => {
-    const wrapper = mountWithPlugins(TrackDetailView)
+    const wrapper = mountTrackDetailView()
     await flushPromises()
 
     expect(wrapper.find('.issue-list').text()).toBe('2')
@@ -173,15 +184,15 @@ describe('TrackDetailView', () => {
   })
 
   it('opens compare mode from the route query', async () => {
-    mocks.route = { params: { id: '7' }, query: { compareVersion: '201' } }
+    mocks.route = { params: { id: '7' }, query: { compareVersion: '201' }, path: '/tracks/7', fullPath: '/tracks/7?compareVersion=201' }
 
-    const wrapper = mountWithPlugins(TrackDetailView)
+    const wrapper = mountTrackDetailView()
     await flushPromises()
 
     expect(wrapper.find('.waveform').text()).toContain('compare:201')
   })
 
-  it('wires master compare audio into the master waveform', async () => {
+  it('renders current master audio in a separate waveform and filters master issues to the active delivery', async () => {
     mocks.trackGetMock.mockResolvedValueOnce({
       track: {
         id: 7,
@@ -208,7 +219,11 @@ describe('TrackDetailView', () => {
           submitter_approved_at: null,
         },
       },
-      issues: [],
+      issues: [
+        { id: 11, phase: 'final_review', workflow_cycle: 2, master_delivery_id: 21, title: 'Current delivery issue' },
+        { id: 12, phase: 'final_review', workflow_cycle: 2, master_delivery_id: 20, title: 'Older delivery issue' },
+        { id: 13, phase: 'peer', workflow_cycle: 2, source_version_number: 3, title: 'Source issue' },
+      ],
       discussions: [],
       events: [],
       source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
@@ -234,21 +249,14 @@ describe('TrackDetailView', () => {
       ],
     })
 
-    const wrapper = mountWithPlugins(TrackDetailView)
-    await flushPromises()
-
-    const compareButtons = wrapper.findAll('button').filter(button => button.text().includes('Compare'))
-    expect(compareButtons).toHaveLength(1)
-
-    await compareButtons[0].trigger('click')
-    await flushPromises()
-
-    await wrapper.find('.compare-option').trigger('click')
+    const wrapper = mountTrackDetailView()
     await flushPromises()
 
     const waveforms = wrapper.findAll('.waveform')
     expect(waveforms).toHaveLength(2)
-    expect(waveforms[1].text()).toContain('compareAudio:/api/tracks/7/master-deliveries/20/audio?v=3&c=2')
+    expect(waveforms[1].text()).toContain('scope:master')
+    expect(waveforms[1].text()).toContain('audio:/api/tracks/7/master-audio?v=4&c=2')
+    expect(waveforms[1].text()).toContain('issues:1')
   })
 
   it('shows a single step CTA for custom workflows', async () => {
@@ -279,7 +287,7 @@ describe('TrackDetailView', () => {
       workflow_config: { version: 2, steps: [{ id: 'intake', label: 'Intake', type: 'approval', assignee_role: 'producer', order: 0, transitions: { accept: 'peer_review' } }] },
     })
 
-    const wrapper = mountWithPlugins(TrackDetailView)
+    const wrapper = mountTrackDetailView()
     await flushPromises()
 
     const buttons = wrapper.findAll('button.workflow-cta-btn')
@@ -325,7 +333,7 @@ describe('TrackDetailView', () => {
       },
     })
 
-    const wrapper = mountWithPlugins(TrackDetailView)
+    const wrapper = mountTrackDetailView()
     await flushPromises()
 
     const reopenButton = wrapper.findAll('button').find(button => button.text().includes('Request Workflow Reopen'))
