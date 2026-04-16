@@ -264,6 +264,10 @@ export const albumApi = {
     circle_id?: number | null
     circle_name?: string | null
     genres?: string[] | null
+    mastering_engineer_id?: number | null
+    member_ids?: number[]
+    deadline?: string | null
+    phase_deadlines?: Record<string, string> | null
     workflow_config?: WorkflowConfig | null
     workflow_template_id?: number | null
   }) =>

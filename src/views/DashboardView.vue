@@ -17,17 +17,7 @@ import { useToast } from '@/composables/useToast'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { Music, Search } from 'lucide-vue-next'
 
-const ALBUM_STATS_TTL = 5 * 60 * 1000
 const TRACK_PAGE_SIZE = 100
-const albumStatsCache = new Map<number, { stats: AlbumStats; ts: number }>()
-
-async function fetchAlbumStats(albumId: number): Promise<AlbumStats> {
-  const cached = albumStatsCache.get(albumId)
-  if (cached && Date.now() - cached.ts < ALBUM_STATS_TTL) return cached.stats
-  const stats = await albumApi.stats(albumId)
-  albumStatsCache.set(albumId, { stats, ts: Date.now() })
-  return stats
-}
 
 const router = useRouter()
 const route = useRoute()
@@ -37,7 +27,6 @@ const { error: toastError } = useToast()
 const tracks = ref<Track[]>([])
 const rejectedTracks = ref<Track[]>([])
 const albums = ref<Album[]>([])
-const albumStatsMap = ref<Record<number, AlbumStats>>({})
 const loading = ref(true)
 const loadError = ref(false)
 const filterStatus = ref<TrackStatus | ''>('')
@@ -53,6 +42,17 @@ const exportProgress = ref<{
 } | null>(null)
 const showPinnedOnly = ref(false)
 const { hasAnyPins, isPinned, togglePin } = useDashboardPins(() => appStore.currentUser?.id ?? null)
+
+function toAlbumStats(album: Album): AlbumStats {
+  return {
+    total_tracks: album.total_tracks ?? album.track_count ?? 0,
+    by_status: album.by_status ?? {},
+    open_issues: album.open_issues ?? 0,
+    recent_events: album.recent_events ?? [],
+    deadline: album.deadline ?? null,
+    overdue_track_count: album.overdue_track_count ?? 0,
+  }
+}
 
 function statusColor(status: string): string {
   return TRACK_STATUS_COLORS[status as TrackStatus] ?? '#6b7280'
@@ -76,6 +76,10 @@ const albumNonZeroStatuses = computed(() => {
   return result
 })
 
+const albumStatsMap = computed<Record<number, AlbumStats>>(() =>
+  Object.fromEntries(albums.value.map(album => [album.id, toAlbumStats(album)])),
+)
+
 const searchAlbumResults = ref<Album[]>([])
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -94,15 +98,6 @@ async function loadDashboard() {
     albums.value = loadedAlbums
     searchAlbumResults.value = query ? loadedAlbums : []
     if (!query) await appStore.loadPendingInvitations()
-
-    const statsResults = await Promise.allSettled(
-      loadedAlbums.map(album => fetchAlbumStats(album.id).then(stats => ({ id: album.id, stats })))
-    )
-    for (const result of statsResults) {
-      if (result.status === 'fulfilled') {
-        albumStatsMap.value[result.value.id] = result.value.stats
-      }
-    }
   } catch {
     loadError.value = true
   } finally {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { albumApi, circleApi, userApi } from '@/api'
@@ -22,7 +22,10 @@ const loading = ref(true)
 const creating = ref(false)
 const loadError = ref('')
 const createError = ref('')
-const users = ref<User[]>([])
+const allUsers = ref<User[]>([])
+const circleMemberUsers = ref<User[]>([])
+const circleMembersLoading = ref(false)
+const circleMemberCache = new Map<number, User[]>()
 
 const form = ref({ title: '', description: '' })
 const titleError = ref('')
@@ -58,8 +61,12 @@ const saveTemplateDesc = ref('')
 const savingTemplate = ref(false)
 const selectedTemplateId = ref<number | null>(null)
 
+const assignableUsers = computed<User[]>(() =>
+  selectedCircleId.value ? circleMemberUsers.value : allUsers.value
+)
+
 const userOptions = computed<SelectOption[]>(() =>
-  users.value.map((u) => ({ value: u.id, label: u.display_name }))
+  assignableUsers.value.map((u) => ({ value: u.id, label: u.display_name }))
 )
 const coverButtonLabel = computed(() =>
   locale.value === 'zh-CN' ? '上传专辑封面' : 'Upload album cover'
@@ -72,6 +79,9 @@ const circleOptions = computed<SelectOption[]>(() =>
 )
 
 const workflowMemberOptions = computed<SelectOption[]>(() => {
+  const allKnownUsers = new Map<number, User>()
+  for (const user of allUsers.value) allKnownUsers.set(user.id, user)
+  for (const user of circleMemberUsers.value) allKnownUsers.set(user.id, user)
   const byId = new Map<number, SelectOption>()
 
   const currentUser = appStore.currentUser
@@ -80,14 +90,14 @@ const workflowMemberOptions = computed<SelectOption[]>(() => {
   }
 
   if (teamState.mastering_engineer_id) {
-    const mastering = users.value.find(user => user.id === teamState.mastering_engineer_id)
+    const mastering = allKnownUsers.get(teamState.mastering_engineer_id)
     if (mastering) {
       byId.set(mastering.id, { value: mastering.id, label: mastering.display_name })
     }
   }
 
   for (const memberId of teamState.member_ids) {
-    const member = users.value.find(user => user.id === memberId)
+    const member = allKnownUsers.get(memberId)
     if (member) {
       byId.set(member.id, { value: member.id, label: member.display_name })
     }
@@ -111,10 +121,11 @@ async function loadInitialOptions() {
   loadError.value = ''
   try {
     const [userList, circleList] = await Promise.all([userApi.list(), circleApi.list()])
-    users.value = userList
+    allUsers.value = userList
     circles.value = circleList
   } catch (error: any) {
-    users.value = []
+    allUsers.value = []
+    circleMemberUsers.value = []
     circles.value = []
     loadError.value = error?.message || t('common.loadFailed')
   } finally {
@@ -123,6 +134,72 @@ async function loadInitialOptions() {
 }
 
 onMounted(loadInitialOptions)
+
+function sanitizeTeamState(allowedUsers: User[]) {
+  const allowedIds = new Set(allowedUsers.map(user => user.id))
+
+  if (
+    teamState.mastering_engineer_id !== null &&
+    !allowedIds.has(teamState.mastering_engineer_id)
+  ) {
+    teamState.mastering_engineer_id = null
+  }
+
+  const nextMemberIds = teamState.member_ids.filter(id => allowedIds.has(id))
+  if (nextMemberIds.length !== teamState.member_ids.length) {
+    teamState.member_ids = nextMemberIds
+  }
+}
+
+let latestCircleMembersRequest = 0
+
+async function loadCircleMembers(circleId: number) {
+  const cached = circleMemberCache.get(circleId)
+  if (cached) {
+    circleMemberUsers.value = cached
+    sanitizeTeamState(cached)
+    return
+  }
+
+  const requestId = ++latestCircleMembersRequest
+  circleMembersLoading.value = true
+  try {
+    const circle = await circleApi.get(circleId)
+    if (requestId !== latestCircleMembersRequest || selectedCircleId.value !== circleId) return
+
+    const members = circle.members.map(member => member.user)
+    circleMemberCache.set(circleId, members)
+    circleMemberUsers.value = members
+    sanitizeTeamState(members)
+  } catch (error: any) {
+    if (requestId !== latestCircleMembersRequest || selectedCircleId.value !== circleId) return
+
+    circleMemberUsers.value = []
+    sanitizeTeamState([])
+    toastError(error?.message || t('common.loadFailed'))
+  } finally {
+    if (requestId === latestCircleMembersRequest) {
+      circleMembersLoading.value = false
+    }
+  }
+}
+
+watch(selectedCircleId, async (circleId, previousCircleId) => {
+  if (circleId !== previousCircleId) {
+    selectedTemplateId.value = null
+    templates.value = []
+    showTemplateList.value = false
+  }
+
+  if (!circleId) {
+    circleMembersLoading.value = false
+    circleMemberUsers.value = []
+    sanitizeTeamState(allUsers.value)
+    return
+  }
+
+  await loadCircleMembers(circleId)
+})
 
 async function loadTemplates() {
   if (!selectedCircleId.value) return
@@ -184,10 +261,22 @@ async function create() {
   createError.value = ''
   let createdAlbumId: number | null = null
   try {
+    sanitizeTeamState(assignableUsers.value)
+
     const payload: any = { ...form.value }
     if (selectedCircleId.value) {
       payload.circle_id = selectedCircleId.value
     }
+    payload.mastering_engineer_id = teamState.mastering_engineer_id
+    payload.member_ids = [...teamState.member_ids]
+
+    const phaseDeadlines: Record<string, string> = {}
+    if (deadlineState.peer_review) phaseDeadlines.peer_review = new Date(deadlineState.peer_review).toISOString()
+    if (deadlineState.mastering) phaseDeadlines.mastering = new Date(deadlineState.mastering).toISOString()
+    if (deadlineState.final_review) phaseDeadlines.final_review = new Date(deadlineState.final_review).toISOString()
+    payload.deadline = deadlineState.deadline ? new Date(deadlineState.deadline).toISOString() : null
+    payload.phase_deadlines = Object.keys(phaseDeadlines).length ? phaseDeadlines : null
+
     if (showWorkflowBuilder.value && workflowConfig.value) {
       payload.workflow_config = workflowConfig.value
       if (selectedTemplateId.value) {
@@ -197,31 +286,9 @@ async function create() {
     const album = await albumApi.create(payload)
     createdAlbumId = album.id
 
-    const tasks: Promise<any>[] = []
-
     if (coverImageFile.value) {
-      tasks.push(albumApi.uploadCover(album.id, coverImageFile.value))
+      await albumApi.uploadCover(album.id, coverImageFile.value)
     }
-
-    const hasTeam = teamState.mastering_engineer_id !== null || teamState.member_ids.length > 0
-    if (hasTeam) {
-      tasks.push(albumApi.updateTeam(album.id, teamState))
-    }
-
-    const hasDeadline = deadlineState.deadline || deadlineState.peer_review ||
-      deadlineState.mastering || deadlineState.final_review
-    if (hasDeadline) {
-      const phaseDeadlines: Record<string, string> = {}
-      if (deadlineState.peer_review) phaseDeadlines.peer_review = new Date(deadlineState.peer_review).toISOString()
-      if (deadlineState.mastering) phaseDeadlines.mastering = new Date(deadlineState.mastering).toISOString()
-      if (deadlineState.final_review) phaseDeadlines.final_review = new Date(deadlineState.final_review).toISOString()
-      tasks.push(albumApi.updateDeadlines(album.id, {
-        deadline: deadlineState.deadline ? new Date(deadlineState.deadline).toISOString() : null,
-        phase_deadlines: Object.keys(phaseDeadlines).length ? phaseDeadlines : null,
-      }))
-    }
-
-    await Promise.all(tasks)
     router.push(`/albums/${album.id}/settings`)
   } catch (error: any) {
     if (createdAlbumId !== null) {
@@ -319,13 +386,17 @@ async function create() {
         <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('albumNew.teamSection') }}</h2>
         <div>
           <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.masteringEngineerSelect') }}</label>
-          <CustomSelect v-model="teamState.mastering_engineer_id" :options="userOptions" :placeholder="t('settings.noneOption')" />
+          <CustomSelect
+            v-model="teamState.mastering_engineer_id"
+            :options="userOptions"
+            :placeholder="circleMembersLoading ? t('common.loading') : t('settings.noneOption')"
+          />
         </div>
         <div>
           <div class="text-xs text-muted-foreground mb-2">{{ t('settings.participants') }}</div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <label
-              v-for="user in users"
+              v-for="user in assignableUsers"
               :key="user.id"
               class="flex items-center gap-2 text-sm text-foreground cursor-pointer"
             >
