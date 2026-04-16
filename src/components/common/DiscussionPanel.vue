@@ -7,6 +7,7 @@ import { formatLocaleDate, formatDuration } from '@/utils/time'
 import { useAppStore } from '@/stores/app'
 import CommentInput from '@/components/common/CommentInput.vue'
 import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { Music, Pencil, Trash2 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -36,10 +37,11 @@ const emit = defineEmits<{
   'update:editingContent': [value: string]
 }>()
 
-const { locale } = useI18n()
+const { locale, t } = useI18n()
 const appStore = useAppStore()
 const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
 const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
+const pendingRemovalDiscussion = ref<Discussion | null>(null)
 
 const editContent = computed({
   get: () => props.editingContent,
@@ -50,6 +52,17 @@ const editContent = computed({
 watch(() => props.discussions.length, (newLen, oldLen) => {
   if (newLen > oldLen) commentInputRef.value?.reset()
 })
+
+function requestRemove(d: Discussion) {
+  pendingRemovalDiscussion.value = d
+}
+
+function confirmRemove() {
+  if (pendingRemovalDiscussion.value) {
+    emit('remove', pendingRemovalDiscussion.value)
+  }
+  pendingRemovalDiscussion.value = null
+}
 </script>
 
 <template>
@@ -81,7 +94,7 @@ watch(() => props.discussions.length, (newLen, oldLen) => {
               <button @click="emit('startEdit', d)" class="text-muted-foreground hover:text-foreground transition-colors ml-auto">
                 <Pencil class="w-3.5 h-3.5" :stroke-width="2" />
               </button>
-              <button @click="emit('remove', d)" class="text-muted-foreground hover:text-error transition-colors">
+              <button @click="requestRemove(d)" class="text-muted-foreground hover:text-error transition-colors">
                 <Trash2 class="w-3.5 h-3.5" :stroke-width="2" />
               </button>
             </template>
@@ -148,5 +161,15 @@ watch(() => props.discussions.length, (newLen, oldLen) => {
     v-if="showHistoryForId !== null"
     :items="historyItems"
     @close="emit('closeHistory')"
+  />
+
+  <ConfirmModal
+    v-if="pendingRemovalDiscussion"
+    :title="t('discussionPanel.deleteTitle')"
+    :message="t('discussionPanel.deleteConfirm')"
+    :confirm-text="t('common.delete')"
+    :destructive="true"
+    @confirm="confirmRemove"
+    @cancel="pendingRemovalDiscussion = null"
   />
 </template>

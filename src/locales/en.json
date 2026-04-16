@@ -81,6 +81,8 @@
     "langToggle": "中文"
   },
   "common": {
+    "removeMemberTitle": "Remove Member",
+    "removeMemberConfirm": "Remove {name}? This takes effect immediately.",
     "loading": "Loading...",
     "backToTrack": "Back to Track",
     "addIssue": "+ Add Issue",
@@ -110,6 +112,10 @@
     "delete": "Delete",
     "moveUp": "Move up",
     "moveDown": "Move down"
+  },
+  "discussionPanel": {
+    "deleteTitle": "Delete Discussion",
+    "deleteConfirm": "Delete this discussion? This action cannot be undone."
   },
   "severity": {
     "critical": "Critical",
@@ -564,6 +570,8 @@
     }
   },
   "trackDetail": {
+    "visibilitySetPublic": "Track is now visible to all members",
+    "visibilitySetPrivate": "Track is now visible to participants only",
     "workflowStatus": "Workflow Status",
     "currentSourceAudio": "Current Source Audio",
     "noAudioFile": "No source audio file uploaded for this track yet.",
@@ -806,6 +814,8 @@
     "returnRequested": "Return request sent to producer"
   },
   "issueDetail": {
+    "deleteCommentTitle": "Delete Comment",
+    "deleteCommentConfirm": "Delete this comment? This action cannot be undone.",
     "back": "Back",
     "created": "Created {date}",
     "markFixed": "Resolved",

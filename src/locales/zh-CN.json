@@ -81,6 +81,8 @@
     "langToggle": "EN"
   },
   "common": {
+    "removeMemberTitle": "移除成员",
+    "removeMemberConfirm": "确认移除 {name}？此操作会立即生效。",
     "loading": "加载中…",
     "backToTrack": "返回曲目",
     "addIssue": "+ 添加问题",
@@ -110,6 +112,10 @@
     "delete": "删除",
     "moveUp": "上移",
     "moveDown": "下移"
+  },
+  "discussionPanel": {
+    "deleteTitle": "删除讨论",
+    "deleteConfirm": "确认删除这条讨论？此操作不可撤销。"
   },
   "severity": {
     "critical": "严重",
@@ -564,6 +570,8 @@
     }
   },
   "trackDetail": {
+    "visibilitySetPublic": "曲目已设为所有成员可见",
+    "visibilitySetPrivate": "曲目已设为仅相关人员可见",
     "workflowStatus": "工作流状态",
     "currentSourceAudio": "当前源音频",
     "noAudioFile": "该曲目暂无源音频文件。",
@@ -806,6 +814,8 @@
     "returnRequested": "已向主催发送退回请求"
   },
   "issueDetail": {
+    "deleteCommentTitle": "删除评论",
+    "deleteCommentConfirm": "确认删除这条评论？此操作不可撤销。",
     "back": "返回",
     "created": "创建于 {date}",
     "markFixed": "已解决",

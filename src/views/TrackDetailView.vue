@@ -472,6 +472,7 @@ async function toggleVisibility() {
   try {
     const updated = await trackApi.setVisibility(track.value.id, !track.value.is_public)
     track.value = { ...track.value, is_public: updated.is_public }
+    toastSuccess(t(updated.is_public ? 'trackDetail.visibilitySetPublic' : 'trackDetail.visibilitySetPrivate'))
   } catch {
     toastError(t('common.error'))
   } finally {
@@ -1171,15 +1172,19 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
 
         <!-- Visibility toggle (producer only, non-archived) -->
         <div v-if="isProducer && !track.archived_at" class="pt-2">
-          <div class="flex items-center justify-between">
-            <span class="text-xs text-muted-foreground">{{ t('trackDetail.visibility') }}</span>
+          <div class="flex items-center justify-between gap-4">
+            <div class="space-y-1">
+              <span class="text-xs text-muted-foreground">{{ t('trackDetail.visibility') }}</span>
+              <p class="text-xs font-mono text-foreground">
+                {{ track.is_public ? t('trackDetail.visibilityPublic') : t('trackDetail.visibilityPrivate') }}
+              </p>
+            </div>
             <button
               @click="toggleVisibility"
               :disabled="togglingVisibility"
-              class="text-xs font-mono transition-colors disabled:opacity-50"
-              :class="track.is_public ? 'text-success hover:text-success/70' : 'text-muted-foreground hover:text-foreground'"
+              class="btn-secondary h-8 shrink-0 px-3 text-xs disabled:opacity-50"
             >
-              {{ track.is_public ? t('trackDetail.visibilityPublic') : t('trackDetail.visibilityPrivate') }}
+              {{ track.is_public ? t('trackDetail.setPrivate') : t('trackDetail.setPublic') }}
             </button>
           </div>
         </div>
