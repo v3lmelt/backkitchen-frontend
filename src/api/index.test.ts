@@ -85,4 +85,15 @@ describe('api client', () => {
   it('resolves relative asset urls to api origin', () => {
     expect(resolveAssetUrl('/uploads/comment_images/abc.png')).toBe('/uploads/comment_images/abc.png')
   })
+
+  it('appends token params for protected attachment audio urls', () => {
+    localStorage.setItem('backkitchen_token', 'secret token')
+
+    expect(resolveAssetUrl('/api/comment-audios/7/file')).toBe('/api/comment-audios/7/file?token=secret%20token')
+    expect(resolveAssetUrl('/api/discussion-audios/8/file?download=1')).toBe('/api/discussion-audios/8/file?download=1&token=secret%20token')
+  })
+
+  it('does not rewrite external absolute asset urls', () => {
+    expect(resolveAssetUrl('https://cdn.example.com/audio.wav')).toBe('https://cdn.example.com/audio.wav')
+  })
 })

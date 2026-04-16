@@ -125,11 +125,14 @@ describe('DashboardView', () => {
       recent_events: [],
       deadline: null,
     })
-    mocks.albumExportStreamMock.mockImplementation(async (_albumId: number, onEvent: (event: any) => Promise<void> | void) => {
-      await onEvent({ type: 'start', total: 1 })
-      await onEvent({ type: 'complete', total: 1, download_id: 'dl-1' })
-    })
     mocks.albumExportDownloadMock.mockResolvedValue(new Blob(['zip']))
+    mocks.albumExportStreamMock.mockImplementation((_albumId: number, onEvent: (event: any) => Promise<void> | void) => {
+      void (async () => {
+        await onEvent({ type: 'start', total: 1 })
+        await onEvent({ type: 'complete', total: 1, processed: 1, download_id: 'dl-1' })
+      })()
+      return { cancel: vi.fn() }
+    })
     mocks.acceptInvitationMock.mockResolvedValue(undefined)
     mocks.declineInvitationMock.mockResolvedValue(undefined)
     mocks.loadPendingInvitationsMock.mockResolvedValue(undefined)

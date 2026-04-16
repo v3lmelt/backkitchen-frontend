@@ -17,8 +17,7 @@ export function useAudioDownload() {
       const resolved = await resolveAudioUrl(url)
       const res = await fetch(resolved)
       if (!res.ok) {
-        toastError(t('common.downloadFailed'))
-        return
+        throw new Error(`Download failed: ${res.status}`)
       }
 
       const contentLength = res.headers.get('Content-Length')
@@ -47,6 +46,8 @@ export function useAudioDownload() {
       const blob = new Blob(chunks as unknown as BlobPart[])
       downloadProgress.value = 100
       triggerDownload(blob, filename)
+    } catch {
+      toastError(t('common.downloadFailed'))
     } finally {
       downloading.value = false
     }
