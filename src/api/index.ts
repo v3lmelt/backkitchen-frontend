@@ -42,10 +42,25 @@ const TOKEN_KEY = 'backkitchen_token'
 
 export { API_ORIGIN }
 
+function withAssetToken(url: string): string {
+  const token = localStorage.getItem(TOKEN_KEY)
+  if (!token || /[?&]token=/.test(url)) return url
+  const separator = url.includes('?') ? '&' : '?'
+  return `${url}${separator}token=${encodeURIComponent(token)}`
+}
+
+function isProtectedAssetUrl(url: string): boolean {
+  return /(?:^|https?:\/\/[^/]+)\/api\/(?:issue-audios|comment-audios|discussion-audios)\//i.test(url)
+}
+
 export function resolveAssetUrl(url: string | null | undefined): string {
   if (!url) return ''
-  if (/^https?:\/\//i.test(url)) return url
-  return `${API_ORIGIN}${url.startsWith('/') ? url : `/${url}`}`
+  if (/^https?:\/\//i.test(url)) {
+    return isProtectedAssetUrl(url) ? withAssetToken(url) : url
+  }
+
+  const resolved = `${API_ORIGIN}${url.startsWith('/') ? url : `/${url}`}`
+  return isProtectedAssetUrl(resolved) ? withAssetToken(resolved) : resolved
 }
 
 function parseErrorDetail(detail: unknown): string {
