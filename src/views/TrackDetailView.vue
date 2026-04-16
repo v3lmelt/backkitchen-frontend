@@ -516,7 +516,16 @@ async function openReassignModal() {
     await doReassign()
     return
   }
-  reassignSelectedUserIds.value = []
+  // Pre-select reviewers who are currently still pending on this step so the
+  // producer does not accidentally drop a reviewer who is mid-review when
+  // they only intend to adjust part of the roster.
+  const stageId = track.value?.workflow_step?.id
+  reassignSelectedUserIds.value = stageId
+    ? reviewAssignments.value
+        .filter(a => a.stage_id === stageId && a.status === 'pending')
+        .map(a => a.user_id)
+        .slice(0, reassignReviewerLimit.value)
+    : []
   if (!reassignMembers.value.length && track.value) {
     const album = await albumApi.get(track.value.album_id)
     reassignMembers.value = album.members.filter(m => m.user_id !== track.value!.submitter_id)
