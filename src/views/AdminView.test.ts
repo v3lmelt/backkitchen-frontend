@@ -5,6 +5,7 @@ import { mountWithPlugins } from '@/tests/utils'
 
 const mocks = vi.hoisted(() => ({
   replaceMock: vi.fn(),
+  dashboardMock: vi.fn(),
   listUsersMock: vi.fn(),
   updateUserMock: vi.fn(),
   deleteUserMock: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('@/stores/app', () => ({
 
 vi.mock('@/api', () => ({
   adminApi: {
+    dashboard: mocks.dashboardMock,
     listUsers: mocks.listUsersMock,
     updateUser: mocks.updateUserMock,
     deleteUser: mocks.deleteUserMock,
@@ -54,15 +56,33 @@ vi.mock('@/components/common/CustomSelect.vue', () => ({
 
 import AdminView from './AdminView.vue'
 
+async function openUsersTab(wrapper: ReturnType<typeof mountWithPlugins>) {
+  await wrapper.findAll('button').find(button => button.text().includes('User Management'))!.trigger('click')
+  await flushPromises()
+}
+
 describe('AdminView', () => {
   beforeEach(() => {
     mocks.replaceMock.mockReset()
+    mocks.dashboardMock.mockReset()
     mocks.listUsersMock.mockReset()
     mocks.updateUserMock.mockReset()
     mocks.deleteUserMock.mockReset()
     mocks.toastSuccessMock.mockReset()
     mocks.toastErrorMock.mockReset()
     mocks.currentUser = { id: 1, is_admin: true }
+    mocks.dashboardMock.mockResolvedValue({
+      total_users: 2,
+      active_albums: 1,
+      total_albums: 1,
+      total_tracks: 1,
+      open_issues: 0,
+      overdue_tracks: 0,
+      tracks_by_status: {},
+      users_by_role: { producer: 1, member: 1 },
+      recent_events: [],
+      recent_activity: [],
+    })
     mocks.listUsersMock.mockResolvedValue([
       {
         id: 1,
@@ -111,6 +131,7 @@ describe('AdminView', () => {
   it('loads users for admins', async () => {
     const wrapper = mountWithPlugins(AdminView)
     await flushPromises()
+    await openUsersTab(wrapper)
 
     expect(mocks.listUsersMock).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('Admin')
@@ -120,6 +141,7 @@ describe('AdminView', () => {
   it('updates role, admin flag, and verification flag', async () => {
     const wrapper = mountWithPlugins(AdminView)
     await flushPromises()
+    await openUsersTab(wrapper)
 
     const selects = wrapper.findAll('select.custom-select')
     await selects[1].setValue('producer')
@@ -130,12 +152,14 @@ describe('AdminView', () => {
     await flushPromises()
 
     expect(mocks.updateUserMock).toHaveBeenCalledWith(2, { role: 'producer' })
+    expect(mocks.updateUserMock).toHaveBeenCalledWith(2, { is_admin: true })
     expect(mocks.updateUserMock).toHaveBeenCalledWith(2, { email_verified: true })
   })
 
   it('deletes a user after confirmation', async () => {
     const wrapper = mountWithPlugins(AdminView)
     await flushPromises()
+    await openUsersTab(wrapper)
 
     await wrapper.findAll('button').find(button => button.text() === 'Delete')!.trigger('click')
     await wrapper.find('button.confirm-delete').trigger('click')

@@ -24,7 +24,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <BaseModal max-width="max-w-sm" @close="emit('cancel')">
+  <BaseModal max-width="max-w-sm" :aria-label="title" @close="emit('cancel')">
     <div class="space-y-4">
       <h3 class="text-sm font-mono font-semibold text-foreground pr-6">{{ title }}</h3>
       <p v-if="message" class="text-sm text-muted-foreground">{{ message }}</p>

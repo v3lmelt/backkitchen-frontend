@@ -4,7 +4,13 @@ import { flushPromises } from '@vue/test-utils'
 import { mountWithPlugins } from '@/tests/utils'
 
 const mocks = vi.hoisted(() => ({
-  route: { params: { id: '7' }, query: {} as Record<string, string> },
+  route: {
+    name: 'track-detail',
+    path: '/tracks/7',
+    fullPath: '/tracks/7',
+    params: { id: '7' },
+    query: {} as Record<string, string>,
+  },
   pushMock: vi.fn(),
   openMock: vi.fn(),
   trackGetMock: vi.fn(),
@@ -99,9 +105,25 @@ vi.mock('@/components/common/CommentInput.vue', () => ({
 
 import TrackDetailView from './TrackDetailView.vue'
 
+function mountTrackDetailView() {
+  return mountWithPlugins(TrackDetailView, {
+    global: {
+      mocks: {
+        $route: mocks.route,
+      },
+    },
+  })
+}
+
 describe('TrackDetailView', () => {
   beforeEach(() => {
-    mocks.route = { params: { id: '7' }, query: {} }
+    mocks.route = {
+      name: 'track-detail',
+      path: '/tracks/7',
+      fullPath: '/tracks/7',
+      params: { id: '7' },
+      query: {},
+    }
     mocks.pushMock.mockReset()
     mocks.openMock.mockReset()
     mocks.discussionCreateMock.mockReset()
@@ -154,7 +176,7 @@ describe('TrackDetailView', () => {
   })
 
   it('filters issue lists and posts a discussion', async () => {
-    const wrapper = mountWithPlugins(TrackDetailView)
+    const wrapper = mountTrackDetailView()
     await flushPromises()
 
     expect(wrapper.find('.issue-list').text()).toBe('2')
@@ -173,15 +195,21 @@ describe('TrackDetailView', () => {
   })
 
   it('opens compare mode from the route query', async () => {
-    mocks.route = { params: { id: '7' }, query: { compareVersion: '201' } }
+    mocks.route = {
+      name: 'track-detail',
+      path: '/tracks/7',
+      fullPath: '/tracks/7?compareVersion=201',
+      params: { id: '7' },
+      query: { compareVersion: '201' },
+    }
 
-    const wrapper = mountWithPlugins(TrackDetailView)
+    const wrapper = mountTrackDetailView()
     await flushPromises()
 
     expect(wrapper.find('.waveform').text()).toContain('compare:201')
   })
 
-  it('wires master compare audio into the master waveform', async () => {
+  it('renders the master waveform with the current delivery audio', async () => {
     mocks.trackGetMock.mockResolvedValueOnce({
       track: {
         id: 7,
@@ -234,21 +262,13 @@ describe('TrackDetailView', () => {
       ],
     })
 
-    const wrapper = mountWithPlugins(TrackDetailView)
-    await flushPromises()
-
-    const compareButtons = wrapper.findAll('button').filter(button => button.text().includes('Compare'))
-    expect(compareButtons).toHaveLength(1)
-
-    await compareButtons[0].trigger('click')
-    await flushPromises()
-
-    await wrapper.find('.compare-option').trigger('click')
+    const wrapper = mountTrackDetailView()
     await flushPromises()
 
     const waveforms = wrapper.findAll('.waveform')
     expect(waveforms).toHaveLength(2)
-    expect(waveforms[1].text()).toContain('compareAudio:/api/tracks/7/master-deliveries/20/audio?v=3&c=2')
+    expect(waveforms[1].text()).toContain('audio:/api/tracks/7/master-audio?v=4&c=2')
+    expect(waveforms[1].text()).toContain('compare:none')
   })
 
   it('shows a single step CTA for custom workflows', async () => {
@@ -279,7 +299,7 @@ describe('TrackDetailView', () => {
       workflow_config: { version: 2, steps: [{ id: 'intake', label: 'Intake', type: 'approval', assignee_role: 'producer', order: 0, transitions: { accept: 'peer_review' } }] },
     })
 
-    const wrapper = mountWithPlugins(TrackDetailView)
+    const wrapper = mountTrackDetailView()
     await flushPromises()
 
     const buttons = wrapper.findAll('button.workflow-cta-btn')
@@ -325,7 +345,7 @@ describe('TrackDetailView', () => {
       },
     })
 
-    const wrapper = mountWithPlugins(TrackDetailView)
+    const wrapper = mountTrackDetailView()
     await flushPromises()
 
     const reopenButton = wrapper.findAll('button').find(button => button.text().includes('Request Workflow Reopen'))

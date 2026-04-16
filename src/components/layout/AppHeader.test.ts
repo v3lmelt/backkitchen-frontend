@@ -32,6 +32,7 @@ vi.mock('@/api', () => ({
   notificationApi: { list: vi.fn(), markAllRead: vi.fn(), markRead: vi.fn() },
   trackApi: { get: vi.fn(), list: vi.fn() },
   userApi: { list: vi.fn() },
+  onAuthCleared: vi.fn(),
 }))
 
 import AppHeader from './AppHeader.vue'
@@ -84,7 +85,7 @@ describe('AppHeader', () => {
 
     expect(wrapper.text()).toContain('Home')
     expect(wrapper.text()).toContain('test_audio')
-    expect(wrapper.text()).toContain('Producer Review')
+    expect(wrapper.text()).toContain('Producer Gate')
     expect(wrapper.text()).not.toContain('BACK KITCHEN')
   })
 

@@ -84,6 +84,7 @@ const savingDeadlines = ref(false)
 // Activity state
 const activityEvents = ref<WorkflowEvent[]>([])
 const loadingActivity = ref(false)
+const activityError = ref('')
 const activityOffset = ref(0)
 const activityHasMore = ref(true)
 const ACTIVITY_PAGE_SIZE = 30
@@ -91,7 +92,9 @@ const ACTIVITY_PAGE_SIZE = 30
 // Checklist state
 const templateItems = ref<ChecklistTemplateItem[]>([])
 const templateIsDefault = ref(false)
+const loadingTemplate = ref(false)
 const savingTemplate = ref(false)
+const templateLoadError = ref('')
 const templateError = ref('')
 const savedTemplateSnapshot = ref('')
 const templateDirty = computed(() => JSON.stringify(templateItems.value) !== savedTemplateSnapshot.value)
@@ -103,6 +106,8 @@ const orderMessage = ref<{ type: 'success' | 'error'; text: string } | null>(nul
 
 // Archived tracks state
 const archivedTracks = ref<Track[]>([])
+const loadingArchivedTracks = ref(false)
+const archiveLoadError = ref('')
 const restoringTrackId = ref<number | null>(null)
 
 // Webhook state
@@ -112,10 +117,13 @@ const WEBHOOK_TYPES = [
   { value: 'feishu', label: '飞书 / Feishu' },
 ]
 const savingWebhook = ref(false)
+const loadingWebhookConfig = ref(false)
+const webhookConfigError = ref('')
 const testingWebhook = ref(false)
 const webhookTestResult = ref<boolean | null>(null)
 const webhookDeliveries = ref<WebhookDelivery[]>([])
 const loadingDeliveries = ref(false)
+const webhookDeliveriesError = ref('')
 
 const WEBHOOK_EVENT_TYPES = [
   'track_submitted', 'track_status_changed', 'reviewer_assigned', 'reviewer_reassigned',
@@ -264,6 +272,131 @@ function syncDeadlineState() {
   deadlineEnabled.final_review = !!album.value.phase_deadlines?.final_review
 }
 
+function resetWebhookState() {
+  webhookState.url = ''
+  webhookState.enabled = false
+  webhookState.events = []
+  webhookState.type = 'generic'
+  webhookState.secret = ''
+  webhookState.app_id = ''
+  webhookState.app_secret = ''
+  webhookState.filter_user_ids = []
+}
+
+function applyWebhookConfig(config: {
+  url: string
+  enabled: boolean
+  events: string[]
+  type?: string
+  secret?: string | null
+  app_id?: string | null
+  app_secret?: string | null
+  filter_user_ids?: number[] | null
+}) {
+  webhookState.url = config.url
+  webhookState.enabled = config.enabled
+  webhookState.events = [...config.events]
+  webhookState.type = config.type || 'generic'
+  webhookState.secret = config.secret || ''
+  webhookState.app_id = config.app_id || ''
+  webhookState.app_secret = config.app_secret || ''
+  webhookState.filter_user_ids = config.filter_user_ids || []
+}
+
+async function loadAssignableUsers(currentAlbum: Album) {
+  try {
+    users.value = currentAlbum.circle_id
+      ? (await circleApi.get(currentAlbum.circle_id)).members.map(m => m.user)
+      : await userApi.list()
+  } catch (e: any) {
+    users.value = []
+    toastError(e.message || t('common.loadFailed'))
+  }
+}
+
+async function loadInvitations(currentAlbumId: number) {
+  try {
+    invitations.value = await invitationApi.listForAlbum(currentAlbumId)
+  } catch (e: any) {
+    invitations.value = []
+    toastError(e.message || t('common.loadFailed'))
+  }
+}
+
+async function loadTrackList(currentAlbumId: number) {
+  try {
+    tracks.value = await albumApi.tracks(currentAlbumId)
+  } catch (e: any) {
+    tracks.value = []
+    toastError(e.message || t('common.loadFailed'))
+  }
+}
+
+async function loadChecklistTemplate(currentAlbumId: number) {
+  loadingTemplate.value = true
+  templateLoadError.value = ''
+  try {
+    const tpl = await checklistApi.getTemplate(currentAlbumId)
+    templateItems.value = tpl.items.map(item => ({ ...item }))
+    templateIsDefault.value = tpl.is_default
+    savedTemplateSnapshot.value = JSON.stringify(templateItems.value)
+  } catch (e: any) {
+    templateLoadError.value = e.message || t('common.loadFailed')
+    if (templateItems.value.length === 0) {
+      templateItems.value = []
+      templateIsDefault.value = false
+      savedTemplateSnapshot.value = JSON.stringify([])
+    }
+  } finally {
+    loadingTemplate.value = false
+  }
+}
+
+async function loadArchivedTracks(currentAlbumId: number) {
+  loadingArchivedTracks.value = true
+  archiveLoadError.value = ''
+  try {
+    archivedTracks.value = await albumApi.archivedTracks(currentAlbumId)
+  } catch (e: any) {
+    archiveLoadError.value = e.message || t('common.loadFailed')
+    if (archivedTracks.value.length === 0) {
+      archivedTracks.value = []
+    }
+  } finally {
+    loadingArchivedTracks.value = false
+  }
+}
+
+async function loadWebhookConfig(currentAlbumId: number) {
+  loadingWebhookConfig.value = true
+  webhookConfigError.value = ''
+  try {
+    applyWebhookConfig(await albumApi.getWebhook(currentAlbumId))
+  } catch (e: any) {
+    if (!webhookState.url && webhookState.events.length === 0 && !webhookState.enabled) {
+      resetWebhookState()
+    }
+    webhookConfigError.value = e.message || t('common.loadFailed')
+  } finally {
+    loadingWebhookConfig.value = false
+  }
+}
+
+async function loadWebhookDeliveries(currentAlbumId: number) {
+  loadingDeliveries.value = true
+  webhookDeliveriesError.value = ''
+  try {
+    webhookDeliveries.value = await albumApi.getWebhookDeliveries(currentAlbumId)
+  } catch (e: any) {
+    webhookDeliveriesError.value = e.message || t('common.loadFailed')
+    if (webhookDeliveries.value.length === 0) {
+      webhookDeliveries.value = []
+    }
+  } finally {
+    loadingDeliveries.value = false
+  }
+}
+
 onMounted(async () => {
   loading.value = true
   try {
@@ -288,47 +421,17 @@ onMounted(async () => {
 
     if (albumData.producer_id === userId) {
       loadTasks.push(
-        (albumData.circle_id
-          ? circleApi.get(albumData.circle_id).then(c => { users.value = c.members.map(m => m.user) })
-          : userApi.list().then(u => { users.value = u })
-        ),
-        invitationApi.listForAlbum(albumData.id).then(invs => { invitations.value = invs }),
-        checklistApi.getTemplate(albumData.id).then(tpl => {
-          templateItems.value = tpl.items.map(item => ({ ...item }))
-          templateIsDefault.value = tpl.is_default
-          savedTemplateSnapshot.value = JSON.stringify(templateItems.value)
-        }).catch(() => { console.warn('[AlbumSettings] Failed to load checklist template') }),
-        albumApi.tracks(albumData.id).then(ts => { tracks.value = ts }),
-        albumApi.archivedTracks(albumData.id).then(ts => { archivedTracks.value = ts }).catch(() => {}),
-        albumApi.getWebhook(albumData.id).then(cfg => {
-          webhookState.url = cfg.url
-          webhookState.enabled = cfg.enabled
-          webhookState.events = [...cfg.events]
-          webhookState.type = cfg.type || 'generic'
-          webhookState.secret = cfg.secret || ''
-          webhookState.app_id = cfg.app_id || ''
-          webhookState.app_secret = cfg.app_secret || ''
-          webhookState.filter_user_ids = cfg.filter_user_ids || []
-        }).catch(() => {
-          console.warn('[AlbumSettings] Failed to load webhook config')
-          webhookState.url = ''
-          webhookState.enabled = false
-          webhookState.events = []
-          webhookState.type = 'generic'
-          webhookState.secret = ''
-          webhookState.app_id = ''
-          webhookState.app_secret = ''
-          webhookState.filter_user_ids = []
-        }),
-        albumApi.getWebhookDeliveries(albumData.id).then(d => { webhookDeliveries.value = d }).catch(() => {}),
+        loadAssignableUsers(albumData),
+        loadInvitations(albumData.id),
+        loadChecklistTemplate(albumData.id),
+        loadTrackList(albumData.id),
+        loadArchivedTracks(albumData.id),
+        loadWebhookConfig(albumData.id),
+        loadWebhookDeliveries(albumData.id),
       )
     } else if (albumData.members.some(m => m.user_id === userId)) {
       loadTasks.push(
-        checklistApi.getTemplate(albumData.id).then(tpl => {
-          templateItems.value = tpl.items.map(item => ({ ...item }))
-          templateIsDefault.value = tpl.is_default
-          savedTemplateSnapshot.value = JSON.stringify(templateItems.value)
-        }).catch(() => { console.warn('[AlbumSettings] Failed to load checklist template') }),
+        loadChecklistTemplate(albumData.id),
       )
     }
 
@@ -371,6 +474,8 @@ async function saveCover() {
     coverPreviewUrl.value = null
     coverImageFile.value = null
     toastSuccess(t('albumSettings.info.coverSaved'))
+  } catch (e: any) {
+    toastError(e.message || t('common.uploadFailed'))
   } finally {
     uploadingCover.value = false
   }
@@ -425,6 +530,8 @@ async function saveTeam() {
     album.value = updated
     syncTeamState()
     toastSuccess(t('settings.teamSaved'))
+  } catch (e: any) {
+    toastError(e.message || t('common.requestFailed'))
   } finally {
     savingTeam.value = false
   }
@@ -505,9 +612,13 @@ async function inviteMember() {
 }
 
 async function cancelInvitation(invitationId: number) {
-  await invitationApi.cancel(invitationId)
-  invitations.value = invitations.value.filter(inv => inv.id !== invitationId)
-  toastSuccess(t('settings.invitationCancelled'))
+  try {
+    await invitationApi.cancel(invitationId)
+    invitations.value = invitations.value.filter(inv => inv.id !== invitationId)
+    toastSuccess(t('settings.invitationCancelled'))
+  } catch (e: any) {
+    toastError(e.message || t('common.requestFailed'))
+  }
 }
 
 function getUserDisplayName(userId: number): string {
@@ -531,28 +642,37 @@ async function handleLeaveAlbum() {
 }
 
 // Activity actions
-async function loadActivity(append = false) {
+async function loadActivity(options: { append?: boolean; offset?: number } = {}) {
   if (!album.value) return
+  const append = options.append ?? false
+  const targetOffset = options.offset ?? activityOffset.value
   loadingActivity.value = true
+  activityError.value = ''
   try {
     const events = await albumApi.activity(album.value.id, {
       limit: ACTIVITY_PAGE_SIZE,
-      offset: activityOffset.value,
+      offset: targetOffset,
     })
     if (append) {
       activityEvents.value.push(...events)
     } else {
       activityEvents.value = events
     }
+    activityOffset.value = targetOffset
     activityHasMore.value = events.length === ACTIVITY_PAGE_SIZE
+  } catch (e: any) {
+    if (!append) {
+      activityEvents.value = []
+      activityOffset.value = 0
+    }
+    activityError.value = e.message || t('common.loadFailed')
   } finally {
     loadingActivity.value = false
   }
 }
 
 function loadMoreActivity() {
-  activityOffset.value += ACTIVITY_PAGE_SIZE
-  loadActivity(true)
+  loadActivity({ append: true, offset: activityOffset.value + ACTIVITY_PAGE_SIZE })
 }
 
 // Deadline actions
@@ -564,11 +684,15 @@ async function saveDeadlines() {
     if (deadlineState.peer_review) phaseDeadlines.peer_review = new Date(deadlineState.peer_review).toISOString()
     if (deadlineState.mastering) phaseDeadlines.mastering = new Date(deadlineState.mastering).toISOString()
     if (deadlineState.final_review) phaseDeadlines.final_review = new Date(deadlineState.final_review).toISOString()
-    await albumApi.updateDeadlines(album.value.id, {
+    const updated = await albumApi.updateDeadlines(album.value.id, {
       deadline: deadlineState.deadline ? new Date(deadlineState.deadline).toISOString() : null,
       phase_deadlines: Object.keys(phaseDeadlines).length ? phaseDeadlines : null,
     })
+    album.value = updated
+    syncDeadlineState()
     toastSuccess(t('settings.deadlinesSaved'))
+  } catch (e: any) {
+    toastError(e.message || t('common.requestFailed'))
   } finally {
     savingDeadlines.value = false
   }
@@ -590,6 +714,7 @@ async function saveTemplate() {
   if (hasEmpty) { templateError.value = t('settings.templateItemLabelRequired'); return }
   savingTemplate.value = true
   templateError.value = ''
+  templateLoadError.value = ''
   try {
     const result = await checklistApi.updateTemplate(
       album.value.id,
@@ -610,12 +735,10 @@ async function resetTemplate() {
   if (!album.value) return
   savingTemplate.value = true
   templateError.value = ''
+  templateLoadError.value = ''
   try {
     await checklistApi.resetTemplate(album.value.id)
-    const tpl = await checklistApi.getTemplate(album.value.id)
-    templateItems.value = tpl.items.map(item => ({ ...item }))
-    templateIsDefault.value = true
-    savedTemplateSnapshot.value = JSON.stringify(templateItems.value)
+    await loadChecklistTemplate(album.value.id)
     toastSuccess(t('settings.templateReset'))
   } catch (err: any) {
     templateError.value = err.message || t('settings.templateSaveFailed')
@@ -682,15 +805,11 @@ async function saveWebhook() {
   savingWebhook.value = true
   try {
     const result = await albumApi.updateWebhook(album.value.id, webhookState)
-    webhookState.url = result.url
-    webhookState.enabled = result.enabled
-    webhookState.events = [...result.events]
-    webhookState.type = result.type || 'generic'
-    webhookState.secret = result.secret || ''
-    webhookState.app_id = result.app_id || ''
-    webhookState.app_secret = result.app_secret || ''
-    webhookState.filter_user_ids = result.filter_user_ids || []
+    applyWebhookConfig(result)
+    webhookConfigError.value = ''
     toastSuccess(t('settings.webhookSaved'))
+  } catch (e: any) {
+    toastError(e.message || t('common.requestFailed'))
   } finally {
     savingWebhook.value = false
   }
@@ -708,18 +827,13 @@ async function testWebhook() {
   } finally {
     testingWebhook.value = false
     // Refresh delivery history after test
-    albumApi.getWebhookDeliveries(album.value.id).then(d => { webhookDeliveries.value = d }).catch(() => {})
+    void loadWebhookDeliveries(album.value.id)
   }
 }
 
 async function refreshDeliveries() {
   if (!album.value) return
-  loadingDeliveries.value = true
-  try {
-    webhookDeliveries.value = await albumApi.getWebhookDeliveries(album.value.id)
-  } finally {
-    loadingDeliveries.value = false
-  }
+  await loadWebhookDeliveries(album.value.id)
 }
 </script>
 
@@ -1083,8 +1197,14 @@ async function refreshDeliveries() {
       <div v-else-if="activeTab === 'activity'">
         <div class="card space-y-4">
           <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('albumSettings.activity.title') }}</h3>
+          <div v-if="activityError" class="border border-error/30 bg-error-bg/30 p-3 flex items-center justify-between gap-3">
+            <p class="text-sm text-error">{{ activityError }}</p>
+            <button @click="loadActivity({ offset: 0 })" class="btn-secondary text-xs flex-shrink-0">
+              {{ t('common.retry') }}
+            </button>
+          </div>
           <div v-if="loadingActivity && activityEvents.length === 0" class="text-sm text-muted-foreground py-4 text-center">...</div>
-          <div v-else-if="activityEvents.length === 0" class="text-sm text-muted-foreground py-4 text-center">
+          <div v-else-if="!activityError && activityEvents.length === 0" class="text-sm text-muted-foreground py-4 text-center">
             {{ t('albumSettings.activity.empty') }}
           </div>
           <div v-else class="space-y-0">
@@ -1174,7 +1294,18 @@ async function refreshDeliveries() {
 
       <!-- Checklist tab -->
       <div v-else-if="activeTab === 'checklist'">
-        <div v-if="isProducerOfAlbum" class="card space-y-4">
+        <div v-if="loadingTemplate" class="card">
+          <p class="text-sm text-muted-foreground py-4 text-center">{{ t('common.loading') }}</p>
+        </div>
+
+        <div v-else-if="templateLoadError" class="card space-y-3">
+          <p class="text-sm text-error">{{ templateLoadError }}</p>
+          <div>
+            <button @click="album && loadChecklistTemplate(album.id)" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
+          </div>
+        </div>
+
+        <div v-else-if="isProducerOfAlbum" class="card space-y-4">
           <div v-if="templateIsDefault" class="text-xs text-muted-foreground">{{ t('settings.usingDefaultTemplate') }}</div>
           <div class="space-y-3">
             <div
@@ -1320,7 +1451,18 @@ async function refreshDeliveries() {
           <p class="text-xs text-muted-foreground">{{ t('albumSettings.archive.description') }}</p>
         </div>
 
-        <div v-if="archivedTracks.length === 0" class="card">
+        <div v-if="archiveLoadError" class="card space-y-3">
+          <p class="text-sm text-error">{{ archiveLoadError }}</p>
+          <div>
+            <button @click="album && loadArchivedTracks(album.id)" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
+          </div>
+        </div>
+
+        <div v-if="loadingArchivedTracks && archivedTracks.length === 0" class="card">
+          <p class="text-sm text-muted-foreground text-center py-4">{{ t('common.loading') }}</p>
+        </div>
+
+        <div v-else-if="!archiveLoadError && archivedTracks.length === 0" class="card">
           <p class="text-sm text-muted-foreground text-center py-4">{{ t('albumSettings.archive.empty') }}</p>
         </div>
 
@@ -1355,6 +1497,14 @@ async function refreshDeliveries() {
       </div>
 
       <div v-else-if="activeTab === 'webhook'" class="card space-y-5">
+        <div v-if="webhookConfigError" class="border border-error/30 bg-error-bg/30 p-3 space-y-3">
+          <p class="text-sm text-error">{{ webhookConfigError }}</p>
+          <div>
+            <button @click="album && loadWebhookConfig(album.id)" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
+          </div>
+        </div>
+
+        <template v-else>
         <div>
           <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.webhookType') }}</label>
           <select v-model="webhookState.type" class="select-field w-full text-sm">
@@ -1416,12 +1566,12 @@ async function refreshDeliveries() {
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <button @click="saveWebhook" :disabled="savingWebhook" class="btn-primary text-sm">
+          <button @click="saveWebhook" :disabled="savingWebhook || loadingWebhookConfig" class="btn-primary text-sm">
             {{ savingWebhook ? t('settings.saving') : t('settings.webhookSave') }}
           </button>
           <button
             @click="testWebhook"
-            :disabled="testingWebhook || !webhookState.url"
+            :disabled="testingWebhook || !webhookState.url || loadingWebhookConfig"
             class="btn-secondary text-sm"
           >
             {{ testingWebhook ? t('common.loading') : t('settings.webhookTest') }}
@@ -1429,6 +1579,8 @@ async function refreshDeliveries() {
           <span v-if="webhookTestResult === true" class="text-xs text-success">✓</span>
           <span v-if="webhookTestResult === false" class="text-xs text-error">✗</span>
         </div>
+
+        </template>
 
         <!-- Delivery history -->
         <div class="space-y-2">
@@ -1438,7 +1590,16 @@ async function refreshDeliveries() {
               {{ loadingDeliveries ? t('common.loading') : t('common.refresh') }}
             </button>
           </div>
-          <div v-if="webhookDeliveries.length === 0" class="text-xs text-muted-foreground py-3 text-center">
+          <div v-if="webhookDeliveriesError" class="border border-error/30 bg-error-bg/30 p-3 flex items-center justify-between gap-3">
+            <p class="text-sm text-error">{{ webhookDeliveriesError }}</p>
+            <button @click="album && loadWebhookDeliveries(album.id)" class="btn-secondary text-xs flex-shrink-0">
+              {{ t('common.retry') }}
+            </button>
+          </div>
+          <div v-else-if="loadingDeliveries && webhookDeliveries.length === 0" class="text-xs text-muted-foreground py-3 text-center">
+            {{ t('common.loading') }}
+          </div>
+          <div v-else-if="webhookDeliveries.length === 0" class="text-xs text-muted-foreground py-3 text-center">
             {{ t('settings.webhookNoDeliveries') }}
           </div>
           <div v-else class="space-y-1.5">

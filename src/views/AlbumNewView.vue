@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { albumApi, circleApi, userApi } from '@/api'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
+import { useToast } from '@/composables/useToast'
 import type { CircleSummary, User, WorkflowConfig, WorkflowTemplate } from '@/types'
 import { ChevronLeft, Upload, ChevronDown, ChevronRight, HelpCircle, BookTemplate, Save } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
@@ -12,12 +13,15 @@ import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
+const { error: toastError, warning: toastWarning } = useToast()
 
 const loading = ref(true)
 const creating = ref(false)
+const loadError = ref('')
+const createError = ref('')
 const users = ref<User[]>([])
 
 const form = ref({ title: '', description: '' })
@@ -57,6 +61,9 @@ const selectedTemplateId = ref<number | null>(null)
 const userOptions = computed<SelectOption[]>(() =>
   users.value.map((u) => ({ value: u.id, label: u.display_name }))
 )
+const coverButtonLabel = computed(() =>
+  locale.value === 'zh-CN' ? '上传专辑封面' : 'Upload album cover'
+)
 
 const circleOptions = computed<SelectOption[]>(() =>
   circles.value
@@ -89,20 +96,33 @@ const workflowMemberOptions = computed<SelectOption[]>(() => {
   return Array.from(byId.values())
 })
 
-onMounted(async () => {
+function partialSetupWarning() {
+  return locale.value === 'zh-CN'
+    ? '专辑已创建，但部分设置保存失败，请在设置页检查。'
+    : 'Album created, but some setup options failed to save. Please review the album settings.'
+}
+
+async function loadInitialOptions() {
   if (appStore.currentUser?.role !== 'producer') {
     router.replace('/albums')
     return
   }
   loading.value = true
+  loadError.value = ''
   try {
     const [userList, circleList] = await Promise.all([userApi.list(), circleApi.list()])
     users.value = userList
     circles.value = circleList
+  } catch (error: any) {
+    users.value = []
+    circles.value = []
+    loadError.value = error?.message || t('common.loadFailed')
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(loadInitialOptions)
 
 async function loadTemplates() {
   if (!selectedCircleId.value) return
@@ -161,6 +181,8 @@ async function create() {
   validateTitle()
   if (titleError.value) return
   creating.value = true
+  createError.value = ''
+  let createdAlbumId: number | null = null
   try {
     const payload: any = { ...form.value }
     if (selectedCircleId.value) {
@@ -173,6 +195,7 @@ async function create() {
       }
     }
     const album = await albumApi.create(payload)
+    createdAlbumId = album.id
 
     const tasks: Promise<any>[] = []
 
@@ -200,6 +223,16 @@ async function create() {
 
     await Promise.all(tasks)
     router.push(`/albums/${album.id}/settings`)
+  } catch (error: any) {
+    if (createdAlbumId !== null) {
+      const detail = error?.message ? ` ${error.message}` : ''
+      toastWarning(`${partialSetupWarning()}${detail}`.trim())
+      router.push(`/albums/${createdAlbumId}/settings`)
+      return
+    }
+
+    createError.value = error?.message || t('common.requestFailed')
+    toastError(createError.value)
   } finally {
     creating.value = false
   }
@@ -217,6 +250,11 @@ async function create() {
 
     <div v-if="loading"><SkeletonLoader :rows="4" :card="true" /></div>
 
+    <div v-else-if="loadError" class="card max-w-xl mx-auto text-center space-y-3">
+      <p class="text-sm text-error">{{ loadError }}</p>
+      <button @click="loadInitialOptions" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
+    </div>
+
     <template v-else>
       <!-- 基本信息 -->
       <div class="card space-y-5">
@@ -225,8 +263,10 @@ async function create() {
         <div class="flex items-start gap-5">
           <!-- 封面预览 -->
           <div class="flex-shrink-0 space-y-1.5">
-            <div
+            <button
+              type="button"
               class="relative w-24 h-24 overflow-hidden border border-border cursor-pointer group"
+              :aria-label="coverButtonLabel"
               @click="coverInputRef?.click()"
             >
               <img
@@ -236,7 +276,7 @@ async function create() {
               <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <Upload class="w-6 h-6 text-white" :stroke-width="2" />
               </div>
-            </div>
+            </button>
             <p class="text-xs text-muted-foreground text-center w-24">{{ t('albumNew.coverImageHint') }}</p>
             <input ref="coverInputRef" type="file" accept="image/*" class="hidden" @change="handleCoverSelect" />
           </div>
@@ -482,6 +522,7 @@ async function create() {
           {{ creating ? t('albumNew.creating') : t('albumNew.createButton') }}
         </button>
       </div>
+      <p v-if="createError" class="text-sm text-error">{{ createError }}</p>
     </template>
   </div>
 </template>

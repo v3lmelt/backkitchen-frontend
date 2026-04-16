@@ -8,16 +8,22 @@
     <template v-else-if="circle">
       <!-- header -->
       <div class="flex items-start gap-5 mb-8">
-        <div
-          class="w-16 h-16 rounded-full overflow-hidden border border-border bg-border flex items-center justify-center shrink-0 relative group"
-          :class="{ 'cursor-pointer': isOwner }"
-          @click="isOwner && logoInputRef?.click()"
+        <button
+          v-if="isOwner"
+          type="button"
+          class="w-16 h-16 rounded-full overflow-hidden border border-border bg-border flex items-center justify-center shrink-0 relative group cursor-pointer"
+          :aria-label="uploadLogoLabel"
+          @click="logoInputRef?.click()"
         >
           <img v-if="circle.logo_url" :src="`${API_ORIGIN}/uploads/${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
           <Smile v-else class="w-6 h-6 text-muted-foreground" :stroke-width="1.5" />
           <div v-if="isOwner" class="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <Upload class="w-3.5 h-3.5 text-white" :stroke-width="2" />
           </div>
+        </button>
+        <div v-else class="w-16 h-16 rounded-full overflow-hidden border border-border bg-border flex items-center justify-center shrink-0 relative">
+          <img v-if="circle.logo_url" :src="`${API_ORIGIN}/uploads/${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
+          <Smile v-else class="w-6 h-6 text-muted-foreground" :stroke-width="1.5" />
         </div>
         <input v-if="isOwner" ref="logoInputRef" type="file" accept="image/*" class="hidden" @change="uploadLogo" />
 
@@ -143,13 +149,15 @@
             :key="code.id"
             class="flex items-center gap-3 px-6 py-3 border-b border-border last:border-b-0"
           >
-            <span
-              class="font-mono text-sm select-all cursor-pointer px-3 py-1 rounded-full border transition-colors"
+            <button
+              type="button"
+              class="font-mono text-sm select-all px-3 py-1 rounded-full border transition-colors"
               :class="code.is_active ? 'border-border text-foreground hover:border-primary' : 'border-border text-muted-foreground line-through'"
+              :aria-label="inviteCodeLabel(code.code)"
               @click="copyCode(code.code)"
             >
               {{ code.code }}
-            </span>
+            </button>
             <span class="text-xs font-mono px-2 py-0.5 rounded-full" :class="code.is_active ? 'bg-success-bg text-success' : 'bg-border text-muted-foreground'">
               {{ code.is_active ? t('circleDetail.active') : t('circleDetail.revoked') }}
             </span>
@@ -198,7 +206,16 @@
             </button>
           </div>
 
-          <div v-if="templates.length === 0" class="text-center py-8">
+          <div v-if="loadingTemplates" class="text-center py-8">
+            <p class="text-sm text-muted-foreground">{{ t('common.loading') }}</p>
+          </div>
+
+          <div v-else-if="templatesLoadError" class="bg-card border border-error/30 rounded-none p-4 space-y-3 text-center">
+            <p class="text-sm text-error">{{ templatesLoadError }}</p>
+            <button @click="loadTemplates" class="btn-secondary text-xs">{{ t('common.retry') }}</button>
+          </div>
+
+          <div v-else-if="templates.length === 0" class="text-center py-8">
             <p class="text-sm text-muted-foreground">{{ t('workflowTemplate.noTemplates') }}</p>
             <p class="text-xs text-muted-foreground mt-1">{{ t('workflowTemplate.noTemplatesHint') }}</p>
           </div>
@@ -306,6 +323,16 @@
         </div>
       </div>
     </template>
+
+    <ConfirmModal
+      v-if="pendingTemplateAction"
+      :title="pendingTemplateAction.title"
+      :message="pendingTemplateAction.message"
+      :confirm-text="pendingTemplateAction.confirmText"
+      :destructive="pendingTemplateAction.destructive"
+      @confirm="confirmTemplateAction"
+      @cancel="pendingTemplateAction = null"
+    />
   </div>
 </template>
 
@@ -320,10 +347,11 @@ import { useToast } from '@/composables/useToast'
 import { parseUTC } from '@/utils/time'
 import { Smile, Upload, Plus, Pencil, Trash2 } from 'lucide-vue-next'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
@@ -353,10 +381,22 @@ const editTemplateDesc = ref('')
 const editTemplateConfig = ref<WorkflowConfig | null>(null)
 const savingTpl = ref(false)
 const showNewTemplate = ref(false)
+const loadingTemplates = ref(false)
+const templatesLoadError = ref('')
+const pendingTemplateAction = ref<{
+  title: string
+  message: string
+  confirmText?: string
+  destructive?: boolean
+  action: () => Promise<void>
+} | null>(null)
 
 const currentUserId = computed(() => appStore.currentUser?.id)
 const isOwner = computed(() =>
   circle.value ? circle.value.created_by === currentUserId.value : false
+)
+const uploadLogoLabel = computed(() =>
+  locale.value === 'zh-CN' ? '上传社团头像' : 'Upload circle logo'
 )
 
 const tabs = computed(() => {
@@ -419,7 +459,11 @@ onMounted(async () => {
     editForm.description = circle.value.description ?? ''
     editForm.website = circle.value.website ?? ''
     if (circle.value.created_by === currentUserId.value) {
-      inviteCodes.value = await circleApi.listInviteCodes(id)
+      try {
+        inviteCodes.value = await circleApi.listInviteCodes(id)
+      } catch (error: any) {
+        toast.error(error?.message || t('common.loadFailed'))
+      }
     }
   } catch (e: any) {
     toast.error(e.message || t('common.loadFailed'))
@@ -508,13 +552,26 @@ async function revokeCode(codeId: number) {
 }
 
 async function copyCode(code: string) {
-  await navigator.clipboard.writeText(code)
-  toast.success(t('circleDetail.codeCopied'))
+  try {
+    await navigator.clipboard.writeText(code)
+    toast.success(t('circleDetail.codeCopied'))
+  } catch (error: any) {
+    toast.error(error?.message || t('common.requestFailed'))
+  }
 }
 
 async function loadTemplates() {
   if (!circle.value) return
-  templates.value = await circleApi.listWorkflowTemplates(circle.value.id)
+  loadingTemplates.value = true
+  templatesLoadError.value = ''
+  try {
+    templates.value = await circleApi.listWorkflowTemplates(circle.value.id)
+  } catch (error: any) {
+    templates.value = []
+    templatesLoadError.value = error?.message || t('common.loadFailed')
+  } finally {
+    loadingTemplates.value = false
+  }
 }
 
 function startNewTemplate() {
@@ -533,16 +590,22 @@ function startEditTemplate(tpl: WorkflowTemplate) {
   showNewTemplate.value = true
 }
 
-async function saveTemplate() {
+function inviteCodeLabel(code: string) {
+  return locale.value === 'zh-CN' ? `复制邀请码 ${code}` : `Copy invite code ${code}`
+}
+
+async function confirmTemplateAction() {
+  if (!pendingTemplateAction.value) return
+  const action = pendingTemplateAction.value.action
+  pendingTemplateAction.value = null
+  await action()
+}
+
+async function persistTemplate() {
   if (!circle.value || !editTemplateName.value.trim() || !editTemplateConfig.value) return
   savingTpl.value = true
   try {
     if (editingTemplate.value) {
-      // Editing existing — check album_count for soft prompt
-      if (editingTemplate.value.album_count > 0) {
-        const confirmed = confirm(t('workflowTemplate.editWarning', { count: editingTemplate.value.album_count }))
-        if (!confirmed) { savingTpl.value = false; return }
-      }
       await circleApi.updateWorkflowTemplate(circle.value.id, editingTemplate.value.id, {
         name: editTemplateName.value.trim(),
         description: editTemplateDesc.value.trim() || null,
@@ -565,15 +628,36 @@ async function saveTemplate() {
   }
 }
 
+async function saveTemplate() {
+  if (!circle.value || !editTemplateName.value.trim() || !editTemplateConfig.value) return
+  if (editingTemplate.value?.album_count) {
+    pendingTemplateAction.value = {
+      title: t('workflowTemplate.editTemplate'),
+      message: t('workflowTemplate.editWarning', { count: editingTemplate.value.album_count }),
+      action: persistTemplate,
+    }
+    return
+  }
+  await persistTemplate()
+}
+
 async function deleteTemplate(tpl: WorkflowTemplate) {
   if (!circle.value) return
-  if (!confirm(t('workflowTemplate.deleteConfirm', { name: tpl.name }))) return
-  try {
-    await circleApi.deleteWorkflowTemplate(circle.value.id, tpl.id)
-    toast.success(t('workflowTemplate.deleted'))
-    await loadTemplates()
-  } catch (e: any) {
-    toast.error(e.message)
+  pendingTemplateAction.value = {
+    title: t('workflowTemplate.deleteTemplate'),
+    message: t('workflowTemplate.deleteConfirm', { name: tpl.name }),
+    confirmText: t('workflowTemplate.deleteTemplate'),
+    destructive: true,
+    action: async () => {
+      if (!circle.value) return
+      try {
+        await circleApi.deleteWorkflowTemplate(circle.value.id, tpl.id)
+        toast.success(t('workflowTemplate.deleted'))
+        await loadTemplates()
+      } catch (e: any) {
+        toast.error(e.message)
+      }
+    },
   }
 }
 

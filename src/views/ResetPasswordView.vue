@@ -28,6 +28,11 @@ const loading = ref(false)
 
 const passwordValid = computed(() => password.value.length >= 8)
 const passwordsMatch = computed(() => password.value === confirmPassword.value)
+const passwordToggleLabel = computed(() =>
+  showPassword.value
+    ? (locale.value === 'zh-CN' ? '隐藏密码' : 'Hide password')
+    : (locale.value === 'zh-CN' ? '显示密码' : 'Show password')
+)
 
 onMounted(() => {
   const t = route.query.token
@@ -107,6 +112,7 @@ async function handleSubmit() {
               <button
                 type="button"
                 class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                :aria-label="passwordToggleLabel"
                 @click="showPassword = !showPassword"
               >
                 <Eye v-if="!showPassword" class="w-4 h-4" :stroke-width="2" />

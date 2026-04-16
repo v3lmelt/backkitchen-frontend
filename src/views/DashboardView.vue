@@ -13,6 +13,7 @@ import { hashId } from '@/utils/hash'
 import { TRACK_STATUS_COLORS } from '@/utils/status'
 import { translateStepLabel } from '@/utils/workflow'
 import { useDashboardPins } from '@/composables/useDashboardPins'
+import { useToast } from '@/composables/useToast'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { Music, Search } from 'lucide-vue-next'
 
@@ -32,6 +33,7 @@ const router = useRouter()
 const route = useRoute()
 const { t, te, locale } = useI18n()
 const appStore = useAppStore()
+const { error: toastError } = useToast()
 const tracks = ref<Track[]>([])
 const rejectedTracks = ref<Track[]>([])
 const albums = ref<Album[]>([])
@@ -260,12 +262,20 @@ function formatEventDescription(event: WorkflowEvent): string {
 }
 
 async function handleAccept(invitationId: number) {
-  await appStore.acceptInvitation(invitationId)
-  await loadDashboard()
+  try {
+    await appStore.acceptInvitation(invitationId)
+    await loadDashboard()
+  } catch (e: any) {
+    toastError(e.message || t('common.requestFailed'))
+  }
 }
 
 async function handleDecline(invitationId: number) {
-  await appStore.declineInvitation(invitationId)
+  try {
+    await appStore.declineInvitation(invitationId)
+  } catch (e: any) {
+    toastError(e.message || t('common.requestFailed'))
+  }
 }
 
 function completedCount(albumId: number): number {

@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { authApi } from '@/api'
-import { Music, AlertCircle, Eye, EyeOff, Mail, CheckCircle2, Check } from 'lucide-vue-next'
+import { Music, AlertCircle, Eye, EyeOff, Mail, CheckCircle2, Check, Circle } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
 
