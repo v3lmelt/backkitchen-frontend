@@ -8,6 +8,7 @@ import { formatLocaleDate, formatDuration } from '@/utils/time'
 import { useDiscussions } from '@/composables/useDiscussions'
 import CommentInput from '@/components/common/CommentInput.vue'
 import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { MessageSquare, X, Pencil, Trash2, Music } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -23,23 +24,38 @@ const trackIdRef = computed(() => props.trackId)
 const mastering = useDiscussions(trackIdRef, 'mastering')
 
 const open = ref(false)
-const loading = ref(false)
 const unreadCount = ref(0)
 const messageListRef = ref<HTMLElement | null>(null)
 const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
+const pendingDeleteDiscussion = ref<Discussion | null>(null)
+
+const launcherMeta = computed(() => (
+  unreadCount.value > 0
+    ? t('chat.unreadCount', { count: unreadCount.value > 99 ? '99+' : unreadCount.value })
+    : t('chat.launchHint')
+))
+
+function openPanel() {
+  if (open.value) return
+  open.value = true
+  unreadCount.value = 0
+  nextTick(scrollToBottom)
+}
+
+function closePanel() {
+  open.value = false
+}
 
 function toggle() {
-  open.value = !open.value
   if (open.value) {
-    unreadCount.value = 0
-    nextTick(scrollToBottom)
+    closePanel()
+  } else {
+    openPanel()
   }
 }
 
 async function loadDiscussions() {
-  loading.value = true
   await mastering.load()
-  loading.value = false
 }
 
 function scrollToBottom() {
@@ -77,28 +93,44 @@ async function handleDiscussionEvent(event: string, discussionId: number) {
 
 const isOwnMessage = (d: Discussion) => d.author_id === appStore.currentUser?.id
 
+function requestDeleteDiscussion(discussion: Discussion) {
+  pendingDeleteDiscussion.value = discussion
+}
+
+function confirmDeleteDiscussion() {
+  if (!pendingDeleteDiscussion.value) return
+  mastering.remove(pendingDeleteDiscussion.value)
+  pendingDeleteDiscussion.value = null
+}
+
 onMounted(loadDiscussions)
 
 watch(() => props.trackId, loadDiscussions)
 
-defineExpose({ handleDiscussionEvent })
+defineExpose({ handleDiscussionEvent, openPanel, closePanel })
 </script>
 
 <template>
   <!-- Toggle button -->
   <button
     v-if="!open"
-    @click="toggle"
-    class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex items-center justify-center w-10 h-12 bg-card border border-border border-r-0 rounded-l-lg hover:bg-primary/10 transition-colors"
+    @click="openPanel"
+    class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex w-[132px] sm:w-[148px] items-center gap-3 rounded-l-2xl border border-primary/30 border-r-0 bg-card/95 px-3 py-3 text-left shadow-lg backdrop-blur transition-all hover:bg-primary/10"
     :title="t('chat.openChat')"
   >
-    <MessageSquare class="w-5 h-5 text-primary" :stroke-width="2" />
-    <span
-      v-if="unreadCount > 0"
-      class="absolute -top-1.5 -left-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-primary text-[10px] font-mono font-bold text-black px-1"
-    >
-      {{ unreadCount > 99 ? '99+' : unreadCount }}
-    </span>
+    <div class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+      <MessageSquare class="w-5 h-5" :stroke-width="2" />
+      <span
+        v-if="unreadCount > 0"
+        class="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-primary text-[10px] font-mono font-bold text-black px-1"
+      >
+        {{ unreadCount > 99 ? '99+' : unreadCount }}
+      </span>
+    </div>
+    <div class="min-w-0 pr-1">
+      <div class="text-xs font-mono text-primary">{{ t('chat.title') }}</div>
+      <div class="mt-0.5 text-[11px] leading-4 text-muted-foreground">{{ launcherMeta }}</div>
+    </div>
   </button>
 
   <!-- Sidebar panel -->
@@ -113,7 +145,7 @@ defineExpose({ handleDiscussionEvent })
           <MessageSquare class="w-4 h-4 text-primary" :stroke-width="2" />
           {{ t('chat.title') }}
         </h3>
-        <button @click="toggle" class="p-1 text-muted-foreground hover:text-foreground transition-colors">
+        <button @click="closePanel" class="p-1 text-muted-foreground hover:text-foreground transition-colors">
           <X class="w-4 h-4" :stroke-width="2" />
         </button>
       </div>
@@ -124,8 +156,13 @@ defineExpose({ handleDiscussionEvent })
         class="flex-1 overflow-y-auto px-4 py-3 space-y-4"
       >
         <!-- Loading -->
-        <div v-if="loading" class="flex items-center justify-center py-8">
+        <div v-if="mastering.loading.value" class="flex items-center justify-center py-8">
           <span class="text-sm text-muted-foreground">{{ t('common.loading') }}</span>
+        </div>
+
+        <div v-else-if="mastering.loadError.value && mastering.discussions.value.length === 0" class="flex flex-col items-center justify-center gap-3 py-8 text-center">
+          <p class="text-sm text-error">{{ mastering.loadError.value }}</p>
+          <button class="btn-secondary text-sm" @click="loadDiscussions">{{ t('common.retry') }}</button>
         </div>
 
         <!-- Empty -->
@@ -136,6 +173,15 @@ defineExpose({ handleDiscussionEvent })
 
         <!-- Messages list -->
         <template v-else>
+          <div
+            v-if="mastering.loadError.value"
+            class="rounded-none border border-error/30 bg-error-bg/30 px-3 py-2"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-sm text-error">{{ mastering.loadError.value }}</p>
+              <button class="btn-secondary text-xs flex-shrink-0" @click="loadDiscussions">{{ t('common.retry') }}</button>
+            </div>
+          </div>
           <div
             v-for="d in mastering.discussions.value"
             :key="d.id"
@@ -227,7 +273,7 @@ defineExpose({ handleDiscussionEvent })
                   <button @click="mastering.startEdit(d)" class="text-muted-foreground hover:text-foreground transition-colors">
                     <Pencil class="w-3 h-3" :stroke-width="2" />
                   </button>
-                  <button @click="mastering.remove(d)" class="text-muted-foreground hover:text-error transition-colors">
+                  <button @click="requestDeleteDiscussion(d)" class="text-muted-foreground hover:text-error transition-colors">
                     <Trash2 class="w-3 h-3" :stroke-width="2" />
                   </button>
                 </template>
@@ -260,6 +306,16 @@ defineExpose({ handleDiscussionEvent })
     v-if="mastering.showHistoryForId.value !== null"
     :items="mastering.historyItems.value"
     @close="mastering.closeHistory()"
+  />
+
+  <ConfirmModal
+    v-if="pendingDeleteDiscussion"
+    :title="t('discussion.deleteTitle')"
+    :message="t('discussion.deleteMessage')"
+    :confirm-text="t('common.delete')"
+    destructive
+    @confirm="confirmDeleteDiscussion"
+    @cancel="pendingDeleteDiscussion = null"
   />
 </template>
 

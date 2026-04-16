@@ -115,6 +115,16 @@ vi.mock('@/components/common/CustomSelect.vue', () => ({
   },
 }))
 
+vi.mock('@/components/chat/MasteringChatSidebar.vue', () => ({
+  default: {
+    methods: {
+      openPanel() {},
+      handleDiscussionEvent() {},
+    },
+    template: '<div class="mastering-chat-sidebar" />',
+  },
+}))
+
 vi.mock('@/composables/useAudioDownload', () => ({
   useAudioDownload: () => ({
     downloading: ref(false),
@@ -128,6 +138,12 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({
     success: vi.fn(),
     error: vi.fn(),
+  }),
+}))
+
+vi.mock('@/composables/useTrackWebSocket', () => ({
+  useTrackWebSocket: () => ({
+    connected: ref(false),
   }),
 }))
 
@@ -352,6 +368,71 @@ describe('WorkflowStepView', () => {
       'Master Track_master_v2_history_202401020000',
       '/master-v2.wav',
     )
+  })
+
+  it('omits the confirm delivery action when the delivery step does not require confirmation', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Direct Delivery Track',
+        artist: 'Nova',
+        status: 'mastering',
+        file_path: '/audio.wav',
+        version: 1,
+        workflow_cycle: 1,
+        mastering_engineer_id: 1,
+        current_master_delivery: {
+          id: 31,
+          workflow_cycle: 1,
+          delivery_number: 1,
+          file_path: '/master.wav',
+          confirmed_at: null,
+          producer_approved_at: null,
+          submitter_approved_at: null,
+          created_at: '2024-01-03T00:00:00Z',
+        },
+        workflow_step: {
+          id: 'mastering',
+          label: 'Mastering',
+          type: 'delivery',
+          ui_variant: 'mastering',
+          assignee_role: 'mastering_engineer',
+          order: 1,
+          require_confirmation: false,
+          transitions: { deliver: 'final_review' },
+        },
+        workflow_transitions: [
+          { decision: 'deliver', label: 'Deliver' },
+        ],
+      },
+      issues: [],
+      checklist_items: [],
+      master_deliveries: [
+        {
+          id: 31,
+          workflow_cycle: 1,
+          delivery_number: 1,
+          file_path: '/master.wav',
+          confirmed_at: null,
+          producer_approved_at: null,
+          submitter_approved_at: null,
+          created_at: '2024-01-03T00:00:00Z',
+        },
+      ],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'mastering', label: 'Mastering', type: 'delivery', ui_variant: 'mastering', assignee_role: 'mastering_engineer', order: 1, require_confirmation: false, transitions: { deliver: 'final_review' } },
+          { id: 'final_review', label: 'Final Review', type: 'approval', ui_variant: 'final_review', assignee_role: 'producer', order: 2, transitions: {} },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    expect(wrapper.find('.workflow-action-bar').text()).toContain('Deliver')
+    expect(wrapper.find('.workflow-action-bar').text()).not.toContain('Confirm Delivery')
   })
 
   it('auto-saves peer review notes before transitioning', async () => {

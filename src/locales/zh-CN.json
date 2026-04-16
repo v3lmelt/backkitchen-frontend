@@ -81,6 +81,8 @@
     "langToggle": "EN"
   },
   "common": {
+    "removeMemberTitle": "移除成员",
+    "removeMemberConfirm": "确认移除 {name}？此操作会立即生效。",
     "loading": "加载中…",
     "backToTrack": "返回曲目",
     "addIssue": "+ 添加问题",
@@ -110,6 +112,10 @@
     "delete": "删除",
     "moveUp": "上移",
     "moveDown": "下移"
+  },
+  "discussionPanel": {
+    "deleteTitle": "删除讨论",
+    "deleteConfirm": "确认删除这条讨论？此操作不可撤销。"
   },
   "severity": {
     "critical": "严重",
@@ -564,6 +570,8 @@
     }
   },
   "trackDetail": {
+    "visibilitySetPublic": "曲目已设为所有成员可见",
+    "visibilitySetPrivate": "曲目已设为仅相关人员可见",
     "workflowStatus": "工作流状态",
     "currentSourceAudio": "当前源音频",
     "noAudioFile": "该曲目暂无源音频文件。",
@@ -589,7 +597,7 @@
     "openIssues": "未解决问题",
     "currentMaster": "当前母带",
     "finalApprovals": "终审批准",
-    "goToMastering": "前往母带交流",
+    "goToMastering": "前往母带页面",
     "producer": "主催",
     "discussionsHeading": "讨论 ({count})",
     "noDiscussions": "暂无讨论。",
@@ -644,6 +652,9 @@
       "checklist_items": "审核清单",
       "master_delivery_approvals": "终审批准状态"
     },
+    "reopenDone": "流程已重新开启。",
+    "reopenRequested": "已提交重新开启申请。",
+    "reopenFailed": "重新开启流程失败。",
     "confirmDelivery": "确认提交",
     "reupload": "重新上传",
     "deliveryPreview": "请试听并确认上传的母带文件",
@@ -733,7 +744,7 @@
     "postDiscussion": "发送"
   },
   "masteringPage": {
-    "heading": "母带交流",
+    "heading": "母带沟通",
     "currentDelivery": "当前母带交付",
     "approvalStatus": "签收状态",
     "approveDelivery": "签收母带",
@@ -742,14 +753,46 @@
     "approved": "已签收",
     "uploadDelivery": "上传母带交付物",
     "uploadHint": "选择母带音频文件后上传。",
-    "discussionsHeading": "母带讨论 ({count})",
-    "noDiscussions": "暂无母带讨论。可在此与母带师、主催沟通母带细节。",
-    "discussionPlaceholder": "输入母带相关讨论…",
-    "postDiscussion": "发送",
+    "discussionsHeading": "母带沟通 ({count})",
+    "noDiscussions": "暂无母带沟通记录。可在此与母带师、主催对齐需求、试听反馈和交付细节。",
+    "discussionPlaceholder": "输入母带沟通内容…",
+    "postDiscussion": "发送消息",
     "tabs": {
+      "discussion": "沟通",
       "listen": "审听",
       "issues": "问题反馈",
       "delivery": "交付管理"
+    }
+  },
+  "masteringCommunication": {
+    "title": "母带沟通",
+    "subtitle": "把母带需求、反馈和交付确认集中在一个线程里",
+    "description": "最新沟通、当前母带版本和终审进度会在这里持续同步。",
+    "messageHeading": "沟通消息",
+    "deliveryHeading": "当前母带",
+    "approvalHeading": "终审进度",
+    "messageCount": "{count} 条消息",
+    "deliveryValue": "v{version}",
+    "deliveryEmpty": "未上传",
+    "approvalValue": "{approved}/{total} 已签收",
+    "approvalEmpty": "待交付后显示",
+    "none": "暂无",
+    "latestDiscussion": "最新沟通",
+    "masteringNotes": "曲师母带备注",
+    "getStarted": "建议先对齐目标",
+    "emptyPreview": "还没有沟通记录。建议先说明参考曲目、目标响度和希望保留的动态范围。",
+    "audioAttachment": "发送了试听音频",
+    "imageAttachment": "发送了图片",
+    "attachmentOnly": "发送了附件",
+    "openDiscussion": "打开母带沟通",
+    "status": {
+      "awaitingMastering": "待母带师处理",
+      "awaitingEngineerConfirmation": "待母带师确认交付",
+      "awaitingFinalApproval": "待终审反馈",
+      "deliveryReady": "已有新母带可试听",
+      "active": "沟通进行中",
+      "readyToStart": "建议尽早建立沟通",
+      "completed": "母带已完成"
     }
   },
   "producer": {
@@ -806,6 +849,8 @@
     "returnRequested": "已向主催发送退回请求"
   },
   "issueDetail": {
+    "deleteCommentTitle": "删除评论",
+    "deleteCommentConfirm": "确认删除这条评论？此操作不可撤销。",
     "back": "返回",
     "created": "创建于 {date}",
     "markFixed": "已解决",
@@ -841,8 +886,12 @@
     "outdatedWaveformUnavailable": "无法加载该问题所属的旧版本音频，因此这里不显示问题标记。",
     "commentsEmptyHint": "暂无评论，率先发表看法吧。",
     "keyboardHint": "空格 播放/暂停 · ←/→ 快退/快进 5s · J/K 上/下一问题",
+    "statusUpdated": "问题状态已更新。",
+    "statusUpdateFailed": "更新问题状态失败。",
     "commentUpdated": "评论已更新。",
-    "commentDeleted": "评论已删除。"
+    "commentDeleted": "评论已删除。",
+    "deleteCommentTitle": "删除评论？",
+    "deleteCommentMessage": "这条评论将被永久删除。"
   },
   "upload": {
     "heading": "提交曲目",
@@ -1071,6 +1120,10 @@
     "currentVersion": "当前版本",
     "previousVersion": "旧版本",
     "clear": "取消对比"
+  },
+  "discussion": {
+    "deleteTitle": "删除讨论？",
+    "deleteMessage": "这条讨论消息将被永久删除。"
   },
   "timestamp": {
     "syntaxTitle": "时间点语法",
@@ -1433,7 +1486,9 @@
   },
   "chat": {
     "title": "母带沟通",
-    "openChat": "打开母带聊天",
+    "openChat": "打开母带沟通",
+    "launchHint": "侧边栏随时展开",
+    "unreadCount": "{count} 条未读",
     "placeholder": "输入消息…",
     "send": "发送",
     "empty": "暂无消息。曲师、母带师和主催可在此沟通母带细节。",

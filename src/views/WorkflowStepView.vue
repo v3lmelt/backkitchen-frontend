@@ -29,6 +29,7 @@ import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
+import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
 import { ChevronLeft, Upload } from 'lucide-vue-next'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useDiscussions } from '@/composables/useDiscussions'
@@ -51,6 +52,7 @@ const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
 const appStore = useAppStore()
 const trackStore = useTrackStore()
 const trackId = computed(() => Number(route.params.id))
+const chatSidebarRef = ref<InstanceType<typeof MasteringChatSidebar> | null>(null)
 
 const wsReloading = ref(false)
 useTrackWebSocket(trackId.value, async () => {
@@ -59,6 +61,10 @@ useTrackWebSocket(trackId.value, async () => {
   await nextTick()
   await loadPage()
   wsReloading.value = false
+}, {
+  onDiscussionEvent: (event, discussionId) => {
+    chatSidebarRef.value?.handleDiscussionEvent(event, discussionId)
+  },
 })
 
 const track = ref<Track | null>(null)
@@ -71,6 +77,7 @@ const templateItems = ref<ChecklistTemplateItem[]>([])
 const checklistDraft = ref<{ label: string; passed: boolean; note: string }[]>([])
 const reviewAssignments = ref<StageAssignment[]>([])
 const loading = ref(true)
+const loadError = ref('')
 const acting = ref(false)
 const uploadFile = ref<File | null>(null)
 const localDeliveryPreviewUrl = ref('')
@@ -368,6 +375,7 @@ const finalReviewIssues = computed(() => {
 })
 const canConfirmDelivery = computed(() => {
   if (currentStep.value?.type !== 'delivery' || !track.value || !masterDelivery.value) return false
+  if (!currentStep.value.require_confirmation) return false
   const userId = appStore.currentUser?.id
   if (!userId) return false
   if (masterDelivery.value.confirmed_at) return false
@@ -398,6 +406,15 @@ const canRequestReturn = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId) return false
   return userId === track.value.submitter_id && userId !== track.value.producer_id
+})
+const canSeeMasteringSidebar = computed(() => {
+  const userId = appStore.currentUser?.id
+  if (!userId || !track.value) return false
+  const isParticipant = userId === track.value.submitter_id
+    || userId === track.value.producer_id
+    || userId === track.value.mastering_engineer_id
+  const supportsSidebar = activeVariant.value === 'mastering' || activeVariant.value === 'final_review'
+  return isParticipant && supportsSidebar
 })
 
 // Resolve the user id the current revision step is assigned to.
@@ -465,6 +482,7 @@ async function loadPeerChecklist(albumId: number) {
 
 async function loadPage() {
   if (!track.value) loading.value = true
+  loadError.value = ''
   error.value = ''
   try {
     const detail = await trackApi.get(trackId.value)
@@ -501,9 +519,10 @@ async function loadPage() {
     if (inferClassicVariant(detail.track.workflow_step ?? null) === 'mastering') {
       masteringDiscussion.discussions.value = (detail.discussions ?? []).filter(d => d.phase === 'mastering')
     }
-  } catch (err) {
+  } catch (err: any) {
     trackStore.setCurrentTrack(null)
-    throw err
+    track.value = null
+    loadError.value = err?.message || t('common.loadFailed')
   } finally {
     loading.value = false
   }
@@ -1105,8 +1124,13 @@ function handleIssueLeave() {
     <div class="card animate-pulse h-24"></div>
   </div>
 
-  <div v-else-if="!track || !currentStep" class="max-w-4xl mx-auto space-y-6">
-    <div class="card text-muted-foreground">{{ t('common.loading') }}</div>
+  <div v-else-if="loadError || !track || !currentStep" class="max-w-4xl mx-auto space-y-6">
+    <div class="card space-y-3">
+      <p class="text-sm text-error">{{ loadError || t('common.loadFailed') }}</p>
+      <div>
+        <button @click="loadPage" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
+      </div>
+    </div>
   </div>
 
   <div v-else-if="activeVariant === 'intake'" class="max-w-4xl mx-auto min-h-full flex flex-col">
@@ -1876,6 +1900,8 @@ function handleIssueLeave() {
         :editing-content="masteringDiscussion.editingContent.value"
         :history-items="masteringDiscussion.historyItems.value"
         :show-history-for-id="masteringDiscussion.showHistoryForId.value"
+        :loading="masteringDiscussion.loading.value"
+        :load-error="masteringDiscussion.loadError.value"
         :enable-audio="true"
         @submit="masteringDiscussion.submit"
         @start-edit="masteringDiscussion.startEdit"
@@ -1885,6 +1911,7 @@ function handleIssueLeave() {
         @show-history="masteringDiscussion.showHistory"
         @close-history="masteringDiscussion.closeHistory"
         @open-image="masteringDiscussion.openImage"
+        @retry="masteringDiscussion.load"
         @update:editing-content="masteringDiscussion.editingContent.value = $event"
       />
     </div>
@@ -2461,4 +2488,10 @@ function handleIssueLeave() {
     </template>
   </div>
 
+  <MasteringChatSidebar
+    v-if="canSeeMasteringSidebar && track"
+    ref="chatSidebarRef"
+    :track-id="trackId"
+    :track-completed="track.status === 'completed'"
+  />
 </template>

@@ -104,6 +104,16 @@ vi.mock('@/components/common/CommentInput.vue', () => ({
   },
 }))
 
+vi.mock('@/components/chat/MasteringChatSidebar.vue', () => ({
+  default: {
+    methods: {
+      openPanel() {},
+      handleDiscussionEvent() {},
+    },
+    template: '<div class="mastering-chat-sidebar" />',
+  },
+}))
+
 import TrackDetailView from './TrackDetailView.vue'
 
 function mountTrackDetailView() {
@@ -132,6 +142,7 @@ describe('TrackDetailView', () => {
     mocks.listAssignmentsMock.mockReset()
     mocks.trackReopenMock.mockReset()
     mocks.trackRequestReopenMock.mockReset()
+    mocks.currentUser = { id: 2 }
     vi.stubGlobal('open', mocks.openMock)
     mocks.trackReopenMock.mockResolvedValue({})
     mocks.trackRequestReopenMock.mockResolvedValue({})
@@ -208,6 +219,16 @@ describe('TrackDetailView', () => {
     await flushPromises()
 
     expect(wrapper.find('.waveform').text()).toContain('compare:201')
+  })
+
+  it('shows the current visibility separately from the toggle action', async () => {
+    mocks.currentUser = { id: 8 }
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Visible to participants only')
+    expect(wrapper.findAll('button').some(button => button.text() === 'Make visible to all members')).toBe(true)
   })
 
   it('renders current master audio in a separate waveform and filters master issues to the active delivery', async () => {

@@ -16,6 +16,7 @@ import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -85,6 +86,7 @@ const inviteError = ref('')
 const inviteSuccess = ref('')
 const invitingUser = ref(false)
 const addMemberUserId = ref<number | null>(null)
+const pendingMemberRemoval = ref<{ userId: number; displayName: string } | null>(null)
 
 // Leave album state
 const showLeaveConfirm = ref(false)
@@ -694,9 +696,17 @@ const availableUserOptions = computed<SelectOption[]>(() =>
     .map(u => ({ value: u.id, label: u.display_name }))
 )
 
-async function removeMemberFromAlbum(userId: number) {
+function promptRemoveMemberFromAlbum(userId: number) {
   if (!album.value || userId === album.value.producer_id) return
-  const next = { ...teamState, member_ids: teamState.member_ids.filter(id => id !== userId) }
+  pendingMemberRemoval.value = {
+    userId,
+    displayName: getUserDisplayName(userId),
+  }
+}
+
+async function removeMemberFromAlbum() {
+  if (!album.value || !pendingMemberRemoval.value) return
+  const next = { ...teamState, member_ids: teamState.member_ids.filter(id => id !== pendingMemberRemoval.value!.userId) }
   savingTeam.value = true
   try {
     const updated = await albumApi.updateTeam(album.value.id, next)
@@ -707,6 +717,7 @@ async function removeMemberFromAlbum(userId: number) {
     toastError(e.message || t('common.requestFailed'))
   } finally {
     savingTeam.value = false
+    pendingMemberRemoval.value = null
   }
 }
 
@@ -1220,8 +1231,9 @@ async function refreshDeliveries() {
                 </div>
                 <button
                   v-if="userId !== album.producer_id"
-                  @click="removeMemberFromAlbum(userId)"
-                  class="text-error text-xs hover:underline shrink-0"
+                  @click="promptRemoveMemberFromAlbum(userId)"
+                  :disabled="savingTeam"
+                  class="text-error text-xs hover:underline shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {{ t('circleDetail.remove') }}
                 </button>
@@ -1860,4 +1872,14 @@ async function refreshDeliveries() {
 
     </div>
   </div>
+
+  <ConfirmModal
+    v-if="pendingMemberRemoval"
+    :title="t('common.removeMemberTitle')"
+    :message="t('common.removeMemberConfirm', { name: pendingMemberRemoval.displayName })"
+    :confirm-text="t('circleDetail.remove')"
+    :destructive="true"
+    @confirm="removeMemberFromAlbum"
+    @cancel="pendingMemberRemoval = null"
+  />
 </template>

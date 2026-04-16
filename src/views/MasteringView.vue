@@ -22,9 +22,12 @@ import BatchIssueActions from '@/components/workflow/BatchIssueActions.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
+import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
+import MasteringCommunicationCard from '@/components/mastering/MasteringCommunicationCard.vue'
 import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
+import { useDiscussions } from '@/composables/useDiscussions'
 import { useToast } from '@/composables/useToast'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { ChevronLeft, ChevronDown, Upload, Check } from 'lucide-vue-next'
@@ -56,13 +59,17 @@ const editingMasteringNotes = ref(false)
 const masteringNotesForm = ref('')
 const savingMasteringNotes = ref(false)
 const masteringNotesExpanded = ref(false)
-
-// Chat sidebar
 const chatSidebarRef = ref<InstanceType<typeof MasteringChatSidebar> | null>(null)
+const masteringDiscussion = useDiscussions(trackId, 'mastering')
 
 // Tabs
-const activeTab = ref<'listen' | 'issues' | 'delivery'>('listen')
+type MasteringTabKey = 'discussion' | 'listen' | 'issues' | 'delivery'
+
+const activeTab = ref<MasteringTabKey>('discussion')
 const masteringTabs = computed(() => [
+  ...(canSeeMasteringDiscussion.value
+    ? [{ key: 'discussion' as const, label: t('masteringPage.tabs.discussion') }]
+    : []),
   { key: 'listen' as const, label: t('masteringPage.tabs.listen') },
   { key: 'issues' as const, label: t('masteringPage.tabs.issues') },
   { key: 'delivery' as const, label: t('masteringPage.tabs.delivery') },
@@ -107,6 +114,13 @@ const canSeeMasteringDiscussion = computed(() => {
   return userId === track.value.submitter_id
     || userId === track.value.producer_id
     || userId === track.value.mastering_engineer_id
+})
+
+watch(canSeeMasteringDiscussion, (canSee) => {
+  if (!track.value) return
+  if (!canSee && activeTab.value === 'discussion') {
+    activeTab.value = 'listen'
+  }
 })
 
 const masterAudioUrl = computed(() => {
@@ -358,6 +372,7 @@ async function loadData() {
     issues.value = (detail.issues ?? []).filter(
       (issue: Issue) => issue.workflow_cycle === detail.track.workflow_cycle,
     )
+    masteringDiscussion.discussions.value = (detail.discussions ?? []).filter(d => d.phase === 'mastering')
     try {
       reviewAssignments.value = await trackApi.listAssignments(trackId.value)
     } catch {
@@ -366,9 +381,14 @@ async function loadData() {
   } catch {
     trackStore.setCurrentTrack(null)
     loadError.value = true
+    masteringDiscussion.discussions.value = []
   } finally {
     loading.value = false
   }
+}
+
+function openDiscussionPanel() {
+  chatSidebarRef.value?.openPanel()
 }
 
 function goBack() {
@@ -746,6 +766,14 @@ watch(olderMasterDeliveries, (deliveries) => {
       {{ actionError }}
     </div>
 
+    <MasteringCommunicationCard
+      v-if="canSeeMasteringDiscussion"
+      :track="track"
+      :discussions="masteringDiscussion.discussions.value"
+      :cta-label="t('masteringCommunication.openDiscussion')"
+      @open="openDiscussionPanel"
+    />
+
     <!-- Tab bar -->
     <div class="flex gap-0 border-b border-border overflow-x-auto scrollbar-hide">
       <button
@@ -762,6 +790,43 @@ watch(olderMasterDeliveries, (deliveries) => {
     </div>
 
     <!-- ═══ Tab: Listen ═══ -->
+    <template v-if="activeTab === 'discussion'">
+      <div id="mastering-discussion" class="space-y-4">
+        <div v-if="track.mastering_notes" class="card border border-primary/20 bg-primary/5 space-y-2">
+          <div class="text-xs font-mono text-primary">{{ t('masteringCommunication.masteringNotes') }}</div>
+          <p class="text-sm text-foreground whitespace-pre-wrap">{{ track.mastering_notes }}</p>
+        </div>
+
+        <DiscussionPanel
+          v-if="canSeeMasteringDiscussion"
+          :discussions="masteringDiscussion.discussions.value"
+          :heading="t('masteringPage.discussionsHeading', { count: masteringDiscussion.discussions.value.length })"
+          :empty-text="t('masteringPage.noDiscussions')"
+          :placeholder="t('masteringPage.discussionPlaceholder')"
+          :submit-label="t('masteringPage.postDiscussion')"
+          :posting="masteringDiscussion.posting.value"
+          :posting-progress="masteringDiscussion.postingProgress.value"
+          :editing-id="masteringDiscussion.editingId.value"
+          :editing-content="masteringDiscussion.editingContent.value"
+          :history-items="masteringDiscussion.historyItems.value"
+          :show-history-for-id="masteringDiscussion.showHistoryForId.value"
+          :loading="masteringDiscussion.loading.value"
+          :load-error="masteringDiscussion.loadError.value"
+          :enable-audio="true"
+          @submit="masteringDiscussion.submit"
+          @start-edit="masteringDiscussion.startEdit"
+          @save-edit="masteringDiscussion.saveEdit"
+          @cancel-edit="masteringDiscussion.cancelEdit"
+          @remove="masteringDiscussion.remove"
+          @show-history="masteringDiscussion.showHistory"
+          @close-history="masteringDiscussion.closeHistory"
+          @open-image="masteringDiscussion.openImage"
+          @retry="masteringDiscussion.load"
+          @update:editing-content="masteringDiscussion.editingContent.value = $event"
+        />
+      </div>
+    </template>
+
     <template v-if="activeTab === 'listen'">
       <!-- Source audio -->
       <div v-if="audioUrl" class="space-y-4">
@@ -1050,7 +1115,6 @@ watch(olderMasterDeliveries, (deliveries) => {
     <WorkflowActionBar v-if="deliveryActions.length" :actions="deliveryActions" :hint="t('mastering.actionHint')" />
   </div>
 
-  <!-- Chat sidebar -->
   <MasteringChatSidebar
     v-if="canSeeMasteringDiscussion && track"
     ref="chatSidebarRef"

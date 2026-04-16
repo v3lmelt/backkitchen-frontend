@@ -81,6 +81,8 @@
     "langToggle": "中文"
   },
   "common": {
+    "removeMemberTitle": "Remove Member",
+    "removeMemberConfirm": "Remove {name}? This takes effect immediately.",
     "loading": "Loading...",
     "backToTrack": "Back to Track",
     "addIssue": "+ Add Issue",
@@ -110,6 +112,10 @@
     "delete": "Delete",
     "moveUp": "Move up",
     "moveDown": "Move down"
+  },
+  "discussionPanel": {
+    "deleteTitle": "Delete Discussion",
+    "deleteConfirm": "Delete this discussion? This action cannot be undone."
   },
   "severity": {
     "critical": "Critical",
@@ -564,6 +570,8 @@
     }
   },
   "trackDetail": {
+    "visibilitySetPublic": "Track is now visible to all members",
+    "visibilitySetPrivate": "Track is now visible to participants only",
     "workflowStatus": "Workflow Status",
     "currentSourceAudio": "Current Source Audio",
     "noAudioFile": "No source audio file uploaded for this track yet.",
@@ -589,7 +597,7 @@
     "openIssues": "Open Issues",
     "currentMaster": "Current Master",
     "finalApprovals": "Final approvals",
-    "goToMastering": "Go to Mastering",
+    "goToMastering": "Open Mastering Page",
     "producer": "Producer",
     "discussionsHeading": "Discussion ({count})",
     "noDiscussions": "No discussions yet.",
@@ -644,6 +652,9 @@
       "checklist_items": "Review checklists",
       "master_delivery_approvals": "Final review approval status"
     },
+    "reopenDone": "Workflow reopened.",
+    "reopenRequested": "Reopen request submitted.",
+    "reopenFailed": "Failed to reopen workflow.",
     "confirmDelivery": "Confirm Delivery",
     "reupload": "Re-upload",
     "deliveryPreview": "Preview and confirm the uploaded master file",
@@ -742,14 +753,46 @@
     "approved": "Approved",
     "uploadDelivery": "Upload Master Delivery",
     "uploadHint": "Select and upload the mastered audio file.",
-    "discussionsHeading": "Mastering Discussion ({count})",
-    "noDiscussions": "No mastering discussions yet. Use this space to communicate mastering details with the engineer and producer.",
-    "discussionPlaceholder": "Write a mastering discussion message…",
-    "postDiscussion": "Post",
+    "discussionsHeading": "Mastering Communication ({count})",
+    "noDiscussions": "No mastering communication yet. Use this space to align requirements, listening feedback, and delivery details.",
+    "discussionPlaceholder": "Write a mastering communication message…",
+    "postDiscussion": "Send message",
     "tabs": {
+      "discussion": "Discussion",
       "listen": "Listen",
       "issues": "Issues",
       "delivery": "Delivery"
+    }
+  },
+  "masteringCommunication": {
+    "title": "Mastering Communication",
+    "subtitle": "Keep mastering goals, feedback, and delivery confirmation in one thread",
+    "description": "Latest messages, the current master version, and final approval progress stay visible here.",
+    "messageHeading": "Messages",
+    "deliveryHeading": "Current master",
+    "approvalHeading": "Final approvals",
+    "messageCount": "{count} messages",
+    "deliveryValue": "v{version}",
+    "deliveryEmpty": "Not uploaded",
+    "approvalValue": "{approved}/{total} signed off",
+    "approvalEmpty": "Shows after delivery",
+    "none": "None yet",
+    "latestDiscussion": "Latest communication",
+    "masteringNotes": "Submitter mastering notes",
+    "getStarted": "Suggested starting point",
+    "emptyPreview": "No communication yet. Start by clarifying the reference track, target loudness, and what dynamics should remain.",
+    "audioAttachment": "Shared an audio preview",
+    "imageAttachment": "Shared an image",
+    "attachmentOnly": "Shared an attachment",
+    "openDiscussion": "Open mastering communication",
+    "status": {
+      "awaitingMastering": "Waiting on mastering",
+      "awaitingEngineerConfirmation": "Waiting for engineer confirmation",
+      "awaitingFinalApproval": "Waiting for final approval",
+      "deliveryReady": "New master ready for listening",
+      "active": "Discussion in progress",
+      "readyToStart": "Start the communication early",
+      "completed": "Mastering complete"
     }
   },
   "producer": {
@@ -806,6 +849,8 @@
     "returnRequested": "Return request sent to producer"
   },
   "issueDetail": {
+    "deleteCommentTitle": "Delete Comment",
+    "deleteCommentConfirm": "Delete this comment? This action cannot be undone.",
     "back": "Back",
     "created": "Created {date}",
     "markFixed": "Resolved",
@@ -841,8 +886,12 @@
     "outdatedWaveformUnavailable": "The source-version audio for this issue is unavailable, so the marker is hidden here.",
     "commentsEmptyHint": "No comments yet — be the first to leave a note.",
     "keyboardHint": "Space play/pause · ←/→ seek ±5s · J/K prev/next issue",
+    "statusUpdated": "Issue status updated.",
+    "statusUpdateFailed": "Failed to update issue status.",
     "commentUpdated": "Comment updated.",
-    "commentDeleted": "Comment deleted."
+    "commentDeleted": "Comment deleted.",
+    "deleteCommentTitle": "Delete comment?",
+    "deleteCommentMessage": "This comment will be permanently removed."
   },
   "upload": {
     "heading": "Submit Track",
@@ -1020,6 +1069,10 @@
     "currentVersion": "Current",
     "previousVersion": "Previous",
     "clear": "Clear"
+  },
+  "discussion": {
+    "deleteTitle": "Delete discussion?",
+    "deleteMessage": "This discussion message will be permanently removed."
   },
   "timestamp": {
     "syntaxTitle": "Timestamp Syntax",
@@ -1432,8 +1485,10 @@
     "error": "Export failed"
   },
   "chat": {
-    "title": "Mastering Chat",
-    "openChat": "Open mastering chat",
+    "title": "Mastering Communication",
+    "openChat": "Open mastering communication",
+    "launchHint": "Open from the side anytime",
+    "unreadCount": "{count} unread",
     "placeholder": "Type a message…",
     "send": "Send",
     "empty": "No messages yet. Submitter, mastering engineer, and producer can discuss mastering details here.",

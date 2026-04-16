@@ -14,14 +14,15 @@ const mocks = vi.hoisted(() => ({
   albumArchivedTracksMock: vi.fn(),
   albumGetWebhookMock: vi.fn(),
   albumGetWebhookDeliveriesMock: vi.fn(),
+  albumUpdateTeamMock: vi.fn(),
   albumArchiveMock: vi.fn(),
   albumRestoreMock: vi.fn(),
   checklistGetTemplateMock: vi.fn(),
   checklistUpdateTemplateMock: vi.fn(),
   checklistResetTemplateMock: vi.fn(),
   invitationListForAlbumMock: vi.fn(),
-  circleGetMock: vi.fn(),
   userListMock: vi.fn(),
+  circleGetMock: vi.fn(),
   trackRestoreMock: vi.fn(),
   toastSuccessMock: vi.fn(),
   toastErrorMock: vi.fn(),
@@ -51,6 +52,7 @@ vi.mock('@/api', () => ({
     get: mocks.albumGetMock,
     activity: mocks.albumActivityMock,
     updateWorkflow: mocks.albumUpdateWorkflowMock,
+    updateTeam: mocks.albumUpdateTeamMock,
     tracks: mocks.albumTracksMock,
     archivedTracks: mocks.albumArchivedTracksMock,
     getWebhook: mocks.albumGetWebhookMock,
@@ -128,6 +130,7 @@ vi.mock('lucide-vue-next', () => ({
   Archive: { template: '<svg class="icon-archive" />' },
   RotateCcw: { template: '<svg class="icon-rotate" />' },
   Upload: { template: '<svg class="icon-upload" />' },
+  X: { template: '<svg class="icon-close" />' },
 }))
 
 import AlbumSettingsView from './AlbumSettingsView.vue'
@@ -245,12 +248,14 @@ describe('AlbumSettingsView', () => {
     mocks.albumArchivedTracksMock.mockReset()
     mocks.albumGetWebhookMock.mockReset()
     mocks.albumGetWebhookDeliveriesMock.mockReset()
+    mocks.albumUpdateTeamMock.mockReset()
     mocks.albumArchiveMock.mockReset()
     mocks.albumRestoreMock.mockReset()
     mocks.checklistGetTemplateMock.mockReset()
     mocks.checklistUpdateTemplateMock.mockReset()
     mocks.checklistResetTemplateMock.mockReset()
     mocks.invitationListForAlbumMock.mockReset()
+    mocks.userListMock.mockReset()
     mocks.circleGetMock.mockReset()
     mocks.userListMock.mockReset()
     mocks.trackRestoreMock.mockReset()
@@ -274,6 +279,7 @@ describe('AlbumSettingsView', () => {
     mocks.albumArchivedTracksMock.mockResolvedValue([
       makeTrack(91, 'Archived Track', { archived_at: '2024-01-05T00:00:00Z' }),
     ])
+    mocks.albumUpdateTeamMock.mockResolvedValue(makeAlbum({ members: [] }))
     mocks.albumGetWebhookMock.mockResolvedValue({
       url: '',
       enabled: false,
@@ -295,6 +301,11 @@ describe('AlbumSettingsView', () => {
     })
     mocks.checklistResetTemplateMock.mockResolvedValue(undefined)
     mocks.invitationListForAlbumMock.mockResolvedValue([])
+    mocks.userListMock.mockResolvedValue([
+      makeUser(1, 'Producer'),
+      makeUser(2, 'Mastering'),
+      makeUser(3, 'Member'),
+    ])
     mocks.circleGetMock.mockResolvedValue({
       id: 9,
       members: [
@@ -474,5 +485,31 @@ describe('AlbumSettingsView', () => {
       offset: 0,
     })
     expect(wrapper.text()).toContain('issue created')
+  })
+
+  it('confirms member removal before updating the album team', async () => {
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'Team')!.trigger('click')
+    await flushPromises()
+
+    const removeButton = findButtonByText(wrapper, 'Remove')
+    expect(removeButton).toBeTruthy()
+
+    await removeButton!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.albumUpdateTeamMock).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('Remove Member')
+
+    const confirmButton = Array.from(document.body.querySelectorAll('button'))
+      .find(button => button.textContent?.trim() === 'Remove')
+    expect(confirmButton).toBeTruthy()
+
+    confirmButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+
+    expect(mocks.albumUpdateTeamMock).toHaveBeenCalledWith(5, expect.objectContaining({ member_ids: [] }))
   })
 })

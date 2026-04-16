@@ -11,6 +11,7 @@ import TimestampText from '@/components/common/TimestampText.vue'
 import CommentInput from '@/components/common/CommentInput.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { formatTimestamp, formatTimestampShort, formatLocaleDate, formatDuration } from '@/utils/time'
 import type { MarkerIndexReference, TimeReference, TimestampTarget } from '@/utils/timestamps'
 import { ArrowDownUp, ChevronLeft, ChevronRight, Music, Pencil, Trash2 } from 'lucide-vue-next'
@@ -305,6 +306,7 @@ async function handleCommentSubmit(payload: { content: string; images: File[]; a
 // Comment edit/delete
 const editingCommentId = ref<number | null>(null)
 const editingCommentContent = ref('')
+const pendingDeleteComment = ref<Comment | null>(null)
 
 function startEditComment(comment: Comment) {
   editingCommentId.value = comment.id
@@ -323,13 +325,21 @@ async function saveEditComment(comment: Comment) {
   } catch { /* handled by request wrapper */ }
 }
 
-async function deleteComment(comment: Comment) {
-  if (!issue.value?.comments) return
+function promptDeleteComment(comment: Comment) {
+  pendingDeleteComment.value = comment
+}
+
+async function deleteComment() {
+  const comment = pendingDeleteComment.value
+  if (!comment || !issue.value?.comments) return
   try {
     await commentApi.delete(comment.id)
     issue.value.comments = issue.value.comments.filter(c => c.id !== comment.id)
     toastSuccess(t('issueDetail.commentDeleted'))
   } catch { /* handled by request wrapper */ }
+  finally {
+    pendingDeleteComment.value = null
+  }
 }
 
 // Edit history
@@ -767,7 +777,7 @@ function openVersionCompare() {
                   <button @click="startEditComment(comment)" class="text-muted-foreground hover:text-foreground transition-colors ml-auto">
                     <Pencil class="w-3.5 h-3.5" :stroke-width="2" />
                   </button>
-                  <button @click="deleteComment(comment)" class="text-muted-foreground hover:text-error transition-colors">
+                  <button @click="promptDeleteComment(comment)" class="text-muted-foreground hover:text-error transition-colors">
                     <Trash2 class="w-3.5 h-3.5" :stroke-width="2" />
                   </button>
                 </template>
@@ -949,6 +959,16 @@ function openVersionCompare() {
     v-if="showHistoryForCommentId !== null"
     :items="historyItems"
     @close="closeHistory"
+  />
+
+  <ConfirmModal
+    v-if="pendingDeleteComment"
+    :title="t('issueDetail.deleteCommentTitle')"
+    :message="t('issueDetail.deleteCommentConfirm')"
+    :confirm-text="t('common.delete')"
+    :destructive="true"
+    @confirm="deleteComment"
+    @cancel="pendingDeleteComment = null"
   />
 </template>
 
