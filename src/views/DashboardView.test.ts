@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => ({
   trackListMock: vi.fn(),
   albumListMock: vi.fn(),
   albumStatsMock: vi.fn(),
-  albumExportMock: vi.fn(),
+  albumExportStreamMock: vi.fn(),
+  albumExportDownloadMock: vi.fn(),
   acceptInvitationMock: vi.fn(),
   declineInvitationMock: vi.fn(),
   loadPendingInvitationsMock: vi.fn(),
@@ -28,7 +29,8 @@ vi.mock('@/api', () => ({
   albumApi: {
     list: mocks.albumListMock,
     stats: mocks.albumStatsMock,
-    export: mocks.albumExportMock,
+    exportStream: mocks.albumExportStreamMock,
+    exportDownload: mocks.albumExportDownloadMock,
   },
 }))
 
@@ -54,7 +56,8 @@ describe('DashboardView', () => {
     mocks.trackListMock.mockReset()
     mocks.albumListMock.mockReset()
     mocks.albumStatsMock.mockReset()
-    mocks.albumExportMock.mockReset()
+    mocks.albumExportStreamMock.mockReset()
+    mocks.albumExportDownloadMock.mockReset()
     mocks.acceptInvitationMock.mockReset()
     mocks.declineInvitationMock.mockReset()
     mocks.loadPendingInvitationsMock.mockReset()
@@ -65,34 +68,52 @@ describe('DashboardView', () => {
         invited_by_user: { display_name: 'Producer' },
       },
     ]
-    mocks.trackListMock.mockResolvedValue([
-      {
-        id: 11,
-        album_id: 1,
-        title: 'Submitted Song',
-        artist: 'Nova',
-        status: 'submitted',
-        duration: 61,
-        version: 1,
-        updated_at: '2024-01-01T00:00:00Z',
-        allowed_actions: [],
-        open_issue_count: 0,
-        original_title: 'Bad Apple!!',
-        original_artist: 'Touhou',
-      },
-      {
-        id: 12,
-        album_id: 1,
-        title: 'Peer Song',
-        artist: 'Nova',
-        status: 'peer_review',
-        duration: 62,
-        version: 2,
-        updated_at: '2024-01-02T00:00:00Z',
-        allowed_actions: ['open-step'],
-        open_issue_count: 1,
-      },
-    ])
+    mocks.trackListMock.mockImplementation(async ({ status }: { status?: string } = {}) => {
+      if (status === 'rejected') {
+        return [
+          {
+            id: 13,
+            album_id: 1,
+            title: 'Rejected Song',
+            artist: 'Nova',
+            status: 'rejected',
+            duration: 63,
+            version: 1,
+            updated_at: '2024-01-03T00:00:00Z',
+            allowed_actions: [],
+            open_issue_count: 0,
+          },
+        ]
+      }
+      return [
+        {
+          id: 11,
+          album_id: 1,
+          title: 'Submitted Song',
+          artist: 'Nova',
+          status: 'submitted',
+          duration: 61,
+          version: 1,
+          updated_at: '2024-01-01T00:00:00Z',
+          allowed_actions: [],
+          open_issue_count: 0,
+          original_title: 'Bad Apple!!',
+          original_artist: 'Touhou',
+        },
+        {
+          id: 12,
+          album_id: 1,
+          title: 'Peer Song',
+          artist: 'Nova',
+          status: 'peer_review',
+          duration: 62,
+          version: 2,
+          updated_at: '2024-01-02T00:00:00Z',
+          allowed_actions: ['open-step'],
+          open_issue_count: 1,
+        },
+      ]
+    })
     mocks.albumListMock.mockResolvedValue([
       { id: 1, title: 'Album One', producer_id: 1, track_count: 2, genres: ['Trance'], catalog_number: 'BK-001', circle_name: 'Back Kitchen', cover_image: null },
     ])
@@ -104,7 +125,11 @@ describe('DashboardView', () => {
       recent_events: [],
       deadline: null,
     })
-    mocks.albumExportMock.mockResolvedValue(new Blob(['zip']))
+    mocks.albumExportStreamMock.mockImplementation(async (_albumId: number, onEvent: (event: any) => Promise<void> | void) => {
+      await onEvent({ type: 'start', total: 1 })
+      await onEvent({ type: 'complete', total: 1, download_id: 'dl-1' })
+    })
+    mocks.albumExportDownloadMock.mockResolvedValue(new Blob(['zip']))
     mocks.acceptInvitationMock.mockResolvedValue(undefined)
     mocks.declineInvitationMock.mockResolvedValue(undefined)
     mocks.loadPendingInvitationsMock.mockResolvedValue(undefined)
@@ -114,17 +139,22 @@ describe('DashboardView', () => {
     const wrapper = mountWithPlugins(DashboardView)
     await flushPromises()
 
-    expect(mocks.trackListMock).toHaveBeenCalledTimes(1)
+    expect(mocks.trackListMock).toHaveBeenCalledTimes(2)
     expect(mocks.albumListMock).toHaveBeenCalledTimes(1)
     expect(mocks.albumStatsMock).toHaveBeenCalledWith(1)
     expect(wrapper.text()).toContain('Submitted Song')
     expect(wrapper.text()).toContain('Peer Song')
+    expect(wrapper.text()).not.toContain('Rejected Song')
     expect(wrapper.text()).toContain('Original Song: Bad Apple!!')
     expect(wrapper.text()).toContain('Original Source: Touhou')
 
     await wrapper.findAll('.card').find(node => node.text().includes('Peer Flow'))!.trigger('click')
     expect(wrapper.find('tbody').text()).toContain('Peer Song')
     expect(wrapper.find('tbody').text()).not.toContain('Submitted Song')
+
+    await wrapper.findAll('.card').find(node => node.text().includes('Rejected'))!.trigger('click')
+    expect(wrapper.find('tbody').text()).toContain('Rejected Song')
+    expect(wrapper.find('tbody').text()).not.toContain('Peer Song')
   })
 
   it('handles invitation actions and album export', async () => {
@@ -147,7 +177,8 @@ describe('DashboardView', () => {
     await exportButton!.trigger('click')
     await flushPromises()
 
-    expect(mocks.albumExportMock).toHaveBeenCalledWith(1)
+    expect(mocks.albumExportStreamMock).toHaveBeenCalledWith(1, expect.any(Function))
+    expect(mocks.albumExportDownloadMock).toHaveBeenCalledWith(1, 'dl-1')
     expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
     expect(appendSpy).toHaveBeenCalled()

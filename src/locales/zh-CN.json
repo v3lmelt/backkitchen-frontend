@@ -425,7 +425,7 @@
     "reviewFinalizeApprove": "提交评审组最终结论：通过",
     "reviewFinalizeRevision": "提交评审组最终结论：打回修订",
     "reviewSubmitHint": "先提交你的个人评审意见；达到人数要求后，再由评审组内成员提交最终结论。",
-    "reviewFinalizeHint": "已达到评审人数要求，请在组内讨论后提交本轮同行评审的最终结论。",
+    "reviewFinalizeHint": "已达到评审人数要求，请在组内讨论后提交同行评审的最终结论。",
     "reviewFinalizeReady": "评审人数已满足，现在可以由评审组内成员提交最终结论。",
     "reviewWaitingForQuorum": "已收到 {completed}/{required} 份评审意见，等待更多评审人提交。",
     "reviewWaitingForAssignment": "当前阶段尚未指派评审人，需等待主催手动安排。",
@@ -624,7 +624,7 @@
     "masterAudio": "母带音频",
     "reopen": "重新开启流程",
     "requestReopen": "申请重新开启流程",
-    "reopenDesc": "选择要重新开启到的阶段，曲目会进入新的工作周期。",
+    "reopenDesc": "选择要重新开启到的阶段，曲目会从该阶段继续，并重置相关进度。",
     "requestReopenDesc": "向主催申请将此曲重新开启到指定阶段。",
     "reopenTarget": "目标阶段",
     "selectStage": "选择阶段",
@@ -712,7 +712,7 @@
     "actionHint": "上传修订后的源文件以回到审核流程",
     "returnedBy": "由 {name} 发起修订",
     "openIssuesReminder": "还有 {count} 个待处理问题需要逐项确认并处理",
-    "allIssuesHandled": "当前轮次的问题已全部处理，可以直接上传新版本。"
+    "allIssuesHandled": "当前问题已全部处理，可以直接上传新版本。"
   },
   "mastering": {
     "heading": "母带制作：{title}",
@@ -755,7 +755,7 @@
   "producer": {
     "heading": "主催工作台：{title}",
     "subheading": "曲目接收、同行评审签署及母带审批决策。",
-    "cycleIssues": "本轮问题",
+    "cycleIssues": "当前问题",
     "open": "待处理",
     "resolved": "已解决",
     "checklistPassed": "清单通过",
@@ -785,7 +785,7 @@
     "activeDiscussions": "有讨论",
     "hasDiscussion": "已有回复",
     "viewConversation": "查看完整问题与回复",
-    "noPeerIssues": "当前轮次没有同行评审问题。",
+    "noPeerIssues": "当前没有同行评审问题。",
     "producerFollowupHeading": "主催问题跟进",
     "producerFollowupHint": "查看主催提出的问题是否已获回复，并可直接调整问题状态。",
     "decisionGroupLabel": "下一步决策"

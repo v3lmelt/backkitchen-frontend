@@ -33,6 +33,7 @@ const route = useRoute()
 const { t, te, locale } = useI18n()
 const appStore = useAppStore()
 const tracks = ref<Track[]>([])
+const rejectedTracks = ref<Track[]>([])
 const albums = ref<Album[]>([])
 const albumStatsMap = ref<Record<number, AlbumStats>>({})
 const loading = ref(true)
@@ -81,11 +82,13 @@ async function loadDashboard() {
   loadError.value = false
   try {
     const query = searchQuery.value.trim() || undefined
-    const [loadedTracks, loadedAlbums] = await Promise.all([
+    const [loadedTracks, loadedRejectedTracks, loadedAlbums] = await Promise.all([
       loadAllTracks({ search: query }),
+      loadAllTracks({ status: 'rejected', search: query }),
       albumApi.list({ search: query }),
     ])
     tracks.value = loadedTracks
+    rejectedTracks.value = loadedRejectedTracks
     albums.value = loadedAlbums
     searchAlbumResults.value = query ? loadedAlbums : []
     if (!query) await appStore.loadPendingInvitations()
@@ -117,6 +120,9 @@ onBeforeUnmount(() => {
 })
 
 const filteredTracks = computed(() => {
+  if (filterStatus.value === 'rejected') {
+    return rejectedTracks.value
+  }
   let result = tracks.value
   if (filterStatus.value) {
     result = result.filter(track => track.status === filterStatus.value)
@@ -146,8 +152,8 @@ const trackStats = computed(() => {
     else if (s === 'peer_review' || s === 'peer_revision') peer_review++
     else if (s === 'mastering' || s === 'mastering_revision' || s === 'final_review') mastering++
     else if (s === 'completed') completed++
-    else if (s === 'rejected') rejected++
   }
+  rejected = rejectedTracks.value.length
   return { total: tracks.value.length, submitted, peer_review, mastering, completed, rejected }
 })
 

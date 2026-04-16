@@ -624,7 +624,7 @@
     "masterAudio": "Master Audio",
     "reopen": "Reopen Workflow",
     "requestReopen": "Request Workflow Reopen",
-    "reopenDesc": "Choose the stage to reopen into. The track will start a new workflow cycle.",
+    "reopenDesc": "Choose the stage to reopen into. The track will continue from that step and reset any related progress.",
     "requestReopenDesc": "Ask the producer to reopen this track into a specific stage.",
     "reopenTarget": "Target Stage",
     "selectStage": "Select stage",
@@ -712,7 +712,7 @@
     "actionHint": "Upload a revised source file to return to the review workflow",
     "returnedBy": "Revision requested by {name}",
     "openIssuesReminder": "{count} open issue(s) still need to be reviewed and addressed",
-    "allIssuesHandled": "All issues in this round are handled. You can upload the next source version."
+    "allIssuesHandled": "All current issues are handled. You can upload the next source version."
   },
   "mastering": {
     "heading": "Mastering: {title}",
@@ -755,7 +755,7 @@
   "producer": {
     "heading": "Producer Workspace: {title}",
     "subheading": "Submission intake, peer review sign-off, and mastering gate decisions.",
-    "cycleIssues": "Cycle Issues",
+    "cycleIssues": "Current Issues",
     "open": "Open",
     "resolved": "Resolved",
     "checklistPassed": "Checklist Passed",
@@ -785,7 +785,7 @@
     "activeDiscussions": "Discussed",
     "hasDiscussion": "Has replies",
     "viewConversation": "Open full issue thread",
-    "noPeerIssues": "No peer-review issues in this cycle.",
+    "noPeerIssues": "No peer-review issues right now.",
     "producerFollowupHeading": "Producer Follow-up",
     "producerFollowupHint": "Review whether producer-raised issues were addressed, and adjust their status without leaving this page.",
     "decisionGroupLabel": "Next Decision"

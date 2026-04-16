@@ -639,10 +639,13 @@ function toggleMasterCompare() {
 
 function masterDeliveryOptionLabel(delivery: MasterDelivery): string {
   const version = `v${delivery.delivery_number}`
-  const cycle = track.value && delivery.workflow_cycle !== track.value.workflow_cycle
-    ? ` · C${delivery.workflow_cycle}`
-    : ''
-  return `${version}${cycle} · ${fmtDate(delivery.created_at)}`
+  return `${version} · ${fmtDate(delivery.created_at)}`
+}
+
+function historicalDeliveryDownloadSuffix(delivery: MasterDelivery): string {
+  if (!track.value || delivery.workflow_cycle === track.value.workflow_cycle) return ''
+  const timestamp = delivery.created_at.replace(/\D/g, '').slice(0, 12)
+  return timestamp ? `_history_${timestamp}` : '_history'
 }
 
 function compareWithMasterDelivery(deliveryId: number) {
@@ -651,11 +654,9 @@ function compareWithMasterDelivery(deliveryId: number) {
 }
 
 function handleMasterVersionDownload(delivery: MasterDelivery) {
-  const cycleSuffix = track.value && delivery.workflow_cycle !== track.value.workflow_cycle
-    ? `_cycle${delivery.workflow_cycle}`
-    : ''
   const url = `${API_ORIGIN}/api/tracks/${trackId.value}/master-deliveries/${delivery.id}/audio?v=${delivery.delivery_number}&c=${delivery.workflow_cycle}`
-  downloadAudioAsset(url, `${track.value?.title ?? 'track'}_master_v${delivery.delivery_number}${cycleSuffix}`, delivery.file_path)
+  const historySuffix = historicalDeliveryDownloadSuffix(delivery)
+  downloadAudioAsset(url, `${track.value?.title ?? 'track'}_master_v${delivery.delivery_number}${historySuffix}`, delivery.file_path)
 }
 
 watch(activeTab, () => {

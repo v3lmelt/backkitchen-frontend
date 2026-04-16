@@ -784,7 +784,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
                 </button>
               </div>
               <p class="text-sm sm:text-base text-muted-foreground">
-                <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span> · source v{{ track.version }} · cycle {{ track.workflow_cycle }}
+                <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span> · source v{{ track.version }}
               </p>
               <div v-if="track.bpm || track.original_title || track.original_artist" class="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
                 <span v-if="track.bpm" class="font-mono">BPM {{ track.bpm }}</span>

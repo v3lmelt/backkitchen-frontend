@@ -67,9 +67,32 @@ describe('IssueCreatePanel', () => {
       description: 'Audible clicking artifacts',
       severity: 'major',
       phase: 'mastering',
+      visibility: 'public',
       markers: [{ marker_type: 'point', time_start: 1.5, time_end: null }],
     })
     expect(typeof onProgress).toBe('function')
+  })
+
+  it('defaults multi-review issues to internal visibility and submits it explicitly', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 9, phase: 'peer', allowInternalVisibility: true },
+    })
+
+    const vm = wrapper.vm as any
+    vm.handleClick(4.2)
+    await wrapper.vm.$nextTick()
+
+    await wrapper.find('input').setValue('Needs balance tweak')
+    await wrapper.find('textarea').setValue('Low end is masking the vocal')
+
+    const submitBtn = wrapper.findAll('button').find(b => b.classes().includes('btn-primary') && b.classes().includes('text-sm'))!
+    await submitBtn.trigger('click')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(mocks.createMock).toHaveBeenCalledTimes(1)
+    const [, payload] = mocks.createMock.mock.calls[0]
+    expect(payload.visibility).toBe('internal')
   })
 
   it('emits created event after successful submit', async () => {

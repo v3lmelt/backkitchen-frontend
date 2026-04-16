@@ -347,7 +347,7 @@ describe('WorkflowStepView', () => {
     await downloadButtons[downloadButtons.length - 1].trigger('click')
     expect(mocks.downloadAudioAssetMock).toHaveBeenCalledWith(
       '/api/tracks/9/master-deliveries/21/audio?v=2&c=1',
-      'Master Track_master_v2_cycle1',
+      'Master Track_master_v2_history_202401020000',
       '/master-v2.wav',
     )
   })

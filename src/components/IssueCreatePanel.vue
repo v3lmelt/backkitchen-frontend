@@ -27,7 +27,12 @@ const { error: toastError } = useToast()
 
 const showForm = ref(false)
 const issueMode = ref<'timed' | 'general'>('timed')
-const issueVisibility = ref<'public' | 'internal'>('public')
+
+function defaultIssueVisibility(): 'public' | 'internal' {
+  return props.allowInternalVisibility === true ? 'internal' : 'public'
+}
+
+const issueVisibility = ref<'public' | 'internal'>(defaultIssueVisibility())
 const issueVisibilityTouched = ref(false)
 const title = ref('')
 const description = ref('')
@@ -281,7 +286,7 @@ function resetForm() {
   title.value = ''
   description.value = ''
   severity.value = 'major'
-  issueVisibility.value = 'public'
+  issueVisibility.value = defaultIssueVisibility()
   issueVisibilityTouched.value = false
   markers.value = []
   rangeAnchor.value = null
@@ -425,7 +430,7 @@ async function submitIssue() {
     description: description.value,
     severity: severity.value,
     phase: props.phase,
-    visibility: issueVisibilityTouched.value ? issueVisibility.value : undefined,
+    visibility: issueVisibility.value,
     markers: issueMode.value === 'general' ? [] : markers.value.map(m => ({
       marker_type: m.marker_type,
       time_start: m.time_start,
@@ -509,9 +514,16 @@ watch(
 )
 
 watch(() => props.allowInternalVisibility, (allow) => {
-  if (allow !== false) return
-  issueVisibility.value = 'public'
-  issueVisibilityTouched.value = false
+  if (allow === false) {
+    issueVisibility.value = 'public'
+    issueVisibilityTouched.value = false
+    return
+  }
+
+  if (!showForm.value || !issueVisibilityTouched.value) {
+    issueVisibility.value = defaultIssueVisibility()
+    issueVisibilityTouched.value = false
+  }
 }, { immediate: true })
 
 watch(showForm, (open) => {
