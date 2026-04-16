@@ -9,7 +9,7 @@
       <!-- header -->
       <div class="flex items-start gap-5 mb-8">
         <button
-          v-if="isOwner"
+          v-if="canManageCircle"
           type="button"
           class="w-16 h-16 rounded-full overflow-hidden border border-border bg-border flex items-center justify-center shrink-0 relative group cursor-pointer"
           :aria-label="uploadLogoLabel"
@@ -17,7 +17,7 @@
         >
           <img v-if="circle.logo_url" :src="`${API_ORIGIN}/uploads/${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
           <Smile v-else class="w-6 h-6 text-muted-foreground" :stroke-width="1.5" />
-          <div v-if="isOwner" class="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <div v-if="canManageCircle" class="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <Upload class="w-3.5 h-3.5 text-white" :stroke-width="2" />
           </div>
         </button>
@@ -25,7 +25,7 @@
           <img v-if="circle.logo_url" :src="`${API_ORIGIN}/uploads/${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
           <Smile v-else class="w-6 h-6 text-muted-foreground" :stroke-width="1.5" />
         </div>
-        <input v-if="isOwner" ref="logoInputRef" type="file" accept="image/*" class="hidden" @change="uploadLogo" />
+        <input v-if="canManageCircle" ref="logoInputRef" type="file" accept="image/*" class="hidden" @change="uploadLogo" />
 
         <div class="flex-1">
           <h1 class="text-2xl font-semibold font-mono text-foreground">{{ circle.name }}</h1>
@@ -57,7 +57,7 @@
             <input
               v-model="editForm.name"
               type="text"
-              :disabled="!isOwner"
+              :disabled="!canManageCircle"
               class="input-field w-full disabled:opacity-60"
             />
           </div>
@@ -66,7 +66,7 @@
             <textarea
               v-model="editForm.description"
               rows="3"
-              :disabled="!isOwner"
+              :disabled="!canManageCircle"
               class="textarea-field w-full disabled:opacity-60"
             />
           </div>
@@ -75,11 +75,11 @@
             <input
               v-model="editForm.website"
               type="text"
-              :disabled="!isOwner"
+              :disabled="!canManageCircle"
               class="input-field w-full disabled:opacity-60"
             />
           </div>
-          <div v-if="isOwner" class="flex justify-end">
+          <div v-if="canManageCircle" class="flex justify-end">
             <button class="btn-primary" :disabled="savingInfo" @click="saveInfo">
               {{ savingInfo ? t('common.loading') : t('common.save') }}
             </button>
@@ -106,7 +106,7 @@
               {{ t(`circleDetail.roles.${member.role}`) }}
             </span>
             <button
-              v-if="isOwner && member.user_id !== currentUserId"
+              v-if="canManageCircle && member.user_id !== currentUserId"
               class="text-error text-xs hover:underline"
               @click="promptRemoveMember(member)"
             >
@@ -117,7 +117,7 @@
       </div>
 
       <!-- invite codes tab (owner only) -->
-      <div v-if="activeTab === 'invites' && isOwner" class="flex flex-col gap-6 max-w-xl">
+      <div v-if="activeTab === 'invites' && canManageCircle" class="flex flex-col gap-6 max-w-xl">
         <!-- create new code -->
         <div class="bg-card border border-border rounded-none p-6 flex flex-col gap-4">
           <h2 class="font-mono font-semibold text-sm text-foreground">{{ t('circleDetail.createInvite') }}</h2>
@@ -200,7 +200,7 @@
 
         <!-- Template list -->
         <template v-if="!showNewTemplate">
-          <div v-if="isOwner" class="flex justify-end">
+          <div v-if="canManageCircle" class="flex justify-end">
             <button @click="startNewTemplate" class="btn-primary text-xs">
               <Plus class="w-3.5 h-3.5 mr-1" /> {{ t('workflowTemplate.createTemplate') }}
             </button>
@@ -232,7 +232,7 @@
               <span>{{ tpl.workflow_config.steps.length }} steps</span>
               <span v-if="tpl.created_by_user">{{ t('workflowTemplate.createdBy', { name: tpl.created_by_user.display_name }) }}</span>
             </div>
-            <div v-if="isOwner" class="flex gap-2 pt-1">
+            <div v-if="canManageCircle" class="flex gap-2 pt-1">
               <button @click="startEditTemplate(tpl)" class="btn-secondary text-xs">
                 <Pencil class="w-3 h-3 mr-1" /> {{ t('workflowTemplate.editTemplate') }}
               </button>
@@ -250,7 +250,7 @@
           <h3 class="text-sm font-mono font-semibold text-error">{{ t('circleDetail.danger.title') }}</h3>
 
           <!-- Owner: delete circle -->
-          <template v-if="isOwner">
+          <template v-if="canManageCircle">
             <div class="space-y-2">
               <p class="text-sm font-mono font-semibold text-foreground">{{ t('circleDetail.danger.deleteTitle') }}</p>
               <p class="text-xs text-muted-foreground">{{ t('circleDetail.danger.deleteDesc') }}</p>
@@ -355,6 +355,7 @@ import { circleApi, API_ORIGIN } from '@/api'
 import type { Circle, CircleMember, InviteCode, WorkflowConfig, WorkflowTemplate } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { parseUTC } from '@/utils/time'
+import { hasAdminRole } from '@/utils/admin'
 import { Smile, Upload, Plus, Pencil, Trash2 } from 'lucide-vue-next'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
@@ -405,6 +406,7 @@ const currentUserId = computed(() => appStore.currentUser?.id)
 const isOwner = computed(() =>
   circle.value ? circle.value.created_by === currentUserId.value : false
 )
+const canManageCircle = computed(() => isOwner.value || hasAdminRole(appStore.currentUser, 'operator'))
 const uploadLogoLabel = computed(() =>
   locale.value === 'zh-CN' ? '上传社团头像' : 'Upload circle logo'
 )
@@ -414,7 +416,7 @@ const tabs = computed(() => {
     { id: 'info', label: t('circleDetail.tabs.info') },
     { id: 'members', label: t('circleDetail.tabs.members') },
   ]
-  if (isOwner.value) base.push({ id: 'invites', label: t('circleDetail.tabs.invites') })
+  if (canManageCircle.value) base.push({ id: 'invites', label: t('circleDetail.tabs.invites') })
   base.push({ id: 'templates', label: t('circleDetail.tabs.templates') })
   base.push({ id: 'danger', label: t('circleDetail.tabs.danger') })
   return base
@@ -469,7 +471,7 @@ onMounted(async () => {
     editForm.name = circle.value.name
     editForm.description = circle.value.description ?? ''
     editForm.website = circle.value.website ?? ''
-    if (circle.value.created_by === currentUserId.value) {
+    if (canManageCircle.value) {
       try {
         inviteCodes.value = await circleApi.listInviteCodes(id)
       } catch (error: any) {

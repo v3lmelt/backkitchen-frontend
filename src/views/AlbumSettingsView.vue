@@ -11,6 +11,7 @@ import type { Album, ChecklistTemplateItem, Invitation, Track, User, WebhookDeli
 import { Archive, RotateCcw, Upload } from 'lucide-vue-next'
 import { formatRelativeTime } from '@/utils/time'
 import { formatWorkflowEvent, workflowEventDotColor } from '@/utils/workflow'
+import { hasAdminRole } from '@/utils/admin'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
@@ -157,17 +158,20 @@ async function saveWorkflow(config: WorkflowConfig) {
 }
 
 const isProducerOfAlbum = computed(() => album.value?.producer_id === appStore.currentUser?.id)
+const canManageAlbum = computed(() => isProducerOfAlbum.value || hasAdminRole(appStore.currentUser, 'operator'))
 const isMasteringEngineerOfAlbum = computed(() => album.value?.mastering_engineer_id === appStore.currentUser?.id)
 const isMemberOfAlbum = computed(() => album.value?.members.some(m => m.user_id === appStore.currentUser?.id) ?? false)
 
 const userRoleInAlbum = computed(() => {
   if (isProducerOfAlbum.value) return t('roles.producer')
+  if (canManageAlbum.value) return 'Admin'
   if (isMasteringEngineerOfAlbum.value) return t('roles.masteringEngineer')
   return t('roles.member')
 })
 
 const roleBadgeClass = computed(() => {
   if (isProducerOfAlbum.value) return 'bg-warning-bg text-warning'
+  if (canManageAlbum.value) return 'bg-info-bg text-info'
   if (isMasteringEngineerOfAlbum.value) return 'bg-info-bg text-info'
   return 'bg-border text-foreground'
 })
@@ -179,10 +183,10 @@ const availableTabs = computed(() => {
     { key: 'deadlines', label: t('albumSettings.tabs.deadlines') },
   ]
   tabs.push({ key: 'activity', label: t('albumSettings.tabs.activity') })
-  if (isProducerOfAlbum.value || isMemberOfAlbum.value) {
+  if (canManageAlbum.value || isMemberOfAlbum.value) {
     tabs.push({ key: 'checklist', label: t('albumSettings.tabs.checklist') })
   }
-  if (isProducerOfAlbum.value) {
+  if (canManageAlbum.value) {
     tabs.push({ key: 'workflow', label: t('albumSettings.tabs.workflow') })
     tabs.push({ key: 'order', label: t('albumSettings.tabs.order') })
     tabs.push({ key: 'archive', label: t('albumSettings.tabs.archive') })
@@ -903,15 +907,15 @@ async function refreshDeliveries() {
           <div class="flex-shrink-0 space-y-2">
             <div
               class="relative w-32 h-32 overflow-hidden border border-border"
-              :class="isProducerOfAlbum ? 'cursor-pointer group' : ''"
-              @click="isProducerOfAlbum && coverInputRef?.click()"
+              :class="canManageAlbum ? 'cursor-pointer group' : ''"
+              @click="canManageAlbum && coverInputRef?.click()"
             >
               <img
                 :src="coverPreviewUrl || (album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : albumPlaceholder)"
                 class="absolute inset-0 w-full h-full object-cover"
               />
               <div
-                v-if="isProducerOfAlbum"
+                v-if="canManageAlbum"
                 class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
               >
                 <Upload class="w-6 h-6 text-white" :stroke-width="2" />
@@ -919,21 +923,21 @@ async function refreshDeliveries() {
             </div>
             <input ref="coverInputRef" type="file" accept="image/*" class="hidden" @change="handleCoverSelect" />
             <button
-              v-if="isProducerOfAlbum && coverImageFile"
+              v-if="canManageAlbum && coverImageFile"
               @click="saveCover"
               :disabled="uploadingCover"
               class="btn-primary text-xs px-3 py-1.5 w-32"
             >
               {{ uploadingCover ? t('albumSettings.info.uploading') : t('albumSettings.info.saveCover') }}
             </button>
-            <p v-else-if="isProducerOfAlbum" class="text-xs text-muted-foreground text-center w-32">
+            <p v-else-if="canManageAlbum" class="text-xs text-muted-foreground text-center w-32">
               {{ t('albumSettings.info.coverHint') }}
             </p>
           </div>
 
           <!-- Album metadata — editable for producer, read-only otherwise -->
           <div class="flex-1 min-w-0 space-y-4">
-            <template v-if="isProducerOfAlbum">
+            <template v-if="canManageAlbum">
               <div>
                 <label class="block text-xs text-muted-foreground mb-1">{{ t('albumNew.albumTitle') }}</label>
                 <input
@@ -1035,7 +1039,7 @@ async function refreshDeliveries() {
 
       <!-- Team tab -->
       <div v-if="activeTab === 'team'" class="space-y-4">
-        <template v-if="isProducerOfAlbum">
+        <template v-if="canManageAlbum">
           <!-- Mastering engineer selector -->
           <div class="card space-y-3">
             <label class="block text-xs text-muted-foreground">{{ t('settings.masteringEngineerSelect') }}</label>
@@ -1245,7 +1249,7 @@ async function refreshDeliveries() {
 
       <!-- Deadlines tab -->
       <div v-else-if="activeTab === 'deadlines'">
-        <div v-if="isProducerOfAlbum" class="card space-y-5">
+        <div v-if="canManageAlbum" class="card space-y-5">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.albumDeadline') }}</label>
@@ -1317,7 +1321,7 @@ async function refreshDeliveries() {
           </div>
         </div>
 
-        <div v-else-if="isProducerOfAlbum" class="card space-y-4">
+        <div v-else-if="canManageAlbum" class="card space-y-4">
           <div v-if="templateIsDefault" class="text-xs text-muted-foreground">{{ t('settings.usingDefaultTemplate') }}</div>
           <div class="space-y-3">
             <div
@@ -1436,7 +1440,7 @@ async function refreshDeliveries() {
 
       <!-- Workflow editor -->
       <div v-else-if="activeTab === 'workflow'" class="card space-y-5">
-        <div v-if="!isProducerOfAlbum" class="text-sm text-muted-foreground">
+        <div v-if="!canManageAlbum" class="text-sm text-muted-foreground">
           {{ t('albumSettings.workflow.viewOnly') }}
         </div>
         <div v-if="workflowMigrations.length" class="bg-warning-bg border border-warning/20 rounded-none p-3 space-y-1">

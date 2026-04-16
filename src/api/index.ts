@@ -1,9 +1,12 @@
 import type {
   AdminActivityLogEntry,
+  AdminAuditLogEntry,
   AdminDashboardStats,
+  AdminReopenRequestEntry,
   Album,
   AlbumStats,
   AppConfig,
+  AdminRole,
   AuthResponse,
   ChecklistItem,
   ChecklistTemplateItem,
@@ -710,10 +713,28 @@ export const authApi = {
 }
 
 export const adminApi = {
-  listUsers: () => request<User[]>('/admin/users'),
-  updateUser: (id: number, data: { role?: UserRole; is_admin?: boolean; email_verified?: boolean }) =>
+  listUsers: (params?: { include_deleted?: boolean }) => {
+    const sp = new URLSearchParams()
+    if (params?.include_deleted) sp.set('include_deleted', 'true')
+    const qs = sp.toString()
+    return request<User[]>(`/admin/users${qs ? `?${qs}` : ''}`)
+  },
+  updateUser: (id: number, data: { role?: UserRole; admin_role?: AdminRole; is_admin?: boolean; email_verified?: boolean }) =>
     request<User>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deleteUser: (id: number) => request<void>(`/admin/users/${id}`, { method: 'DELETE' }),
+  suspendUser: (id: number, reason: string) =>
+    request<User>(`/admin/users/${id}/suspend`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  restoreUser: (id: number, reason: string) =>
+    request<User>(`/admin/users/${id}/restore`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  revokeUserSessions: (id: number, reason: string) =>
+    request<User>(`/admin/users/${id}/revoke-sessions`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  transferOwnership: (id: number, data: { target_user_id: number; reason: string }) =>
+    request<Record<string, number>>(`/admin/users/${id}/transfer-ownership`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteUser: (id: number, reason?: string) => {
+    const sp = new URLSearchParams()
+    if (reason) sp.set('reason', reason)
+    const qs = sp.toString()
+    return request<void>(`/admin/users/${id}${qs ? `?${qs}` : ''}`, { method: 'DELETE' })
+  },
   listAlbums: (params?: { include_archived?: boolean; search?: string }) => {
     const sp = new URLSearchParams()
     if (params?.include_archived) sp.set('include_archived', 'true')
@@ -721,12 +742,36 @@ export const adminApi = {
     const qs = sp.toString()
     return request<Album[]>(`/admin/albums${qs ? `?${qs}` : ''}`)
   },
-  listAlbumTracks: (albumId: number) => request<Track[]>(`/admin/albums/${albumId}/tracks`),
+  listCircles: (params?: { search?: string }) => {
+    const sp = new URLSearchParams()
+    if (params?.search) sp.set('search', params.search)
+    const qs = sp.toString()
+    return request<CircleSummary[]>(`/admin/circles${qs ? `?${qs}` : ''}`)
+  },
+  listAlbumTracks: (albumId: number, params?: { include_archived?: boolean; status?: string; search?: string }) => {
+    const sp = new URLSearchParams()
+    if (params?.include_archived != null) sp.set('include_archived', String(params.include_archived))
+    if (params?.status) sp.set('status', params.status)
+    if (params?.search) sp.set('search', params.search)
+    const qs = sp.toString()
+    return request<Track[]>(`/admin/albums/${albumId}/tracks${qs ? `?${qs}` : ''}`)
+  },
+  listReopenRequests: (params?: { album_id?: number; status?: string; limit?: number; offset?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.album_id) sp.set('album_id', String(params.album_id))
+    if (params?.status) sp.set('status', params.status)
+    if (params?.limit) sp.set('limit', String(params.limit))
+    if (params?.offset) sp.set('offset', String(params.offset))
+    const qs = sp.toString()
+    return request<AdminReopenRequestEntry[]>(`/admin/reopen-requests${qs ? `?${qs}` : ''}`)
+  },
   dashboard: () => request<AdminDashboardStats>('/admin/dashboard'),
   activityLog: (params?: {
     album_id?: number
     event_type?: string
     actor_user_id?: number
+    from_time?: string
+    to_time?: string
     limit?: number
     offset?: number
   }) => {
@@ -734,15 +779,53 @@ export const adminApi = {
     if (params?.album_id) sp.set('album_id', String(params.album_id))
     if (params?.event_type) sp.set('event_type', params.event_type)
     if (params?.actor_user_id) sp.set('actor_user_id', String(params.actor_user_id))
+    if (params?.from_time) sp.set('from_time', params.from_time)
+    if (params?.to_time) sp.set('to_time', params.to_time)
     if (params?.limit) sp.set('limit', String(params.limit))
     if (params?.offset) sp.set('offset', String(params.offset))
     const qs = sp.toString()
     return request<AdminActivityLogEntry[]>(`/admin/activity-log${qs ? `?${qs}` : ''}`)
   },
+  auditLog: (params?: {
+    action?: string
+    entity_type?: string
+    actor_user_id?: number
+    target_user_id?: number
+    from_time?: string
+    to_time?: string
+    limit?: number
+    offset?: number
+  }) => {
+    const sp = new URLSearchParams()
+    if (params?.action) sp.set('action', params.action)
+    if (params?.entity_type) sp.set('entity_type', params.entity_type)
+    if (params?.actor_user_id) sp.set('actor_user_id', String(params.actor_user_id))
+    if (params?.target_user_id) sp.set('target_user_id', String(params.target_user_id))
+    if (params?.from_time) sp.set('from_time', params.from_time)
+    if (params?.to_time) sp.set('to_time', params.to_time)
+    if (params?.limit) sp.set('limit', String(params.limit))
+    if (params?.offset) sp.set('offset', String(params.offset))
+    const qs = sp.toString()
+    return request<AdminAuditLogEntry[]>(`/admin/audit-log${qs ? `?${qs}` : ''}`)
+  },
   forceStatus: (trackId: number, data: { new_status: string; reason: string }) =>
     request<Track>(`/admin/tracks/${trackId}/force-status`, { method: 'POST', body: JSON.stringify(data) }),
   reassign: (trackId: number, data: { user_ids: number[]; reason: string }) =>
     request<Track>(`/admin/tracks/${trackId}/reassign`, { method: 'POST', body: JSON.stringify(data) }),
+  reopenTrack: (trackId: number, data: { target_stage_id: string; reason: string }) =>
+    request<Track>(`/admin/tracks/${trackId}/reopen`, { method: 'POST', body: JSON.stringify(data) }),
+  decideReopenRequest: (requestId: number, data: { decision: 'approve' | 'reject'; reason: string }) =>
+    request<AdminReopenRequestEntry>(`/admin/reopen-requests/${requestId}/decide`, { method: 'POST', body: JSON.stringify(data) }),
+  archiveTrack: (trackId: number, reason: string) =>
+    request<Track>(`/admin/tracks/${trackId}/archive`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  restoreTrack: (trackId: number, reason: string) =>
+    request<Track>(`/admin/tracks/${trackId}/restore`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  deleteTrack: (trackId: number, reason?: string) => {
+    const sp = new URLSearchParams()
+    if (reason) sp.set('reason', reason)
+    const qs = sp.toString()
+    return request<void>(`/admin/tracks/${trackId}${qs ? `?${qs}` : ''}`, { method: 'DELETE' })
+  },
 }
 
 export const invitationApi = {
