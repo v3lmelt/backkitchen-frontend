@@ -231,6 +231,14 @@ describe('TrackDetailView', () => {
     expect(wrapper.findAll('button').some(button => button.text() === 'Make visible to all members')).toBe(true)
   })
 
+  it('renders the mastering chat sidebar before the track enters mastering', async () => {
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    expect(wrapper.find('.mastering-chat-sidebar').exists()).toBe(true)
+    expect(wrapper.findAll('button').some(button => button.text() === 'Open Mastering Page')).toBe(false)
+  })
+
   it('renders current master audio in a separate waveform and filters master issues to the active delivery', async () => {
     mocks.trackGetMock.mockResolvedValueOnce({
       track: {
@@ -297,6 +305,7 @@ describe('TrackDetailView', () => {
     expect(waveforms[1].text()).toContain('audio:/api/tracks/7/master-audio?v=4&c=2')
     expect(waveforms[1].text()).toContain('issues:1')
     expect(waveforms[1].text()).toContain('compare:none')
+    expect(wrapper.findAll('button').some(button => button.text() === 'Open Mastering Page')).toBe(true)
   })
 
   it('shows a single step CTA for custom workflows', async () => {
