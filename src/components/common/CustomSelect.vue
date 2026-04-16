@@ -23,10 +23,23 @@ const emit = defineEmits<{
 
 const open = ref(false)
 const selectRef = ref<HTMLElement>()
-const triggerRef = ref<HTMLElement>()
+const triggerRef = ref<HTMLButtonElement>()
+const optionRefs = ref<HTMLButtonElement[]>([])
+const highlightedIndex = ref(-1)
+const listboxId = `custom-select-${Math.random().toString(36).slice(2, 10)}`
+
+const allOptions = computed<SelectOption[]>(() => (
+  props.placeholder !== undefined
+    ? [{ value: null, label: props.placeholder }, ...props.options]
+    : props.options
+))
+
+const selectedIndex = computed(() =>
+  allOptions.value.findIndex((option) => option.value === props.modelValue)
+)
 
 const selectedLabel = computed(() => {
-  const found = props.options.find((o) => o.value === props.modelValue)
+  const found = allOptions.value.find((o) => o.value === props.modelValue)
   return found ? found.label : props.placeholder ?? ''
 })
 
@@ -34,25 +47,128 @@ const isPlaceholder = computed(() => {
   return !props.options.some((o) => o.value === props.modelValue)
 })
 
+function setOptionRef(el: unknown, index: number) {
+  if (el instanceof HTMLButtonElement) {
+    optionRefs.value[index] = el
+  }
+}
+
+function closeMenu(restoreFocus = true) {
+  open.value = false
+  highlightedIndex.value = -1
+  if (restoreFocus) {
+    triggerRef.value?.focus()
+  }
+}
+
+function syncHighlightedIndex() {
+  highlightedIndex.value = selectedIndex.value >= 0 ? selectedIndex.value : 0
+}
+
+function focusOption(index: number) {
+  highlightedIndex.value = index
+  void nextTick(() => {
+    optionRefs.value[index]?.focus()
+  })
+}
+
+function openMenu() {
+  if (open.value) return
+  syncHighlightedIndex()
+  open.value = true
+}
+
 function toggle() {
-  open.value = !open.value
+  if (open.value) {
+    closeMenu(false)
+    return
+  }
+  openMenu()
 }
 
 function select(opt: SelectOption) {
   emit('update:modelValue', opt.value)
-  open.value = false
+  closeMenu()
+}
+
+function selectByIndex(index: number) {
+  const opt = allOptions.value[index]
+  if (opt) {
+    select(opt)
+  }
 }
 
 function onClickOutside(e: MouseEvent) {
   if (selectRef.value && !selectRef.value.contains(e.target as Node)) {
-    open.value = false
+    closeMenu(false)
   }
 }
 
-function onKeydown(e: KeyboardEvent) {
+function onTriggerKeydown(e: KeyboardEvent) {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    if (!open.value) {
+      openMenu()
+      return
+    }
+    const next = highlightedIndex.value < allOptions.value.length - 1 ? highlightedIndex.value + 1 : 0
+    focusOption(next)
+    return
+  }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    if (!open.value) {
+      openMenu()
+      return
+    }
+    const next = highlightedIndex.value > 0 ? highlightedIndex.value - 1 : allOptions.value.length - 1
+    focusOption(next)
+    return
+  }
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault()
+    if (!open.value) {
+      openMenu()
+      return
+    }
+    selectByIndex(highlightedIndex.value)
+    return
+  }
+  if (e.key === 'Escape' && open.value) {
+    e.preventDefault()
+    closeMenu()
+  }
+}
+
+function onOptionKeydown(index: number, e: KeyboardEvent) {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    focusOption(index < allOptions.value.length - 1 ? index + 1 : 0)
+    return
+  }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    focusOption(index > 0 ? index - 1 : allOptions.value.length - 1)
+    return
+  }
+  if (e.key === 'Home') {
+    e.preventDefault()
+    focusOption(0)
+    return
+  }
+  if (e.key === 'End') {
+    e.preventDefault()
+    focusOption(allOptions.value.length - 1)
+    return
+  }
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault()
+    selectByIndex(index)
+    return
+  }
   if (e.key === 'Escape') {
-    open.value = false
-    triggerRef.value?.focus()
+    e.preventDefault()
+    closeMenu()
   }
 }
 
@@ -61,23 +177,28 @@ const dropAbove = ref(false)
 
 watch(open, async (val) => {
   if (val) {
+    syncHighlightedIndex()
     await nextTick()
     if (triggerRef.value) {
       const rect = triggerRef.value.getBoundingClientRect()
       const spaceBelow = window.innerHeight - rect.bottom
       dropAbove.value = spaceBelow < 200 && rect.top > spaceBelow
     }
+    await nextTick()
+    if (allOptions.value.length > 0 && highlightedIndex.value >= 0) {
+      optionRefs.value[highlightedIndex.value]?.focus()
+    }
+  } else {
+    optionRefs.value = []
   }
 })
 
 onMounted(() => {
   document.addEventListener('click', onClickOutside, true)
-  document.addEventListener('keydown', onKeydown)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onClickOutside, true)
-  document.removeEventListener('keydown', onKeydown)
 })
 </script>
 
@@ -88,7 +209,11 @@ onBeforeUnmount(() => {
       type="button"
       class="custom-select-trigger"
       :class="{ 'text-muted-foreground': isPlaceholder }"
+      :aria-expanded="open ? 'true' : 'false'"
+      aria-haspopup="listbox"
+      :aria-controls="listboxId"
       @click="toggle"
+      @keydown="onTriggerKeydown"
     >
       <span class="truncate">{{ selectedLabel }}</span>
       <ChevronDown
@@ -99,28 +224,27 @@ onBeforeUnmount(() => {
     <Transition name="cs-drop">
       <div
         v-if="open"
+        :id="listboxId"
         class="custom-select-dropdown"
         :class="{ 'custom-select-dropdown--above': dropAbove }"
+        role="listbox"
       >
-        <div
-          v-if="placeholder !== undefined"
+        <button
+          v-for="(opt, index) in allOptions"
+          :key="`${index}-${String(opt.value)}`"
+          :ref="(el) => setOptionRef(el, index)"
+          type="button"
           class="custom-select-option"
-          :class="{ 'is-selected': isPlaceholder }"
-          @click="select({ value: null, label: placeholder! })"
-        >
-          <span class="custom-select-dot" />
-          <span class="truncate">{{ placeholder }}</span>
-        </div>
-        <div
-          v-for="opt in options"
-          :key="String(opt.value)"
-          class="custom-select-option"
-          :class="{ 'is-selected': opt.value === modelValue }"
+          :class="{ 'is-selected': opt.value === modelValue, 'is-active': index === highlightedIndex }"
+          role="option"
+          :aria-selected="opt.value === modelValue ? 'true' : 'false'"
           @click="select(opt)"
+          @keydown="onOptionKeydown(index, $event)"
+          @mouseenter="highlightedIndex = index"
         >
           <span class="custom-select-dot" />
           <span class="truncate">{{ opt.label }}</span>
-        </div>
+        </button>
       </div>
     </Transition>
   </div>
@@ -203,11 +327,15 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   padding: 8px 12px;
+  background: transparent;
+  border: 0;
   font-size: 14px;
   color: var(--color-foreground, #FFFFFF);
   cursor: pointer;
   transition: background-color 0.1s;
+  text-align: left;
 }
 
 .custom-select--sm .custom-select-option {
@@ -217,6 +345,12 @@ onBeforeUnmount(() => {
 }
 
 .custom-select-option:hover {
+  background: var(--color-border, #2E2E2E);
+}
+
+.custom-select-option:focus-visible,
+.custom-select-option.is-active {
+  outline: none;
   background: var(--color-border, #2E2E2E);
 }
 

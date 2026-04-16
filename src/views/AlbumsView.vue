@@ -14,14 +14,19 @@ const router = useRouter()
 const appStore = useAppStore()
 const albums = ref<Album[]>([])
 const loading = ref(true)
+const loadError = ref('')
 const activeTab = ref<'active' | 'archived'>('active')
 
 async function load() {
   loading.value = true
+  loadError.value = ''
   try {
     albums.value = await albumApi.list(
       activeTab.value === 'archived' ? { archived_only: true } : undefined,
     )
+  } catch (error: any) {
+    albums.value = []
+    loadError.value = error?.message || t('common.loadFailed')
   } finally {
     loading.value = false
   }
@@ -96,6 +101,11 @@ function roleBadgeClass(album: Album): string {
         <div class="h-4 bg-border rounded animate-pulse w-3/4"></div>
         <div class="h-3 bg-border rounded animate-pulse w-1/2"></div>
       </div>
+    </div>
+
+    <div v-else-if="loadError" class="card max-w-md mx-auto mt-12 text-center space-y-3">
+      <p class="text-sm text-error">{{ loadError }}</p>
+      <button @click="load" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
     </div>
 
     <EmptyState

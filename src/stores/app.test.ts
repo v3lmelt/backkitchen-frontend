@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   notificationListMock: vi.fn(),
   notificationMarkAllReadMock: vi.fn(),
   notificationMarkReadMock: vi.fn(),
+  onAuthClearedMock: vi.fn(),
   pushMock: vi.fn(),
 }))
 
@@ -22,6 +23,7 @@ vi.mock('@/api', () => ({
     markRead: mocks.notificationMarkReadMock,
   },
   userApi: { list: mocks.listMock },
+  onAuthCleared: mocks.onAuthClearedMock,
 }))
 
 vi.mock('@/router', () => ({
@@ -41,6 +43,7 @@ describe('app store', () => {
     mocks.notificationListMock.mockReset()
     mocks.notificationMarkAllReadMock.mockReset()
     mocks.notificationMarkReadMock.mockReset()
+    mocks.onAuthClearedMock.mockReset()
     mocks.pushMock.mockReset()
     mocks.configMock.mockResolvedValue({ r2_enabled: false })
     mocks.invitationListMock.mockResolvedValue([])

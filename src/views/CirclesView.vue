@@ -23,6 +23,11 @@
       <SkeletonLoader :rows="4" :card="true" />
     </div>
 
+    <div v-else-if="loadError" class="card max-w-md mx-auto mt-12 text-center space-y-3">
+      <p class="text-sm text-error">{{ loadError }}</p>
+      <button @click="loadCircles" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
+    </div>
+
     <!-- empty -->
     <div v-else-if="circles.length === 0" class="flex flex-col items-center justify-center py-24 gap-4">
       <Smile class="w-10 h-10 text-muted-foreground" :stroke-width="1.5" />
@@ -97,6 +102,7 @@ const toast = useToast()
 
 const circles = ref<CircleSummary[]>([])
 const loading = ref(true)
+const loadError = ref('')
 const showJoinModal = ref(false)
 const joinCode = ref('')
 const joinError = ref('')
@@ -104,13 +110,20 @@ const joining = ref(false)
 
 const isProducer = computed(() => appStore.currentUser?.role === 'producer')
 
-onMounted(async () => {
+async function loadCircles() {
+  loading.value = true
+  loadError.value = ''
   try {
     circles.value = await circleApi.list()
+  } catch (error: any) {
+    circles.value = []
+    loadError.value = error?.message || t('common.loadFailed')
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(loadCircles)
 
 async function joinCircle() {
   if (!joinCode.value.trim()) return
