@@ -241,9 +241,15 @@ const wfAlbumOptions = computed(() =>
   albums.value.map(a => ({ value: String(a.id), label: a.title }))
 )
 
+const TERMINAL_STATUSES = [
+  { value: 'completed', label: 'Completed' },
+  { value: 'rejected', label: 'Rejected' },
+]
+
 const LEGACY_STATUSES = [
-  'submitted', 'peer_review', 'peer_revision', 'producer_mastering_gate',
-  'mastering', 'mastering_revision', 'final_review', 'completed', 'rejected',
+  'intake', 'peer_review', 'peer_review_revision', 'producer_gate', 'producer_revision',
+  'mastering', 'mastering_revision', 'final_review', 'final_review_revision',
+  'completed', 'rejected',
 ]
 
 const wfAlbumMembers = computed(() => {
@@ -257,7 +263,10 @@ const wfAlbumMembers = computed(() => {
 const wfStatusOptions = computed(() => {
   const album = albums.value.find(a => a.id === wfSelectedAlbumId.value)
   if (album?.workflow_config?.steps?.length) {
-    return album.workflow_config.steps.map(s => ({ value: s.id, label: `${s.label} (${s.id})` }))
+    const stepOptions = album.workflow_config.steps.map(s => ({ value: s.id, label: `${s.label} (${s.id})` }))
+    const stepIds = new Set(stepOptions.map(o => o.value))
+    const extras = TERMINAL_STATUSES.filter(t => !stepIds.has(t.value))
+    return [...stepOptions, ...extras]
   }
   return LEGACY_STATUSES.map(s => ({ value: s, label: s }))
 })
