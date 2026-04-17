@@ -24,7 +24,6 @@ import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
-import MasteringCommunicationCard from '@/components/mastering/MasteringCommunicationCard.vue'
 import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
@@ -388,10 +387,6 @@ async function loadData() {
   } finally {
     loading.value = false
   }
-}
-
-function openDiscussionPanel() {
-  chatSidebarRef.value?.openPanel()
 }
 
 function goBack() {
@@ -835,14 +830,6 @@ watch(olderMasterDeliveries, (deliveries) => {
     <div v-if="actionError" class="card border border-error/40 bg-error-bg text-sm text-error">
       {{ actionError }}
     </div>
-
-    <MasteringCommunicationCard
-      v-if="canSeeMasteringDiscussion"
-      :track="track"
-      :discussions="masteringDiscussion.discussions.value"
-      :cta-label="t('masteringCommunication.openDiscussion')"
-      @open="openDiscussionPanel"
-    />
 
     <!-- Tab bar -->
     <div class="flex gap-0 border-b border-border overflow-x-auto scrollbar-hide">
