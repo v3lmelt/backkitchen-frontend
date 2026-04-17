@@ -703,7 +703,11 @@
     "passToProducer": "提交至主催",
     "checklistSubmitted": "清单已提交。",
     "actionHint": "完成清单后，选择下一步操作",
-    "checklistRequiredHint": "请先完成并保存评审清单，才能提交审核决策"
+    "checklistRequiredHint": "请先完成并保存评审清单，才能提交审核决策",
+    "checklistRequiredBadge": "必填",
+    "checklistSavedBadge": "已保存",
+    "checklistBlockerTitle": "请先完成同行评审清单",
+    "checklistBlockerDesc": "提交审核决策前，必须勾选并保存上方的清单项目"
   },
   "revision": {
     "peerRevision": "同行修订",

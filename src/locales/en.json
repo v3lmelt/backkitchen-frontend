@@ -703,7 +703,11 @@
     "passToProducer": "Pass to Producer",
     "checklistSubmitted": "Checklist submitted.",
     "actionHint": "After completing the checklist, choose the next step",
-    "checklistRequiredHint": "Please complete and save the review checklist before submitting your decision"
+    "checklistRequiredHint": "Please complete and save the review checklist before submitting your decision",
+    "checklistRequiredBadge": "Required",
+    "checklistSavedBadge": "Saved",
+    "checklistBlockerTitle": "Complete the peer review checklist first",
+    "checklistBlockerDesc": "You must check off and save the items above before submitting your review decision"
   },
   "revision": {
     "peerRevision": "Peer Revision",
