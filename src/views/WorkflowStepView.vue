@@ -1247,8 +1247,8 @@ function handleIssueLeave() {
           <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('producer.heading', { title: track.title }) }}</h1>
           <p class="text-sm sm:text-base text-muted-foreground">{{ t('producer.subheading') }}</p>
         </div>
-        <button @click="goBack" class="btn-secondary text-sm flex-shrink-0 self-start">
-          {{ t('common.backToTrack') }}
+        <button @click="goBack" class="btn-secondary !px-3 !py-2 flex-shrink-0 self-start" :aria-label="t('common.backToTrack')" :title="t('common.backToTrack')">
+          <ChevronLeft class="w-4 h-4" />
         </button>
       </div>
 
@@ -1311,10 +1311,12 @@ function handleIssueLeave() {
           <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('peerReview.heading', { title: track.title }) }}</h1>
           <p class="text-sm sm:text-base text-muted-foreground">{{ t('peerReview.subheading', { version: track.version }) }}</p>
         </div>
-        <button @click="goBack" class="btn-secondary text-sm flex-shrink-0 self-start">
-          {{ t('common.backToTrack') }}
+        <button @click="goBack" class="btn-secondary !px-3 !py-2 flex-shrink-0 self-start" :aria-label="t('common.backToTrack')" :title="t('common.backToTrack')">
+          <ChevronLeft class="w-4 h-4" />
         </button>
       </div>
+
+      <WorkflowProgress :status="track.status" :workflow-config="workflowConfig" />
 
       <div v-if="error" class="card border border-error/40 bg-error-bg text-sm text-error">
         {{ error }}
@@ -1530,8 +1532,8 @@ function handleIssueLeave() {
           <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('producer.heading', { title: track.title }) }}</h1>
           <p class="text-sm sm:text-base text-muted-foreground">{{ t('producer.subheading') }}</p>
         </div>
-        <button @click="goBack" class="btn-secondary text-sm flex-shrink-0 self-start">
-          {{ t('common.backToTrack') }}
+        <button @click="goBack" class="btn-secondary !px-3 !py-2 flex-shrink-0 self-start" :aria-label="t('common.backToTrack')" :title="t('common.backToTrack')">
+          <ChevronLeft class="w-4 h-4" />
         </button>
       </div>
 
@@ -1659,7 +1661,7 @@ function handleIssueLeave() {
         <div v-if="checklistByReviewer.length === 1" class="space-y-2">
           <div v-for="item in checklistByReviewer[0].items" :key="item.id" class="flex items-center gap-3 text-sm">
             <span :class="item.passed ? 'text-success' : 'text-error'">{{ item.passed ? 'OK' : 'NG' }}</span>
-            <span class="text-foreground">{{ item.label }}</span>
+            <span class="text-foreground">{{ translateChecklistLabel(item.label) }}</span>
             <span v-if="item.note" class="text-muted-foreground text-xs">- {{ item.note }}</span>
           </div>
         </div>
@@ -1671,7 +1673,7 @@ function handleIssueLeave() {
             <div class="space-y-2">
               <div v-for="item in group.items" :key="item.id" class="flex items-center gap-3 text-sm">
                 <span :class="item.passed ? 'text-success' : 'text-error'">{{ item.passed ? 'OK' : 'NG' }}</span>
-                <span class="text-foreground">{{ item.label }}</span>
+                <span class="text-foreground">{{ translateChecklistLabel(item.label) }}</span>
                 <span v-if="item.note" class="text-muted-foreground text-xs">- {{ item.note }}</span>
               </div>
             </div>
@@ -1812,10 +1814,12 @@ function handleIssueLeave() {
           <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('mastering.heading', { title: track.title }) }}</h1>
           <p class="text-sm sm:text-base text-muted-foreground">{{ t('mastering.subheading') }}</p>
         </div>
-        <button @click="goBack" class="btn-secondary text-sm flex-shrink-0 self-start">
-          {{ t('common.backToTrack') }}
+        <button @click="goBack" class="btn-secondary !px-3 !py-2 flex-shrink-0 self-start" :aria-label="t('common.backToTrack')" :title="t('common.backToTrack')">
+          <ChevronLeft class="w-4 h-4" />
         </button>
       </div>
+
+      <WorkflowProgress :status="track.status" :workflow-config="workflowConfig" />
 
       <div v-if="error" class="card border border-error/40 bg-error-bg text-sm text-error">
         {{ error }}
@@ -2078,10 +2082,12 @@ function handleIssueLeave() {
           <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('finalReview.heading', { title: track.title }) }}</h1>
           <p class="text-sm sm:text-base text-muted-foreground">{{ t('finalReview.subheading') }}</p>
         </div>
-        <button @click="goBack" class="btn-secondary text-sm flex-shrink-0 self-start">
-          {{ t('common.backToTrack') }}
+        <button @click="goBack" class="btn-secondary !px-3 !py-2 flex-shrink-0 self-start" :aria-label="t('common.backToTrack')" :title="t('common.backToTrack')">
+          <ChevronLeft class="w-4 h-4" />
         </button>
       </div>
+
+      <WorkflowProgress :status="track.status" :workflow-config="workflowConfig" />
 
       <div v-if="error" class="card border border-error/40 bg-error-bg text-sm text-error">
         {{ error }}
@@ -2188,16 +2194,30 @@ function handleIssueLeave() {
 
         <div class="card space-y-4">
           <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('finalReview.approvalStatus') }}</h3>
-          <div class="flex items-center justify-between text-sm">
+          <div class="flex items-center justify-between gap-3 text-sm">
             <span>{{ t('finalReview.producer') }}</span>
-            <span :class="masterDelivery?.producer_approved_at ? 'text-success' : 'text-muted-foreground'">
-              {{ masterDelivery?.producer_approved_at ? t('common.approved') : t('common.pending') }}
+            <span
+              :class="masterDelivery?.producer_approved_at ? 'text-success' : 'text-muted-foreground'"
+              class="text-right"
+            >
+              <template v-if="masterDelivery?.producer_approved_at">
+                {{ t('common.approved') }}
+                <span class="ml-1 font-mono text-xs text-muted-foreground">{{ fmtDate(masterDelivery.producer_approved_at) }}</span>
+              </template>
+              <template v-else>{{ t('common.pending') }}</template>
             </span>
           </div>
-          <div class="flex items-center justify-between text-sm">
+          <div class="flex items-center justify-between gap-3 text-sm">
             <span>{{ t('finalReview.submitter') }}</span>
-            <span :class="masterDelivery?.submitter_approved_at ? 'text-success' : 'text-muted-foreground'">
-              {{ masterDelivery?.submitter_approved_at ? t('common.approved') : t('common.pending') }}
+            <span
+              :class="masterDelivery?.submitter_approved_at ? 'text-success' : 'text-muted-foreground'"
+              class="text-right"
+            >
+              <template v-if="masterDelivery?.submitter_approved_at">
+                {{ t('common.approved') }}
+                <span class="ml-1 font-mono text-xs text-muted-foreground">{{ fmtDate(masterDelivery.submitter_approved_at) }}</span>
+              </template>
+              <template v-else>{{ t('common.pending') }}</template>
             </span>
           </div>
         </div>
