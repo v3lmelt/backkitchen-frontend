@@ -139,7 +139,8 @@
     "settings": "Settings",
     "albums": "Albums",
     "circles": "Circles",
-    "admin": "Admin"
+    "admin": "Admin",
+    "changelog": "What's New"
   },
   "header": {
     "logout": "Logout",
@@ -1684,6 +1685,12 @@
     "downloadingZip": "Downloading export file…",
     "done": "Export complete!",
     "error": "Export failed"
+  },
+  "changelog": {
+    "heading": "What's New",
+    "subheading": "Notable changes to the system. A NEW badge appears in the sidebar when a new release ships and clears once you visit this page.",
+    "latest": "Latest",
+    "badgeNew": "NEW"
   },
   "chat": {
     "title": "Mastering Communication",

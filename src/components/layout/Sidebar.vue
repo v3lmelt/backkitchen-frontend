@@ -1,16 +1,46 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { LayoutGrid, Upload, Archive, Smile, Lock, X, Bell } from 'lucide-vue-next'
+import { LayoutGrid, Upload, Archive, Smile, Lock, X, Bell, Megaphone } from 'lucide-vue-next'
+import { CHANGELOG_SEEN_EVENT, CHANGELOG_SEEN_KEY, LATEST_CHANGELOG_VERSION } from '@/data/changelog'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const { t } = useI18n()
 
-const iconMap = { grid: LayoutGrid, upload: Upload, notifications: Bell, albums: Archive, circles: Smile, admin: Lock } as const
+const iconMap = {
+  grid: LayoutGrid,
+  upload: Upload,
+  notifications: Bell,
+  albums: Archive,
+  circles: Smile,
+  admin: Lock,
+  changelog: Megaphone,
+} as const
+
+const seenChangelogVersion = ref<string | null>(null)
+
+function readSeenVersion() {
+  seenChangelogVersion.value = localStorage.getItem(CHANGELOG_SEEN_KEY)
+}
+
+const changelogUnseen = computed(() =>
+  Boolean(LATEST_CHANGELOG_VERSION) && seenChangelogVersion.value !== LATEST_CHANGELOG_VERSION,
+)
+
+onMounted(() => {
+  readSeenVersion()
+  window.addEventListener(CHANGELOG_SEEN_EVENT, readSeenVersion)
+  window.addEventListener('storage', readSeenVersion)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener(CHANGELOG_SEEN_EVENT, readSeenVersion)
+  window.removeEventListener('storage', readSeenVersion)
+})
 
 const navItems = computed(() => [
   { label: t('nav.dashboard'), icon: 'grid' as const, path: '/' },
@@ -18,6 +48,7 @@ const navItems = computed(() => [
   { label: t('nav.notifications'), icon: 'notifications' as const, path: '/notifications' },
   { label: t('nav.albums'), icon: 'albums' as const, path: '/albums' },
   { label: t('nav.circles'), icon: 'circles' as const, path: '/circles' },
+  { label: t('nav.changelog'), icon: 'changelog' as const, path: '/changelog' },
 ])
 
 const roleLabel = computed(() => {
@@ -88,6 +119,12 @@ const navItemClass = (path: string) => [
         >
           {{ appStore.unreadCount > 99 ? '99+' : appStore.unreadCount }}
         </span>
+        <span
+          v-else-if="item.path === '/changelog' && changelogUnseen"
+          class="ml-auto rounded-full bg-primary px-2 py-0.5 text-[11px] font-mono text-background"
+        >
+          {{ t('changelog.badgeNew') }}
+        </span>
       </RouterLink>
       <RouterLink
         v-if="appStore.currentUser?.is_admin"
@@ -154,6 +191,12 @@ const navItemClass = (path: string) => [
             class="ml-auto rounded-full bg-error px-2 py-0.5 text-[11px] font-mono text-white"
           >
             {{ appStore.unreadCount > 99 ? '99+' : appStore.unreadCount }}
+          </span>
+          <span
+            v-else-if="item.path === '/changelog' && changelogUnseen"
+            class="ml-auto rounded-full bg-primary px-2 py-0.5 text-[11px] font-mono text-background"
+          >
+            {{ t('changelog.badgeNew') }}
           </span>
         </button>
         <button

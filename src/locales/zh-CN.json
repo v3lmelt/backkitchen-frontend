@@ -139,7 +139,8 @@
     "settings": "设置",
     "albums": "专辑管理",
     "circles": "社团管理",
-    "admin": "后台管理"
+    "admin": "后台管理",
+    "changelog": "更新公告"
   },
   "header": {
     "logout": "退出登录",
@@ -1684,6 +1685,12 @@
     "downloadingZip": "正在下载导出文件…",
     "done": "导出完成！",
     "error": "导出失败"
+  },
+  "changelog": {
+    "heading": "更新公告",
+    "subheading": "记录系统的重要变更。新版本发布后，侧边栏会出现 NEW 提示；进入本页后提示会自动消除。",
+    "latest": "最新",
+    "badgeNew": "NEW"
   },
   "chat": {
     "title": "母带沟通",
