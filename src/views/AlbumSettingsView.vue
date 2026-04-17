@@ -7,6 +7,12 @@ import { albumApi, trackApi, checklistApi, invitationApi, userApi, circleApi, AP
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
+import {
+  ALBUM_COVER_ACCEPT,
+  localizeAlbumCoverUploadError,
+  localizeAlbumCoverValidationError,
+  validateAlbumCoverFile,
+} from '@/utils/albumCover'
 import type { Album, ChecklistTemplateItem, Invitation, Track, User, WebhookDelivery, WorkflowConfig, WorkflowEvent } from '@/types'
 import { Archive, RotateCcw, Upload } from 'lucide-vue-next'
 import { hasAdminRole } from '@/utils/admin'
@@ -602,11 +608,21 @@ watch(activityEventType, () => {
 
 // Cover image actions
 function handleCoverSelect(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
   if (!file) return
+
+  const validationError = validateAlbumCoverFile(file)
+  if (validationError) {
+    toastError(localizeAlbumCoverValidationError(validationError, t))
+    input.value = ''
+    return
+  }
+
   coverImageFile.value = file
   if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value)
   coverPreviewUrl.value = URL.createObjectURL(file)
+  input.value = ''
 }
 
 async function saveCover() {
@@ -620,7 +636,7 @@ async function saveCover() {
     coverImageFile.value = null
     toastSuccess(t('albumSettings.info.coverSaved'))
   } catch (e: any) {
-    toastError(e.message || t('common.uploadFailed'))
+    toastError(t('albumSettings.info.coverUploadFailed', { message: localizeAlbumCoverUploadError(e?.message, t) }))
   } finally {
     uploadingCover.value = false
   }
@@ -1067,7 +1083,7 @@ async function refreshDeliveries() {
                 <Upload class="w-6 h-6 text-white" :stroke-width="2" />
               </div>
             </div>
-            <input ref="coverInputRef" type="file" accept="image/*" class="hidden" @change="handleCoverSelect" />
+            <input ref="coverInputRef" type="file" :accept="ALBUM_COVER_ACCEPT" class="hidden" @change="handleCoverSelect" />
             <button
               v-if="canManageAlbum && coverImageFile"
               @click="saveCover"

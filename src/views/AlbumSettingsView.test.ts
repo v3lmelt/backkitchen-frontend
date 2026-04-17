@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   albumArchivedTracksMock: vi.fn(),
   albumGetWebhookMock: vi.fn(),
   albumGetWebhookDeliveriesMock: vi.fn(),
+  albumUploadCoverMock: vi.fn(),
   albumUpdateTeamMock: vi.fn(),
   albumArchiveMock: vi.fn(),
   albumRestoreMock: vi.fn(),
@@ -57,6 +58,7 @@ vi.mock('@/api', () => ({
     archivedTracks: mocks.albumArchivedTracksMock,
     getWebhook: mocks.albumGetWebhookMock,
     getWebhookDeliveries: mocks.albumGetWebhookDeliveriesMock,
+    uploadCover: mocks.albumUploadCoverMock,
     archive: mocks.albumArchiveMock,
     restore: mocks.albumRestoreMock,
   },
@@ -248,6 +250,7 @@ describe('AlbumSettingsView', () => {
     mocks.albumArchivedTracksMock.mockReset()
     mocks.albumGetWebhookMock.mockReset()
     mocks.albumGetWebhookDeliveriesMock.mockReset()
+    mocks.albumUploadCoverMock.mockReset()
     mocks.albumUpdateTeamMock.mockReset()
     mocks.albumArchiveMock.mockReset()
     mocks.albumRestoreMock.mockReset()
@@ -346,6 +349,40 @@ describe('AlbumSettingsView', () => {
     expect(mocks.albumGetMock).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).toContain('The following tracks were migrated due to stage changes:')
     expect(wrapper.text()).toContain('Migrated Track')
+  })
+
+  it('rejects unsupported cover files before upload', async () => {
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    const fileInput = wrapper.find('input[type="file"]')
+    const file = new File(['cover'], 'cover.txt', { type: 'text/plain' })
+    Object.defineProperty(fileInput.element, 'files', { value: [file] })
+
+    await fileInput.trigger('change')
+
+    expect(mocks.toastErrorMock).toHaveBeenCalledWith('Only JPEG, PNG, WebP, and GIF images are supported')
+    expect(mocks.albumUploadCoverMock).not.toHaveBeenCalled()
+  })
+
+  it('shows a localized error when cover upload fails in settings', async () => {
+    mocks.albumUploadCoverMock.mockRejectedValue(new Error('Only JPEG, PNG, WebP, and GIF images are allowed.'))
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    const fileInput = wrapper.find('input[type="file"]')
+    const file = new File(['cover'], 'cover.png', { type: 'image/png' })
+    Object.defineProperty(fileInput.element, 'files', { value: [file] })
+    await fileInput.trigger('change')
+
+    await findButtonByText(wrapper, 'Save Cover')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.albumUploadCoverMock).toHaveBeenCalledWith(5, expect.any(File))
+    expect(mocks.toastErrorMock).toHaveBeenCalledWith(
+      'Cover upload failed: Only JPEG, PNG, WebP, and GIF images are supported',
+    )
   })
 
   it('tracks checklist dirty state, saves edits, and resets to defaults', async () => {

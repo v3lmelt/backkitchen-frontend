@@ -24,6 +24,54 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.1',
+    date: '2026-04-17',
+    headline: {
+      'zh-CN': '本版本更新概览',
+      en: 'Release overview',
+    },
+    summary: {
+      'zh-CN':
+        '本次更新聚焦专辑封面上传体验，新增 20 MB 专用上限与更清晰的上传提示，且不影响其他图片上传场景。以下为本版本主要变更。',
+      en:
+        'This release focuses on the album cover upload experience, adding a dedicated 20 MB limit and clearer upload feedback without affecting other image upload flows. The key changes in this release are listed below.',
+    },
+    sections: [
+      {
+        heading: {
+          'zh-CN': '专辑与上传',
+          en: 'Albums & Uploads',
+        },
+        items: [
+          {
+            title: {
+              'zh-CN': '专辑封面单独支持最多 20 MB 上传',
+              en: 'Album covers now support uploads up to 20 MB',
+            },
+            description: {
+              'zh-CN':
+                '专辑封面上传改为使用独立的 20 MB 限制，不再复用系统其他图片附件的 10 MB 通用限制；头像、社团 Logo、问题与评论图片等其他上传场景保持原有上限不变。',
+              en:
+                'Album cover uploads now use a dedicated 20 MB limit instead of the shared 10 MB image limit used elsewhere. Other upload flows such as avatars, circle logos, and issue/comment images retain their existing limits.',
+            },
+          },
+          {
+            title: {
+              'zh-CN': '优化专辑封面上传校验与报错提示',
+              en: 'Improved album cover validation and error feedback',
+            },
+            description: {
+              'zh-CN':
+                '在新建专辑页与专辑设置页中，封面选择阶段会提前校验格式与大小，并对常见上传失败原因给出更明确的提示；若专辑已创建但封面上传失败，也会明确说明后续需要在设置页重新上传。',
+              en:
+                'The new album and album settings pages now validate cover format and size before upload and provide clearer messages for common upload failures. If album creation succeeds but the cover upload fails, the UI now explicitly tells the user to re-upload the cover in album settings.',
+            },
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: '0.0.1',
     date: '2026-04-17',
     headline: {

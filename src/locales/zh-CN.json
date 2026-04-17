@@ -934,7 +934,8 @@
     "albumRequired": "请先选择专辑再提交",
     "titleRequired": "请输入曲目标题",
     "artistRequired": "请输入艺术家名称",
-    "fileTooLarge": "文件过大，最大允许 {max}"
+    "fileTooLarge": "文件过大，最大允许 {max}",
+    "unsupportedImageType": "仅支持 JPEG、PNG、WebP 和 GIF 图片"
   },
   "settings": {
     "heading": "专辑设置",
@@ -1223,7 +1224,9 @@
     "albumTitle": "专辑标题 *",
     "albumTitlePlaceholder": "专辑标题",
     "coverColor": "封面颜色",
-    "coverImageHint": "点击上传封面图",
+    "coverButtonLabel": "上传专辑封面",
+    "coverImageHint": "点击上传封面图（JPEG/PNG/WebP/GIF，≤ 20 MB）",
+    "coverUploadPartialFailure": "专辑已创建，但封面上传失败：{message}。请在设置页重新上传。",
     "description": "描述",
     "descriptionPlaceholder": "专辑描述（可选）",
     "teamSection": "团队（可选）",
@@ -1250,9 +1253,10 @@
       "activity": "活动记录"
     },
     "info": {
-      "coverHint": "点击更换封面图",
+      "coverHint": "点击更换封面图（JPEG/PNG/WebP/GIF，≤ 20 MB）",
       "saveCover": "保存封面",
       "coverSaved": "封面已更新",
+      "coverUploadFailed": "封面上传失败：{message}",
       "uploading": "上传中…",
       "coverColor": "封面颜色"
     },

@@ -6,6 +6,12 @@ import { albumApi, circleApi, userApi } from '@/api'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
+import {
+  ALBUM_COVER_ACCEPT,
+  localizeAlbumCoverUploadError,
+  localizeAlbumCoverValidationError,
+  validateAlbumCoverFile,
+} from '@/utils/albumCover'
 import type { CircleSummary, User, WorkflowConfig, WorkflowTemplate } from '@/types'
 import { ChevronLeft, Upload, ChevronDown, ChevronRight, HelpCircle, BookTemplate, Save } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
@@ -13,7 +19,7 @@ import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
 const { error: toastError, warning: toastWarning } = useToast()
@@ -68,9 +74,7 @@ const assignableUsers = computed<User[]>(() =>
 const userOptions = computed<SelectOption[]>(() =>
   assignableUsers.value.map((u) => ({ value: u.id, label: u.display_name }))
 )
-const coverButtonLabel = computed(() =>
-  locale.value === 'zh-CN' ? '上传专辑封面' : 'Upload album cover'
-)
+const coverButtonLabel = computed(() => t('albumNew.coverButtonLabel'))
 
 const circleOptions = computed<SelectOption[]>(() =>
   circles.value
@@ -106,10 +110,8 @@ const workflowMemberOptions = computed<SelectOption[]>(() => {
   return Array.from(byId.values())
 })
 
-function partialSetupWarning() {
-  return locale.value === 'zh-CN'
-    ? '专辑已创建，但部分设置保存失败，请在设置页检查。'
-    : 'Album created, but some setup options failed to save. Please review the album settings.'
+function partialSetupWarning(message: string) {
+  return t('albumNew.coverUploadPartialFailure', { message })
 }
 
 async function loadInitialOptions() {
@@ -239,11 +241,21 @@ onUnmounted(() => {
 })
 
 function handleCoverSelect(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
   if (!file) return
+
+  const validationError = validateAlbumCoverFile(file)
+  if (validationError) {
+    toastError(localizeAlbumCoverValidationError(validationError, t))
+    input.value = ''
+    return
+  }
+
   coverImageFile.value = file
   if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value)
   coverPreviewUrl.value = URL.createObjectURL(file)
+  input.value = ''
 }
 
 function toggleMember(userId: number) {
@@ -292,8 +304,7 @@ async function create() {
     router.push(`/albums/${album.id}/settings`)
   } catch (error: any) {
     if (createdAlbumId !== null) {
-      const detail = error?.message ? ` ${error.message}` : ''
-      toastWarning(`${partialSetupWarning()}${detail}`.trim())
+      toastWarning(partialSetupWarning(localizeAlbumCoverUploadError(error?.message, t)))
       router.push(`/albums/${createdAlbumId}/settings`)
       return
     }
@@ -345,7 +356,7 @@ async function create() {
               </div>
             </button>
             <p class="text-xs text-muted-foreground text-center w-24">{{ t('albumNew.coverImageHint') }}</p>
-            <input ref="coverInputRef" type="file" accept="image/*" class="hidden" @change="handleCoverSelect" />
+            <input ref="coverInputRef" type="file" :accept="ALBUM_COVER_ACCEPT" class="hidden" @change="handleCoverSelect" />
           </div>
 
           <!-- 标题 + 描述 + 颜色 -->

@@ -934,7 +934,8 @@
     "albumRequired": "Please select an album before submitting",
     "titleRequired": "Please enter a track title",
     "artistRequired": "Please enter an artist name",
-    "fileTooLarge": "File too large, maximum allowed is {max}"
+    "fileTooLarge": "File too large, maximum allowed is {max}",
+    "unsupportedImageType": "Only JPEG, PNG, WebP, and GIF images are supported"
   },
   "settings": {
     "heading": "Album Settings",
@@ -1172,7 +1173,9 @@
     "albumTitle": "Album Title *",
     "albumTitlePlaceholder": "Album title",
     "coverColor": "Cover Color",
-    "coverImageHint": "Click to upload cover",
+    "coverButtonLabel": "Upload album cover",
+    "coverImageHint": "Click to upload cover (JPEG/PNG/WebP/GIF, ≤ 20 MB)",
+    "coverUploadPartialFailure": "The album was created, but the cover upload failed: {message}. Please re-upload it in album settings.",
     "description": "Description",
     "descriptionPlaceholder": "Album description (optional)",
     "teamSection": "Team (optional)",
@@ -1199,9 +1202,10 @@
       "activity": "Activity"
     },
     "info": {
-      "coverHint": "Click to change cover",
+      "coverHint": "Click to change cover (JPEG/PNG/WebP/GIF, ≤ 20 MB)",
       "saveCover": "Save Cover",
       "coverSaved": "Cover updated",
+      "coverUploadFailed": "Cover upload failed: {message}",
       "uploading": "Uploading...",
       "coverColor": "Cover Color"
     },

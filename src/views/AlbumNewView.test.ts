@@ -171,6 +171,42 @@ describe('AlbumNewView', () => {
     expect(mocks.pushMock).not.toHaveBeenCalled()
   })
 
+  it('rejects oversized cover files before submission', async () => {
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    const fileInput = wrapper.find('input[type="file"]')
+    const file = new File([new Uint8Array(20 * 1024 * 1024 + 1)], 'cover.png', { type: 'image/png' })
+    Object.defineProperty(fileInput.element, 'files', { value: [file] })
+
+    await fileInput.trigger('change')
+
+    expect(mocks.toastErrorMock).toHaveBeenCalledWith('File too large, maximum allowed is 20 MB')
+  })
+
+  it('shows a localized warning when the album is created but cover upload fails', async () => {
+    mocks.createMock.mockResolvedValue({ id: 12 })
+    mocks.uploadCoverMock.mockRejectedValue(new Error('File too large. Maximum size is 20 MB.'))
+
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    await wrapper.find('input.input-field').setValue('Album With Cover')
+    const fileInput = wrapper.find('input[type="file"]')
+    const file = new File(['cover'], 'cover.png', { type: 'image/png' })
+    Object.defineProperty(fileInput.element, 'files', { value: [file] })
+    await fileInput.trigger('change')
+
+    await wrapper.findAll('button').find(button => button.text().includes('Create Album'))!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.uploadCoverMock).toHaveBeenCalledWith(12, expect.any(File))
+    expect(mocks.toastWarningMock).toHaveBeenCalledWith(
+      'The album was created, but the cover upload failed: File too large, maximum allowed is 20 MB. Please re-upload it in album settings.',
+    )
+    expect(mocks.pushMock).toHaveBeenCalledWith('/albums/12/settings')
+  })
+
   it('filters team members to the selected circle and removes invalid picks before save', async () => {
     mocks.circleListMock.mockResolvedValue([
       { id: 9, name: 'Back Kitchen', description: null, logo_url: null, created_by: 1, member_count: 2 },
