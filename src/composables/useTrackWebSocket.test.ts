@@ -17,7 +17,10 @@ class TestWebSocket {
     this.readyState = 3
   })
 
-  constructor(public url: string) {
+  url: string
+
+  constructor(url: string) {
+    this.url = url
     TestWebSocket.instances.push(this)
   }
 
