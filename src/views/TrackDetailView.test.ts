@@ -239,6 +239,46 @@ describe('TrackDetailView', () => {
     expect(wrapper.findAll('button').some(button => button.text() === 'Open Mastering Page')).toBe(false)
   })
 
+  it('shows a mastering history entry after the track is reopened before mastering', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 7,
+        album_id: 5,
+        status: 'peer_review',
+        title: 'Track 7',
+        artist: 'Nova',
+        version: 3,
+        workflow_cycle: 2,
+        file_path: '/audio.wav',
+        submitter_id: 2,
+        producer_id: 8,
+        allowed_actions: ['peer_review'],
+        open_issue_count: 0,
+        submitter: { display_name: 'Nova' },
+        current_source_version: { id: 301 },
+        current_master_delivery: {
+          id: 21,
+          delivery_number: 4,
+          workflow_cycle: 1,
+          file_path: 'master-v4.wav',
+          created_at: '2024-01-04T00:00:00Z',
+          producer_approved_at: '2024-01-05T00:00:00Z',
+          submitter_approved_at: '2024-01-06T00:00:00Z',
+        },
+      },
+      issues: [],
+      discussions: [],
+      events: [],
+      source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
+    })
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    expect(wrapper.findAll('button').some(button => button.text() === 'View Mastering History')).toBe(true)
+    expect(wrapper.findAll('button').some(button => button.text() === 'Open Mastering Page')).toBe(false)
+  })
+
   it('renders current master audio in a separate waveform and filters master issues to the active delivery', async () => {
     mocks.trackGetMock.mockResolvedValueOnce({
       track: {

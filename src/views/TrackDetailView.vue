@@ -393,14 +393,21 @@ const canSeeMastering = computed(() => {
     || userId === track.value.producer_id
     || userId === track.value.mastering_engineer_id
 })
-const hasEnteredMasteringFlow = computed(() => {
+const hasMasteringHistory = computed(() => Boolean(track.value?.current_master_delivery))
+const isActiveMasteringFlow = computed(() => {
   if (!track.value) return false
-  if (track.value.current_master_delivery) return true
   const workflowVariant = inferTrackWorkflowVariant(track.value)
   if (workflowVariant === 'mastering' || workflowVariant === 'final_review') return true
-  return ['mastering', 'mastering_revision', 'final_review', 'completed'].includes(track.value.status)
+  return ['mastering', 'mastering_revision', 'final_review'].includes(track.value.status)
 })
-const canOpenMastering = computed(() => canSeeMastering.value && hasEnteredMasteringFlow.value)
+const canOpenMastering = computed(() => (
+  canSeeMastering.value && (isActiveMasteringFlow.value || hasMasteringHistory.value)
+))
+const masteringEntryLabel = computed(() => (
+  isActiveMasteringFlow.value
+    ? t('trackDetail.goToMastering')
+    : t('trackDetail.viewMasteringHistory')
+))
 const archiving = ref(false)
 const showArchiveConfirm = ref(false)
 const togglingVisibility = ref(false)
@@ -1023,7 +1030,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
               class="w-full flex items-center justify-center gap-2 rounded-full border border-primary/40 text-primary hover:bg-primary/10 transition-colors h-9 text-sm font-mono"
               @click="openMasteringWorkspace"
             >
-              {{ t('trackDetail.goToMastering') }}
+              {{ masteringEntryLabel }}
               <ChevronRight class="w-4 h-4" :stroke-width="2" />
             </button>
           </div>
