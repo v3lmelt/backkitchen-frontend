@@ -343,6 +343,19 @@ function onIssueSelect(issue: Issue) {
   })
 }
 
+function openIssueReference(issueId: number) {
+  const localIssue = issues.value.find(issue => issue.id === issueId)
+  if (localIssue) {
+    onIssueSelect(localIssue)
+    return
+  }
+
+  router.push({
+    path: `/issues/${issueId}`,
+    query: route.query.returnTo ? { returnTo: String(route.query.returnTo) } : undefined,
+  })
+}
+
 function openPrimaryAction(_action: string) {
   if (!track.value) return
   router.push(buildTrackWorkspaceRoute(track.value, {
@@ -898,6 +911,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
           <!-- General Discussions -->
           <DiscussionPanel
             :discussions="generalDiscussion.discussions.value"
+            :issues="issues"
             :heading="t('trackDetail.discussionsHeading', { count: generalDiscussion.discussions.value.length })"
             :empty-text="t('trackDetail.noDiscussions')"
             :placeholder="t('trackDetail.discussionPlaceholder')"
@@ -918,6 +932,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             @show-history="generalDiscussion.showHistory"
             @close-history="generalDiscussion.closeHistory"
             @open-image="generalDiscussion.openImage"
+            @open-issue="openIssueReference"
             @retry="generalDiscussion.load"
             @update:editing-content="generalDiscussion.editingContent.value = $event"
           />
@@ -1270,6 +1285,8 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
       ref="chatSidebarRef"
       :track-id="trackId"
       :track-completed="track.status === 'completed'"
+      :issues="issues"
+      @open-issue="openIssueReference"
     />
   </div>
 

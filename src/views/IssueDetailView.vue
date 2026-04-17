@@ -266,6 +266,11 @@ async function handleCommentReference(comment: Comment, reference: TimeReference
   await playTrackReference(reference)
 }
 
+function openIssueReference(targetIssueId: number) {
+  if (targetIssueId === issueId.value) return
+  void router.push(`/issues/${targetIssueId}`)
+}
+
 function resolveIssueMarkerReference(reference: MarkerIndexReference) {
   const marker = issue.value?.markers[reference.zeroBasedIndex]
   if (!marker) return null
@@ -638,9 +643,11 @@ function openVersionCompare() {
         <div class="card">
           <TimestampText
             :text="issue.description"
+            :issues="allTrackIssues"
             class="text-sm text-foreground"
             @activate="(reference, target) => handleIssueDescriptionReference(reference, target)"
             @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
+            @issueActivate="(reference) => openIssueReference(reference.issueId)"
           />
           <div v-if="issue.audios?.length" class="mt-4 space-y-2">
             <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('issue.audioAttachments') }}</h3>
@@ -738,10 +745,12 @@ function openVersionCompare() {
               </div>
                 <TimestampText
                   :text="comment.content"
+                  :issues="allTrackIssues"
                   class="text-sm text-foreground"
                   :default-target="comment.audios?.length ? 'attachment' : 'track'"
                   @activate="(reference, target) => handleCommentReference(comment, reference, target)"
                   @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
+                  @issueActivate="(reference) => openIssueReference(reference.issueId)"
                 />
               <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-2">
                 <a
@@ -829,10 +838,12 @@ function openVersionCompare() {
               <TimestampText
                 v-else
                 :text="comment.content"
+                :issues="allTrackIssues"
                 class="text-sm text-foreground"
                 :default-target="comment.audios?.length ? 'attachment' : 'track'"
                 @activate="(reference, target) => handleCommentReference(comment, reference, target)"
                 @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
+                @issueActivate="(reference) => openIssueReference(reference.issueId)"
               />
               <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-3">
                 <a

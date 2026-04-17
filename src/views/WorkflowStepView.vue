@@ -638,6 +638,16 @@ function openIssueDrawer(issue: Issue) {
   }
 }
 
+function openLinkedIssue(issueId: number) {
+  const localIssue = issues.value.find(issue => issue.id === issueId)
+  if (localIssue) {
+    openIssueDrawer(localIssue)
+    return
+  }
+
+  void router.push(`/issues/${issueId}`)
+}
+
 function closeIssueDrawer() {
   selectedIssue.value = null
   if (parseIssueQuery(route.query.issue) != null) {
@@ -2024,6 +2034,7 @@ function handleIssueLeave() {
       <!-- Mastering Discussion -->
       <DiscussionPanel
         :discussions="masteringDiscussion.discussions.value"
+        :issues="issues"
         :heading="t('mastering.discussionHeading', { count: masteringDiscussion.discussions.value.length })"
         :empty-text="t('mastering.noDiscussions')"
         :placeholder="t('mastering.discussionPlaceholder')"
@@ -2045,6 +2056,7 @@ function handleIssueLeave() {
         @show-history="masteringDiscussion.showHistory"
         @close-history="masteringDiscussion.closeHistory"
         @open-image="masteringDiscussion.openImage"
+        @open-issue="openLinkedIssue"
         @retry="masteringDiscussion.load"
         @update:editing-content="masteringDiscussion.editingContent.value = $event"
       />
@@ -2659,9 +2671,11 @@ function handleIssueLeave() {
     :issue="selectedIssue"
     :track="track"
     :assignments="reviewAssignments"
+    :issues="issues"
     :preview="selectedIssuePreview"
     @close="closeIssueDrawer"
     @updated="onIssueUpdated"
+    @open-issue="openLinkedIssue"
     @preview-play-at="handleIssuePreviewPlayAt"
     @preview-seek-at="handleIssuePreviewSeekAt"
     @preview-toggle="handleIssuePreviewToggle"
@@ -2672,5 +2686,7 @@ function handleIssueLeave() {
     ref="chatSidebarRef"
     :track-id="trackId"
     :track-completed="track.status === 'completed'"
+    :issues="issues"
+    @open-issue="openLinkedIssue"
   />
 </template>

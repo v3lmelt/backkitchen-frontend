@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { Discussion, EditHistory } from '@/types'
+import type { Discussion, EditHistory, Issue } from '@/types'
 import { resolveAssetUrl } from '@/api'
 import { formatLocaleDate, formatDuration } from '@/utils/time'
 import { useAppStore } from '@/stores/app'
 import CommentInput from '@/components/common/CommentInput.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
+import TimestampText from '@/components/common/TimestampText.vue'
 import { Music, Pencil, Trash2 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -25,6 +26,8 @@ const props = defineProps<{
   loading?: boolean
   loadError?: string
   enableAudio?: boolean
+  issues?: Issue[] | null
+  enableReferencePopover?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -36,6 +39,7 @@ const emit = defineEmits<{
   showHistory: [id: number]
   closeHistory: []
   openImage: [url: string]
+  openIssue: [issueId: number]
   retry: []
   'update:editingContent': [value: string]
 }>()
@@ -131,7 +135,12 @@ function confirmDelete() {
             </div>
           </template>
           <template v-else>
-            <p class="text-sm text-foreground mt-1 whitespace-pre-wrap">{{ d.content }}</p>
+            <TimestampText
+              :text="d.content"
+              :issues="issues"
+              class="text-sm text-foreground mt-1"
+              @issueActivate="emit('openIssue', $event.issueId)"
+            />
           </template>
           <div v-if="d.images?.length" class="flex gap-2 mt-2">
             <img
@@ -171,6 +180,7 @@ function confirmDelete() {
       :submitting="posting"
       :upload-progress="postingProgress"
       :enable-audio="enableAudio ?? false"
+      :enable-timestamp-popover="enableReferencePopover ?? true"
       @submit="emit('submit', $event)"
     />
   </div>

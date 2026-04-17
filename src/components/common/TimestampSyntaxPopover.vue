@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Info } from 'lucide-vue-next'
 import {
+  extractIssueReferences,
   extractMarkerIndexReferences,
   extractTimeReferences,
   resolveTimeReferenceTarget,
@@ -24,37 +25,35 @@ const props = withDefaults(defineProps<{
 const { t } = useI18n()
 
 const manualOpen = ref(false)
-// Set when the user explicitly closes the popover while it's auto-showing due to
-// a timestamp pattern. Cleared automatically once the cursor moves away from any
-// timestamp so the auto-show can trigger again next time.
 const userClosed = ref(false)
 
-// Check whether the cursor is currently sitting inside or immediately after a
-// timestamp token. We can't just regex over a rolling window — in short CJK
-// text (no whitespace) the whole string fits in the window and the popover
-// would never close. So we find real timestamps via extractTimeReferences and
-// also allow a small "in-progress" match right at the cursor for partial input
-// like "03:" before the second digits are typed.
-const typingTimestamp = computed(() => {
+const typingReference = computed(() => {
   const cursor = props.cursorPos ?? props.text.length
-  // 1. Full, valid timestamps: is cursor inside or immediately after one?
+
   for (const ref of extractTimeReferences(props.text)) {
     const start = ref.index
     const end = ref.index + ref.length
     if (cursor >= start && cursor <= end) return true
   }
-  // 2. In-progress partial timestamp ending exactly at the cursor.
-  const snippet = props.text.slice(Math.max(0, cursor - 16), cursor)
+
+  for (const ref of extractIssueReferences(props.text)) {
+    const start = ref.index
+    const end = ref.index + ref.length
+    if (cursor >= start && cursor <= end) return true
+  }
+
+  const snippet = props.text.slice(Math.max(0, cursor - 24), cursor)
   return /(?:^|[^\w])(?:(?:t|a\d*):)?\d{1,2}:\d{0,2}$/.test(snippet)
+    || /(?:^|[^\w])@issue:\d*$/.test(snippet)
 })
+
 const matches = computed(() => extractTimeReferences(props.text))
 const markerMatches = computed(() => extractMarkerIndexReferences(props.text))
-const isVisible = computed(() => props.visible || manualOpen.value || (typingTimestamp.value && !userClosed.value))
+const issueMatches = computed(() => extractIssueReferences(props.text))
+const isVisible = computed(() => props.visible || manualOpen.value || (typingReference.value && !userClosed.value))
 
-// Once the cursor moves away from a timestamp, reset userClosed so the popover
-// can auto-show again the next time the user types near a timestamp.
-watch(typingTimestamp, (val) => {
-  if (!val) userClosed.value = false
+watch(typingReference, (value) => {
+  if (!value) userClosed.value = false
 })
 
 function toggleManual() {
@@ -81,13 +80,13 @@ const examples = computed(() => ([
   { code: '03:15', description: t('timestamp.examples.point') },
   { code: '03:15-04:12', description: t('timestamp.examples.range') },
   { code: '#1', description: t('timestamp.examples.marker') },
+  { code: '@issue:12', description: t('timestamp.examples.issue') },
   { code: 't:03:15', description: t('timestamp.examples.track') },
   { code: 'a1:03:15', description: t('timestamp.examples.attachment') },
 ]))
 </script>
 
 <template>
-  <!-- Toggle button: sits in the bottom-right corner of the textarea (positioned by parent) -->
   <button
     type="button"
     @mousedown.prevent="toggleManual"
@@ -100,7 +99,6 @@ const examples = computed(() => ([
     <Info class="h-3 w-3" :stroke-width="2.5" />
   </button>
 
-  <!-- Popover -->
   <Transition
     enter-active-class="transition-all duration-150 ease-out"
     enter-from-class="opacity-0 -translate-y-1"
@@ -117,13 +115,13 @@ const examples = computed(() => ([
         <span class="text-[11px] font-mono font-semibold text-muted-foreground shrink-0">{{ t('timestamp.syntaxTitle') }}</span>
         <div class="flex flex-wrap gap-1.5">
           <span
-            v-for="ex in examples"
-            :key="ex.code"
+            v-for="example in examples"
+            :key="example.code"
             class="group inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2 py-0.5"
-            :title="ex.description"
+            :title="example.description"
           >
-            <code class="text-[11px] font-mono text-warning">{{ ex.code }}</code>
-            <span class="text-[10px] text-muted-foreground">{{ ex.description }}</span>
+            <code class="text-[11px] font-mono text-warning">{{ example.code }}</code>
+            <span class="text-[10px] text-muted-foreground">{{ example.description }}</span>
           </span>
         </div>
       </div>
@@ -139,6 +137,7 @@ const examples = computed(() => ([
           <span class="text-muted-foreground">{{ resolvedTargetLabel(match) }}</span>
         </span>
       </div>
+
       <div v-if="markerMatches.length" class="mt-2 flex flex-wrap gap-1.5 border-t border-border pt-2">
         <span
           v-for="(match, index) in markerMatches"
@@ -148,6 +147,18 @@ const examples = computed(() => ([
           {{ match.raw }}
           <span class="text-info/50">·</span>
           <span class="text-muted-foreground">{{ t('timestamp.markerReference') }}</span>
+        </span>
+      </div>
+
+      <div v-if="issueMatches.length" class="mt-2 flex flex-wrap gap-1.5 border-t border-border pt-2">
+        <span
+          v-for="(match, index) in issueMatches"
+          :key="`issue-${match.index}-${index}`"
+          class="inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[11px] font-mono text-primary"
+        >
+          {{ match.raw }}
+          <span class="text-primary/50">·</span>
+          <span class="text-muted-foreground">{{ t('timestamp.issueReference') }}</span>
         </span>
       </div>
     </div>

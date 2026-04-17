@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  extractIssueReferences,
   extractMarkerIndexReferences,
   extractTimeReferences,
   parseTimecode,
@@ -162,6 +163,25 @@ describe('extractMarkerIndexReferences', () => {
   })
 })
 
+describe('extractIssueReferences', () => {
+  it('extracts @issue:id references', () => {
+    expect(extractIssueReferences('See @issue:7, compare @issue:42, skip @issue:0')).toEqual([
+      {
+        raw: '@issue:7',
+        issueId: 7,
+        index: 4,
+        length: 8,
+      },
+      {
+        raw: '@issue:42',
+        issueId: 42,
+        index: 22,
+        length: 9,
+      },
+    ])
+  })
+})
+
 describe('splitTextWithInlineReferences', () => {
   it('splits text with both time and marker references', () => {
     expect(splitTextWithInlineReferences('At #2 check 03:15 and #1')).toEqual([
@@ -199,6 +219,47 @@ describe('splitTextWithInlineReferences', () => {
           markerIndex: 1,
           zeroBasedIndex: 0,
           index: 22,
+          length: 2,
+        },
+      },
+    ])
+  })
+
+  it('keeps issue references in the merged segment list', () => {
+    expect(splitTextWithInlineReferences('Link @issue:9 at 03:15 after #2')).toEqual([
+      { type: 'text', value: 'Link ' },
+      {
+        type: 'issue',
+        value: {
+          raw: '@issue:9',
+          issueId: 9,
+          index: 5,
+          length: 8,
+        },
+      },
+      { type: 'text', value: ' at ' },
+      {
+        type: 'time',
+        value: {
+          raw: '03:15',
+          prefixTarget: null,
+          attachmentIndex: null,
+          zeroBasedAttachmentIndex: null,
+          startSeconds: 195,
+          endSeconds: null,
+          isRange: false,
+          index: 17,
+          length: 5,
+        },
+      },
+      { type: 'text', value: ' after ' },
+      {
+        type: 'marker',
+        value: {
+          raw: '#2',
+          markerIndex: 2,
+          zeroBasedIndex: 1,
+          index: 29,
           length: 2,
         },
       },

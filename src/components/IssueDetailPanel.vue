@@ -13,7 +13,7 @@ import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import IssuePlaybackPreview from '@/components/issue/IssuePlaybackPreview.vue'
 import { formatTimestamp, formatDuration, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
-import { resolveAttachmentReferenceIndex, type TimeReference, type TimestampTarget } from '@/utils/timestamps'
+import { resolveAttachmentReferenceIndex, type IssueReference, type TimeReference, type TimestampTarget } from '@/utils/timestamps'
 import { ArrowDownUp, X, Music, Pencil, Trash2 } from 'lucide-vue-next'
 import { canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
 
@@ -21,6 +21,7 @@ const props = defineProps<{
   issue: Issue | null
   track?: import('@/types').Track | null
   assignments?: StageAssignment[]
+  issues?: Issue[] | null
   preview?: {
     duration: number
     currentTime: number
@@ -35,6 +36,7 @@ const emit = defineEmits<{
   'preview-play-at': [time: number]
   'preview-seek-at': [time: number]
   'preview-toggle': [issue: Issue]
+  'open-issue': [issueId: number]
 }>()
 
 const { t, locale } = useI18n()
@@ -46,6 +48,7 @@ const loading = ref(false)
 const pendingStatus = ref<IssueStatus | null>(null)
 const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
 const pendingDeleteComment = ref<Comment | null>(null)
+const issueAudioRefs = new Map<number, HTMLAudioElement>()
 
 const canSubmitIssueStatus = computed(() => {
   return fullIssue.value != null
@@ -168,6 +171,15 @@ function setCommentAudioRef(commentId: number, index: number, element: unknown) 
   else commentAudioRefs.delete(commentId)
 }
 
+function setIssueAudioRef(index: number, element: unknown) {
+  if (!(element instanceof HTMLAudioElement)) {
+    issueAudioRefs.delete(index)
+    return
+  }
+
+  issueAudioRefs.set(index, element)
+}
+
 async function playAttachmentReference(commentId: number, reference: TimeReference, attachmentCount: number) {
   const attachmentIndex = resolveAttachmentReferenceIndex(reference, 'attachment', attachmentCount)
   if (attachmentIndex == null) return
@@ -181,6 +193,27 @@ async function playAttachmentReference(commentId: number, reference: TimeReferen
 async function handleCommentReference(comment: Comment, reference: TimeReference, target: TimestampTarget) {
   if (target !== 'attachment' || !comment.audios?.length) return
   await playAttachmentReference(comment.id, reference, comment.audios.length)
+}
+
+async function handleIssueDescriptionReference(reference: TimeReference, target: TimestampTarget) {
+  if (target === 'attachment') {
+    const attachmentIndex = resolveAttachmentReferenceIndex(reference, 'attachment', fullIssue.value?.audios?.length ?? 0)
+    if (attachmentIndex == null) return
+
+    const audio = issueAudioRefs.get(attachmentIndex)
+    if (!audio) return
+
+    audio.currentTime = reference.startSeconds
+    await audio.play().catch(() => undefined)
+    return
+  }
+
+  emit('preview-play-at', reference.startSeconds)
+}
+
+function handleIssueReference(reference: IssueReference) {
+  if (reference.issueId === fullIssue.value?.id) return
+  emit('open-issue', reference.issueId)
 }
 
 function formatDate(d: string) {
@@ -393,8 +426,11 @@ async function confirmDeleteComment() {
           <TimestampText
             v-if="fullIssue.description"
             :text="fullIssue.description"
+            :issues="issues"
             class="text-sm text-foreground"
-            :interactive="false"
+            :default-target="fullIssue.audios?.length ? 'attachment' : 'track'"
+            @activate="(reference, target) => handleIssueDescriptionReference(reference, target)"
+            @issueActivate="handleIssueReference"
           />
           <p v-else class="text-sm text-muted-foreground italic">{{ t('issueDetail.noDescription') }}</p>
 
@@ -414,7 +450,7 @@ async function confirmDeleteComment() {
             <p class="text-xs font-mono font-semibold text-muted-foreground">{{ t('issue.audioAttachments') }}</p>
             <div class="flex flex-col gap-2">
               <div
-                v-for="audio in fullIssue.audios"
+                v-for="(audio, index) in fullIssue.audios"
                 :key="audio.id"
                 class="bg-background border border-border rounded-2xl px-3 py-2 space-y-1.5"
               >
@@ -424,6 +460,7 @@ async function confirmDeleteComment() {
                   <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
                 </div>
                 <audio
+                  :ref="(element) => setIssueAudioRef(index, element)"
                   :src="resolveAssetUrl(audio.audio_url)"
                   controls
                   class="w-full h-8"
@@ -492,9 +529,11 @@ async function confirmDeleteComment() {
                 </div>
                 <TimestampText
                   :text="comment.content"
+                  :issues="issues"
                   class="text-sm text-foreground"
                   :default-target="comment.audios?.length ? 'attachment' : 'track'"
                   @activate="(reference, target) => handleCommentReference(comment, reference, target)"
+                  @issueActivate="handleIssueReference"
                 />
                 <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-2">
                   <a
@@ -574,9 +613,11 @@ async function confirmDeleteComment() {
                 <TimestampText
                   v-else
                   :text="comment.content"
+                  :issues="issues"
                   class="text-sm text-foreground"
                   :default-target="comment.audios?.length ? 'attachment' : 'track'"
                   @activate="(reference, target) => handleCommentReference(comment, reference, target)"
+                  @issueActivate="handleIssueReference"
                 />
                 <div v-if="comment.images?.length" class="flex flex-wrap gap-2 mt-2">
                   <a

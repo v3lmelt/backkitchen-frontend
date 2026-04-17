@@ -1082,16 +1082,20 @@
     "deleteMessage": "This discussion message will be permanently removed."
   },
   "timestamp": {
-    "syntaxTitle": "Timestamp Syntax",
-    "syntaxDescription": "Enter timestamps or ranges to create highlighted playback links after posting. Comments default to attachment audio, while issue descriptions default to track audio.",
+    "syntaxTitle": "Reference Syntax",
+    "syntaxDescription": "Enter timestamps, marker references, or issue references to create highlighted links after posting. Comments default to attachment audio, while issue descriptions default to track audio.",
     "detectedTitle": "Detected time references",
     "trackAudio": "Track audio",
     "attachmentAudio": "Attachment audio",
     "markerReference": "Issue marker",
+    "issueReference": "Issue reference",
+    "issueReferenceLabel": "Issue #{id}",
+    "issueUnavailable": "Issue unavailable or you don't have access.",
     "examples": {
       "point": "Single timestamp",
       "range": "Time range, plays from the start",
       "marker": "Jump by marker index (in add order)",
+      "issue": "Open an issue reference",
       "track": "Explicitly target track audio",
       "attachment": "Explicitly target attachment audio (a1/a2...)"
     }

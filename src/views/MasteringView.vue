@@ -653,6 +653,16 @@ function onIssueSelect(issue: Issue) {
   }
 }
 
+function openLinkedIssue(issueId: number) {
+  const localIssue = issues.value.find(issue => issue.id === issueId)
+  if (localIssue) {
+    onIssueSelect(localIssue)
+    return
+  }
+
+  void router.push(`/issues/${issueId}`)
+}
+
 function closeIssueDrawer() {
   selectedIssue.value = null
   if (parseIssueQuery(route.query.issue) != null) {
@@ -1020,6 +1030,7 @@ watch(olderMasterDeliveries, (deliveries) => {
         <DiscussionPanel
           v-if="canSeeMasteringDiscussion"
           :discussions="masteringDiscussion.discussions.value"
+          :issues="issues"
           :heading="t('masteringPage.discussionsHeading', { count: masteringDiscussion.discussions.value.length })"
           :empty-text="t('masteringPage.noDiscussions')"
           :placeholder="t('masteringPage.discussionPlaceholder')"
@@ -1041,6 +1052,7 @@ watch(olderMasterDeliveries, (deliveries) => {
           @show-history="masteringDiscussion.showHistory"
           @close-history="masteringDiscussion.closeHistory"
           @open-image="masteringDiscussion.openImage"
+          @open-issue="openLinkedIssue"
           @retry="masteringDiscussion.load"
           @update:editing-content="masteringDiscussion.editingContent.value = $event"
         />
@@ -1366,9 +1378,11 @@ watch(olderMasterDeliveries, (deliveries) => {
     :issue="selectedIssue"
     :track="track"
     :assignments="reviewAssignments"
+    :issues="issues"
     :preview="selectedIssuePreview"
     @close="closeIssueDrawer"
     @updated="onIssueUpdated"
+    @open-issue="openLinkedIssue"
     @preview-play-at="handleIssuePreviewPlayAt"
     @preview-toggle="handleIssuePreviewToggle"
   />
@@ -1378,5 +1392,7 @@ watch(olderMasterDeliveries, (deliveries) => {
     ref="chatSidebarRef"
     :track-id="trackId"
     :track-completed="track.status === 'completed'"
+    :issues="issues"
+    @open-issue="openLinkedIssue"
   />
 </template>

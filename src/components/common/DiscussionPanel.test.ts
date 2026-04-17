@@ -82,4 +82,59 @@ describe('DiscussionPanel', () => {
 
     wrapper.unmount()
   })
+
+  it('forwards issue reference clicks from discussion content', async () => {
+    const wrapper = mountWithPlugins(DiscussionPanel, {
+      props: {
+        discussions: [
+          {
+            id: 8,
+            author_id: 2,
+            author: { id: 2, display_name: 'Kira', avatar_color: '#654321' },
+            content: 'Please revisit @issue:12 before final approval.',
+            created_at: '2024-01-02T00:00:00Z',
+            images: [],
+            audios: [],
+          },
+        ],
+        issues: [
+          {
+            id: 12,
+            track_id: 7,
+            author_id: 2,
+            phase: 'producer',
+            workflow_cycle: 1,
+            source_version_id: null,
+            source_version_number: 2,
+            master_delivery_id: null,
+            title: 'Balance pass',
+            description: 'The chorus needs another balance pass.',
+            severity: 'major',
+            status: 'open',
+            markers: [],
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+            comments: [],
+          },
+        ],
+        heading: 'Discussion',
+        emptyText: 'Empty',
+        placeholder: 'Write a note',
+        submitLabel: 'Post',
+        posting: false,
+        postingProgress: 0,
+        editingId: null,
+        editingContent: '',
+        historyItems: [],
+        showHistoryForId: null,
+      },
+    })
+
+    const issueButton = wrapper.findAll('button').find(button => button.text() === '@issue:12')
+    expect(issueButton).toBeTruthy()
+
+    await issueButton!.trigger('click')
+
+    expect(wrapper.emitted('openIssue')).toEqual([[12]])
+  })
 })

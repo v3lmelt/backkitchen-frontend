@@ -3,17 +3,23 @@ import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Discussion } from '@/types'
+import type { Discussion, Issue } from '@/types'
 import { formatLocaleDate, formatDuration } from '@/utils/time'
 import { useDiscussions } from '@/composables/useDiscussions'
 import CommentInput from '@/components/common/CommentInput.vue'
 import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import TimestampText from '@/components/common/TimestampText.vue'
 import { MessageSquare, X, Pencil, Trash2, Music } from 'lucide-vue-next'
 
 const props = defineProps<{
   trackId: number
   trackCompleted?: boolean
+  issues?: Issue[] | null
+}>()
+
+const emit = defineEmits<{
+  openIssue: [issueId: number]
 }>()
 
 const { t, locale } = useI18n()
@@ -224,7 +230,12 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
 
                 <!-- Content -->
                 <template v-else>
-                  <p class="whitespace-pre-wrap">{{ d.content }}</p>
+                  <TimestampText
+                    :text="d.content"
+                    :issues="issues"
+                    class="text-sm text-foreground"
+                    @issueActivate="emit('openIssue', $event.issueId)"
+                  />
 
                   <!-- Images -->
                   <div v-if="d.images?.length" class="flex flex-wrap gap-1.5 mt-2">
@@ -292,6 +303,7 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
           :submitting="mastering.posting.value"
           :upload-progress="mastering.postingProgress.value"
           :enable-audio="true"
+          enable-timestamp-popover
           :rows="2"
           @submit="handleSubmit"
         />
