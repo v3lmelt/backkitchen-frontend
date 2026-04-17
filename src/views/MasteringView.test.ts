@@ -727,4 +727,37 @@ describe('MasteringView', () => {
 
     expect(mocks.pushMock).toHaveBeenCalledWith('/tracks/9')
   })
+
+  it('keeps the source waveform mounted when switching between the Listen and Issues tabs', async () => {
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetail())
+
+    const wrapper = mountWithPlugins(MasteringView)
+    await flushPromises()
+
+    expect(wrapper.findAll('.waveform')).toHaveLength(0)
+
+    const listenTab = wrapper.findAll('button').find(button => button.text() === 'Listen')!
+    await listenTab.trigger('click')
+    await flushPromises()
+
+    const listenWaveforms = wrapper.findAll('.waveform')
+    expect(listenWaveforms).toHaveLength(2)
+    const sourceElOnListen = listenWaveforms[0].element
+
+    const issuesTab = wrapper.findAll('button').find(button => button.text() === 'Issues')!
+    await issuesTab.trigger('click')
+    await flushPromises()
+
+    const issuesWaveforms = wrapper.findAll('.waveform')
+    expect(issuesWaveforms).toHaveLength(1)
+    // Same DOM node = not remounted, so wavesurfer doesn't re-decode.
+    expect(issuesWaveforms[0].element).toBe(sourceElOnListen)
+
+    await listenTab.trigger('click')
+    await flushPromises()
+
+    const listenAgainWaveforms = wrapper.findAll('.waveform')
+    expect(listenAgainWaveforms).toHaveLength(2)
+    expect(listenAgainWaveforms[0].element).toBe(sourceElOnListen)
+  })
 })

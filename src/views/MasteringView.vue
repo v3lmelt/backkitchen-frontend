@@ -100,6 +100,16 @@ const isIssueFormOpen = ref(false)
 const waveformMode = computed<'seek' | 'annotate'>(() =>
   activeTab.value === 'issues' && isIssueFormOpen.value ? 'annotate' : 'seek',
 )
+// The source waveform (and its toolbar/compare controls) is shared between
+// the Listen and Issues tabs so switching between them doesn't re-decode the
+// audio. These flags let the template stay readable.
+const isListenTab = computed(() => activeTab.value === 'listen')
+const isSharedSourceWaveformTab = computed(
+  () => activeTab.value === 'listen' || activeTab.value === 'issues',
+)
+const sharedSourceWaveformHeading = computed(() =>
+  activeTab.value === 'issues' ? t('mastering.waveformHint') : t('mastering.listenOnlyHint'),
+)
 
 // Source version comparison
 const showSourceCompare = ref(false)
@@ -912,9 +922,14 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
   downloadAudioAsset(url, `${track.value?.title ?? 'track'}_master_v${delivery.delivery_number}${historySuffix}`, delivery.file_path)
 }
 
-watch(activeTab, () => {
-  showSourceCompare.value = false
-  selectedCompareSourceVersionId.value = null
+watch(activeTab, (newTab) => {
+  // Source compare drives the shared waveform that survives Listen ⇄ Issues.
+  // Keep it alive across those two tabs so we don't drop the decoded compare
+  // buffer; reset only when leaving the shared-waveform tabs entirely.
+  if (newTab !== 'listen' && newTab !== 'issues') {
+    showSourceCompare.value = false
+    selectedCompareSourceVersionId.value = null
+  }
   showMasterCompare.value = false
   selectedCompareMasterDeliveryId.value = null
   isIssueFormOpen.value = false
@@ -1054,69 +1069,71 @@ watch(olderMasterDeliveries, (deliveries) => {
       </div>
     </template>
 
-    <template v-if="activeTab === 'listen'">
-      <!-- Source audio -->
-      <div v-if="audioUrl" class="space-y-4">
-        <div class="flex items-start justify-between gap-3">
-          <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.listenOnlyHint') }}</h3>
-          <div class="flex items-center gap-2 shrink-0">
-            <button
-              v-if="olderSourceVersions.length > 0"
-              @click="toggleSourceCompare"
-              class="btn-secondary text-xs px-3 py-1"
-            >
-              {{ t('compare.title') }}
-            </button>
-            <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
-              {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
-            </button>
-          </div>
+    <!-- Hoisted above the Listen/Issues tabs so switching between them doesn't re-decode the audio -->
+    <div v-if="audioUrl && isSharedSourceWaveformTab" class="space-y-4">
+      <div class="flex items-start justify-between gap-3">
+        <h3 class="text-sm font-mono font-semibold text-foreground">
+          {{ sharedSourceWaveformHeading }}
+        </h3>
+        <div class="flex items-center gap-2 shrink-0">
+          <button
+            v-if="isListenTab && olderSourceVersions.length > 0"
+            @click="toggleSourceCompare"
+            class="btn-secondary text-xs px-3 py-1"
+          >
+            {{ t('compare.title') }}
+          </button>
+          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+          </button>
         </div>
-        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="space-y-2">
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
-            <CustomSelect
-              v-model="selectedCompareSourceVersionId"
-              :options="sourceCompareOptions"
-              :placeholder="`-- ${t('compare.selectVersion')} --`"
-              size="sm"
-            />
-            <button
-              v-if="selectedCompareSourceVersionId"
-              @click="selectedCompareSourceVersionId = null"
-              class="text-xs text-muted-foreground hover:text-foreground"
-            >
-              {{ t('compare.clear') }}
-            </button>
-          </div>
-          <p v-if="isSourceCompareActive" class="text-xs text-warning">
-            {{ t('workflowStep.sourceCompareReadonlyHint') }}
-          </p>
-        </div>
-        <WaveformPlayer
-          ref="waveformRef"
-          :audio-url="audioUrl"
-          :issues="waveformIssues"
-          :track-id="trackId"
-          :compare-version-id="selectedCompareSourceVersionId"
-          :selectable="isMasteringEngineer"
-          :mode="waveformMode"
-          :selected-range="issueFormRef?.selectedRange ?? null"
-          :draft-markers="issueFormRef?.markers ?? []"
-          :draft-range-anchor="issueFormRef?.rangeAnchor ?? null"
-          :hovered-issue-id="hoveredIssueId"
-          @click="(time: number) => issueFormRef?.handleClick(time)"
-          @regionClick="onIssueSelect"
-          @rangeSelect="(start: number, end: number, isUpdate: boolean) => isUpdate ? issueFormRef?.handleRangeUpdate?.(start, end) : issueFormRef?.handleRangeSelect(start, end)"
-          @issueHover="handleIssueHover"
-          @issueLeave="handleIssueLeave"
-          @requestModeChange="onRequestWaveformMode"
-          @ready="onSourceWaveformReady"
-          @timeupdate="onSourceWaveformTimeUpdate"
-          @playbackStateChange="onSourceWaveformPlaybackStateChange"
-        />
       </div>
+      <div v-if="isListenTab && showSourceCompare && olderSourceVersions.length > 0" class="space-y-2">
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
+          <CustomSelect
+            v-model="selectedCompareSourceVersionId"
+            :options="sourceCompareOptions"
+            :placeholder="`-- ${t('compare.selectVersion')} --`"
+            size="sm"
+          />
+          <button
+            v-if="selectedCompareSourceVersionId"
+            @click="selectedCompareSourceVersionId = null"
+            class="text-xs text-muted-foreground hover:text-foreground"
+          >
+            {{ t('compare.clear') }}
+          </button>
+        </div>
+        <p v-if="isSourceCompareActive" class="text-xs text-warning">
+          {{ t('workflowStep.sourceCompareReadonlyHint') }}
+        </p>
+      </div>
+      <WaveformPlayer
+        ref="waveformRef"
+        :audio-url="audioUrl"
+        :issues="waveformIssues"
+        :track-id="trackId"
+        :compare-version-id="selectedCompareSourceVersionId"
+        :selectable="isMasteringEngineer"
+        :mode="waveformMode"
+        :selected-range="issueFormRef?.selectedRange ?? null"
+        :draft-markers="issueFormRef?.markers ?? []"
+        :draft-range-anchor="issueFormRef?.rangeAnchor ?? null"
+        :hovered-issue-id="hoveredIssueId"
+        @click="(time: number) => issueFormRef?.handleClick(time)"
+        @regionClick="onIssueSelect"
+        @rangeSelect="(start: number, end: number, isUpdate: boolean) => isUpdate ? issueFormRef?.handleRangeUpdate?.(start, end) : issueFormRef?.handleRangeSelect(start, end)"
+        @issueHover="handleIssueHover"
+        @issueLeave="handleIssueLeave"
+        @requestModeChange="onRequestWaveformMode"
+        @ready="onSourceWaveformReady"
+        @timeupdate="onSourceWaveformTimeUpdate"
+        @playbackStateChange="onSourceWaveformPlaybackStateChange"
+      />
+    </div>
 
+    <template v-if="activeTab === 'listen'">
       <!-- Master delivery audio -->
       <div v-if="masterAudioUrl" class="space-y-3">
         <div class="flex items-center justify-between">
@@ -1167,39 +1184,7 @@ watch(olderMasterDeliveries, (deliveries) => {
       </div>
     </template>
 
-    <!-- ═══ Tab: Issues ═══ -->
     <template v-if="activeTab === 'issues'">
-      <!-- Source waveform for annotation context -->
-      <div v-if="audioUrl" class="space-y-4">
-        <div class="flex items-start justify-between gap-3">
-          <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.waveformHint') }}</h3>
-          <button @click="handleDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
-            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
-          </button>
-        </div>
-        <WaveformPlayer
-          ref="waveformRef"
-          :audio-url="audioUrl"
-          :issues="waveformIssues"
-          :track-id="trackId"
-          :selectable="isMasteringEngineer"
-          :mode="waveformMode"
-          :selected-range="issueFormRef?.selectedRange ?? null"
-          :draft-markers="issueFormRef?.markers ?? []"
-          :draft-range-anchor="issueFormRef?.rangeAnchor ?? null"
-          :hovered-issue-id="hoveredIssueId"
-          @click="(time: number) => issueFormRef?.handleClick(time)"
-          @regionClick="onIssueSelect"
-          @rangeSelect="(start: number, end: number, isUpdate: boolean) => isUpdate ? issueFormRef?.handleRangeUpdate?.(start, end) : issueFormRef?.handleRangeSelect(start, end)"
-          @issueHover="handleIssueHover"
-          @issueLeave="handleIssueLeave"
-          @requestModeChange="onRequestWaveformMode"
-          @ready="onSourceWaveformReady"
-          @timeupdate="onSourceWaveformTimeUpdate"
-          @playbackStateChange="onSourceWaveformPlaybackStateChange"
-        />
-      </div>
-
       <!-- Issue create + list (mastering engineer) -->
       <div v-if="isMasteringEngineer" class="space-y-4">
         <IssueCreatePanel
