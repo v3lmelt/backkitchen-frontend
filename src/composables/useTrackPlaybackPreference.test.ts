@@ -51,20 +51,15 @@ describe('useTrackPlaybackPreference', () => {
       updated_at: '2026-04-16T00:00:00Z',
     }))
 
-    let resolveServerPreference: ((value: {
+    type ServerPreference = {
       track_id: number
       user_id: number
       scope: 'source'
       gain_db: number
       updated_at: string
-    }) => void) | null = null
-    vi.spyOn(trackApi, 'getPlaybackPreference').mockImplementation(() => new Promise<{
-      track_id: number
-      user_id: number
-      scope: 'source'
-      gain_db: number
-      updated_at: string
-    }>((resolve) => {
+    }
+    let resolveServerPreference: (value: ServerPreference) => void = () => {}
+    vi.spyOn(trackApi, 'getPlaybackPreference').mockImplementation(() => new Promise<ServerPreference>((resolve) => {
       resolveServerPreference = resolve
     }))
 
@@ -77,7 +72,7 @@ describe('useTrackPlaybackPreference', () => {
     expect((wrapper.vm as any).gainDb).toBe(24)
     expect((wrapper.vm as any).isLoading).toBe(true)
 
-    resolveServerPreference?.({
+    resolveServerPreference({
       track_id: 42,
       user_id: 9,
       scope: 'source',

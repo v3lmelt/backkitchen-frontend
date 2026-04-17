@@ -52,14 +52,6 @@ function closePanel() {
   open.value = false
 }
 
-function toggle() {
-  if (open.value) {
-    closePanel()
-  } else {
-    openPanel()
-  }
-}
-
 async function loadDiscussions() {
   await mastering.load()
 }
