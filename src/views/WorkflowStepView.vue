@@ -30,7 +30,7 @@ import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
 import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
-import { ChevronLeft, Upload } from 'lucide-vue-next'
+import { ChevronLeft, Upload, AlertCircle, CheckCircle2 } from 'lucide-vue-next'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useDiscussions } from '@/composables/useDiscussions'
 import { useToast } from '@/composables/useToast'
@@ -1490,8 +1490,21 @@ function handleIssueLeave() {
           />
         </div>
 
-        <div class="card space-y-4">
-          <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('peerReview.checklistHeading') }}</h3>
+        <div
+          class="card space-y-4"
+          :class="checklistSaved ? '' : 'border-warning/60 ring-1 ring-warning/40'"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('peerReview.checklistHeading') }}</h3>
+            <span
+              class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-mono"
+              :class="checklistSaved ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning'"
+            >
+              <CheckCircle2 v-if="checklistSaved" class="w-3.5 h-3.5" :stroke-width="2" />
+              <AlertCircle v-else class="w-3.5 h-3.5" :stroke-width="2" />
+              {{ checklistSaved ? t('peerReview.checklistSavedBadge') : t('peerReview.checklistRequiredBadge') }}
+            </span>
+          </div>
           <div v-for="item in checklistDraft" :key="item.label" class="flex items-start gap-3">
             <input
               v-model="item.passed"
@@ -1511,6 +1524,14 @@ function handleIssueLeave() {
             {{ t('peerReview.saveChecklist') }}
           </button>
         </div>
+      </div>
+    </div>
+
+    <div v-if="!checklistSaved" class="mt-4 flex items-start gap-3 border border-warning/60 bg-warning-bg px-4 py-3 text-warning">
+      <AlertCircle class="w-4 h-4 mt-0.5 flex-shrink-0" :stroke-width="2" />
+      <div class="space-y-0.5">
+        <div class="text-sm font-sans font-semibold">{{ t('peerReview.checklistBlockerTitle') }}</div>
+        <div class="text-xs text-muted-foreground">{{ t('peerReview.checklistBlockerDesc') }}</div>
       </div>
     </div>
 
