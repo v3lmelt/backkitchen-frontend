@@ -45,6 +45,18 @@ export const CHANGELOG: ChangelogEntry[] = [
         items: [
           {
             title: {
+              'zh-CN': '优化讨论区加载表现',
+              en: 'Improved discussion panel loading',
+            },
+            description: {
+              'zh-CN':
+                '曲目详情页的讨论区与母带讨论区默认仅加载最新 20 条，并在列表顶部提供「加载更早的讨论」按钮按需回溯更早内容，避免一次性拉取全部历史影响响应速度。母带沟通侧边栏（聊天室）保持原有的完整加载行为不变。',
+              en:
+                'The discussion panel on the track detail page and the mastering discussion panel now load only the 20 most recent entries by default, with a "Load earlier discussions" button at the top of the list for retrieving older content on demand. This avoids fetching the full history upfront, which could affect responsiveness. The mastering communication sidebar (chat) retains its existing full-load behavior.',
+            },
+          },
+          {
+            title: {
               'zh-CN': '新增评论中引用问题的能力',
               en: 'Added the ability to reference issues within comments',
             },
