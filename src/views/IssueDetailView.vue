@@ -647,7 +647,7 @@ function openVersionCompare() {
             class="text-sm text-foreground"
             @activate="(reference, target) => handleIssueDescriptionReference(reference, target)"
             @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
-            @issueActivate="(reference) => openIssueReference(reference.issueId)"
+            @issueActivate="(target) => openIssueReference(target.id)"
           />
           <div v-if="issue.audios?.length" class="mt-4 space-y-2">
             <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('issue.audioAttachments') }}</h3>
@@ -750,7 +750,7 @@ function openVersionCompare() {
                   :default-target="comment.audios?.length ? 'attachment' : 'track'"
                   @activate="(reference, target) => handleCommentReference(comment, reference, target)"
                   @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
-                  @issueActivate="(reference) => openIssueReference(reference.issueId)"
+                  @issueActivate="(target) => openIssueReference(target.id)"
                 />
               <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-2">
                 <a
@@ -843,7 +843,7 @@ function openVersionCompare() {
                 :default-target="comment.audios?.length ? 'attachment' : 'track'"
                 @activate="(reference, target) => handleCommentReference(comment, reference, target)"
                 @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
-                @issueActivate="(reference) => openIssueReference(reference.issueId)"
+                @issueActivate="(target) => openIssueReference(target.id)"
               />
               <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-3">
                 <a
@@ -948,7 +948,7 @@ function openVersionCompare() {
 
           <div class="space-y-2 lg:overflow-y-auto lg:pr-1 lg:min-h-0">
             <button
-              v-for="(item, index) in visibleSiblingIssues"
+              v-for="item in visibleSiblingIssues"
               :key="item.id"
               type="button"
               @click="item.id !== issueId && router.push(`/issues/${item.id}`)"
@@ -960,7 +960,7 @@ function openVersionCompare() {
             >
               <div class="min-w-0 space-y-2">
                 <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-xs font-mono text-muted-foreground">#{{ index + 1 }}</span>
+                  <span class="text-xs font-mono text-muted-foreground">#{{ item.local_number }}</span>
                   <span
                     v-if="item.source_version_number != null"
                     class="inline-flex items-center rounded-full bg-border px-2 py-0.5 text-[11px] font-mono text-foreground"

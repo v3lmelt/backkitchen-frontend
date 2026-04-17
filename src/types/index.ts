@@ -266,6 +266,7 @@ export interface IssueImage {
 export interface Issue {
   id: number
   track_id: number
+  local_number: number
   author_id: number
   author?: User | null
   phase: IssuePhase

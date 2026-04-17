@@ -168,13 +168,13 @@ describe('extractIssueReferences', () => {
     expect(extractIssueReferences('See @issue:7, compare @issue:42, skip @issue:0')).toEqual([
       {
         raw: '@issue:7',
-        issueId: 7,
+        localNumber: 7,
         index: 4,
         length: 8,
       },
       {
         raw: '@issue:42',
-        issueId: 42,
+        localNumber: 42,
         index: 22,
         length: 9,
       },
@@ -232,7 +232,7 @@ describe('splitTextWithInlineReferences', () => {
         type: 'issue',
         value: {
           raw: '@issue:9',
-          issueId: 9,
+          localNumber: 9,
           index: 5,
           length: 8,
         },

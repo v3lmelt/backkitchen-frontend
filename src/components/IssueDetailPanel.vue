@@ -14,7 +14,7 @@ import IssuePlaybackPreview from '@/components/issue/IssuePlaybackPreview.vue'
 import type { PreviewAction } from '@/composables/useIssuePreviewPlayback'
 import { formatTimestamp, formatDuration, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
-import { resolveAttachmentReferenceIndex, type IssueReference, type TimeReference, type TimestampTarget } from '@/utils/timestamps'
+import { resolveAttachmentReferenceIndex, type TimeReference, type TimestampTarget } from '@/utils/timestamps'
 import { ArrowDownUp, X, Music, Pencil, Trash2 } from 'lucide-vue-next'
 import { canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
 
@@ -212,9 +212,9 @@ async function handleIssueDescriptionReference(reference: TimeReference, target:
   emit('preview-play-at', reference.startSeconds)
 }
 
-function handleIssueReference(reference: IssueReference) {
-  if (reference.issueId === fullIssue.value?.id) return
-  emit('open-issue', reference.issueId)
+function handleIssueReference(issue: Issue) {
+  if (issue.id === fullIssue.value?.id) return
+  emit('open-issue', issue.id)
 }
 
 function formatDate(d: string) {
