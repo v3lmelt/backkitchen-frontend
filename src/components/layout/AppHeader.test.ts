@@ -117,6 +117,30 @@ describe('AppHeader', () => {
     expect(wrapper.text()).not.toContain('Track #9')
   })
 
+  it('shows track title and mastering page label on mastering breadcrumbs', async () => {
+    setRoute({
+      name: 'mastering',
+      path: '/tracks/9/mastering',
+      fullPath: '/tracks/9/mastering',
+      params: { id: '9' },
+      query: {},
+    })
+
+    const wrapper = mountWithPlugins(AppHeader)
+    const trackStore = useTrackStore()
+
+    trackStore.setCurrentTrack({
+      id: 9,
+      title: 'test_audio',
+    } as any)
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Home')
+    expect(wrapper.text()).toContain('test_audio')
+    expect(wrapper.text()).toContain('Mastering Communication')
+    expect(wrapper.text()).not.toContain('BACK KITCHEN')
+  })
+
   it('opens track notifications in the active workspace instead of the track detail page', async () => {
     const wrapper = mountWithPlugins(AppHeader)
     const appStore = useAppStore()

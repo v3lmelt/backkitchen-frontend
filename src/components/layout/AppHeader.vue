@@ -95,10 +95,11 @@ const currentWorkflowStepLabel = computed(() => {
 
 const pageTitle = computed(() => {
   const name = route.name as string
-    const map: Record<string, string> = {
-      dashboard: t('header.pages.dashboard'),
-      notifications: t('header.pages.notifications'),
-      'track-detail': t('header.pages.trackDetail'),
+  const map: Record<string, string> = {
+    dashboard: t('header.pages.dashboard'),
+    notifications: t('header.pages.notifications'),
+    'track-detail': t('header.pages.trackDetail'),
+    mastering: t('masteringPage.heading'),
     'peer-review': t('header.pages.peerReview'),
     'issue-detail': t('header.pages.issueDetail'),
     'author-revision': t('header.pages.authorRevision'),
@@ -134,6 +135,9 @@ const breadcrumbs = computed(() => {
     crumbs.push({ label: t('header.pages.circles'), path: '/circles' })
   } else if (route.name === 'track-detail') {
     crumbs.push({ label: currentTrackLabel.value, path: route.path })
+  } else if (route.name === 'mastering') {
+    crumbs.push({ label: currentTrackLabel.value, path: `/tracks/${route.params.id}` })
+    crumbs.push({ label: pageTitle.value, path: route.path })
   } else if (route.name === 'workflow-step') {
     crumbs.push({ label: currentTrackLabel.value, path: `/tracks/${route.params.id}` })
     crumbs.push({ label: currentWorkflowStepLabel.value || pageTitle.value, path: route.path })
