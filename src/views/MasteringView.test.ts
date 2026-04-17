@@ -553,4 +553,177 @@ describe('MasteringView', () => {
     expect(wrapper.text()).toContain('Upload Master Delivery')
     expect(wrapper.text()).toContain('Confirm My Upload')
   })
+
+  it('returns to track detail when delivery confirmation hands off the next step to someone else', async () => {
+    mocks.currentUser.id = 7
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
+      track: {
+        submitter_id: 4,
+        mastering_engineer_id: 7,
+        producer_id: 8,
+        workflow_step: {
+          id: 'mastering',
+          label: 'Mastering',
+          type: 'delivery',
+          ui_variant: 'mastering',
+          assignee_role: 'mastering_engineer',
+          order: 0,
+          transitions: { request_revision: 'mastering_revision', deliver: 'final_review' },
+          require_confirmation: true,
+        },
+      },
+    }))
+    mocks.confirmDeliveryMock.mockResolvedValue({
+      id: 9,
+      status: 'final_review',
+      submitter_id: 4,
+      producer_id: 8,
+      mastering_engineer_id: 7,
+      workflow_step: {
+        id: 'final_review',
+        label: 'Final Review',
+        type: 'approval',
+        ui_variant: 'final_review',
+        assignee_role: 'producer',
+        order: 1,
+        transitions: { reject_to_mastering: 'mastering' },
+      },
+      current_master_delivery: {
+        id: 21,
+        confirmed_at: '2024-01-02T12:00:00Z',
+        producer_approved_at: null,
+        submitter_approved_at: null,
+      },
+    })
+
+    const wrapper = mountWithPlugins(MasteringView)
+    await flushPromises()
+    await openDeliveryTab(wrapper)
+
+    await wrapper.findAll('button').find(button => button.text() === 'Confirm My Upload')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.pushMock).toHaveBeenCalledWith('/tracks/9')
+  })
+
+  it('keeps the mastering workspace open when the same user can continue into final review', async () => {
+    mocks.currentUser.id = 2
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
+      track: {
+        submitter_id: 2,
+        mastering_engineer_id: 2,
+        producer_id: 8,
+        workflow_step: {
+          id: 'mastering',
+          label: 'Mastering',
+          type: 'delivery',
+          ui_variant: 'mastering',
+          assignee_role: 'mastering_engineer',
+          order: 0,
+          transitions: { request_revision: 'mastering_revision', deliver: 'final_review' },
+          require_confirmation: true,
+        },
+      },
+    }))
+    mocks.confirmDeliveryMock.mockResolvedValue({
+      id: 9,
+      status: 'final_review',
+      submitter_id: 2,
+      producer_id: 8,
+      mastering_engineer_id: 2,
+      workflow_step: {
+        id: 'final_review',
+        label: 'Final Review',
+        type: 'approval',
+        ui_variant: 'final_review',
+        assignee_role: 'producer',
+        order: 1,
+        transitions: { reject_to_mastering: 'mastering' },
+      },
+      current_master_delivery: {
+        id: 21,
+        confirmed_at: '2024-01-02T12:00:00Z',
+        producer_approved_at: null,
+        submitter_approved_at: null,
+      },
+    })
+
+    const wrapper = mountWithPlugins(MasteringView)
+    await flushPromises()
+    await openDeliveryTab(wrapper)
+
+    await wrapper.findAll('button').find(button => button.text() === 'Confirm My Upload')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.pushMock).not.toHaveBeenCalled()
+    expect(mocks.trackGetMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('returns to track detail when final approval completes the track', async () => {
+    mocks.currentUser.id = 8
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
+      track: {
+        submitter_id: 4,
+        mastering_engineer_id: 7,
+        producer_id: 8,
+        status: 'final_review',
+        workflow_step: {
+          id: 'final_review',
+          label: 'Final Review',
+          type: 'approval',
+          ui_variant: 'final_review',
+          assignee_role: 'producer',
+          order: 1,
+          transitions: { reject_to_mastering: 'mastering' },
+        },
+        current_master_delivery: {
+          id: 21,
+          workflow_cycle: 1,
+          delivery_number: 1,
+          file_path: '/master.wav',
+          uploaded_by_id: 7,
+          confirmed_at: '2024-01-02T12:00:00Z',
+          producer_approved_at: null,
+          submitter_approved_at: '2024-01-02T13:00:00Z',
+          created_at: '2024-01-02T00:00:00Z',
+        },
+      },
+      master_deliveries: [
+        {
+          id: 21,
+          workflow_cycle: 1,
+          delivery_number: 1,
+          file_path: '/master.wav',
+          uploaded_by_id: 7,
+          confirmed_at: '2024-01-02T12:00:00Z',
+          producer_approved_at: null,
+          submitter_approved_at: '2024-01-02T13:00:00Z',
+          created_at: '2024-01-02T00:00:00Z',
+        },
+      ],
+    }))
+    mocks.approveFinalReviewMock.mockResolvedValue({
+      id: 9,
+      status: 'completed',
+      submitter_id: 4,
+      producer_id: 8,
+      mastering_engineer_id: 7,
+      workflow_step: null,
+      current_master_delivery: {
+        id: 21,
+        confirmed_at: '2024-01-02T12:00:00Z',
+        producer_approved_at: '2024-01-02T14:00:00Z',
+        submitter_approved_at: '2024-01-02T13:00:00Z',
+      },
+    })
+
+    const wrapper = mountWithPlugins(MasteringView)
+    await flushPromises()
+    await openDeliveryTab(wrapper)
+
+    await wrapper.findAll('button').find(button => button.text() === 'Approve Delivery')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.pushMock).toHaveBeenCalledWith('/tracks/9')
+  })
 })

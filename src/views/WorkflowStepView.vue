@@ -884,11 +884,13 @@ async function executeTransition(decision: string) {
 
 async function handleUpload(kind: 'revision' | 'delivery') {
   if (!uploadFile.value || !track.value) return
+  const previousStatus = track.value.status
   uploading.value = true
   uploadProgress.value = 0
   error.value = ''
   try {
     const file = uploadFile.value
+    let updatedTrack: Track
     if (appStore.r2Enabled) {
       const requestFn = kind === 'revision' ? r2Api.requestSourceVersionUpload : r2Api.requestMasterDeliveryUpload
       const confirmFn = kind === 'revision' ? r2Api.confirmSourceVersionUpload : r2Api.confirmMasterDeliveryUpload
@@ -911,13 +913,13 @@ async function handleUpload(kind: 'revision' | 'delivery') {
       if (kind === 'revision' && revisionNotes.value.trim()) {
         confirmParams.revision_notes = revisionNotes.value.trim()
       }
-      await confirmFn(trackId.value, confirmParams)
+      updatedTrack = await confirmFn(trackId.value, confirmParams)
     } else if (kind === 'revision') {
-      await trackApi.uploadSourceVersion(trackId.value, file, revisionNotes.value.trim() || undefined, (percent) => {
+      updatedTrack = await trackApi.uploadSourceVersion(trackId.value, file, revisionNotes.value.trim() || undefined, (percent) => {
         uploadProgress.value = percent
       })
     } else {
-      await trackApi.uploadMasterDelivery(trackId.value, file, (percent) => {
+      updatedTrack = await trackApi.uploadMasterDelivery(trackId.value, file, (percent) => {
         uploadProgress.value = percent
       })
     }
@@ -925,6 +927,10 @@ async function handleUpload(kind: 'revision' | 'delivery') {
       uploadFile.value = null
       resetDeliveryPreview()
       toastSuccess(t('workflowStep.deliveryUploaded'))
+      if (updatedTrack.status !== previousStatus) {
+        pushToTrackDetail()
+        return
+      }
       await loadPage()
       return
     }
@@ -932,6 +938,10 @@ async function handleUpload(kind: 'revision' | 'delivery') {
     revisionNotes.value = ''
     resetDeliveryPreview()
     toastSuccess(t('workflowStep.revisionUploaded'))
+    if (updatedTrack.status !== previousStatus) {
+      pushToTrackDetail()
+      return
+    }
     await loadPage()
   } catch (err: any) {
     error.value = err.message || t('workflowStep.uploadFailed')
