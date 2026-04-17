@@ -82,6 +82,13 @@ const versionHistoryExpanded = ref(false)
 // Issues / waveform annotation
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
+const masterWaveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
+const sourceWaveformDuration = ref(0)
+const sourceWaveformCurrentTime = ref(0)
+const sourceWaveformIsPlaying = ref(false)
+const masterWaveformDuration = ref(0)
+const masterWaveformCurrentTime = ref(0)
+const masterWaveformIsPlaying = ref(false)
 const hoveredIssueId = ref<number | null>(null)
 const selectedIssue = ref<Issue | null>(null)
 const selectedStageIssueIds = ref<number[]>([])
@@ -592,6 +599,81 @@ function closeIssueDrawer() {
   }
 }
 
+function onSourceWaveformReady(nextDuration: number) {
+  sourceWaveformDuration.value = nextDuration
+}
+
+function onSourceWaveformTimeUpdate(time: number) {
+  sourceWaveformCurrentTime.value = time
+}
+
+function onSourceWaveformPlaybackStateChange(isPlaying: boolean) {
+  sourceWaveformIsPlaying.value = isPlaying
+}
+
+function onMasterWaveformReady(nextDuration: number) {
+  masterWaveformDuration.value = nextDuration
+}
+
+function onMasterWaveformTimeUpdate(time: number) {
+  masterWaveformCurrentTime.value = time
+}
+
+function onMasterWaveformPlaybackStateChange(isPlaying: boolean) {
+  masterWaveformIsPlaying.value = isPlaying
+}
+
+function issuePreviewWindow(issue: Issue | null): { start: number; end: number } | null {
+  if (!issue?.markers.length) return null
+  const start = Math.min(...issue.markers.map(marker => marker.time_start))
+  const end = Math.max(...issue.markers.map(marker => marker.time_end ?? marker.time_start + 0.75))
+  return { start, end }
+}
+
+function issuePreviewStart(issue: Issue | null): number | null {
+  return issuePreviewWindow(issue)?.start ?? null
+}
+
+function issueUsesMasterWaveform(issue: Issue | null): boolean {
+  return issue?.phase === 'final_review'
+}
+
+function previewTimeForIssue(issue: Issue | null): number {
+  return issueUsesMasterWaveform(issue) ? masterWaveformCurrentTime.value : sourceWaveformCurrentTime.value
+}
+
+function previewDurationForIssue(issue: Issue | null): number {
+  return issueUsesMasterWaveform(issue) ? masterWaveformDuration.value : sourceWaveformDuration.value
+}
+
+function previewIsPlayingForIssue(issue: Issue | null): boolean {
+  return issueUsesMasterWaveform(issue) ? masterWaveformIsPlaying.value : sourceWaveformIsPlaying.value
+}
+
+function previewWaveformForIssue(issue: Issue | null) {
+  return issueUsesMasterWaveform(issue) ? masterWaveformRef.value : waveformRef.value
+}
+
+function isIssuePreviewActive(issue: Issue | null): boolean {
+  const window = issuePreviewWindow(issue)
+  if (!window) return false
+  const currentTime = previewTimeForIssue(issue)
+  return currentTime >= Math.max(0, window.start - 0.1)
+    && currentTime <= window.end + 0.1
+}
+
+const selectedIssuePreview = computed(() => {
+  if (!selectedIssue.value) return null
+  const duration = previewDurationForIssue(selectedIssue.value)
+  if (duration <= 0) return null
+  return {
+    duration,
+    currentTime: previewTimeForIssue(selectedIssue.value),
+    isPlaying: previewIsPlayingForIssue(selectedIssue.value),
+    isActive: isIssuePreviewActive(selectedIssue.value),
+  }
+})
+
 function onIssueCreated(issue: Issue) {
   issues.value.push(issue)
 }
@@ -613,6 +695,21 @@ async function onQuickIssueStatusChange({ issue, status }: { issue: Issue; statu
     onIssueUpdated(previousIssue)
     toastError(err.message || t('workflowStep.transitionFailed'))
   }
+}
+
+async function handleIssuePreviewPlayAt(time: number) {
+  await previewWaveformForIssue(selectedIssue.value)?.playFrom?.(time)
+}
+
+async function handleIssuePreviewToggle(issue: Issue) {
+  const start = issuePreviewStart(issue)
+  if (start == null) return
+  const player = previewWaveformForIssue(issue)
+  if (isIssuePreviewActive(issue)) {
+    await player?.togglePlay?.()
+    return
+  }
+  await player?.playFrom?.(start)
 }
 
 function handleIssueHover(issue: Issue) {
@@ -954,6 +1051,9 @@ watch(olderMasterDeliveries, (deliveries) => {
           @issueHover="handleIssueHover"
           @issueLeave="handleIssueLeave"
           @requestModeChange="onRequestWaveformMode"
+          @ready="onSourceWaveformReady"
+          @timeupdate="onSourceWaveformTimeUpdate"
+          @playbackStateChange="onSourceWaveformPlaybackStateChange"
         />
       </div>
 
@@ -980,7 +1080,17 @@ watch(olderMasterDeliveries, (deliveries) => {
             {{ t('compare.clear') }}
           </button>
         </div>
-        <WaveformPlayer :audio-url="masterAudioUrl" :issues="finalReviewIssues" :track-id="trackId" playback-scope="master" :compare-audio-url="selectedCompareMasterAudioUrl" />
+        <WaveformPlayer
+          ref="masterWaveformRef"
+          :audio-url="masterAudioUrl"
+          :issues="finalReviewIssues"
+          :track-id="trackId"
+          playback-scope="master"
+          :compare-audio-url="selectedCompareMasterAudioUrl"
+          @ready="onMasterWaveformReady"
+          @timeupdate="onMasterWaveformTimeUpdate"
+          @playbackStateChange="onMasterWaveformPlaybackStateChange"
+        />
         <div v-if="finalReviewIssues.length > 0" class="mt-3">
           <h4 class="text-sm font-mono font-semibold text-foreground mb-2">{{ t('mastering.finalReviewIssuesHeading', { count: finalReviewIssues.length }) }}</h4>
           <IssueMarkerList
@@ -1024,6 +1134,9 @@ watch(olderMasterDeliveries, (deliveries) => {
           @issueHover="handleIssueHover"
           @issueLeave="handleIssueLeave"
           @requestModeChange="onRequestWaveformMode"
+          @ready="onSourceWaveformReady"
+          @timeupdate="onSourceWaveformTimeUpdate"
+          @playbackStateChange="onSourceWaveformPlaybackStateChange"
         />
       </div>
 
@@ -1200,8 +1313,11 @@ watch(olderMasterDeliveries, (deliveries) => {
     :issue="selectedIssue"
     :track="track"
     :assignments="reviewAssignments"
+    :preview="selectedIssuePreview"
     @close="closeIssueDrawer"
     @updated="onIssueUpdated"
+    @preview-play-at="handleIssuePreviewPlayAt"
+    @preview-toggle="handleIssuePreviewToggle"
   />
 
   <MasteringChatSidebar

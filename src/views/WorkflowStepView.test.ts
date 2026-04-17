@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   checklistSubmitMock: vi.fn(),
   downloadTrackAudioMock: vi.fn(),
   downloadAudioAssetMock: vi.fn(),
+  waveformPlayFromMock: vi.fn(),
+  waveformTogglePlayMock: vi.fn(),
   appStore: {
     currentUser: { id: 1 },
   },
@@ -67,6 +69,16 @@ vi.mock('@/components/workflow/WorkflowProgress.vue', () => ({
 vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
   default: {
     props: ['compareVersionId'],
+    emits: ['ready', 'timeupdate', 'playbackStateChange'],
+    mounted(this: any) {
+      this.$emit('ready', 95)
+      this.$emit('timeupdate', 12.5)
+      this.$emit('playbackStateChange', false)
+    },
+    methods: {
+      playFrom: mocks.waveformPlayFromMock,
+      togglePlay: mocks.waveformTogglePlayMock,
+    },
     template: '<div class="waveform">compare:{{ compareVersionId ?? "none" }}</div>',
   },
 }))
@@ -107,9 +119,15 @@ vi.mock('@/components/IssueCreatePanel.vue', () => ({
 
 vi.mock('@/components/IssueDetailPanel.vue', () => ({
   default: {
-    props: ['issue'],
-    emits: ['close', 'updated'],
-    template: '<div v-if="issue" class="peer-issue-drawer">{{ issue.title }}|{{ issue.status }}</div>',
+    props: ['issue', 'preview'],
+    emits: ['close', 'updated', 'preview-play-at', 'preview-toggle'],
+    template: `
+      <div v-if="issue" class="peer-issue-drawer">
+        {{ issue.title }}|{{ issue.status }}|preview:{{ preview?.duration ?? 0 }}|active:{{ preview?.isActive ? '1' : '0' }}
+        <button class="drawer-preview-play" @click="$emit('preview-play-at', 21.5)">preview play</button>
+        <button class="drawer-preview-toggle" @click="$emit('preview-toggle', issue)">preview toggle</button>
+      </div>
+    `,
   },
 }))
 
@@ -175,6 +193,8 @@ describe('WorkflowStepView', () => {
     mocks.checklistSubmitMock.mockReset()
     mocks.downloadTrackAudioMock.mockReset()
     mocks.downloadAudioAssetMock.mockReset()
+    mocks.waveformPlayFromMock.mockReset()
+    mocks.waveformTogglePlayMock.mockReset()
     mocks.workflowTransitionMock.mockResolvedValue({})
     mocks.listAssignmentsMock.mockResolvedValue([])
     mocks.issueUpdateMock.mockImplementation(async (id: number, data: { status?: string }) => ({ id, status: data.status ?? 'open' }))
@@ -679,6 +699,80 @@ describe('WorkflowStepView', () => {
 
     expect(mocks.issueUpdateMock).toHaveBeenCalledWith(51, { status: 'resolved' })
     expect(wrapper.find('.peer-issue-drawer').text()).toContain('Tame the hats|resolved')
+  })
+
+  it('lets the drawer audition peer issues through the main waveform', async () => {
+    mocks.route = {
+      params: { id: '9', stepId: 'peer_review' },
+      query: {},
+      path: '/tracks/9/step/peer_review',
+      fullPath: '/tracks/9/step/peer_review',
+    }
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Peer Track',
+        artist: 'Nova',
+        status: 'peer_review',
+        file_path: '/audio.wav',
+        version: 1,
+        workflow_cycle: 1,
+        workflow_step: {
+          id: 'peer_review',
+          label: 'Peer Review',
+          type: 'review',
+          ui_variant: 'peer_review',
+          assignee_role: 'peer_reviewer',
+          order: 1,
+          transitions: { pass: 'producer_gate' },
+        },
+        workflow_transitions: [{ decision: 'pass', label: 'Pass' }],
+      },
+      issues: [
+        {
+          id: 61,
+          track_id: 9,
+          author_id: 3,
+          phase: 'peer',
+          workflow_cycle: 1,
+          source_version_id: 101,
+          source_version_number: 1,
+          master_delivery_id: null,
+          title: 'Watch the hats',
+          description: 'The hats still poke through.',
+          severity: 'major',
+          status: 'open',
+          markers: [
+            { id: 501, issue_id: 61, marker_type: 'point', time_start: 12.5, time_end: null },
+          ],
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-02T00:00:00Z',
+          comment_count: 1,
+        },
+      ],
+      checklist_items: [],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'peer_review', label: 'Peer Review', type: 'review', ui_variant: 'peer_review', assignee_role: 'peer_reviewer', order: 1, transitions: { pass: 'producer_gate' } },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    await wrapper.find('.issue-list-item').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.peer-issue-drawer').text()).toContain('preview:95')
+    expect(wrapper.find('.peer-issue-drawer').text()).toContain('active:1')
+
+    await wrapper.find('.drawer-preview-toggle').trigger('click')
+    expect(mocks.waveformTogglePlayMock).toHaveBeenCalledTimes(1)
+
+    await wrapper.find('.drawer-preview-play').trigger('click')
+    expect(mocks.waveformPlayFromMock).toHaveBeenCalledWith(21.5)
   })
 
   it('enables source compare on producer gate too', async () => {

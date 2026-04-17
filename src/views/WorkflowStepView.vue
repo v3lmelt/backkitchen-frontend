@@ -87,6 +87,9 @@ const error = ref('')
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 const uploadProgress = ref(0)
 const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
+const waveformDuration = ref(0)
+const waveformCurrentTime = ref(0)
+const waveformIsPlaying = ref(false)
 const hoveredIssueId = ref<number | null>(null)
 const selectedIssue = ref<Issue | null>(null)
 const selectedStageIssueIds = ref<number[]>([])
@@ -642,6 +645,46 @@ function closeIssueDrawer() {
   }
 }
 
+function onWaveformReady(nextDuration: number) {
+  waveformDuration.value = nextDuration
+}
+
+function onWaveformTimeUpdate(time: number) {
+  waveformCurrentTime.value = time
+}
+
+function onWaveformPlaybackStateChange(isPlaying: boolean) {
+  waveformIsPlaying.value = isPlaying
+}
+
+function issuePreviewWindow(issue: Issue | null): { start: number; end: number } | null {
+  if (!issue?.markers.length) return null
+  const start = Math.min(...issue.markers.map(marker => marker.time_start))
+  const end = Math.max(...issue.markers.map(marker => marker.time_end ?? marker.time_start + 0.75))
+  return { start, end }
+}
+
+function issuePreviewStart(issue: Issue | null): number | null {
+  return issuePreviewWindow(issue)?.start ?? null
+}
+
+function isIssuePreviewActive(issue: Issue | null): boolean {
+  const window = issuePreviewWindow(issue)
+  if (!window) return false
+  return waveformCurrentTime.value >= Math.max(0, window.start - 0.1)
+    && waveformCurrentTime.value <= window.end + 0.1
+}
+
+const selectedIssuePreview = computed(() => {
+  if (!selectedIssue.value || waveformDuration.value <= 0) return null
+  return {
+    duration: waveformDuration.value,
+    currentTime: waveformCurrentTime.value,
+    isPlaying: waveformIsPlaying.value,
+    isActive: isIssuePreviewActive(selectedIssue.value),
+  }
+})
+
 function onIssueUpdated(updatedIssue: Issue) {
   issues.value = issues.value.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue)
   if (selectedIssue.value?.id === updatedIssue.id) {
@@ -659,6 +702,20 @@ async function onQuickIssueStatusChange({ issue, status }: { issue: Issue; statu
     onIssueUpdated(previousIssue)
     toastError(err.message || t('workflowStep.transitionFailed'))
   }
+}
+
+async function handleIssuePreviewPlayAt(time: number) {
+  await waveformRef.value?.playFrom?.(time)
+}
+
+async function handleIssuePreviewToggle(issue: Issue) {
+  const start = issuePreviewStart(issue)
+  if (start == null) return
+  if (isIssuePreviewActive(issue)) {
+    await waveformRef.value?.togglePlay?.()
+    return
+  }
+  await waveformRef.value?.playFrom?.(start)
 }
 
 function canCurrentUserChangeIssueStatus(issue: Issue): boolean {
@@ -1223,7 +1280,15 @@ function handleIssueLeave() {
             {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
           </button>
         </div>
-        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" :track-id="trackId" />
+        <WaveformPlayer
+          ref="waveformRef"
+          :audio-url="audioUrl"
+          :issues="waveformIssues"
+          :track-id="trackId"
+          @ready="onWaveformReady"
+          @timeupdate="onWaveformTimeUpdate"
+          @playbackStateChange="onWaveformPlaybackStateChange"
+        />
       </div>
     </div>
 
@@ -1352,6 +1417,9 @@ function handleIssueLeave() {
           @issueHover="handleIssueHover"
           @issueLeave="handleIssueLeave"
           @requestModeChange="onRequestWaveformMode"
+          @ready="onWaveformReady"
+          @timeupdate="onWaveformTimeUpdate"
+          @playbackStateChange="onWaveformPlaybackStateChange"
         />
       </div>
 
@@ -1522,6 +1590,9 @@ function handleIssueLeave() {
           @issueHover="handleIssueHover"
           @issueLeave="handleIssueLeave"
           @requestModeChange="onRequestWaveformMode"
+          @ready="onWaveformReady"
+          @timeupdate="onWaveformTimeUpdate"
+          @playbackStateChange="onWaveformPlaybackStateChange"
         />
       </div>
 
@@ -2035,6 +2106,9 @@ function handleIssueLeave() {
           @issueHover="handleIssueHover"
           @issueLeave="handleIssueLeave"
           @requestModeChange="onRequestWaveformMode"
+          @ready="onWaveformReady"
+          @timeupdate="onWaveformTimeUpdate"
+          @playbackStateChange="onWaveformPlaybackStateChange"
         />
       </div>
 
@@ -2196,7 +2270,16 @@ function handleIssueLeave() {
             {{ t('workflowStep.sourceCompareReadonlyHint') }}
           </p>
         </div>
-        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" :track-id="trackId" :compare-version-id="selectedCompareSourceVersionId" />
+        <WaveformPlayer
+          ref="waveformRef"
+          :audio-url="audioUrl"
+          :issues="waveformIssues"
+          :track-id="trackId"
+          :compare-version-id="selectedCompareSourceVersionId"
+          @ready="onWaveformReady"
+          @timeupdate="onWaveformTimeUpdate"
+          @playbackStateChange="onWaveformPlaybackStateChange"
+        />
       </div>
 
       <div v-if="fallbackStepIssues.length" class="card space-y-3">
@@ -2272,7 +2355,16 @@ function handleIssueLeave() {
             {{ t('workflowStep.sourceCompareReadonlyHint') }}
           </p>
         </div>
-        <WaveformPlayer :audio-url="audioUrl" :issues="fallbackWaveformIssues" :track-id="trackId" :compare-version-id="selectedCompareSourceVersionId" />
+        <WaveformPlayer
+          ref="waveformRef"
+          :audio-url="audioUrl"
+          :issues="fallbackWaveformIssues"
+          :track-id="trackId"
+          :compare-version-id="selectedCompareSourceVersionId"
+          @ready="onWaveformReady"
+          @timeupdate="onWaveformTimeUpdate"
+          @playbackStateChange="onWaveformPlaybackStateChange"
+        />
       </div>
 
       <div class="card space-y-3">
@@ -2323,12 +2415,16 @@ function handleIssueLeave() {
           </button>
         </div>
         <WaveformPlayer
+          ref="waveformRef"
           :audio-url="audioUrl"
           :issues="revisionWaveformIssues"
           :track-id="trackId"
           :hovered-issue-id="hoveredIssueId"
           @issueHover="handleIssueHover"
           @issueLeave="handleIssueLeave"
+          @ready="onWaveformReady"
+          @timeupdate="onWaveformTimeUpdate"
+          @playbackStateChange="onWaveformPlaybackStateChange"
         />
       </div>
 
@@ -2549,8 +2645,11 @@ function handleIssueLeave() {
     :issue="selectedIssue"
     :track="track"
     :assignments="reviewAssignments"
+    :preview="selectedIssuePreview"
     @close="closeIssueDrawer"
     @updated="onIssueUpdated"
+    @preview-play-at="handleIssuePreviewPlayAt"
+    @preview-toggle="handleIssuePreviewToggle"
   />
 
   <MasteringChatSidebar

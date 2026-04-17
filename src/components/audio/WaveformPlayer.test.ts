@@ -186,6 +186,21 @@ describe('WaveformPlayer', () => {
     expect(waveSurferInstances[0].destroy).toHaveBeenCalledTimes(1)
   })
 
+  it('emits playback state changes when the primary waveform plays or pauses', async () => {
+    const wrapper = mountWithPlugins(WaveformPlayer, {
+      props: {
+        audioUrl: '/api/tracks/1/audio',
+      },
+    })
+
+    await flushWaveformMount()
+
+    waveSurferInstances[0].handlers.play?.()
+    waveSurferInstances[0].handlers.pause?.()
+
+    expect(wrapper.emitted('playbackStateChange')).toEqual([[true], [false]])
+  })
+
   it('applies deferred B mode after compare track becomes ready', async () => {
     const wrapper = mountWithPlugins(WaveformPlayer, {
       props: {
