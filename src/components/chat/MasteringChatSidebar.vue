@@ -234,7 +234,7 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
                     :text="d.content"
                     :issues="issues"
                     class="text-sm text-foreground"
-                    @issueActivate="emit('openIssue', $event.issueId)"
+                    @issueActivate="(target) => emit('openIssue', target.id)"
                   />
 
                   <!-- Images -->

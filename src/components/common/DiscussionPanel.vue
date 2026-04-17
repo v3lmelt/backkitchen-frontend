@@ -139,7 +139,7 @@ function confirmDelete() {
               :text="d.content"
               :issues="issues"
               class="text-sm text-foreground mt-1"
-              @issueActivate="emit('openIssue', $event.issueId)"
+              @issueActivate="(target) => emit('openIssue', target.id)"
             />
           </template>
           <div v-if="d.images?.length" class="flex gap-2 mt-2">

@@ -99,8 +99,9 @@ describe('DiscussionPanel', () => {
         ],
         issues: [
           {
-            id: 12,
+            id: 412,
             track_id: 7,
+            local_number: 12,
             author_id: 2,
             phase: 'producer',
             workflow_cycle: 1,
@@ -135,6 +136,6 @@ describe('DiscussionPanel', () => {
 
     await issueButton!.trigger('click')
 
-    expect(wrapper.emitted('openIssue')).toEqual([[12]])
+    expect(wrapper.emitted('openIssue')).toEqual([[412]])
   })
 })

@@ -22,7 +22,7 @@ export interface MarkerIndexReference {
 
 export interface IssueReference {
   raw: string
-  issueId: number
+  localNumber: number
   index: number
   length: number
 }
@@ -43,7 +43,7 @@ const TIME_REFERENCE_PATTERN = new RegExp(
   'gi',
 )
 const MARKER_REFERENCE_PATTERN = /(?<![\w])#(?<index>\d{1,3})(?![\w])/g
-const ISSUE_REFERENCE_PATTERN = /(?<![\w])@issue:(?<id>\d{1,9})(?![\w])/gi
+const ISSUE_REFERENCE_PATTERN = /(?<![\w])@issue:(?<localNumber>\d{1,9})(?![\w])/gi
 
 export function parseTimecode(value: string): number | null {
   const trimmed = value.trim()
@@ -139,14 +139,14 @@ export function extractIssueReferences(text: string): IssueReference[] {
   const references: IssueReference[] = []
 
   for (const match of matches) {
-    const issueIdRaw = match.groups?.id
-    if (!issueIdRaw || match.index == null) continue
-    const issueId = Number(issueIdRaw)
-    if (!Number.isInteger(issueId) || issueId <= 0) continue
+    const localNumberRaw = match.groups?.localNumber
+    if (!localNumberRaw || match.index == null) continue
+    const localNumber = Number(localNumberRaw)
+    if (!Number.isInteger(localNumber) || localNumber <= 0) continue
 
     references.push({
       raw: match[0],
-      issueId,
+      localNumber,
       index: match.index,
       length: match[0].length,
     })

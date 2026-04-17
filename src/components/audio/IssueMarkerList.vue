@@ -138,7 +138,7 @@ function triggerQuickAction(issue: Issue, status: IssueStatus, event: Event) {
 <template>
   <div class="space-y-2">
     <div
-      v-for="(issue, index) in issues"
+      v-for="issue in issues"
       :key="issue.id"
       @click="emit('select', issue)"
       @mouseenter="emit('hover', issue)"
@@ -159,7 +159,7 @@ function triggerQuickAction(issue: Issue, status: IssueStatus, event: Event) {
         />
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2 mb-1">
-            <span class="text-xs font-mono text-muted-foreground flex-shrink-0">#{{ index + 1 }}</span>
+            <span class="text-xs font-mono text-muted-foreground flex-shrink-0">#{{ issue.local_number }}</span>
             <span
               v-if="issue.source_version_number != null"
               class="inline-flex items-center rounded-full bg-border px-2 py-0.5 text-[11px] font-mono text-foreground flex-shrink-0"

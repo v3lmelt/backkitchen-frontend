@@ -2,37 +2,10 @@
 import { computed, onBeforeUnmount, ref, useAttrs } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { issueApi } from '@/api'
 import type { Issue } from '@/types'
 import { formatTimestampShort } from '@/utils/time'
 import type { IssueReference, MarkerIndexReference, TimeReference, TimestampTarget } from '@/utils/timestamps'
 import { resolveTimeReferenceTarget, splitTextWithInlineReferences } from '@/utils/timestamps'
-
-const ISSUE_PREVIEW_CACHE = new Map<number, Issue>()
-const ISSUE_PREVIEW_PENDING = new Map<number, Promise<Issue | null>>()
-
-async function loadIssuePreview(issueId: number): Promise<Issue | null> {
-  if (ISSUE_PREVIEW_CACHE.has(issueId)) {
-    return ISSUE_PREVIEW_CACHE.get(issueId) ?? null
-  }
-
-  if (ISSUE_PREVIEW_PENDING.has(issueId)) {
-    return ISSUE_PREVIEW_PENDING.get(issueId) ?? null
-  }
-
-  const pending = issueApi.get(issueId)
-    .then((issue) => {
-      ISSUE_PREVIEW_CACHE.set(issueId, issue)
-      return issue
-    })
-    .catch(() => null)
-    .finally(() => {
-      ISSUE_PREVIEW_PENDING.delete(issueId)
-    })
-
-  ISSUE_PREVIEW_PENDING.set(issueId, pending)
-  return pending
-}
 
 defineOptions({
   inheritAttrs: false,
@@ -52,19 +25,22 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   activate: [reference: TimeReference, target: TimestampTarget]
   markerActivate: [reference: MarkerIndexReference]
-  issueActivate: [reference: IssueReference]
+  issueActivate: [issue: Issue]
 }>()
 
 const { t, te } = useI18n()
 const attrs = useAttrs()
 const segments = computed(() => splitTextWithInlineReferences(props.text))
-const issuesById = computed(() => new Map((props.issues ?? []).map(issue => [issue.id, issue])))
-const hoveredIssueId = ref<number | null>(null)
+const issuesByLocalNumber = computed(
+  () => new Map((props.issues ?? []).map(issue => [issue.local_number, issue])),
+)
 const hoveredIssue = ref<Issue | null>(null)
-const issuePreviewLoading = ref(false)
-const issuePreviewUnavailable = ref(false)
 const issuePreviewStyle = ref<Record<string, string>>({})
 let hidePreviewTimer: ReturnType<typeof setTimeout> | null = null
+
+function resolveIssue(reference: IssueReference): Issue | null {
+  return issuesByLocalNumber.value.get(reference.localNumber) ?? null
+}
 
 function activate(reference: TimeReference) {
   if (!props.interactive) return
@@ -76,9 +52,9 @@ function activateMarker(reference: MarkerIndexReference) {
   emit('markerActivate', reference)
 }
 
-function activateIssue(reference: IssueReference) {
+function activateIssue(issue: Issue) {
   if (!props.interactive) return
-  emit('issueActivate', reference)
+  emit('issueActivate', issue)
 }
 
 function clearHidePreviewTimer() {
@@ -89,10 +65,7 @@ function clearHidePreviewTimer() {
 
 function hideIssuePreview() {
   clearHidePreviewTimer()
-  hoveredIssueId.value = null
   hoveredIssue.value = null
-  issuePreviewLoading.value = false
-  issuePreviewUnavailable.value = false
 }
 
 function scheduleHideIssuePreview() {
@@ -140,29 +113,13 @@ function translateEnum(prefix: 'status' | 'severity', value: string): string {
   return te(key) ? t(key) : value
 }
 
-async function showIssuePreview(reference: IssueReference, event: MouseEvent | FocusEvent) {
+function showIssuePreview(issue: Issue, event: MouseEvent | FocusEvent) {
   if (!props.interactive) return
   clearHidePreviewTimer()
 
-  hoveredIssueId.value = reference.issueId
-  issuePreviewUnavailable.value = false
+  hoveredIssue.value = issue
   const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
   if (target) positionIssuePreview(target)
-
-  const knownIssue = issuesById.value.get(reference.issueId) ?? ISSUE_PREVIEW_CACHE.get(reference.issueId) ?? null
-  hoveredIssue.value = knownIssue
-  issuePreviewLoading.value = !knownIssue
-  if (knownIssue) {
-    ISSUE_PREVIEW_CACHE.set(reference.issueId, knownIssue)
-    return
-  }
-
-  const loadedIssue = await loadIssuePreview(reference.issueId)
-  if (hoveredIssueId.value !== reference.issueId) return
-
-  hoveredIssue.value = loadedIssue
-  issuePreviewLoading.value = false
-  issuePreviewUnavailable.value = loadedIssue == null
 }
 
 onBeforeUnmount(() => {
@@ -188,24 +145,33 @@ onBeforeUnmount(() => {
       >
         {{ segment.value.raw }}
       </span>
-      <button
-        v-else-if="segment.type === 'issue' && interactive"
-        type="button"
-        class="mx-0.5 inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 align-baseline font-mono text-[0.95em] font-medium text-primary transition-colors hover:bg-primary hover:text-background focus:outline-none focus:ring-1 focus:ring-primary"
-        @click="activateIssue(segment.value)"
-        @mouseenter="showIssuePreview(segment.value, $event)"
-        @mouseleave="scheduleHideIssuePreview"
-        @focus="showIssuePreview(segment.value, $event)"
-        @blur="scheduleHideIssuePreview"
-      >
-        {{ segment.value.raw }}
-      </button>
-      <span
-        v-else-if="segment.type === 'issue'"
-        class="mx-0.5 inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 align-baseline font-mono text-[0.95em] font-medium text-primary"
-      >
-        {{ segment.value.raw }}
-      </span>
+      <template v-else-if="segment.type === 'issue'">
+        <button
+          v-if="interactive && resolveIssue(segment.value)"
+          type="button"
+          class="mx-0.5 inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 align-baseline font-mono text-[0.95em] font-medium text-primary transition-colors hover:bg-primary hover:text-background focus:outline-none focus:ring-1 focus:ring-primary"
+          @click="activateIssue(resolveIssue(segment.value)!)"
+          @mouseenter="showIssuePreview(resolveIssue(segment.value)!, $event)"
+          @mouseleave="scheduleHideIssuePreview"
+          @focus="showIssuePreview(resolveIssue(segment.value)!, $event)"
+          @blur="scheduleHideIssuePreview"
+        >
+          {{ segment.value.raw }}
+        </button>
+        <span
+          v-else-if="!resolveIssue(segment.value)"
+          class="mx-0.5 inline-flex items-center rounded-full border border-border bg-border/40 px-2 py-0.5 align-baseline font-mono text-[0.95em] font-medium text-muted-foreground line-through"
+          :title="t('timestamp.issueUnavailable')"
+        >
+          {{ segment.value.raw }}
+        </span>
+        <span
+          v-else
+          class="mx-0.5 inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 align-baseline font-mono text-[0.95em] font-medium text-primary"
+        >
+          {{ segment.value.raw }}
+        </span>
+      </template>
       <button
         v-else-if="interactive"
         type="button"
@@ -225,32 +191,24 @@ onBeforeUnmount(() => {
 
   <Teleport to="body">
     <div
-      v-if="interactive && hoveredIssueId !== null"
+      v-if="interactive && hoveredIssue"
       class="fixed z-[80] max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-card/95 px-3 py-2.5 text-left shadow-[0_12px_32px_rgba(0,0,0,0.28)] backdrop-blur"
       :style="issuePreviewStyle"
       @mouseenter="clearHidePreviewTimer"
       @mouseleave="scheduleHideIssuePreview"
     >
-      <p class="text-[11px] font-mono text-primary">{{ t('timestamp.issueReferenceLabel', { id: hoveredIssueId }) }}</p>
+      <p class="text-[11px] font-mono text-primary">{{ t('timestamp.issueReferenceLabel', { id: hoveredIssue.local_number }) }}</p>
       <p class="mt-1 text-sm font-semibold text-foreground break-words">
-        {{ hoveredIssue?.title || `#${hoveredIssueId}` }}
+        {{ hoveredIssue.title || `#${hoveredIssue.local_number}` }}
       </p>
-      <p v-if="issuePreviewLoading" class="mt-1 text-xs text-muted-foreground">
-        {{ t('common.loading') }}
+      <p class="mt-1 text-xs text-muted-foreground break-words">
+        {{ issueDescriptionPreview(hoveredIssue) }}
       </p>
-      <p v-else-if="issuePreviewUnavailable" class="mt-1 text-xs text-muted-foreground">
-        {{ t('timestamp.issueUnavailable') }}
+      <p class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+        <span>{{ translateEnum('status', hoveredIssue.status) }}</span>
+        <span>{{ translateEnum('severity', hoveredIssue.severity) }}</span>
+        <span v-if="issueMarkerSummary(hoveredIssue)">{{ issueMarkerSummary(hoveredIssue) }}</span>
       </p>
-      <template v-else>
-        <p class="mt-1 text-xs text-muted-foreground break-words">
-          {{ issueDescriptionPreview(hoveredIssue) }}
-        </p>
-        <p v-if="hoveredIssue" class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-          <span>{{ translateEnum('status', hoveredIssue.status) }}</span>
-          <span>{{ translateEnum('severity', hoveredIssue.severity) }}</span>
-          <span v-if="issueMarkerSummary(hoveredIssue)">{{ issueMarkerSummary(hoveredIssue) }}</span>
-        </p>
-      </template>
     </div>
   </Teleport>
 </template>

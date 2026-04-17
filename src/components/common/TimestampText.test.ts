@@ -1,24 +1,13 @@
 import { flushPromises } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
 import { mountWithPlugins } from '@/tests/utils'
-
-const mocks = vi.hoisted(() => ({
-  issueGetMock: vi.fn(),
-}))
-
-vi.mock('@/api', () => ({
-  issueApi: {
-    get: mocks.issueGetMock,
-  },
-}))
 
 import TimestampText from './TimestampText.vue'
 
 describe('TimestampText', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
-    mocks.issueGetMock.mockReset()
   })
 
   it('highlights references and emits resolved targets on click', async () => {
@@ -84,85 +73,65 @@ describe('TimestampText', () => {
     ])
   })
 
-  it('emits issueActivate and shows a preview for known issues', async () => {
+  it('emits issueActivate with resolved issue and shows a preview when @issue:N matches a track-local number', async () => {
+    const issue = {
+      id: 412,
+      track_id: 4,
+      local_number: 2,
+      author_id: 2,
+      phase: 'producer',
+      workflow_cycle: 1,
+      source_version_id: null,
+      source_version_number: 3,
+      master_delivery_id: null,
+      title: 'Low end masking',
+      description: 'Kick and bass are colliding in the chorus and the tail feels too long.',
+      severity: 'major',
+      status: 'open',
+      markers: [{ id: 1, issue_id: 412, marker_type: 'point', time_start: 42.4, time_end: null }],
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+      comments: [],
+    }
+
     const wrapper = mountWithPlugins(TimestampText, {
       attachTo: document.body,
       props: {
-        text: 'Refer to @issue:12 before shipping',
-        issues: [
-          {
-            id: 12,
-            track_id: 4,
-            author_id: 2,
-            phase: 'producer',
-            workflow_cycle: 1,
-            source_version_id: null,
-            source_version_number: 3,
-            master_delivery_id: null,
-            title: 'Low end masking',
-            description: 'Kick and bass are colliding in the chorus and the tail feels too long.',
-            severity: 'major',
-            status: 'open',
-            markers: [{ id: 1, issue_id: 12, marker_type: 'point', time_start: 42.4, time_end: null }],
-            created_at: '2024-01-01T00:00:00Z',
-            updated_at: '2024-01-01T00:00:00Z',
-            comments: [],
-          },
-        ],
+        text: 'Refer to @issue:2 before shipping',
+        issues: [issue],
       },
     })
 
     const [issueButton] = wrapper.findAll('button')
-    expect(issueButton.text()).toBe('@issue:12')
+    expect(issueButton.text()).toBe('@issue:2')
 
     await issueButton.trigger('mouseenter')
     await flushPromises()
 
     expect(document.body.textContent).toContain('Low end masking')
     expect(document.body.textContent).toContain('Kick and bass are colliding')
-    expect(mocks.issueGetMock).not.toHaveBeenCalled()
 
     await issueButton.trigger('click')
-    expect(wrapper.emitted('issueActivate')).toEqual([
-      [{ raw: '@issue:12', issueId: 12, index: 9, length: 9 }],
-    ])
+    expect(wrapper.emitted('issueActivate')).toEqual([[issue]])
 
     wrapper.unmount()
   })
 
-  it('lazy loads unknown issue previews on hover', async () => {
-    mocks.issueGetMock.mockResolvedValue({
-      id: 99,
-      track_id: 8,
-      author_id: 3,
-      phase: 'mastering',
-      workflow_cycle: 2,
-      source_version_id: null,
-      source_version_number: 5,
-      master_delivery_id: null,
-      title: 'Sibilance spike',
-      description: 'The lead vocal gets too sharp on the bridge.',
-      severity: 'minor',
-      status: 'pending_discussion',
-      markers: [],
-      created_at: '2024-01-01T00:00:00Z',
-      updated_at: '2024-01-01T00:00:00Z',
-      comments: [],
-    })
-
+  it('renders a deleted pill (no preview button) when @issue:N has no matching local number on the track', () => {
     const wrapper = mountWithPlugins(TimestampText, {
       attachTo: document.body,
       props: {
         text: 'Escalate @issue:99 next',
+        issues: [],
       },
     })
 
-    const [issueButton] = wrapper.findAll('button')
-    await issueButton.trigger('mouseenter')
-    await flushPromises()
+    const buttons = wrapper.findAll('button')
+    expect(buttons).toHaveLength(0)
 
-    expect(mocks.issueGetMock).toHaveBeenCalledWith(99)
-    expect(document.body.textContent).toContain('Sibilance spike')
+    const deletedPill = wrapper.find('span.line-through')
+    expect(deletedPill.exists()).toBe(true)
+    expect(deletedPill.text()).toBe('@issue:99')
 
     wrapper.unmount()
   })
