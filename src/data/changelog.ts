@@ -74,9 +74,9 @@ export const CHANGELOG: ChangelogEntry[] = [
             },
             description: {
               'zh-CN':
-                '当评论包含多个音频附件时，可使用 [1]@1:23、[2]@0:45 的格式指向特定附件的特定时间点，便于在评审与沟通中精确定位音频位置。',
+                '当评论包含多个音频附件时，可使用 a1:01:23、a2:00:45 的格式指向特定附件的特定时间点，便于在评审与沟通中精确定位音频位置。',
               en:
-                'When a comment contains multiple audio attachments, references in the form [1]@1:23 or [2]@0:45 may be used to point at a specific moment within a specific attachment, enabling precise audio referencing during review and discussion.',
+                'When a comment contains multiple audio attachments, references in the form a1:01:23 or a2:00:45 may be used to point at a specific moment within a specific attachment, enabling precise audio referencing during review and discussion.',
             },
           },
           {
@@ -267,8 +267,8 @@ export const CHANGELOG: ChangelogEntry[] = [
               en: 'Stabilized audio attachment ordering within comments',
             },
             description: {
-              'zh-CN': '评论内附件的编号顺序已稳定化，[1]、[2] 等时间戳引用不再因上传顺序或页面刷新而发生偏移。',
-              en: 'The numbering order of attachments within comments is now stable, and references such as [1] or [2] in timestamp syntax will no longer shift due to upload order or page refreshes.',
+              'zh-CN': '评论内附件的编号顺序已稳定化，a1:、a2: 等带索引的附件时间戳引用不再因上传顺序或页面刷新而发生偏移。',
+              en: 'The numbering order of attachments within comments is now stable, and indexed attachment timestamp references such as a1: or a2: will no longer shift due to upload order or page refreshes.',
             },
           },
         ],
