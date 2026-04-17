@@ -115,7 +115,9 @@
   },
   "discussionPanel": {
     "deleteTitle": "删除讨论",
-    "deleteConfirm": "确认删除这条讨论？此操作不可撤销。"
+    "deleteConfirm": "确认删除这条讨论？此操作不可撤销。",
+    "loadEarlier": "加载更早的讨论",
+    "loadingEarlier": "加载中…"
   },
   "severity": {
     "critical": "严重",

@@ -28,6 +28,8 @@ const props = defineProps<{
   enableAudio?: boolean
   issues?: Issue[] | null
   enableReferencePopover?: boolean
+  hasMore?: boolean
+  loadingOlder?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -41,6 +43,7 @@ const emit = defineEmits<{
   openImage: [url: string]
   openIssue: [issueId: number]
   retry: []
+  loadOlder: []
   'update:editingContent': [value: string]
 }>()
 
@@ -94,6 +97,16 @@ function confirmDelete() {
       {{ emptyText }}
     </div>
     <div v-else class="space-y-3">
+      <div v-if="hasMore" class="flex justify-center pb-1">
+        <button
+          type="button"
+          class="btn-secondary text-xs px-3 py-1.5"
+          :disabled="loadingOlder"
+          @click="emit('loadOlder')"
+        >
+          {{ loadingOlder ? $t('discussionPanel.loadingEarlier') : $t('discussionPanel.loadEarlier') }}
+        </button>
+      </div>
       <div v-for="d in discussions" :key="d.id" class="flex gap-3 py-3 border-b border-border last:border-0">
         <div
           class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"

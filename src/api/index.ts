@@ -641,8 +641,17 @@ export const checklistApi = {
 }
 
 export const discussionApi = {
-  list: (trackId: number, phase?: string) => {
-    const query = phase ? `?phase=${encodeURIComponent(phase)}` : ''
+  list: (
+    trackId: number,
+    phase?: string,
+    opts?: { beforeId?: number; limit?: number },
+  ) => {
+    const params = new URLSearchParams()
+    if (phase) params.set('phase', phase)
+    if (opts?.beforeId !== undefined) params.set('before_id', String(opts.beforeId))
+    if (opts?.limit !== undefined) params.set('limit', String(opts.limit))
+    const qs = params.toString()
+    const query = qs ? `?${qs}` : ''
     return request<Discussion[]>(`/tracks/${trackId}/discussions${query}`)
   },
   create: (trackId: number, data: { content: string; phase?: string; images?: File[]; audios?: File[] }, onProgress?: (percent: number) => void) => {

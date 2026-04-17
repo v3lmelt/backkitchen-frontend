@@ -115,7 +115,9 @@
   },
   "discussionPanel": {
     "deleteTitle": "Delete Discussion",
-    "deleteConfirm": "Delete this discussion? This action cannot be undone."
+    "deleteConfirm": "Delete this discussion? This action cannot be undone.",
+    "loadEarlier": "Load earlier discussions",
+    "loadingEarlier": "Loading…"
   },
   "severity": {
     "critical": "Critical",

@@ -61,7 +61,7 @@ const masteringNotesForm = ref('')
 const savingMasteringNotes = ref(false)
 const masteringNotesExpanded = ref(false)
 const chatSidebarRef = ref<InstanceType<typeof MasteringChatSidebar> | null>(null)
-const masteringDiscussion = useDiscussions(trackId, 'mastering')
+const masteringDiscussion = useDiscussions(trackId, 'mastering', { paginated: true })
 
 // Tabs
 type MasteringTabKey = 'discussion' | 'listen' | 'issues' | 'delivery'
@@ -406,6 +406,7 @@ const { connected: wsConnected } = useTrackWebSocket(trackId.value, async () => 
 }, {
   onDiscussionEvent: (event, discussionId) => {
     chatSidebarRef.value?.handleDiscussionEvent(event, discussionId)
+    masteringDiscussion.applyRealtimeEvent(event, discussionId)
   },
 })
 
@@ -414,6 +415,7 @@ watch(wsConnected, (val) => {
 })
 
 onMounted(loadData)
+onMounted(() => { masteringDiscussion.load() })
 onMounted(() => {
   window.addEventListener('keydown', handleWaveformHotkeys)
 })
@@ -441,7 +443,6 @@ async function loadData() {
       (issue: Issue) => issue.workflow_cycle === detail.track.workflow_cycle,
     )
     syncIssueDrawerFromRoute()
-    masteringDiscussion.discussions.value = (detail.discussions ?? []).filter(d => d.phase === 'mastering')
     try {
       reviewAssignments.value = await trackApi.listAssignments(trackId.value)
     } catch {
@@ -450,7 +451,6 @@ async function loadData() {
   } catch {
     trackStore.setCurrentTrack(null)
     loadError.value = true
-    masteringDiscussion.discussions.value = []
   } finally {
     loading.value = false
   }
@@ -1054,6 +1054,8 @@ watch(olderMasterDeliveries, (deliveries) => {
           :loading="masteringDiscussion.loading.value"
           :load-error="masteringDiscussion.loadError.value"
           :enable-audio="true"
+          :has-more="masteringDiscussion.hasMore.value"
+          :loading-older="masteringDiscussion.loadingOlder.value"
           @submit="masteringDiscussion.submit"
           @start-edit="masteringDiscussion.startEdit"
           @save-edit="masteringDiscussion.saveEdit"
@@ -1064,6 +1066,7 @@ watch(olderMasterDeliveries, (deliveries) => {
           @open-image="masteringDiscussion.openImage"
           @open-issue="openLinkedIssue"
           @retry="masteringDiscussion.load"
+          @load-older="masteringDiscussion.loadOlder"
           @update:editing-content="masteringDiscussion.editingContent.value = $event"
         />
       </div>
