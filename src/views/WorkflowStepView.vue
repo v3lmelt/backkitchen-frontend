@@ -494,9 +494,7 @@ async function loadPage() {
     issues.value = detail.issues.filter(
       issue => issue.workflow_cycle === detail.track.workflow_cycle,
     )
-    if (selectedIssue.value) {
-      selectedIssue.value = issues.value.find(issue => issue.id === selectedIssue.value?.id) ?? null
-    }
+    syncIssueDrawerFromRoute()
     checklistItems.value = detail.checklist_items
     try {
       reviewAssignments.value = await trackApi.listAssignments(trackId.value)
@@ -541,6 +539,10 @@ watch(isSourceCompareActive, (active) => {
   if (!active) return
   issueFormRef.value?.closeForm?.()
   hoveredIssueId.value = null
+})
+
+watch(() => route.query.issue, () => {
+  syncIssueDrawerFromRoute()
 })
 
 function toggleSourceCompare() {
@@ -588,17 +590,56 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
   downloadAudioAsset(url, `${track.value?.title ?? 'track'}_master_v${delivery.delivery_number}${historySuffix}`, delivery.file_path)
 }
 
+function parseIssueQuery(value: unknown): number | null {
+  const raw = Array.isArray(value) ? value[0] : value
+  const issueId = Number(raw)
+  return Number.isInteger(issueId) && issueId > 0 ? issueId : null
+}
+
+function buildRouteQueryWithoutIssue(): Record<string, string> {
+  const query: Record<string, string> = {}
+  for (const [key, value] of Object.entries(route.query)) {
+    if (key === 'issue') continue
+    if (typeof value === 'string' && value.length > 0) query[key] = value
+    else if (Array.isArray(value) && typeof value[0] === 'string' && value[0].length > 0) query[key] = value[0]
+  }
+  return query
+}
+
+function replaceIssueDrawerQuery(issueId: number | null) {
+  const query = buildRouteQueryWithoutIssue()
+  if (issueId != null) query.issue = String(issueId)
+  void router.replace({
+    path: route.path,
+    query: Object.keys(query).length > 0 ? query : undefined,
+  })
+}
+
+function syncIssueDrawerFromRoute() {
+  const issueId = parseIssueQuery(route.query.issue)
+  if (issueId == null) {
+    selectedIssue.value = null
+    return
+  }
+  selectedIssue.value = issues.value.find(issue => issue.id === issueId) ?? null
+}
 
 function onIssueSelect(issue: Issue) {
-  router.push(`/issues/${issue.id}`)
+  openIssueDrawer(issue)
 }
 
 function openIssueDrawer(issue: Issue) {
   selectedIssue.value = issue
+  if (parseIssueQuery(route.query.issue) !== issue.id) {
+    replaceIssueDrawerQuery(issue.id)
+  }
 }
 
 function closeIssueDrawer() {
   selectedIssue.value = null
+  if (parseIssueQuery(route.query.issue) != null) {
+    replaceIssueDrawerQuery(null)
+  }
 }
 
 function onIssueUpdated(updatedIssue: Issue) {
@@ -1345,10 +1386,15 @@ function handleIssueLeave() {
             :selected-ids="selectedStageIssueIds"
             :current-source-version-number="displayedSourceVersionNumber"
             :hovered-issue-id="hoveredIssueId"
+            :track="track"
+            :assignments="reviewAssignments"
+            :show-activity="true"
+            :enable-quick-actions="true"
             @select="onIssueSelect"
             @update:selectedIds="selectedStageIssueIds = $event"
             @hover="handleIssueHover"
             @leave="handleIssueLeave"
+            @status-change="onQuickIssueStatusChange"
           />
         </div>
 
@@ -1497,9 +1543,14 @@ function handleIssueLeave() {
         :issues="producerWaveformIssues"
         :current-source-version-number="displayedSourceVersionNumber"
         :hovered-issue-id="hoveredIssueId"
+        :track="track"
+        :assignments="reviewAssignments"
+        :show-activity="true"
+        :enable-quick-actions="true"
         @select="onIssueSelect"
         @hover="handleIssueHover"
         @leave="handleIssueLeave"
+        @status-change="onQuickIssueStatusChange"
       />
 
       <div v-if="checklistItems.length > 0" class="card">
@@ -1593,13 +1644,6 @@ function handleIssueLeave() {
 
         <div v-else class="text-sm text-muted-foreground">{{ t('producer.noPeerIssues') }}</div>
 
-        <IssueDetailPanel
-          :issue="selectedIssue"
-          :track="track"
-          :assignments="reviewAssignments"
-          @close="closeIssueDrawer"
-          @updated="onIssueUpdated"
-        />
       </div>
 
       <div class="card space-y-4">
@@ -1765,10 +1809,15 @@ function handleIssueLeave() {
             :selected-ids="selectedStageIssueIds"
             :current-source-version-number="displayedSourceVersionNumber"
             :hovered-issue-id="hoveredIssueId"
+            :track="track"
+            :assignments="reviewAssignments"
+            :show-activity="true"
+            :enable-quick-actions="true"
             @select="onIssueSelect"
             @update:selectedIds="selectedStageIssueIds = $event"
             @hover="handleIssueHover"
             @leave="handleIssueLeave"
+            @status-change="onQuickIssueStatusChange"
           />
         </div>
 
@@ -2019,10 +2068,15 @@ function handleIssueLeave() {
             :selectable="true"
             :selected-ids="selectedStageIssueIds"
             :hovered-issue-id="hoveredIssueId"
+            :track="track"
+            :assignments="reviewAssignments"
+            :show-activity="true"
+            :enable-quick-actions="true"
             @select="onIssueSelect"
             @update:selectedIds="selectedStageIssueIds = $event"
             @hover="handleIssueHover"
             @leave="handleIssueLeave"
+            @status-change="onQuickIssueStatusChange"
           />
         </div>
 
@@ -2161,8 +2215,13 @@ function handleIssueLeave() {
           :selectable="true"
           :selected-ids="selectedStageIssueIds"
           :current-source-version-number="displayedSourceVersionNumber"
+          :track="track"
+          :assignments="reviewAssignments"
+          :show-activity="true"
+          :enable-quick-actions="true"
           @select="onIssueSelect"
           @update:selectedIds="selectedStageIssueIds = $event"
+          @status-change="onQuickIssueStatusChange"
         />
       </div>
 
@@ -2232,8 +2291,13 @@ function handleIssueLeave() {
           :selectable="true"
           :selected-ids="selectedStageIssueIds"
           :current-source-version-number="displayedSourceVersionNumber"
+          :track="track"
+          :assignments="reviewAssignments"
+          :show-activity="true"
+          :enable-quick-actions="true"
           @select="onIssueSelect"
           @update:selectedIds="selectedStageIssueIds = $event"
+          @status-change="onQuickIssueStatusChange"
         />
       </div>
 
@@ -2387,13 +2451,6 @@ function handleIssueLeave() {
         <p class="text-sm text-muted-foreground">{{ t('workflowStep.waitingForRevisionDesc') }}</p>
       </div>
 
-      <IssueDetailPanel
-        :issue="selectedIssue"
-        :track="track"
-        :assignments="reviewAssignments"
-        @close="closeIssueDrawer"
-        @updated="onIssueUpdated"
-      />
     </template>
 
     <template v-if="currentStep.type === 'delivery'">
@@ -2487,6 +2544,14 @@ function handleIssueLeave() {
       <WorkflowActionBar v-if="deliveryActions.length" :actions="deliveryActions" :hint="t('common.actions')" />
     </template>
   </div>
+
+  <IssueDetailPanel
+    :issue="selectedIssue"
+    :track="track"
+    :assignments="reviewAssignments"
+    @close="closeIssueDrawer"
+    @updated="onIssueUpdated"
+  />
 
   <MasteringChatSidebar
     v-if="canSeeMasteringSidebar && track"

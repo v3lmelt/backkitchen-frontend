@@ -1,5 +1,5 @@
 import type { ComposerTranslation } from 'vue-i18n'
-import type { WorkflowEvent } from '@/types'
+import type { Track, WorkflowEvent, WorkflowStepDef } from '@/types'
 
 /**
  * Step IDs that ship with the default workflow config and have matching
@@ -22,6 +22,50 @@ const DEFAULT_STEP_IDS = new Set([
 interface StepLike {
   id: string
   label: string
+}
+
+interface TrackWorkspaceRouteOptions {
+  returnTo?: string | null
+  issueId?: number | null
+}
+
+type TrackWorkspaceLike = Pick<Track, 'id' | 'status' | 'workflow_step'>
+
+function buildTrackWorkspaceQuery(options: TrackWorkspaceRouteOptions): Record<string, string> | undefined {
+  const query: Record<string, string> = {}
+  if (options.returnTo) query.returnTo = options.returnTo
+  if (options.issueId != null) query.issue = String(options.issueId)
+  return Object.keys(query).length > 0 ? query : undefined
+}
+
+function resolveTrackWorkspaceStepId(track: TrackWorkspaceLike): string | null {
+  if (track.workflow_step?.id) return track.workflow_step.id
+  if (track.status === 'completed' || track.status === 'rejected') return null
+  return track.status
+}
+
+export function buildTrackWorkspaceRouteById(
+  trackId: number,
+  step: Pick<WorkflowStepDef, 'id'> | null | undefined,
+  options: TrackWorkspaceRouteOptions = {},
+) {
+  const path = step?.id
+    ? `/tracks/${trackId}/step/${step.id}`
+    : `/tracks/${trackId}`
+  const query = buildTrackWorkspaceQuery(options)
+  return query ? { path, query } : { path }
+}
+
+export function buildTrackWorkspaceRoute(
+  track: TrackWorkspaceLike,
+  options: TrackWorkspaceRouteOptions = {},
+) {
+  const stepId = resolveTrackWorkspaceStepId(track)
+  return buildTrackWorkspaceRouteById(
+    track.id,
+    stepId ? { id: stepId } : null,
+    options,
+  )
 }
 
 /**

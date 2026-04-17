@@ -2,11 +2,12 @@
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { trackApi } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useTrackStore } from '@/stores/tracks'
 import type { Notification } from '@/types'
 import { formatRelativeTime } from '@/utils/time'
-import { translateStepLabel } from '@/utils/workflow'
+import { buildTrackWorkspaceRoute, buildTrackWorkspaceRouteById, translateStepLabel } from '@/utils/workflow'
 import { Menu, Bell } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -39,10 +40,29 @@ onBeforeUnmount(() => document.removeEventListener('click', handleOutsideClick))
 async function handleNotificationClick(notif: Notification) {
   await appStore.markNotificationRead(notif.id)
   showNotifications.value = false
+  if (notif.related_track_id) {
+    const issueId = notif.related_issue_id ?? null
+    const current = trackStore.currentTrack?.id === notif.related_track_id
+      ? trackStore.currentTrack
+      : null
+    if (current) {
+      router.push(buildTrackWorkspaceRoute(current, { returnTo: route.fullPath, issueId }))
+      return
+    }
+
+    try {
+      const detail = await trackApi.get(notif.related_track_id)
+      trackStore.setCurrentTrack(detail.track)
+      router.push(buildTrackWorkspaceRoute(detail.track, { returnTo: route.fullPath, issueId }))
+      return
+    } catch {
+      router.push(buildTrackWorkspaceRouteById(notif.related_track_id, null, { returnTo: route.fullPath, issueId }))
+      return
+    }
+  }
+
   if (notif.related_issue_id) {
     router.push(`/issues/${notif.related_issue_id}`)
-  } else if (notif.related_track_id) {
-    router.push({ path: `/tracks/${notif.related_track_id}`, query: { returnTo: route.path } })
   } else if (notif.related_album_id) {
     router.push(`/albums/${notif.related_album_id}/settings`)
   }
