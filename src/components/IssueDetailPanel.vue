@@ -11,6 +11,7 @@ import TimestampText from '@/components/common/TimestampText.vue'
 import CommentInput from '@/components/common/CommentInput.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import IssuePlaybackPreview from '@/components/issue/IssuePlaybackPreview.vue'
+import type { PreviewAction } from '@/composables/useIssuePreviewPlayback'
 import { formatTimestamp, formatDuration, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import { resolveAttachmentReferenceIndex, type IssueReference, type TimeReference, type TimestampTarget } from '@/utils/timestamps'
@@ -25,8 +26,9 @@ const props = defineProps<{
   preview?: {
     duration: number
     currentTime: number
-    isPlaying: boolean
-    isActive: boolean
+    isPreviewPlaying: boolean
+    activeMarkerIndex: number | null
+    peaks: number[]
   } | null
 }>()
 
@@ -34,8 +36,7 @@ const emit = defineEmits<{
   close: []
   updated: [issue: Issue]
   'preview-play-at': [time: number]
-  'preview-seek-at': [time: number]
-  'preview-toggle': [issue: Issue]
+  'preview-action': [issue: Issue, action: PreviewAction]
   'open-issue': [issueId: number]
 }>()
 
@@ -439,11 +440,10 @@ async function confirmDeleteComment() {
             :issue="previewIssue"
             :duration="preview.duration"
             :current-time="preview.currentTime"
-            :is-playing="preview.isPlaying"
-            :is-active="preview.isActive"
-            @preview="emit('preview-play-at', $event)"
-            @seek="emit('preview-seek-at', $event)"
-            @toggle="emit('preview-toggle', previewIssue)"
+            :is-preview-playing="preview.isPreviewPlaying"
+            :active-marker-index="preview.activeMarkerIndex"
+            :peaks="preview.peaks"
+            @action="emit('preview-action', previewIssue, $event)"
           />
 
           <div v-if="fullIssue.audios?.length" class="space-y-2">

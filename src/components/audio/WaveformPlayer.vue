@@ -1166,6 +1166,25 @@ function getCurrentTime() {
   return activeCurrentTime.value
 }
 
+function exportPeaks(maxLength = 400): number[] {
+  const ws = wavesurfer.value
+  if (!ws) return []
+  try {
+    const result = (ws as unknown as { exportPeaks: (opts: { channels?: number; maxLength?: number; precision?: number }) => number[][] })
+      .exportPeaks({ channels: 1, maxLength, precision: 10000 })
+    const channel = result?.[0]
+    if (!channel?.length) return []
+    const out = new Array<number>(channel.length)
+    for (let i = 0; i < channel.length; i++) {
+      const v = channel[i]
+      out[i] = Math.max(0, Math.min(1, Math.abs(v)))
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
 onBeforeUnmount(() => {
   disconnectGraph('primary')
   disconnectGraph('compare')
@@ -1174,7 +1193,7 @@ onBeforeUnmount(() => {
   void audioContext.value?.close()
 })
 
-defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTime })
+defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTime, exportPeaks })
 </script>
 
 <template>

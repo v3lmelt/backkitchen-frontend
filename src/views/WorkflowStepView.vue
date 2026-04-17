@@ -33,6 +33,7 @@ import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
 import { ChevronLeft, Upload } from 'lucide-vue-next'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useDiscussions } from '@/composables/useDiscussions'
+import { useIssuePreviewPlayback, type PreviewAction } from '@/composables/useIssuePreviewPlayback'
 import { useToast } from '@/composables/useToast'
 import { useAppStore } from '@/stores/app'
 import { useTrackStore } from '@/stores/tracks'
@@ -90,6 +91,7 @@ const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
 const waveformDuration = ref(0)
 const waveformCurrentTime = ref(0)
 const waveformIsPlaying = ref(false)
+const waveformPeaks = ref<number[]>([])
 const hoveredIssueId = ref<number | null>(null)
 const selectedIssue = ref<Issue | null>(null)
 const selectedStageIssueIds = ref<number[]>([])
@@ -657,6 +659,9 @@ function closeIssueDrawer() {
 
 function onWaveformReady(nextDuration: number) {
   waveformDuration.value = nextDuration
+  nextTick(() => {
+    waveformPeaks.value = waveformRef.value?.exportPeaks?.(400) ?? []
+  })
 }
 
 function onWaveformTimeUpdate(time: number) {
@@ -667,31 +672,21 @@ function onWaveformPlaybackStateChange(isPlaying: boolean) {
   waveformIsPlaying.value = isPlaying
 }
 
-function issuePreviewWindow(issue: Issue | null): { start: number; end: number } | null {
-  if (!issue?.markers.length) return null
-  const start = Math.min(...issue.markers.map(marker => marker.time_start))
-  const end = Math.max(...issue.markers.map(marker => marker.time_end ?? marker.time_start + 0.75))
-  return { start, end }
-}
-
-function issuePreviewStart(issue: Issue | null): number | null {
-  return issuePreviewWindow(issue)?.start ?? null
-}
-
-function isIssuePreviewActive(issue: Issue | null): boolean {
-  const window = issuePreviewWindow(issue)
-  if (!window) return false
-  return waveformCurrentTime.value >= Math.max(0, window.start - 0.1)
-    && waveformCurrentTime.value <= window.end + 0.1
-}
+const issuePreviewPlayback = useIssuePreviewPlayback({
+  selectedIssue,
+  waveformFor: () => waveformRef.value,
+  currentTimeFor: () => waveformCurrentTime.value,
+  isPlayingFor: () => waveformIsPlaying.value,
+})
 
 const selectedIssuePreview = computed(() => {
   if (!selectedIssue.value || waveformDuration.value <= 0) return null
   return {
     duration: waveformDuration.value,
     currentTime: waveformCurrentTime.value,
-    isPlaying: waveformIsPlaying.value,
-    isActive: isIssuePreviewActive(selectedIssue.value),
+    isPreviewPlaying: issuePreviewPlayback.isPreviewPlaying.value,
+    activeMarkerIndex: issuePreviewPlayback.activeMarkerIndex.value,
+    peaks: waveformPeaks.value,
   }
 })
 
@@ -718,18 +713,8 @@ async function handleIssuePreviewPlayAt(time: number) {
   await waveformRef.value?.playFrom?.(time)
 }
 
-function handleIssuePreviewSeekAt(time: number) {
-  waveformRef.value?.seekTo?.(time)
-}
-
-async function handleIssuePreviewToggle(issue: Issue) {
-  const start = issuePreviewStart(issue)
-  if (start == null) return
-  if (isIssuePreviewActive(issue)) {
-    await waveformRef.value?.togglePlay?.()
-    return
-  }
-  await waveformRef.value?.playFrom?.(start)
+function handleIssuePreviewAction(_issue: Issue, action: PreviewAction) {
+  void issuePreviewPlayback.handleAction(action)
 }
 
 function canCurrentUserChangeIssueStatus(issue: Issue): boolean {
@@ -2677,8 +2662,7 @@ function handleIssueLeave() {
     @updated="onIssueUpdated"
     @open-issue="openLinkedIssue"
     @preview-play-at="handleIssuePreviewPlayAt"
-    @preview-seek-at="handleIssuePreviewSeekAt"
-    @preview-toggle="handleIssuePreviewToggle"
+    @preview-action="handleIssuePreviewAction"
   />
 
   <MasteringChatSidebar

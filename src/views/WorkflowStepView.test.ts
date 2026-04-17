@@ -133,13 +133,13 @@ vi.mock('@/components/IssueCreatePanel.vue', () => ({
 vi.mock('@/components/IssueDetailPanel.vue', () => ({
   default: {
     props: ['issue', 'preview'],
-    emits: ['close', 'updated', 'preview-play-at', 'preview-seek-at', 'preview-toggle'],
+    emits: ['close', 'updated', 'preview-play-at', 'preview-action'],
     template: `
       <div v-if="issue" class="peer-issue-drawer">
-        {{ issue.title }}|{{ issue.status }}|preview:{{ preview?.duration ?? 0 }}|active:{{ preview?.isActive ? '1' : '0' }}
+        {{ issue.title }}|{{ issue.status }}|preview:{{ preview?.duration ?? 0 }}|playing:{{ preview?.isPreviewPlaying ? '1' : '0' }}|marker:{{ preview?.activeMarkerIndex ?? '-' }}
         <button class="drawer-preview-play" @click="$emit('preview-play-at', 21.5)">preview play</button>
-        <button class="drawer-preview-seek" @click="$emit('preview-seek-at', 18.25)">preview seek</button>
-        <button class="drawer-preview-toggle" @click="$emit('preview-toggle', issue)">preview toggle</button>
+        <button class="drawer-preview-seek" @click="$emit('preview-action', issue, { type: 'seek', time: 18.25 })">preview seek</button>
+        <button class="drawer-preview-toggle" @click="$emit('preview-action', issue, { type: 'playSequence' })">preview toggle</button>
       </div>
     `,
   },
@@ -785,13 +785,14 @@ describe('WorkflowStepView', () => {
     await flushPromises()
 
     expect(wrapper.find('.peer-issue-drawer').text()).toContain('preview:95')
-    expect(wrapper.find('.peer-issue-drawer').text()).toContain('active:1')
+    expect(wrapper.find('.peer-issue-drawer').text()).toContain('playing:0')
+    expect(wrapper.find('.peer-issue-drawer').text()).toContain('marker:-')
 
     await wrapper.find('.drawer-preview-toggle').trigger('click')
-    expect(mocks.waveformTogglePlayMock).toHaveBeenCalledTimes(1)
+    expect(mocks.waveformPlayFromMock).toHaveBeenNthCalledWith(1, 12.5)
 
     await wrapper.find('.drawer-preview-play').trigger('click')
-    expect(mocks.waveformPlayFromMock).toHaveBeenCalledWith(21.5)
+    expect(mocks.waveformPlayFromMock).toHaveBeenNthCalledWith(2, 21.5)
 
     await wrapper.find('.drawer-preview-seek').trigger('click')
     expect(mocks.waveformSeekToMock).toHaveBeenCalledWith(18.25)
