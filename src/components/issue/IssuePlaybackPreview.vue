@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Pause, Play, SkipBack, SkipForward } from 'lucide-vue-next'
 import type { Issue } from '@/types'
@@ -20,6 +20,9 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const timelineRef = ref<HTMLElement | null>(null)
+const isScrubbing = ref(false)
+let activePointerId: number | null = null
 
 interface PreviewMarker {
   key: string
@@ -60,23 +63,51 @@ function seekRelative(delta: number) {
   emitSeek(props.currentTime + delta)
 }
 
-function handleTimelineClick(event: MouseEvent) {
-  const timeline = event.currentTarget as HTMLElement | null
+function seekFromClientX(clientX: number) {
+  const timeline = timelineRef.value
   if (!timeline || props.duration <= 0) return
 
   const { left, width } = timeline.getBoundingClientRect()
   if (width <= 0) return
 
-  const ratio = clampPercent(((event.clientX - left) / width) * 100) / 100
+  const ratio = clampPercent(((clientX - left) / width) * 100) / 100
   emitSeek(props.duration * ratio)
 }
 
-function onSeekInput(event: Event) {
-  const target = event.target as HTMLInputElement | null
-  if (!target) return
+function removeScrubListeners() {
+  window.removeEventListener('pointermove', handleWindowPointerMove)
+  window.removeEventListener('pointerup', handleWindowPointerEnd)
+  window.removeEventListener('pointercancel', handleWindowPointerEnd)
+}
 
-  const value = Number(target.value)
-  if (Number.isFinite(value)) emitSeek(value)
+function stopScrub(pointerId?: number) {
+  if (pointerId != null && pointerId !== activePointerId) return
+  isScrubbing.value = false
+  activePointerId = null
+  removeScrubListeners()
+}
+
+function handleWindowPointerMove(event: PointerEvent) {
+  if (!isScrubbing.value || event.pointerId !== activePointerId) return
+  seekFromClientX(event.clientX)
+}
+
+function handleWindowPointerEnd(event: PointerEvent) {
+  stopScrub(event.pointerId)
+}
+
+function beginScrub(event: PointerEvent) {
+  if (props.duration <= 0) return
+  if (event.pointerType === 'mouse' && event.button !== 0) return
+
+  activePointerId = event.pointerId
+  isScrubbing.value = true
+  seekFromClientX(event.clientX)
+
+  removeScrubListeners()
+  window.addEventListener('pointermove', handleWindowPointerMove)
+  window.addEventListener('pointerup', handleWindowPointerEnd)
+  window.addEventListener('pointercancel', handleWindowPointerEnd)
 }
 
 const previewMarkers = computed<PreviewMarker[]>(() =>
@@ -101,13 +132,15 @@ const playheadLeft = computed(() => {
   return `${clampPercent((props.currentTime / props.duration) * 100)}%`
 })
 
-const scrubberValue = computed(() => clampTime(props.currentTime))
-
 const primaryActionLabel = computed(() =>
   props.isActive && props.isPlaying
     ? t('issueDetail.previewPause')
     : t('issueDetail.previewPlay'),
 )
+
+onBeforeUnmount(() => {
+  stopScrub()
+})
 </script>
 
 <template>
@@ -119,41 +152,33 @@ const primaryActionLabel = computed(() =>
 
     <div class="space-y-2">
       <div
-        class="issue-preview-timeline relative h-16 cursor-pointer overflow-hidden rounded-none border border-border bg-card/70 touch-manipulation"
-        @click="handleTimelineClick"
+        ref="timelineRef"
+        class="issue-preview-timeline relative h-16 cursor-pointer select-none overflow-hidden rounded-none border border-border bg-card/70 touch-manipulation"
+        @pointerdown.prevent="beginScrub"
       >
-        <div class="absolute inset-x-3 top-1/2 h-1 -translate-y-1/2 rounded-full bg-border/80"></div>
-        <button
+        <div class="pointer-events-none absolute inset-x-3 top-1/2 h-1 -translate-y-1/2 rounded-full bg-border/80"></div>
+        <div
           v-for="marker in previewMarkers"
           :key="marker.key"
-          type="button"
-          class="issue-preview-marker absolute top-3 bottom-3 transition-colors"
+          class="issue-preview-marker pointer-events-none absolute top-3 bottom-3 transition-colors"
           :class="marker.isRange
             ? 'rounded-none border border-primary/45 bg-primary/15 hover:border-primary hover:bg-primary/20'
             : 'w-2 -translate-x-1/2 rounded-full border border-primary/60 bg-primary/80 hover:bg-primary'"
           :style="marker.isRange ? { left: marker.left, width: marker.width } : { left: marker.left }"
           :title="marker.label"
-          @click.stop="emit('preview', marker.start)"
         />
         <div
-          class="issue-preview-playhead absolute top-2 bottom-2 w-px bg-success transition-all"
+          class="issue-preview-playhead pointer-events-none absolute top-2 bottom-2 w-px bg-success transition-all"
+          :style="{ left: playheadLeft }"
+        />
+        <div
+          class="issue-preview-playhead-handle pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-success bg-background transition-all"
           :style="{ left: playheadLeft }"
         />
       </div>
 
-      <input
-        class="issue-preview-slider h-2 w-full cursor-pointer accent-primary"
-        type="range"
-        min="0"
-        :max="duration"
-        step="0.1"
-        :value="scrubberValue"
-        :aria-label="t('issueDetail.previewSeek')"
-        @input="onSeekInput"
-      />
-
       <div class="flex items-center justify-between text-[11px] font-mono text-muted-foreground">
-        <span>{{ formatTimestampShort(scrubberValue) }}</span>
+        <span>{{ formatTimestampShort(currentTime) }}</span>
         <span>{{ formatTimestampShort(duration) }}</span>
       </div>
     </div>
@@ -194,7 +219,7 @@ const primaryActionLabel = computed(() =>
       </div>
 
       <span class="text-[11px] font-mono text-muted-foreground">
-        {{ formatTimestampShort(scrubberValue) }} / {{ formatTimestampShort(duration) }}
+        {{ formatTimestampShort(currentTime) }} / {{ formatTimestampShort(duration) }}
       </span>
     </div>
 

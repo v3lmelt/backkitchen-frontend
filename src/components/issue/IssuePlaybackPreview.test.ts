@@ -5,7 +5,33 @@ import { mountWithPlugins } from '@/tests/utils'
 import IssuePlaybackPreview from './IssuePlaybackPreview.vue'
 
 describe('IssuePlaybackPreview', () => {
-  it('emits transport and seek controls for the drawer preview', async () => {
+  function createPointerEvent(type: string, init: Record<string, unknown>) {
+    if (typeof window.PointerEvent === 'function') {
+      return new window.PointerEvent(type, init as PointerEventInit)
+    }
+
+    const event = new Event(type)
+    Object.assign(event, init)
+    return event
+  }
+
+  function mockTimelineRect(element: Element) {
+    Object.defineProperty(element, 'getBoundingClientRect', {
+      value: () => ({
+        left: 20,
+        width: 200,
+        top: 0,
+        right: 220,
+        bottom: 40,
+        height: 40,
+        x: 20,
+        y: 0,
+        toJSON: () => ({}),
+      }),
+    })
+  }
+
+  it('emits transport controls and supports scrubbing on the main preview timeline', async () => {
     const wrapper = mountWithPlugins(IssuePlaybackPreview, {
       props: {
         issue: {
@@ -22,23 +48,41 @@ describe('IssuePlaybackPreview', () => {
       },
     })
 
+    const timeline = wrapper.get('.issue-preview-timeline')
+    mockTimelineRect(timeline.element)
+
     await wrapper.get('.issue-preview-back').trigger('click')
     await wrapper.get('.issue-preview-toggle').trigger('click')
     await wrapper.get('.issue-preview-forward').trigger('click')
-    await wrapper.get('.issue-preview-slider').setValue(33.3)
+    await timeline.trigger('pointerdown', {
+      clientX: 40,
+      button: 0,
+      pointerId: 1,
+      pointerType: 'mouse',
+    })
+    window.dispatchEvent(createPointerEvent('pointermove', {
+      clientX: 120,
+      pointerId: 1,
+      pointerType: 'mouse',
+    }))
+    window.dispatchEvent(createPointerEvent('pointerup', {
+      clientX: 120,
+      pointerId: 1,
+      pointerType: 'mouse',
+    }))
     await wrapper.get('.issue-preview-marker-chip').trigger('click')
 
-    expect(wrapper.emitted('seek')).toEqual([[7.5], [17.5], [33.3]])
+    expect(wrapper.emitted('seek')).toEqual([[7.5], [17.5], [9], [45]])
     expect(wrapper.emitted('toggle')).toEqual([[]])
     expect(wrapper.emitted('preview')).toEqual([[12.5]])
   })
 
-  it('seeks when the mini timeline itself is clicked', async () => {
+  it('seeks when the mini timeline itself is pressed, including over marker ranges', async () => {
     const wrapper = mountWithPlugins(IssuePlaybackPreview, {
       props: {
         issue: {
           id: 62,
-          markers: [{ id: 503, issue_id: 62, marker_type: 'point', time_start: 10, time_end: null }],
+          markers: [{ id: 503, issue_id: 62, marker_type: 'range', time_start: 10, time_end: 28 }],
         },
         duration: 80,
         currentTime: 10,
@@ -48,22 +92,14 @@ describe('IssuePlaybackPreview', () => {
     })
 
     const timeline = wrapper.get('.issue-preview-timeline')
-    Object.defineProperty(timeline.element, 'getBoundingClientRect', {
-      value: () => ({
-        left: 20,
-        width: 200,
-        top: 0,
-        right: 220,
-        bottom: 40,
-        height: 40,
-        x: 20,
-        y: 0,
-        toJSON: () => ({}),
-      }),
+    mockTimelineRect(timeline.element)
+    await timeline.trigger('pointerdown', {
+      clientX: 80,
+      button: 0,
+      pointerId: 3,
+      pointerType: 'mouse',
     })
 
-    await timeline.trigger('click', { clientX: 120 })
-
-    expect(wrapper.emitted('seek')).toEqual([[40]])
+    expect(wrapper.emitted('seek')).toEqual([[24]])
   })
 })
