@@ -10,6 +10,7 @@ import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import TimestampText from '@/components/common/TimestampText.vue'
 import CommentInput from '@/components/common/CommentInput.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
+import IssuePlaybackPreview from '@/components/issue/IssuePlaybackPreview.vue'
 import { formatTimestamp, formatDuration, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import { resolveAttachmentReferenceIndex, type TimeReference, type TimestampTarget } from '@/utils/timestamps'
@@ -20,11 +21,19 @@ const props = defineProps<{
   issue: Issue | null
   track?: import('@/types').Track | null
   assignments?: StageAssignment[]
+  preview?: {
+    duration: number
+    currentTime: number
+    isPlaying: boolean
+    isActive: boolean
+  } | null
 }>()
 
 const emit = defineEmits<{
   close: []
   updated: [issue: Issue]
+  'preview-play-at': [time: number]
+  'preview-toggle': [issue: Issue]
 }>()
 
 const { t, locale } = useI18n()
@@ -98,6 +107,15 @@ const shouldHideInternalComments = computed(() =>
 )
 
 const commentSortOrder = ref<'desc' | 'asc'>('desc')
+const previewIssue = computed(() => fullIssue.value ?? props.issue)
+const hasPlaybackPreview = computed(() =>
+  Boolean(
+    previewIssue.value
+    && props.preview
+    && props.preview.duration > 0
+    && previewIssue.value.markers.length > 0,
+  ),
+)
 
 const visibleComments = computed(() => {
   const filtered = (fullIssue.value?.comments ?? []).filter(
@@ -378,6 +396,17 @@ async function confirmDeleteComment() {
             :interactive="false"
           />
           <p v-else class="text-sm text-muted-foreground italic">{{ t('issueDetail.noDescription') }}</p>
+
+          <IssuePlaybackPreview
+            v-if="hasPlaybackPreview && previewIssue && preview"
+            :issue="previewIssue"
+            :duration="preview.duration"
+            :current-time="preview.currentTime"
+            :is-playing="preview.isPlaying"
+            :is-active="preview.isActive"
+            @preview="emit('preview-play-at', $event)"
+            @toggle="emit('preview-toggle', previewIssue)"
+          />
 
           <div v-if="fullIssue.audios?.length" class="space-y-2">
             <p class="text-xs font-mono font-semibold text-muted-foreground">{{ t('issue.audioAttachments') }}</p>

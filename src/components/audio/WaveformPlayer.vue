@@ -41,6 +41,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   ready: [duration: number]
   timeupdate: [time: number]
+  playbackStateChange: [isPlaying: boolean]
   'update:gainDb': [gainDb: number]
   click: [time: number]
   regionClick: [issue: Issue]
@@ -890,8 +891,14 @@ onMounted(async () => {
     // rather than continuously here, to avoid seekTo() stutter on the B track.
   })
 
-  ws.on('play', () => { isPlaying.value = true })
-  ws.on('pause', () => { isPlaying.value = false })
+  ws.on('play', () => {
+    isPlaying.value = true
+    emit('playbackStateChange', true)
+  })
+  ws.on('pause', () => {
+    isPlaying.value = false
+    emit('playbackStateChange', false)
+  })
   ws.on('error', (err: unknown) => {
     isPrimaryLoading.value = false
     console.error('WaveformPlayer: wavesurfer primary error', err)

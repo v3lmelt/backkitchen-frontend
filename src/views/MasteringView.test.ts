@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   setCurrentTrackMock: vi.fn(),
   downloadTrackAudioMock: vi.fn(),
   downloadAudioAssetMock: vi.fn(),
+  waveformPlayFromMock: vi.fn(),
+  waveformTogglePlayMock: vi.fn(),
   currentUser: { id: 2 },
 }))
 
@@ -64,6 +66,16 @@ vi.mock('@/stores/tracks', () => ({
 
 vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
   default: {
+    emits: ['ready', 'timeupdate', 'playbackStateChange'],
+    mounted(this: any) {
+      this.$emit('ready', 95)
+      this.$emit('timeupdate', 12.5)
+      this.$emit('playbackStateChange', false)
+    },
+    methods: {
+      playFrom: mocks.waveformPlayFromMock,
+      togglePlay: mocks.waveformTogglePlayMock,
+    },
     template: '<div class="waveform" />',
   },
 }))
@@ -71,7 +83,20 @@ vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
 vi.mock('@/components/audio/IssueMarkerList.vue', () => ({
   default: {
     props: ['issues'],
-    template: '<div class="issue-list">{{ issues.length }}</div>',
+    emits: ['select'],
+    template: `
+      <div>
+        <div class="issue-list">{{ issues.length }}</div>
+        <button
+          v-for="issue in issues"
+          :key="issue.id"
+          class="issue-list-item"
+          @click="$emit('select', issue)"
+        >
+          {{ issue.title }}
+        </button>
+      </div>
+    `,
   },
 }))
 
@@ -83,9 +108,15 @@ vi.mock('@/components/IssueCreatePanel.vue', () => ({
 
 vi.mock('@/components/IssueDetailPanel.vue', () => ({
   default: {
-    props: ['issue'],
-    emits: ['close', 'updated'],
-    template: '<div v-if="issue" class="issue-drawer">{{ issue.title }}|{{ issue.status }}</div>',
+    props: ['issue', 'preview'],
+    emits: ['close', 'updated', 'preview-play-at', 'preview-toggle'],
+    template: `
+      <div v-if="issue" class="issue-drawer">
+        {{ issue.title }}|{{ issue.status }}|preview:{{ preview?.duration ?? 0 }}|active:{{ preview?.isActive ? '1' : '0' }}
+        <button class="drawer-preview-play" @click="$emit('preview-play-at', 18.25)">preview play</button>
+        <button class="drawer-preview-toggle" @click="$emit('preview-toggle', issue)">preview toggle</button>
+      </div>
+    `,
   },
 }))
 
@@ -285,6 +316,8 @@ describe('MasteringView', () => {
     mocks.setCurrentTrackMock.mockReset()
     mocks.downloadTrackAudioMock.mockReset()
     mocks.downloadAudioAssetMock.mockReset()
+    mocks.waveformPlayFromMock.mockReset()
+    mocks.waveformTogglePlayMock.mockReset()
     mocks.currentUser.id = 2
     mocks.listAssignmentsMock.mockResolvedValue([])
     mocks.trackGetMock.mockResolvedValue(makeTrackDetail())
@@ -417,6 +450,90 @@ describe('MasteringView', () => {
 
     expect(wrapper.text()).toContain('Approve Delivery')
     expect(wrapper.text()).not.toContain('Confirm My Upload')
+  })
+
+  it('lets the drawer audition final-review issues through the master waveform on the listen tab', async () => {
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
+      track: {
+        status: 'final_review',
+        workflow_step: {
+          id: 'final_review',
+          label: 'Final Review',
+          type: 'approval',
+          ui_variant: 'final_review',
+          assignee_role: 'producer',
+          order: 1,
+          transitions: { reject_to_mastering: 'mastering' },
+        },
+        workflow_transitions: [{ decision: 'reject_to_mastering', label: 'Return to Mastering' }],
+        current_master_delivery: {
+          id: 21,
+          workflow_cycle: 1,
+          delivery_number: 1,
+          file_path: '/master.wav',
+          uploaded_by_id: 2,
+          confirmed_at: '2024-01-02T12:00:00Z',
+          producer_approved_at: null,
+          submitter_approved_at: null,
+          created_at: '2024-01-02T00:00:00Z',
+        },
+      },
+      issues: [
+        {
+          id: 81,
+          track_id: 9,
+          author_id: 8,
+          phase: 'final_review',
+          workflow_cycle: 1,
+          source_version_id: 11,
+          source_version_number: 1,
+          master_delivery_id: 21,
+          title: 'Trim the outro',
+          description: 'The outro can end a touch earlier.',
+          severity: 'minor',
+          status: 'open',
+          markers: [
+            { id: 701, issue_id: 81, marker_type: 'point', time_start: 12.5, time_end: null },
+          ],
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-02T00:00:00Z',
+          comment_count: 0,
+        },
+      ],
+      master_deliveries: [
+        {
+          id: 21,
+          workflow_cycle: 1,
+          delivery_number: 1,
+          file_path: '/master.wav',
+          uploaded_by_id: 2,
+          confirmed_at: '2024-01-02T12:00:00Z',
+          producer_approved_at: null,
+          submitter_approved_at: null,
+          created_at: '2024-01-02T00:00:00Z',
+        },
+      ],
+    }))
+
+    const wrapper = mountWithPlugins(MasteringView)
+    await flushPromises()
+
+    const listenTab = wrapper.findAll('button').find(button => button.text() === 'Listen')
+    expect(listenTab).toBeTruthy()
+    await listenTab!.trigger('click')
+    await flushPromises()
+
+    await wrapper.find('.issue-list-item').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.issue-drawer').text()).toContain('preview:95')
+    expect(wrapper.find('.issue-drawer').text()).toContain('active:1')
+
+    await wrapper.find('.drawer-preview-toggle').trigger('click')
+    expect(mocks.waveformTogglePlayMock).toHaveBeenCalledTimes(1)
+
+    await wrapper.find('.drawer-preview-play').trigger('click')
+    expect(mocks.waveformPlayFromMock).toHaveBeenCalledWith(18.25)
   })
 
   it('allows a submitter-assigned delivery step to confirm and upload from the mastering page', async () => {
