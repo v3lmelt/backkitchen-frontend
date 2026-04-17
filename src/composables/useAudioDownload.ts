@@ -2,7 +2,7 @@ import { ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import type { Track } from '@/types'
-import { resolveAudioUrl } from '@/utils/url'
+import { loadAudioCached } from '@/utils/audioCache'
 
 export function useAudioDownload() {
   const { t } = useI18n()
@@ -14,39 +14,18 @@ export function useAudioDownload() {
     downloading.value = true
     downloadProgress.value = 0
     try {
-      const resolved = await resolveAudioUrl(url)
-      const res = await fetch(resolved)
-      if (!res.ok) {
-        toastError(t('common.downloadFailed'))
-        return
-      }
-
-      const contentLength = res.headers.get('Content-Length')
-      const total = contentLength ? parseInt(contentLength, 10) : 0
-
-      if (!total || !res.body) {
-        // Fallback: no Content-Length or no ReadableStream support
-        const blob = await res.blob()
-        downloadProgress.value = 100
-        triggerDownload(blob, filename)
-        return
-      }
-
-      const reader = res.body.getReader()
-      const chunks: Uint8Array[] = []
-      let received = 0
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        chunks.push(value)
-        received += value.length
-        downloadProgress.value = Math.min(Math.round((received / total) * 100), 99)
-      }
-
-      const blob = new Blob(chunks as unknown as BlobPart[])
+      // Route through the shared audio cache so downloads reuse bytes that
+      // playback has already fetched (and vice versa).  `loadAudioCached`
+      // handles URL resolution, streaming progress, and persistence.
+      const blobUrl = await loadAudioCached(url, (percent) => {
+        downloadProgress.value = Math.min(Math.max(percent, 0), 99)
+      })
+      const res = await fetch(blobUrl)
+      const blob = await res.blob()
       downloadProgress.value = 100
       triggerDownload(blob, filename)
+    } catch {
+      toastError(t('common.downloadFailed'))
     } finally {
       downloading.value = false
     }
