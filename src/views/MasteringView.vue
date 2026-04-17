@@ -203,6 +203,53 @@ const canApproveFinal = computed(() => {
   return false
 })
 
+function resolveStepAssigneeUserId(stepTrack: Track, step = stepTrack.workflow_step): number | null {
+  if (!step) return null
+  if (step.assignee_user_id != null) return step.assignee_user_id
+  switch (step.assignee_role) {
+    case 'submitter':
+      return stepTrack.submitter_id ?? null
+    case 'producer':
+      return stepTrack.producer_id ?? null
+    case 'peer_reviewer':
+      return stepTrack.peer_reviewer_id ?? null
+    case 'mastering_engineer':
+      return stepTrack.mastering_engineer_id ?? null
+    default:
+      return null
+  }
+}
+
+function canCurrentUserContinueInMasteringWorkspace(nextTrack: Track): boolean {
+  const step = nextTrack.workflow_step
+  const userId = appStore.currentUser?.id
+  if (!step || !userId) return false
+
+  const isMasteringStep = step.ui_variant === 'mastering' || step.id === 'mastering'
+  if (isMasteringStep && step.type === 'delivery') {
+    return resolveStepAssigneeUserId(nextTrack, step) === userId
+  }
+
+  const isFinalReview = step.ui_variant === 'final_review' || step.id === 'final_review'
+  if (!isFinalReview || step.type !== 'approval') return false
+
+  const delivery = nextTrack.current_master_delivery
+  if (!delivery?.confirmed_at) return false
+  if (userId === nextTrack.producer_id) return !delivery.producer_approved_at
+  if (userId === nextTrack.submitter_id) return !delivery.submitter_approved_at
+  return false
+}
+
+function shouldStayOnMasteringWorkspace(previousStatus: string, nextTrack: Track): boolean {
+  if (nextTrack.status === previousStatus) return true
+  if (nextTrack.status === 'completed' || nextTrack.status === 'rejected') return false
+  return canCurrentUserContinueInMasteringWorkspace(nextTrack)
+}
+
+function pushToTrackDetail() {
+  router.push(`/tracks/${trackId.value}`)
+}
+
 // Source audio
 const audioUrl = computed(() =>
   track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio?v=${track.value.version ?? 0}` : '',
@@ -450,11 +497,13 @@ function resetDeliveryPreview() {
 
 async function handleUploadDelivery() {
   if (!uploadFile.value || !track.value) return
+  const previousStatus = track.value.status
   uploading.value = true
   uploadProgress.value = 0
   uploadError.value = ''
   try {
     const file = uploadFile.value
+    let updatedTrack: Track
     if (appStore.r2Enabled) {
       const [presigned, duration] = await Promise.all([
         r2Api.requestMasterDeliveryUpload(trackId.value, {
@@ -467,19 +516,24 @@ async function handleUploadDelivery() {
       await uploadToR2(presigned.upload_url, file, file.type || 'application/octet-stream', (p) => {
         uploadProgress.value = p
       })
-      await r2Api.confirmMasterDeliveryUpload(trackId.value, {
+      updatedTrack = await r2Api.confirmMasterDeliveryUpload(trackId.value, {
         upload_id: presigned.upload_id,
         object_key: presigned.object_key,
         duration,
       })
     } else {
-      await trackApi.uploadMasterDelivery(trackId.value, file, (p) => {
+      updatedTrack = await trackApi.uploadMasterDelivery(trackId.value, file, (p) => {
         uploadProgress.value = p
       })
     }
     uploadFile.value = null
     resetDeliveryPreview()
     toastSuccess(t('workflowStep.deliveryUploaded'))
+    if (!shouldStayOnMasteringWorkspace(previousStatus, updatedTrack)) {
+      pushToTrackDetail()
+      return
+    }
+    track.value = updatedTrack
     await loadData()
   } catch (err: any) {
     uploadError.value = err.message || t('workflowStep.uploadFailed')
@@ -491,8 +545,14 @@ async function handleUploadDelivery() {
 // Approve final
 async function handleApproveFinal() {
   if (!track.value) return
+  const previousStatus = track.value.status
   try {
     const updated = await trackApi.approveFinalReview(track.value.id)
+    if (!shouldStayOnMasteringWorkspace(previousStatus, updated)) {
+      toastSuccess(t('masteringPage.approved'))
+      pushToTrackDetail()
+      return
+    }
     track.value = updated
     await loadData()
     toastSuccess(t('masteringPage.approved'))
@@ -503,9 +563,15 @@ async function handleApproveFinal() {
 
 // Confirm delivery
 async function handleConfirmDelivery() {
-  if (!track.value?.current_master_delivery) return
+  if (!track.value?.current_master_delivery || !track.value) return
+  const previousStatus = track.value.status
   try {
     const updated = await trackApi.confirmDelivery(track.value.id, track.value.current_master_delivery.id)
+    if (!shouldStayOnMasteringWorkspace(previousStatus, updated)) {
+      toastSuccess(t('masteringPage.deliveryConfirmed'))
+      pushToTrackDetail()
+      return
+    }
     track.value = updated
     await loadData()
     toastSuccess(t('masteringPage.deliveryConfirmed'))
@@ -537,7 +603,7 @@ async function executeTransition(decision: string) {
       await loadData()
       return
     }
-    router.push(`/tracks/${trackId.value}`)
+    pushToTrackDetail()
   } catch (err: any) {
     actionError.value = err.message || t('workflowStep.transitionFailed')
   } finally {

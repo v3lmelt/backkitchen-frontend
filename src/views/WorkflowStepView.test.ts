@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   workflowTransitionMock: vi.fn(),
   approveFinalReviewMock: vi.fn(),
   confirmDeliveryMock: vi.fn(),
+  uploadSourceVersionMock: vi.fn(),
+  uploadMasterDeliveryMock: vi.fn(),
   checklistGetTemplateMock: vi.fn(),
   checklistSubmitMock: vi.fn(),
   downloadTrackAudioMock: vi.fn(),
@@ -51,7 +53,16 @@ vi.mock('@/api', () => ({
     workflowTransition: mocks.workflowTransitionMock,
     approveFinalReview: mocks.approveFinalReviewMock,
     confirmDelivery: mocks.confirmDeliveryMock,
+    uploadSourceVersion: mocks.uploadSourceVersionMock,
+    uploadMasterDelivery: mocks.uploadMasterDeliveryMock,
   },
+  r2Api: {
+    requestSourceVersionUpload: vi.fn(),
+    confirmSourceVersionUpload: vi.fn(),
+    requestMasterDeliveryUpload: vi.fn(),
+    confirmMasterDeliveryUpload: vi.fn(),
+  },
+  uploadToR2: vi.fn(),
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -189,6 +200,8 @@ describe('WorkflowStepView', () => {
     mocks.workflowTransitionMock.mockReset()
     mocks.approveFinalReviewMock.mockReset()
     mocks.confirmDeliveryMock.mockReset()
+    mocks.uploadSourceVersionMock.mockReset()
+    mocks.uploadMasterDeliveryMock.mockReset()
     mocks.checklistGetTemplateMock.mockReset()
     mocks.checklistSubmitMock.mockReset()
     mocks.downloadTrackAudioMock.mockReset()
@@ -200,6 +213,8 @@ describe('WorkflowStepView', () => {
     mocks.issueUpdateMock.mockImplementation(async (id: number, data: { status?: string }) => ({ id, status: data.status ?? 'open' }))
     mocks.approveFinalReviewMock.mockResolvedValue({})
     mocks.confirmDeliveryMock.mockResolvedValue({})
+    mocks.uploadSourceVersionMock.mockResolvedValue({})
+    mocks.uploadMasterDeliveryMock.mockResolvedValue({})
     mocks.checklistSubmitMock.mockResolvedValue([])
   })
 
@@ -1086,5 +1101,201 @@ describe('WorkflowStepView', () => {
 
     expect(wrapper.find('.peer-issue-drawer').text()).toContain('Loosen the limiter|open')
     expect(mocks.pushMock).not.toHaveBeenCalled()
+  })
+
+  it('returns to track detail after a revision upload advances to the next step', async () => {
+    mocks.route = {
+      params: { id: '9', stepId: 'peer_revision' },
+      query: {},
+      path: '/tracks/9/step/peer_revision',
+      fullPath: '/tracks/9/step/peer_revision',
+    }
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Revision Track',
+        artist: 'Nova',
+        album_id: 3,
+        status: 'peer_revision',
+        workflow_variant: 'standard',
+        version: 2,
+        workflow_cycle: 1,
+        file_path: '/audio.wav',
+        duration: null,
+        bpm: null,
+        original_title: null,
+        original_artist: null,
+        author_notes: null,
+        mastering_notes: null,
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-02T00:00:00Z',
+        archived_at: null,
+        submitter_id: 1,
+        peer_reviewer_id: 4,
+        producer_id: 8,
+        mastering_engineer_id: 12,
+        allowed_actions: ['upload_revision'],
+        is_public: false,
+        workflow_step: {
+          id: 'peer_revision',
+          label: 'Peer Revision',
+          type: 'revision',
+          assignee_role: 'submitter',
+          order: 2,
+          transitions: {},
+          return_to: 'peer_review',
+        },
+        workflow_transitions: [],
+        current_source_version: {
+          id: 22,
+          workflow_cycle: 1,
+          version_number: 2,
+          file_path: '/audio.wav',
+          duration: null,
+          uploaded_by_id: 1,
+          revision_notes: null,
+          created_at: '2024-01-02T00:00:00Z',
+        },
+      },
+      issues: [],
+      checklist_items: [],
+      source_versions: [],
+      master_deliveries: [],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'peer_review', label: 'Peer Review', type: 'review', assignee_role: 'peer_reviewer', order: 1, transitions: {} },
+          { id: 'peer_revision', label: 'Peer Revision', type: 'revision', assignee_role: 'submitter', order: 2, transitions: {}, return_to: 'peer_review' },
+        ],
+      },
+    })
+    mocks.uploadSourceVersionMock.mockResolvedValue({
+      id: 9,
+      status: 'peer_review',
+      workflow_step: {
+        id: 'peer_review',
+        label: 'Peer Review',
+        type: 'review',
+        assignee_role: 'peer_reviewer',
+        order: 1,
+        transitions: {},
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    const fileInput = wrapper.find('input[type="file"]')
+    const file = new File(['audio'], 'revision.wav', { type: 'audio/wav' })
+    Object.defineProperty(fileInput.element, 'files', { value: [file] })
+    await fileInput.trigger('change')
+    await flushPromises()
+
+    await wrapper.findAll('button').find(button => button.text().includes('Upload Revision'))!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.uploadSourceVersionMock).toHaveBeenCalledWith(9, file, undefined, expect.any(Function))
+    expect(mocks.pushMock).toHaveBeenCalledWith({
+      path: '/tracks/9',
+      query: { returnTo: '/tracks/9/step/peer_revision' },
+    })
+  })
+
+  it('returns to track detail after a delivery upload advances beyond the current workspace', async () => {
+    mocks.route = {
+      params: { id: '9', stepId: 'delivery_custom' },
+      query: {},
+      path: '/tracks/9/step/delivery_custom',
+      fullPath: '/tracks/9/step/delivery_custom',
+    }
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Delivery Track',
+        artist: 'Nova',
+        album_id: 3,
+        status: 'delivery_custom',
+        workflow_variant: 'standard',
+        version: 2,
+        workflow_cycle: 1,
+        file_path: '/audio.wav',
+        duration: null,
+        bpm: null,
+        original_title: null,
+        original_artist: null,
+        author_notes: null,
+        mastering_notes: null,
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-02T00:00:00Z',
+        archived_at: null,
+        submitter_id: 1,
+        peer_reviewer_id: null,
+        producer_id: 8,
+        mastering_engineer_id: 12,
+        allowed_actions: ['deliver'],
+        is_public: false,
+        workflow_step: {
+          id: 'delivery_custom',
+          label: 'Custom Delivery',
+          type: 'delivery',
+          assignee_role: 'submitter',
+          order: 4,
+          transitions: { deliver: 'qc_review' },
+          require_confirmation: false,
+        },
+        workflow_transitions: [{ decision: 'deliver', label: 'Deliver' }],
+        current_source_version: {
+          id: 22,
+          workflow_cycle: 1,
+          version_number: 2,
+          file_path: '/audio.wav',
+          duration: null,
+          uploaded_by_id: 1,
+          revision_notes: null,
+          created_at: '2024-01-02T00:00:00Z',
+        },
+      },
+      issues: [],
+      checklist_items: [],
+      source_versions: [],
+      master_deliveries: [],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'delivery_custom', label: 'Custom Delivery', type: 'delivery', assignee_role: 'submitter', order: 4, transitions: { deliver: 'qc_review' }, require_confirmation: false },
+          { id: 'qc_review', label: 'QC Review', type: 'approval', assignee_role: 'producer', order: 5, transitions: {} },
+        ],
+      },
+    })
+    mocks.uploadMasterDeliveryMock.mockResolvedValue({
+      id: 9,
+      status: 'qc_review',
+      workflow_step: {
+        id: 'qc_review',
+        label: 'QC Review',
+        type: 'approval',
+        assignee_role: 'producer',
+        order: 5,
+        transitions: {},
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    const fileInput = wrapper.find('input[type="file"]')
+    const file = new File(['audio'], 'delivery.wav', { type: 'audio/wav' })
+    Object.defineProperty(fileInput.element, 'files', { value: [file] })
+    await fileInput.trigger('change')
+    await flushPromises()
+
+    await wrapper.findAll('button').find(button => button.text().includes('Confirm Upload'))!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.uploadMasterDeliveryMock).toHaveBeenCalledWith(9, file, expect.any(Function))
+    expect(mocks.pushMock).toHaveBeenCalledWith({
+      path: '/tracks/9',
+      query: { returnTo: '/tracks/9/step/delivery_custom' },
+    })
   })
 })
