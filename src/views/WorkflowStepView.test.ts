@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   downloadTrackAudioMock: vi.fn(),
   downloadAudioAssetMock: vi.fn(),
   waveformPlayFromMock: vi.fn(),
+  waveformSeekToMock: vi.fn(),
   waveformTogglePlayMock: vi.fn(),
   appStore: {
     currentUser: { id: 1 },
@@ -77,6 +78,7 @@ vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
     },
     methods: {
       playFrom: mocks.waveformPlayFromMock,
+      seekTo: mocks.waveformSeekToMock,
       togglePlay: mocks.waveformTogglePlayMock,
     },
     template: '<div class="waveform">compare:{{ compareVersionId ?? "none" }}</div>',
@@ -120,11 +122,12 @@ vi.mock('@/components/IssueCreatePanel.vue', () => ({
 vi.mock('@/components/IssueDetailPanel.vue', () => ({
   default: {
     props: ['issue', 'preview'],
-    emits: ['close', 'updated', 'preview-play-at', 'preview-toggle'],
+    emits: ['close', 'updated', 'preview-play-at', 'preview-seek-at', 'preview-toggle'],
     template: `
       <div v-if="issue" class="peer-issue-drawer">
         {{ issue.title }}|{{ issue.status }}|preview:{{ preview?.duration ?? 0 }}|active:{{ preview?.isActive ? '1' : '0' }}
         <button class="drawer-preview-play" @click="$emit('preview-play-at', 21.5)">preview play</button>
+        <button class="drawer-preview-seek" @click="$emit('preview-seek-at', 18.25)">preview seek</button>
         <button class="drawer-preview-toggle" @click="$emit('preview-toggle', issue)">preview toggle</button>
       </div>
     `,
@@ -194,6 +197,7 @@ describe('WorkflowStepView', () => {
     mocks.downloadTrackAudioMock.mockReset()
     mocks.downloadAudioAssetMock.mockReset()
     mocks.waveformPlayFromMock.mockReset()
+    mocks.waveformSeekToMock.mockReset()
     mocks.waveformTogglePlayMock.mockReset()
     mocks.workflowTransitionMock.mockResolvedValue({})
     mocks.listAssignmentsMock.mockResolvedValue([])
@@ -773,6 +777,9 @@ describe('WorkflowStepView', () => {
 
     await wrapper.find('.drawer-preview-play').trigger('click')
     expect(mocks.waveformPlayFromMock).toHaveBeenCalledWith(21.5)
+
+    await wrapper.find('.drawer-preview-seek').trigger('click')
+    expect(mocks.waveformSeekToMock).toHaveBeenCalledWith(18.25)
   })
 
   it('enables source compare on producer gate too', async () => {

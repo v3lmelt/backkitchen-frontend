@@ -33,6 +33,7 @@ const emit = defineEmits<{
   close: []
   updated: [issue: Issue]
   'preview-play-at': [time: number]
+  'preview-seek-at': [time: number]
   'preview-toggle': [issue: Issue]
 }>()
 
@@ -405,6 +406,7 @@ async function confirmDeleteComment() {
             :is-playing="preview.isPlaying"
             :is-active="preview.isActive"
             @preview="emit('preview-play-at', $event)"
+            @seek="emit('preview-seek-at', $event)"
             @toggle="emit('preview-toggle', previewIssue)"
           />
 

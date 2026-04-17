@@ -708,6 +708,10 @@ async function handleIssuePreviewPlayAt(time: number) {
   await waveformRef.value?.playFrom?.(time)
 }
 
+function handleIssuePreviewSeekAt(time: number) {
+  waveformRef.value?.seekTo?.(time)
+}
+
 async function handleIssuePreviewToggle(issue: Issue) {
   const start = issuePreviewStart(issue)
   if (start == null) return
@@ -2649,6 +2653,7 @@ function handleIssueLeave() {
     @close="closeIssueDrawer"
     @updated="onIssueUpdated"
     @preview-play-at="handleIssuePreviewPlayAt"
+    @preview-seek-at="handleIssuePreviewSeekAt"
     @preview-toggle="handleIssuePreviewToggle"
   />
 
