@@ -84,16 +84,17 @@ async function handleSubmit(payload: { content: string; images: File[]; audios: 
 async function handleDiscussionEvent(event: string, discussionId: number) {
   if (event === 'created') {
     if (mastering.discussions.value.some(d => d.id === discussionId)) return
-    await mastering.load()
-    if (open.value) {
-      scrollToBottom()
-    } else {
-      unreadCount.value++
+    const prevLen = mastering.discussions.value.length
+    await mastering.applyRealtimeEvent(event, discussionId)
+    if (mastering.discussions.value.length > prevLen) {
+      if (open.value) {
+        scrollToBottom()
+      } else {
+        unreadCount.value++
+      }
     }
-  } else if (event === 'updated') {
-    await mastering.load()
-  } else if (event === 'deleted') {
-    mastering.discussions.value = mastering.discussions.value.filter(d => d.id !== discussionId)
+  } else {
+    await mastering.applyRealtimeEvent(event, discussionId)
   }
 }
 
