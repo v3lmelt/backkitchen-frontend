@@ -158,13 +158,6 @@ vi.mock('@/components/common/DiscussionPanel.vue', () => ({
   },
 }))
 
-vi.mock('@/components/mastering/MasteringCommunicationCard.vue', () => ({
-  default: {
-    props: ['ctaLabel'],
-    template: '<div class="mastering-communication-card">{{ ctaLabel }}</div>',
-  },
-}))
-
 vi.mock('@/components/chat/MasteringChatSidebar.vue', () => ({
   default: {
     methods: {
