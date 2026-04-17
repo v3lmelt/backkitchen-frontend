@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 
 const mocks = vi.hoisted(() => ({
+  loadAudioCachedMock: vi.fn(),
   fetchMock: vi.fn(),
-  resolveAudioUrlMock: vi.fn(),
   toastErrorMock: vi.fn(),
 }))
 
@@ -19,8 +19,8 @@ vi.mock('@/composables/useToast', () => ({
   }),
 }))
 
-vi.mock('@/utils/url', () => ({
-  resolveAudioUrl: mocks.resolveAudioUrlMock,
+vi.mock('@/utils/audioCache', () => ({
+  loadAudioCached: mocks.loadAudioCachedMock,
 }))
 
 import { useAudioDownload } from './useAudioDownload'
@@ -28,8 +28,8 @@ import { useAudioDownload } from './useAudioDownload'
 describe('useAudioDownload', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', mocks.fetchMock)
+    mocks.loadAudioCachedMock.mockReset()
     mocks.fetchMock.mockReset()
-    mocks.resolveAudioUrlMock.mockReset()
     mocks.toastErrorMock.mockReset()
     vi.mocked(URL.createObjectURL).mockClear()
     vi.mocked(URL.revokeObjectURL).mockClear()
@@ -39,11 +39,36 @@ describe('useAudioDownload', () => {
     vi.unstubAllGlobals()
   })
 
-  it('shows a toast when audio url resolution fails', async () => {
-    mocks.resolveAudioUrlMock.mockRejectedValue(new Error('boom'))
+  it('routes through loadAudioCached and triggers a browser download', async () => {
+    mocks.loadAudioCachedMock.mockImplementation(async (_url: string, onProgress?: (p: number) => void) => {
+      onProgress?.(50)
+      onProgress?.(100)
+      return 'blob:mock-url'
+    })
+    const downloadBlob = new Blob(['audio-bytes'], { type: 'audio/wav' })
+    mocks.fetchMock.mockResolvedValue({ ok: true, blob: async () => downloadBlob })
+
+    const { downloadAudioAsset, downloading, downloadProgress } = useAudioDownload()
+    downloadAudioAsset('/api/tracks/1/audio?v=1', 'track', 'demo.wav')
+
+    await flushPromises()
+
+    expect(mocks.loadAudioCachedMock).toHaveBeenCalledWith(
+      '/api/tracks/1/audio?v=1',
+      expect.any(Function),
+    )
+    expect(mocks.fetchMock).toHaveBeenCalledWith('blob:mock-url')
+    expect(URL.createObjectURL).toHaveBeenCalledWith(downloadBlob)
+    expect(downloading.value).toBe(false)
+    expect(downloadProgress.value).toBe(100)
+    expect(mocks.toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('shows a toast when loadAudioCached rejects', async () => {
+    mocks.loadAudioCachedMock.mockRejectedValue(new Error('boom'))
 
     const { downloadAudioAsset, downloading } = useAudioDownload()
-    downloadAudioAsset('/api/tracks/1/audio', 'track', 'demo.wav')
+    downloadAudioAsset('/api/tracks/1/audio?v=1', 'track', 'demo.wav')
 
     await flushPromises()
 
@@ -52,21 +77,27 @@ describe('useAudioDownload', () => {
     expect(URL.createObjectURL).not.toHaveBeenCalled()
   })
 
-  it('shows a toast when fetch throws before the blob is downloaded', async () => {
-    mocks.resolveAudioUrlMock.mockResolvedValue('/api/tracks/1/audio?token=token-1')
-    mocks.fetchMock.mockRejectedValue(new Error('network down'))
+  it('caps progress at 99 while fetching, then sets it to 100 on completion', async () => {
+    const progressSnapshots: number[] = []
+    mocks.loadAudioCachedMock.mockImplementation(async (_url: string, onProgress?: (p: number) => void) => {
+      onProgress?.(42)
+      progressSnapshots.push(progressBefore())
+      onProgress?.(100)
+      progressSnapshots.push(progressBefore())
+      return 'blob:mock-url'
+    })
+    mocks.fetchMock.mockResolvedValue({ ok: true, blob: async () => new Blob(['x']) })
 
-    const { downloadTrackAudio, downloading } = useAudioDownload()
-    downloadTrackAudio(
-      { value: '/api/tracks/1/audio' } as any,
-      { value: { title: 'Demo', file_path: 'demo.wav' } } as any,
-    )
+    const { downloadAudioAsset, downloadProgress } = useAudioDownload()
+    function progressBefore() {
+      return downloadProgress.value
+    }
 
+    downloadAudioAsset('/api/tracks/1/audio?v=1', 'track', 'demo.wav')
     await flushPromises()
 
-    expect(mocks.fetchMock).toHaveBeenCalledWith('/api/tracks/1/audio?token=token-1')
-    expect(mocks.toastErrorMock).toHaveBeenCalledWith('common.downloadFailed')
-    expect(downloading.value).toBe(false)
-    expect(URL.createObjectURL).not.toHaveBeenCalled()
+    // While streaming: capped at 99. After completion: 100.
+    expect(progressSnapshots).toEqual([42, 99])
+    expect(downloadProgress.value).toBe(100)
   })
 })

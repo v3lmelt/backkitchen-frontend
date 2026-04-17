@@ -20,7 +20,13 @@ import { resolveAudioUrl } from './url'
 
 const MAX_MEMORY_ENTRIES = 8
 const PERSISTENT_CACHE_NAME = 'backkitchen-audio-v1'
-const MAX_PERSISTENT_ENTRIES = 16
+/**
+ * Soft budget for the persistent cache.  Chosen to keep a handful of large
+ * (50–150 MB) WAV masters around without risking browser quota on typical
+ * laptops.  Entries are evicted FIFO (Cache API keys() preserve insertion
+ * order) until the total fits under this limit.
+ */
+const MAX_PERSISTENT_BYTES = 1.5 * 1024 * 1024 * 1024
 
 interface CacheEntry {
   blob: Blob
@@ -33,6 +39,35 @@ const _cache = new Map<string, CacheEntry>()
 
 /** In-flight fetch promises — prevents duplicate concurrent fetches for the same key. */
 const _pending = new Map<string, Promise<string>>()
+
+/**
+ * Strip auth tokens so callers that accidentally pass an authed URL still
+ * hit the same cache entry as the canonical form.  Also keeps playback and
+ * download paths sharing the same cache key even if one of them forgets.
+ */
+function _normalizeKey(url: string): string {
+  const qIndex = url.indexOf('?')
+  if (qIndex === -1) return url
+  const params = new URLSearchParams(url.slice(qIndex + 1))
+  if (!params.has('token')) return url
+  if (import.meta.env?.DEV) {
+    console.warn('[audioCache] rawUrl contained `token` query param; stripping for cache key')
+  }
+  params.delete('token')
+  const cleaned = params.toString()
+  return cleaned ? `${url.slice(0, qIndex)}?${cleaned}` : url.slice(0, qIndex)
+}
+
+function _warnIfUnversioned(key: string): void {
+  if (!import.meta.env?.DEV) return
+  const qIndex = key.indexOf('?')
+  const params = new URLSearchParams(qIndex === -1 ? '' : key.slice(qIndex + 1))
+  if (!params.has('v') && !params.has('c')) {
+    console.warn(
+      `[audioCache] URL "${key}" lacks version query params (v / c); cached copy may become stale after re-uploads`,
+    )
+  }
+}
 
 function _evictMemoryIfNeeded() {
   while (_cache.size > MAX_MEMORY_ENTRIES) {
@@ -61,23 +96,49 @@ async function _openPersistentCache(): Promise<Cache | null> {
   }
 }
 
-async function _evictPersistentIfNeeded(cache: Cache) {
+async function _evictPersistentToFit(cache: Cache, incomingBytes: number): Promise<void> {
   try {
     const keys = await cache.keys()
-    if (keys.length <= MAX_PERSISTENT_ENTRIES) return
-    // FIFO eviction — Cache API keys() returns entries in insertion order
-    const toRemove = keys.length - MAX_PERSISTENT_ENTRIES
-    for (let i = 0; i < toRemove; i++) {
-      await cache.delete(keys[i])
+    const entries: Array<{ key: Request; size: number }> = []
+    for (const key of keys) {
+      const resp = await cache.match(key)
+      const len = resp?.headers.get('content-length')
+      entries.push({ key, size: len ? parseInt(len, 10) || 0 : 0 })
+    }
+    let total = entries.reduce((sum, e) => sum + e.size, 0) + incomingBytes
+    for (const entry of entries) {
+      if (total <= MAX_PERSISTENT_BYTES) break
+      await cache.delete(entry.key)
+      total -= entry.size
     }
   } catch {
-    // Ignore eviction errors
+    // Ignore eviction errors — worst case we simply skip this put
   }
 }
 
-function _storeInMemory(rawUrl: string, blob: Blob): string {
+async function _persistBlob(cache: Cache, key: string, blob: Blob): Promise<void> {
+  try {
+    await _evictPersistentToFit(cache, blob.size)
+    const response = new Response(blob, {
+      headers: {
+        'Content-Type': blob.type || 'audio/mpeg',
+        'Content-Length': String(blob.size),
+      },
+    })
+    await cache.put(new Request(key), response)
+  } catch (err: unknown) {
+    // Quota can still trip even after eviction (other origins, stale stats).
+    // Wipe the namespace so in-memory playback keeps working without
+    // repeatedly hammering the failing put.
+    if ((err as { name?: string } | null)?.name === 'QuotaExceededError') {
+      try { await caches.delete(PERSISTENT_CACHE_NAME) } catch { /* ignore */ }
+    }
+  }
+}
+
+function _storeInMemory(key: string, blob: Blob): string {
   const objectUrl = URL.createObjectURL(blob)
-  _cache.set(rawUrl, { blob, objectUrl, lastAccess: Date.now() })
+  _cache.set(key, { blob, objectUrl, lastAccess: Date.now() })
   _evictMemoryIfNeeded()
   return objectUrl
 }
@@ -89,6 +150,9 @@ function _storeInMemory(rawUrl: string, blob: Blob): string {
  * On cache hit (memory or persistent) the network is skipped entirely.
  *
  * @param rawUrl  The unresolved audio URL (as passed via the audioUrl prop).
+ *                Callers should pass the bare versioned endpoint without a
+ *                `token` param; tokens are stripped from the cache key (with
+ *                a dev-mode warning) so entries stay stable across sessions.
  * @param onProgress  Optional callback receiving download percentage (0–100).
  */
 export async function loadAudioCached(
@@ -98,8 +162,11 @@ export async function loadAudioCached(
   // Blob URLs are already local — pass through
   if (rawUrl.startsWith('blob:')) return rawUrl
 
+  const key = _normalizeKey(rawUrl)
+  _warnIfUnversioned(key)
+
   // Layer 1: in-memory cache hit
-  const cached = _cache.get(rawUrl)
+  const cached = _cache.get(key)
   if (cached) {
     cached.lastAccess = Date.now()
     onProgress?.(100)
@@ -107,7 +174,7 @@ export async function loadAudioCached(
   }
 
   // De-duplicate concurrent fetches for the same URL
-  const inflight = _pending.get(rawUrl)
+  const inflight = _pending.get(key)
   if (inflight) return inflight
 
   const promise = (async () => {
@@ -115,11 +182,11 @@ export async function loadAudioCached(
     const persistentCache = await _openPersistentCache()
     if (persistentCache) {
       try {
-        const cachedResponse = await persistentCache.match(rawUrl)
+        const cachedResponse = await persistentCache.match(key)
         if (cachedResponse) {
           const blob = await cachedResponse.blob()
           onProgress?.(100)
-          return _storeInMemory(rawUrl, blob)
+          return _storeInMemory(key, blob)
         }
       } catch {
         // Cache read failed — fall through to network
@@ -127,7 +194,7 @@ export async function loadAudioCached(
     }
 
     // Layer 3: network fetch
-    const resolved = await resolveAudioUrl(rawUrl)
+    const resolved = await resolveAudioUrl(key)
     const response = await fetch(resolved)
     if (!response.ok) throw new Error(`Audio fetch failed: ${response.status}`)
 
@@ -157,21 +224,16 @@ export async function loadAudioCached(
 
     // Store in persistent Cache API (fire-and-forget)
     if (persistentCache) {
-      persistentCache.put(
-        new Request(rawUrl),
-        new Response(blob, {
-          headers: { 'Content-Type': blob.type || 'audio/mpeg' },
-        }),
-      ).then(() => _evictPersistentIfNeeded(persistentCache)).catch(() => {})
+      void _persistBlob(persistentCache, key, blob)
     }
 
-    return _storeInMemory(rawUrl, blob)
+    return _storeInMemory(key, blob)
   })()
 
-  _pending.set(rawUrl, promise)
+  _pending.set(key, promise)
   try {
     return await promise
   } finally {
-    _pending.delete(rawUrl)
+    _pending.delete(key)
   }
 }
