@@ -148,10 +148,14 @@ watch(() => props.issue, async (issue) => {
   pendingStatus.value = null
   statusNote.value = ''
   commentInputRef.value?.reset()
-  if (!issue) { fullIssue.value = null; return }
+  if (!issue) { fullIssue.value = null; loading.value = false; return }
+  if (!fullIssue.value || fullIssue.value.id !== issue.id) {
+    fullIssue.value = issue
+  }
   loading.value = true
   try {
-    fullIssue.value = await issueApi.get(issue.id)
+    const detail = await issueApi.get(issue.id)
+    if (props.issue?.id === detail.id) fullIssue.value = detail
   } finally {
     loading.value = false
   }
@@ -418,10 +422,7 @@ async function confirmDeleteComment() {
         </div>
 
         <!-- Scrollable body -->
-        <div v-if="loading" class="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-          {{ t('common.loading') }}
-        </div>
-        <div v-else-if="fullIssue" class="flex-1 overflow-y-auto p-5 space-y-5">
+        <div v-if="fullIssue" class="flex-1 overflow-y-auto p-5 space-y-5">
 
           <!-- Description -->
           <TimestampText
