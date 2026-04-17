@@ -96,6 +96,7 @@ describe('DashboardView', () => {
           open_issue_count: 0,
           original_title: 'Bad Apple!!',
           original_artist: 'Touhou',
+          workflow_step: { id: 'submitted', label: 'Submitted' },
         },
         {
           id: 12,
@@ -108,6 +109,7 @@ describe('DashboardView', () => {
           updated_at: '2024-01-02T00:00:00Z',
           allowed_actions: ['open-step'],
           open_issue_count: 1,
+          workflow_step: { id: 'peer_review', label: 'Peer Review' },
         },
       ]
     })
@@ -202,5 +204,17 @@ describe('DashboardView', () => {
     await wrapper.findAll('div').find(node => node.text().includes('Album One') && node.classes().includes('cursor-pointer'))!.trigger('click')
 
     expect(mocks.pushMock).toHaveBeenCalledWith('/albums/1/settings')
+  })
+
+  it('opens waiting-for-me tracks directly in the workflow workspace', async () => {
+    const wrapper = mountWithPlugins(DashboardView)
+    await flushPromises()
+
+    await wrapper.findAll('button').find(button => button.text().includes('Peer Song'))!.trigger('click')
+
+    expect(mocks.pushMock).toHaveBeenCalledWith({
+      path: '/tracks/12/step/peer_review',
+      query: { returnTo: '/dashboard' },
+    })
   })
 })

@@ -20,7 +20,7 @@ import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useDiscussions } from '@/composables/useDiscussions'
 import { useToast } from '@/composables/useToast'
-import { translateStepLabel } from '@/utils/workflow'
+import { buildTrackWorkspaceRoute, translateStepLabel } from '@/utils/workflow'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { useTrackStore } from '@/stores/tracks'
 
@@ -344,11 +344,10 @@ function onIssueSelect(issue: Issue) {
 }
 
 function openPrimaryAction(_action: string) {
-  if (!track.value?.workflow_step) return
-  router.push({
-    path: `/tracks/${trackId.value}/step/${track.value.workflow_step.id}`,
-    query: route.query.returnTo ? { returnTo: String(route.query.returnTo) } : undefined,
-  })
+  if (!track.value) return
+  router.push(buildTrackWorkspaceRoute(track.value, {
+    returnTo: typeof route.query.returnTo === 'string' ? route.query.returnTo : null,
+  }))
 }
 
 function openMasteringWorkspace() {

@@ -5,8 +5,9 @@ import { ref } from 'vue'
 import { mountWithPlugins } from '@/tests/utils'
 
 const mocks = vi.hoisted(() => ({
-  route: { params: { id: '9' }, query: {} as Record<string, string> },
+  route: { params: { id: '9' }, query: {} as Record<string, string>, path: '/tracks/9/mastering', fullPath: '/tracks/9/mastering' },
   pushMock: vi.fn(),
+  replaceMock: vi.fn(),
   trackGetMock: vi.fn(),
   listAssignmentsMock: vi.fn(),
   updateMasteringNotesMock: vi.fn(),
@@ -23,7 +24,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('vue-router', () => ({
   useRoute: () => mocks.route,
-  useRouter: () => ({ push: mocks.pushMock }),
+  useRouter: () => ({ push: mocks.pushMock, replace: mocks.replaceMock }),
   onBeforeRouteLeave: vi.fn(),
 }))
 
@@ -77,6 +78,14 @@ vi.mock('@/components/audio/IssueMarkerList.vue', () => ({
 vi.mock('@/components/IssueCreatePanel.vue', () => ({
   default: {
     template: '<div class="issue-create" />',
+  },
+}))
+
+vi.mock('@/components/IssueDetailPanel.vue', () => ({
+  default: {
+    props: ['issue'],
+    emits: ['close', 'updated'],
+    template: '<div v-if="issue" class="issue-drawer">{{ issue.title }}|{{ issue.status }}</div>',
   },
 }))
 
@@ -262,8 +271,9 @@ async function openDeliveryTab(wrapper: ReturnType<typeof mountWithPlugins>) {
 
 describe('MasteringView', () => {
   beforeEach(() => {
-    mocks.route = { params: { id: '9' }, query: {} }
+    mocks.route = { params: { id: '9' }, query: {}, path: '/tracks/9/mastering', fullPath: '/tracks/9/mastering' }
     mocks.pushMock.mockReset()
+    mocks.replaceMock.mockReset()
     mocks.trackGetMock.mockReset()
     mocks.listAssignmentsMock.mockReset()
     mocks.updateMasteringNotesMock.mockReset()
@@ -320,6 +330,43 @@ describe('MasteringView', () => {
     await flushPromises()
 
     expect(wrapper.find('.discussion-panel').text()).toContain('Mastering Communication (1)|1')
+  })
+
+  it('restores the requested mastering issue drawer from the route query', async () => {
+    mocks.route = {
+      params: { id: '9' },
+      query: { issue: '77' },
+      path: '/tracks/9/mastering',
+      fullPath: '/tracks/9/mastering?issue=77',
+    }
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
+      issues: [
+        {
+          id: 77,
+          track_id: 9,
+          author_id: 2,
+          phase: 'mastering',
+          workflow_cycle: 1,
+          source_version_id: 11,
+          source_version_number: 1,
+          master_delivery_id: null,
+          title: 'Ease the transient',
+          description: 'The snare transient is a bit too sharp.',
+          severity: 'minor',
+          status: 'open',
+          markers: [],
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-02T00:00:00Z',
+          comment_count: 0,
+        },
+      ],
+    }))
+
+    const wrapper = mountWithPlugins(MasteringView)
+    await flushPromises()
+
+    expect(wrapper.find('.issue-drawer').text()).toContain('Ease the transient|open')
+    expect(mocks.pushMock).not.toHaveBeenCalled()
   })
 
   it('shows final approval for the submitter after the confirmed delivery enters final review', async () => {

@@ -11,7 +11,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import { formatRelativeTime, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import { TRACK_STATUS_COLORS } from '@/utils/status'
-import { translateStepLabel } from '@/utils/workflow'
+import { buildTrackWorkspaceRoute, translateStepLabel } from '@/utils/workflow'
 import { useDashboardPins } from '@/composables/useDashboardPins'
 import { useToast } from '@/composables/useToast'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
@@ -338,8 +338,8 @@ function openAlbumSettings(albumId: number) {
   router.push(`/albums/${albumId}/settings`)
 }
 
-function openTrack(trackId: number) {
-  router.push({ path: `/tracks/${trackId}`, query: { returnTo: route.path } })
+function openTrack(track: Track) {
+  router.push(buildTrackWorkspaceRoute(track, { returnTo: route.fullPath }))
 }
 </script>
 
@@ -418,7 +418,7 @@ function openTrack(trackId: number) {
             v-for="track in actionableTracks"
             :key="`queue-${track.id}`"
             class="w-full border border-border bg-background px-3 py-2 text-left transition-colors hover:border-primary/50"
-            @click="openTrack(track.id)"
+            @click="openTrack(track)"
           >
             <div class="flex items-center justify-between gap-3">
               <div class="min-w-0 space-y-1">
@@ -447,7 +447,7 @@ function openTrack(trackId: number) {
             v-for="track in attentionTracks"
             :key="`attention-${track.id}`"
             class="w-full border border-border bg-background px-3 py-2 text-left transition-colors hover:border-primary/50"
-            @click="openTrack(track.id)"
+            @click="openTrack(track)"
           >
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0 space-y-1">
@@ -476,7 +476,7 @@ function openTrack(trackId: number) {
             v-for="track in recentTracks"
             :key="`recent-${track.id}`"
             class="w-full border border-border bg-background px-3 py-2 text-left transition-colors hover:border-primary/50"
-            @click="openTrack(track.id)"
+            @click="openTrack(track)"
           >
             <div class="flex items-center justify-between gap-3">
               <div class="min-w-0 space-y-1">

@@ -16,6 +16,7 @@ import { activeAssignmentsForStep, canUserChangeIssueStatus, canUserSubmitIssueS
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
+import IssueDetailPanel from '@/components/IssueDetailPanel.vue'
 import WorkflowActionBar from '@/components/workflow/WorkflowActionBar.vue'
 import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue'
 import BatchIssueActions from '@/components/workflow/BatchIssueActions.vue'
@@ -82,6 +83,7 @@ const versionHistoryExpanded = ref(false)
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
 const hoveredIssueId = ref<number | null>(null)
+const selectedIssue = ref<Issue | null>(null)
 const selectedStageIssueIds = ref<number[]>([])
 const stageBatchNote = ref('')
 const batchUpdatingIssues = ref(false)
@@ -372,6 +374,7 @@ async function loadData() {
     issues.value = (detail.issues ?? []).filter(
       (issue: Issue) => issue.workflow_cycle === detail.track.workflow_cycle,
     )
+    syncIssueDrawerFromRoute()
     masteringDiscussion.discussions.value = (detail.discussions ?? []).filter(d => d.phase === 'mastering')
     try {
       reviewAssignments.value = await trackApi.listAssignments(trackId.value)
@@ -541,12 +544,75 @@ async function executeTransition(decision: string) {
 }
 
 // Issue handlers
+function parseIssueQuery(value: unknown): number | null {
+  const raw = Array.isArray(value) ? value[0] : value
+  const issueId = Number(raw)
+  return Number.isInteger(issueId) && issueId > 0 ? issueId : null
+}
+
+function buildRouteQueryWithoutIssue(): Record<string, string> {
+  const query: Record<string, string> = {}
+  for (const [key, value] of Object.entries(route.query)) {
+    if (key === 'issue') continue
+    if (typeof value === 'string' && value.length > 0) query[key] = value
+    else if (Array.isArray(value) && typeof value[0] === 'string' && value[0].length > 0) query[key] = value[0]
+  }
+  return query
+}
+
+function replaceIssueDrawerQuery(issueId: number | null) {
+  const query = buildRouteQueryWithoutIssue()
+  if (issueId != null) query.issue = String(issueId)
+  void router.replace({
+    path: route.path,
+    query: Object.keys(query).length > 0 ? query : undefined,
+  })
+}
+
+function syncIssueDrawerFromRoute() {
+  const issueId = parseIssueQuery(route.query.issue)
+  if (issueId == null) {
+    selectedIssue.value = null
+    return
+  }
+  selectedIssue.value = issues.value.find(issue => issue.id === issueId) ?? null
+}
+
 function onIssueSelect(issue: Issue) {
-  router.push(`/issues/${issue.id}`)
+  selectedIssue.value = issue
+  if (parseIssueQuery(route.query.issue) !== issue.id) {
+    replaceIssueDrawerQuery(issue.id)
+  }
+}
+
+function closeIssueDrawer() {
+  selectedIssue.value = null
+  if (parseIssueQuery(route.query.issue) != null) {
+    replaceIssueDrawerQuery(null)
+  }
 }
 
 function onIssueCreated(issue: Issue) {
   issues.value.push(issue)
+}
+
+function onIssueUpdated(updatedIssue: Issue) {
+  issues.value = issues.value.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue)
+  if (selectedIssue.value?.id === updatedIssue.id) {
+    selectedIssue.value = updatedIssue
+  }
+}
+
+async function onQuickIssueStatusChange({ issue, status }: { issue: Issue; status: Issue['status'] }) {
+  const previousIssue = { ...issue }
+  onIssueUpdated({ ...issue, status })
+  try {
+    const updatedIssue = await issueApi.update(issue.id, { status })
+    onIssueUpdated(updatedIssue)
+  } catch (err: any) {
+    onIssueUpdated(previousIssue)
+    toastError(err.message || t('workflowStep.transitionFailed'))
+  }
 }
 
 function handleIssueHover(issue: Issue) {
@@ -643,6 +709,10 @@ watch(isSourceCompareActive, (active) => {
   if (!active) return
   issueFormRef.value?.closeForm?.()
   hoveredIssueId.value = null
+})
+
+watch(() => route.query.issue, () => {
+  syncIssueDrawerFromRoute()
 })
 
 watch([stageBatchIssueList], ([issuesList]) => {
@@ -916,6 +986,9 @@ watch(olderMasterDeliveries, (deliveries) => {
           <IssueMarkerList
             :issues="finalReviewIssues"
             :hovered-issue-id="hoveredIssueId"
+            :track="track"
+            :assignments="reviewAssignments"
+            :show-activity="true"
             @select="onIssueSelect"
             @hover="handleIssueHover"
             @leave="handleIssueLeave"
@@ -985,10 +1058,15 @@ watch(olderMasterDeliveries, (deliveries) => {
           :selected-ids="selectedStageIssueIds"
           :current-source-version-number="displayedSourceVersionNumber"
           :hovered-issue-id="hoveredIssueId"
+          :track="track"
+          :assignments="reviewAssignments"
+          :show-activity="true"
+          :enable-quick-actions="true"
           @select="onIssueSelect"
           @update:selectedIds="selectedStageIssueIds = $event"
           @hover="handleIssueHover"
           @leave="handleIssueLeave"
+          @status-change="onQuickIssueStatusChange"
         />
       </div>
 
@@ -999,6 +1077,9 @@ watch(olderMasterDeliveries, (deliveries) => {
           :issues="fallbackWaveformIssues"
           :current-source-version-number="displayedSourceVersionNumber"
           :hovered-issue-id="hoveredIssueId"
+          :track="track"
+          :assignments="reviewAssignments"
+          :show-activity="true"
           @select="onIssueSelect"
           @hover="handleIssueHover"
           @leave="handleIssueLeave"
@@ -1114,6 +1195,14 @@ watch(olderMasterDeliveries, (deliveries) => {
 
     <WorkflowActionBar v-if="deliveryActions.length" :actions="deliveryActions" :hint="t('mastering.actionHint')" />
   </div>
+
+  <IssueDetailPanel
+    :issue="selectedIssue"
+    :track="track"
+    :assignments="reviewAssignments"
+    @close="closeIssueDrawer"
+    @updated="onIssueUpdated"
+  />
 
   <MasteringChatSidebar
     v-if="canSeeMasteringDiscussion && track"

@@ -7,6 +7,12 @@ import { mountWithPlugins } from '@/tests/utils'
 const mocks = vi.hoisted(() => ({
   pushMock: vi.fn(),
   replaceMock: vi.fn(),
+  route: {
+    params: { id: '9', stepId: 'intake' },
+    query: {} as Record<string, string>,
+    path: '/tracks/9/step/intake',
+    fullPath: '/tracks/9/step/intake',
+  },
   trackGetMock: vi.fn(),
   listAssignmentsMock: vi.fn(),
   issueUpdateMock: vi.fn(),
@@ -23,7 +29,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: '9', stepId: 'intake' }, query: {}, path: '/tracks/9/step/intake', fullPath: '/tracks/9/step/intake' }),
+  useRoute: () => mocks.route,
   useRouter: () => ({ push: mocks.pushMock, replace: mocks.replaceMock }),
   onBeforeRouteLeave: vi.fn(),
 }))
@@ -153,6 +159,12 @@ describe('WorkflowStepView', () => {
   beforeEach(() => {
     mocks.pushMock.mockReset()
     mocks.replaceMock.mockReset()
+    mocks.route = {
+      params: { id: '9', stepId: 'intake' },
+      query: {},
+      path: '/tracks/9/step/intake',
+      fullPath: '/tracks/9/step/intake',
+    }
     mocks.trackGetMock.mockReset()
     mocks.listAssignmentsMock.mockReset()
     mocks.issueUpdateMock.mockReset()
@@ -575,6 +587,100 @@ describe('WorkflowStepView', () => {
     expect(wrapper.find('.issue-list').text()).toBe('1')
   })
 
+  it('keeps peer review issue inspection and status updates inside the step page', async () => {
+    mocks.route = {
+      params: { id: '9', stepId: 'peer_review' },
+      query: {},
+      path: '/tracks/9/step/peer_review',
+      fullPath: '/tracks/9/step/peer_review',
+    }
+    mocks.issueUpdateMock.mockResolvedValueOnce({
+      id: 51,
+      track_id: 9,
+      author_id: 3,
+      phase: 'peer',
+      workflow_cycle: 1,
+      source_version_id: 101,
+      source_version_number: 1,
+      master_delivery_id: null,
+      title: 'Tame the hats',
+      description: 'The hats feel too sharp in the drop.',
+      severity: 'major',
+      status: 'resolved',
+      markers: [],
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-02T00:00:00Z',
+      comment_count: 1,
+    })
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Peer Track',
+        artist: 'Nova',
+        status: 'peer_review',
+        file_path: '/audio.wav',
+        version: 1,
+        workflow_cycle: 1,
+        workflow_step: {
+          id: 'peer_review',
+          label: 'Peer Review',
+          type: 'review',
+          ui_variant: 'peer_review',
+          assignee_role: 'peer_reviewer',
+          order: 1,
+          transitions: { pass: 'producer_gate' },
+        },
+        workflow_transitions: [{ decision: 'pass', label: 'Pass' }],
+      },
+      issues: [
+        {
+          id: 51,
+          track_id: 9,
+          author_id: 3,
+          phase: 'peer',
+          workflow_cycle: 1,
+          source_version_id: 101,
+          source_version_number: 1,
+          master_delivery_id: null,
+          title: 'Tame the hats',
+          description: 'The hats feel too sharp in the drop.',
+          severity: 'major',
+          status: 'open',
+          markers: [],
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-02T00:00:00Z',
+          comment_count: 1,
+        },
+      ],
+      checklist_items: [],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'peer_review', label: 'Peer Review', type: 'review', ui_variant: 'peer_review', assignee_role: 'peer_reviewer', order: 1, transitions: { pass: 'producer_gate' } },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    await wrapper.find('.issue-list-item').trigger('click')
+    await flushPromises()
+
+    expect(mocks.pushMock).not.toHaveBeenCalled()
+    expect(mocks.replaceMock).toHaveBeenCalledWith({
+      path: '/tracks/9/step/peer_review',
+      query: { issue: '51' },
+    })
+    expect(wrapper.find('.peer-issue-drawer').text()).toContain('Tame the hats|open')
+
+    await wrapper.find('.issue-quick-resolve').trigger('click')
+    await flushPromises()
+
+    expect(mocks.issueUpdateMock).toHaveBeenCalledWith(51, { status: 'resolved' })
+    expect(wrapper.find('.peer-issue-drawer').text()).toContain('Tame the hats|resolved')
+  })
+
   it('enables source compare on producer gate too', async () => {
     mocks.trackGetMock.mockResolvedValueOnce({
       track: {
@@ -812,5 +918,79 @@ describe('WorkflowStepView', () => {
 
     expect(mocks.issueUpdateMock).toHaveBeenCalledWith(41, { status: 'resolved' })
     expect(wrapper.find('.peer-issue-drawer').text()).toContain('Fix the chorus lift|resolved')
+  })
+
+  it('reopens the requested final review issue drawer from the route query', async () => {
+    mocks.route = {
+      params: { id: '9', stepId: 'final_review' },
+      query: { issue: '61' },
+      path: '/tracks/9/step/final_review',
+      fullPath: '/tracks/9/step/final_review?issue=61',
+    }
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Final Track',
+        artist: 'Nova',
+        status: 'final_review',
+        file_path: '/audio.wav',
+        version: 1,
+        workflow_cycle: 1,
+        producer_id: 1,
+        submitter_id: 2,
+        mastering_engineer_id: 3,
+        current_master_delivery: {
+          id: 11,
+          file_path: '/master.wav',
+          producer_approved_at: null,
+          submitter_approved_at: null,
+          confirmed_at: '2024-01-01T00:00:00Z',
+        },
+        workflow_step: {
+          id: 'final_review',
+          label: 'Final Review',
+          type: 'approval',
+          ui_variant: 'final_review',
+          assignee_role: 'producer',
+          order: 0,
+          transitions: { reject_to_mastering: 'mastering' },
+        },
+        workflow_transitions: [{ decision: 'reject_to_mastering', label: 'Return to Mastering' }],
+      },
+      issues: [
+        {
+          id: 61,
+          track_id: 9,
+          author_id: 3,
+          phase: 'final_review',
+          workflow_cycle: 1,
+          source_version_id: null,
+          source_version_number: null,
+          master_delivery_id: 11,
+          title: 'Loosen the limiter',
+          description: 'The outro feels a bit too pinned down.',
+          severity: 'minor',
+          status: 'open',
+          markers: [],
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-02T00:00:00Z',
+          comment_count: 0,
+        },
+      ],
+      checklist_items: [],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'mastering', label: 'Mastering', type: 'delivery', assignee_role: 'mastering_engineer', order: 0, transitions: {} },
+          { id: 'final_review', label: 'Final Review', type: 'approval', ui_variant: 'final_review', assignee_role: 'producer', order: 1, transitions: { reject_to_mastering: 'mastering' } },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    expect(wrapper.find('.peer-issue-drawer').text()).toContain('Loosen the limiter|open')
+    expect(mocks.pushMock).not.toHaveBeenCalled()
   })
 })
