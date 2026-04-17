@@ -214,12 +214,13 @@ const filteredEvents = computed(() => {
     return sorted.filter(e => e.event_type.includes('upload') || e.event_type.includes('deliver'))
   return sorted
 })
-const generalDiscussion = useDiscussions(trackId)
+const generalDiscussion = useDiscussions(trackId, 'general', { paginated: true })
 const chatSidebarRef = ref<InstanceType<typeof MasteringChatSidebar> | null>(null)
 const showVersionCompare = ref(false)
 const selectedCompareVersionId = ref<number | null>(null)
 
 onMounted(loadTrack)
+onMounted(() => { generalDiscussion.load() })
 onMounted(async () => {
   await nextTick()
   updateMobileCtaHeight()
@@ -245,6 +246,7 @@ const { connected: wsConnected } = useTrackWebSocket(trackId.value, async () => 
 }, {
   onDiscussionEvent: (event, discussionId) => {
     chatSidebarRef.value?.handleDiscussionEvent(event, discussionId)
+    generalDiscussion.applyRealtimeEvent(event, discussionId)
   },
 })
 
@@ -266,8 +268,6 @@ async function loadTrack() {
     const detail = await trackApi.get(trackId.value)
     applyTrack(detail.track)
     issues.value = detail.issues
-    const allDiscussions = detail.discussions ?? []
-    generalDiscussion.discussions.value = allDiscussions.filter(d => d.phase !== 'mastering')
     events.value = detail.events
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
     workflowConfig.value = detail.workflow_config ?? null
@@ -938,6 +938,8 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             :show-history-for-id="generalDiscussion.showHistoryForId.value"
             :loading="generalDiscussion.loading.value"
             :load-error="generalDiscussion.loadError.value"
+            :has-more="generalDiscussion.hasMore.value"
+            :loading-older="generalDiscussion.loadingOlder.value"
             @submit="generalDiscussion.submit"
             @start-edit="generalDiscussion.startEdit"
             @save-edit="generalDiscussion.saveEdit"
@@ -948,6 +950,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             @open-image="generalDiscussion.openImage"
             @open-issue="openIssueReference"
             @retry="generalDiscussion.load"
+            @load-older="generalDiscussion.loadOlder"
             @update:editing-content="generalDiscussion.editingContent.value = $event"
           />
         </div>

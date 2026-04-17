@@ -65,6 +65,7 @@ useTrackWebSocket(trackId.value, async () => {
 }, {
   onDiscussionEvent: (event, discussionId) => {
     chatSidebarRef.value?.handleDiscussionEvent(event, discussionId)
+    masteringDiscussion.applyRealtimeEvent(event, discussionId)
   },
 })
 
@@ -107,7 +108,7 @@ const showSourceCompare = ref(false)
 const selectedCompareSourceVersionId = ref<number | null>(null)
 
 // ── Mastering discussion (composable) ──────────────────────────────────────
-const masteringDiscussion = useDiscussions(trackId, 'mastering')
+const masteringDiscussion = useDiscussions(trackId, 'mastering', { paginated: true })
 
 function isIssueUnresolved(status: Issue['status']): boolean {
   return status === 'open' || status === 'pending_discussion' || status === 'disagreed'
@@ -519,8 +520,12 @@ async function loadPage() {
       templateItems.value = []
       checklistDraft.value = []
     }
-    if (inferClassicVariant(detail.track.workflow_step ?? null) === 'mastering') {
-      masteringDiscussion.discussions.value = (detail.discussions ?? []).filter(d => d.phase === 'mastering')
+    if (
+      inferClassicVariant(detail.track.workflow_step ?? null) === 'mastering'
+      && masteringDiscussion.discussions.value.length === 0
+      && !masteringDiscussion.loading.value
+    ) {
+      masteringDiscussion.load()
     }
   } catch (err: any) {
     trackStore.setCurrentTrack(null)
@@ -2058,6 +2063,8 @@ function handleIssueLeave() {
         :loading="masteringDiscussion.loading.value"
         :load-error="masteringDiscussion.loadError.value"
         :enable-audio="true"
+        :has-more="masteringDiscussion.hasMore.value"
+        :loading-older="masteringDiscussion.loadingOlder.value"
         @submit="masteringDiscussion.submit"
         @start-edit="masteringDiscussion.startEdit"
         @save-edit="masteringDiscussion.saveEdit"
@@ -2068,6 +2075,7 @@ function handleIssueLeave() {
         @open-image="masteringDiscussion.openImage"
         @open-issue="openLinkedIssue"
         @retry="masteringDiscussion.load"
+        @load-older="masteringDiscussion.loadOlder"
         @update:editing-content="masteringDiscussion.editingContent.value = $event"
       />
     </div>

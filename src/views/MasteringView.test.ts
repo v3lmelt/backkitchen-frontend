@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   confirmDeliveryMock: vi.fn(),
   workflowTransitionMock: vi.fn(),
   issueUpdateMock: vi.fn(),
+  discussionListMock: vi.fn(),
   setCurrentTrackMock: vi.fn(),
   downloadTrackAudioMock: vi.fn(),
   downloadAudioAssetMock: vi.fn(),
@@ -44,6 +45,14 @@ vi.mock('@/api', () => ({
   issueApi: {
     update: mocks.issueUpdateMock,
   },
+  discussionApi: {
+    list: mocks.discussionListMock,
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    history: vi.fn(),
+  },
+  resolveAssetUrl: (url: string) => url,
   r2Api: {
     requestMasterDeliveryUpload: vi.fn(),
     confirmMasterDeliveryUpload: vi.fn(),
@@ -306,6 +315,8 @@ describe('MasteringView', () => {
     mocks.confirmDeliveryMock.mockReset()
     mocks.workflowTransitionMock.mockReset()
     mocks.issueUpdateMock.mockReset()
+    mocks.discussionListMock.mockReset()
+    mocks.discussionListMock.mockResolvedValue([])
     mocks.setCurrentTrackMock.mockReset()
     mocks.downloadTrackAudioMock.mockReset()
     mocks.downloadAudioAssetMock.mockReset()
@@ -334,23 +345,22 @@ describe('MasteringView', () => {
   })
 
   it('opens on the discussion tab and renders mastering communication inline', async () => {
-    mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
-      discussions: [
-        {
-          id: 301,
-          track_id: 9,
-          author_id: 8,
-          phase: 'mastering',
-          visibility: 'public',
-          content: 'Please keep the top end smooth.',
-          created_at: '2024-01-03T00:00:00Z',
-          edited_at: null,
-          author: { id: 8, display_name: 'Producer', avatar_color: '#123456' },
-          images: [],
-          audios: [],
-        },
-      ],
-    }))
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetail())
+    mocks.discussionListMock.mockResolvedValue([
+      {
+        id: 301,
+        track_id: 9,
+        author_id: 8,
+        phase: 'mastering',
+        visibility: 'public',
+        content: 'Please keep the top end smooth.',
+        created_at: '2024-01-03T00:00:00Z',
+        edited_at: null,
+        author: { id: 8, display_name: 'Producer', avatar_color: '#123456' },
+        images: [],
+        audios: [],
+      },
+    ])
 
     const wrapper = mountWithPlugins(MasteringView)
     await flushPromises()

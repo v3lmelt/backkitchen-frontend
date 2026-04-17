@@ -4,9 +4,21 @@ import type { Discussion, DiscussionPhase, EditHistory } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
 
-export function useDiscussions(trackId: Ref<number>, phase?: DiscussionPhase) {
+export interface UseDiscussionsOptions {
+  paginated?: boolean
+  pageSize?: number
+}
+
+export function useDiscussions(
+  trackId: Ref<number>,
+  phase?: DiscussionPhase,
+  options: UseDiscussionsOptions = {},
+) {
   const { t } = useI18n()
   const { error: toastError } = useToast()
+
+  const paginated = options.paginated ?? false
+  const pageSize = options.pageSize ?? 20
 
   const discussions = ref<Discussion[]>([])
   const loading = ref(false)
@@ -17,17 +29,82 @@ export function useDiscussions(trackId: Ref<number>, phase?: DiscussionPhase) {
   const editingContent = ref('')
   const historyItems = ref<EditHistory[]>([])
   const showHistoryForId = ref<number | null>(null)
+  const loadingOlder = ref(false)
+  const hasMore = ref(false)
 
   async function load() {
     loading.value = true
     loadError.value = ''
     try {
-      discussions.value = await discussionApi.list(trackId.value, phase)
+      if (paginated) {
+        const items = await discussionApi.list(trackId.value, phase, { limit: pageSize })
+        discussions.value = items
+        hasMore.value = items.length === pageSize
+      } else {
+        discussions.value = await discussionApi.list(trackId.value, phase)
+        hasMore.value = false
+      }
     } catch (err: any) {
       loadError.value = err?.message || t('common.loadFailed')
     } finally {
       loading.value = false
     }
+  }
+
+  async function loadOlder() {
+    if (!paginated || !hasMore.value || loadingOlder.value) return
+    const oldestId = discussions.value[0]?.id
+    if (oldestId === undefined) return
+    loadingOlder.value = true
+    try {
+      const older = await discussionApi.list(trackId.value, phase, {
+        beforeId: oldestId,
+        limit: pageSize,
+      })
+      if (older.length > 0) {
+        discussions.value = [...older, ...discussions.value]
+      }
+      hasMore.value = older.length === pageSize
+    } catch {
+      toastError(t('common.error'))
+    } finally {
+      loadingOlder.value = false
+    }
+  }
+
+  // Pull the latest page and fold it into the current list without rewinding
+  // any already-loaded older items. Used to react to realtime create/update.
+  async function refreshLatestPage() {
+    try {
+      if (!paginated) {
+        discussions.value = await discussionApi.list(trackId.value, phase)
+        return
+      }
+      const latest = await discussionApi.list(trackId.value, phase, { limit: pageSize })
+      const byId = new Map(latest.map(d => [d.id, d]))
+      const merged = discussions.value.map(d => byId.get(d.id) ?? d)
+      const existingIds = new Set(merged.map(d => d.id))
+      for (const d of latest) {
+        if (!existingIds.has(d.id)) merged.push(d)
+      }
+      merged.sort((a, b) => a.id - b.id)
+      discussions.value = merged
+    } catch {
+      // silent; next user action will retry
+    }
+  }
+
+  async function applyRealtimeEvent(event: string, discussionId: number) {
+    if (event === 'deleted') {
+      discussions.value = discussions.value.filter(d => d.id !== discussionId)
+      return
+    }
+    // Updates to items outside our loaded range can't be applied by refreshing
+    // only the latest page, so skip the refetch when the id isn't in view.
+    if (event === 'updated' && !discussions.value.some(d => d.id === discussionId)) {
+      return
+    }
+    await refreshLatestPage()
   }
 
   async function submit(payload: { content: string; images: File[]; audios: File[] }) {
@@ -40,7 +117,9 @@ export function useDiscussions(trackId: Ref<number>, phase?: DiscussionPhase) {
         images: payload.images.length ? payload.images : undefined,
         audios: payload.audios.length ? payload.audios : undefined,
       }, (p) => { postingProgress.value = p })
-      discussions.value.push(d)
+      if (!discussions.value.some(x => x.id === d.id)) {
+        discussions.value.push(d)
+      }
     } catch {
       toastError(t('common.error'))
     } finally {
@@ -101,7 +180,11 @@ export function useDiscussions(trackId: Ref<number>, phase?: DiscussionPhase) {
     editingContent,
     historyItems,
     showHistoryForId,
+    loadingOlder,
+    hasMore,
     load,
+    loadOlder,
+    applyRealtimeEvent,
     submit,
     startEdit,
     saveEdit,

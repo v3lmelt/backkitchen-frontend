@@ -83,6 +83,50 @@ describe('DiscussionPanel', () => {
     wrapper.unmount()
   })
 
+  it('renders the load-earlier button only when hasMore is true', async () => {
+    const baseProps = {
+      discussions: [
+        {
+          id: 5,
+          author_id: 2,
+          author: { id: 2, display_name: 'Kira', avatar_color: '#654321' },
+          content: 'Hi',
+          created_at: '2024-01-02T00:00:00Z',
+          images: [],
+          audios: [],
+        },
+      ],
+      heading: 'Discussion',
+      emptyText: 'Empty',
+      placeholder: 'Write a note',
+      submitLabel: 'Post',
+      posting: false,
+      postingProgress: 0,
+      editingId: null,
+      editingContent: '',
+      historyItems: [],
+      showHistoryForId: null,
+    }
+
+    const withoutMore = mountWithPlugins(DiscussionPanel, { props: { ...baseProps, hasMore: false } })
+    expect(withoutMore.text()).not.toContain('Load earlier discussions')
+    withoutMore.unmount()
+
+    const withMore = mountWithPlugins(DiscussionPanel, { props: { ...baseProps, hasMore: true } })
+    const loadBtn = withMore.findAll('button').find(b => b.text() === 'Load earlier discussions')
+    expect(loadBtn).toBeTruthy()
+
+    await loadBtn!.trigger('click')
+    expect(withMore.emitted('loadOlder')).toHaveLength(1)
+
+    await withMore.setProps({ ...baseProps, hasMore: true, loadingOlder: true })
+    const loadingBtn = withMore.findAll('button').find(b => b.text() === 'Loading…')
+    expect(loadingBtn).toBeTruthy()
+    expect(loadingBtn!.attributes('disabled')).toBeDefined()
+
+    withMore.unmount()
+  })
+
   it('forwards issue reference clicks from discussion content', async () => {
     const wrapper = mountWithPlugins(DiscussionPanel, {
       props: {
