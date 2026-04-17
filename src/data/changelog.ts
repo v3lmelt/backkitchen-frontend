@@ -24,181 +24,179 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '1.1.0',
+    version: '0.0.1',
     date: '2026-04-17',
     headline: {
-      'zh-CN': '评论协作、后台治理与母带工作流大更新',
-      en: 'Collaboration, admin governance, and mastering workflow overhaul',
+      'zh-CN': '评审、母带、后台一次性升级',
+      en: 'Review, mastering, and admin — all get a lift',
     },
     summary: {
       'zh-CN':
-        '本次更新跨越了评审、母带、后台、下载与专辑导出五个大方向，共计 45 个前端 commit / 21 个后端 commit。重点打磨了评论内的问题与附件引用能力、后台治理能力、母带阶段的沟通面貌，以及下载与危险操作的安全性。',
+        '这一版围绕"在评论里把话说清楚"和"让评审/母带/后台的每一步都更顺手"展开：你可以在评论里直接 @ 某个问题、指向附件里的某个时间点；问题抽屉现在能直接试听；同行评审需要先完成清单才能提交；导出音频会自动带上专辑目录号；危险操作（如销号、交付确认）全部加了保护。',
       en:
-        'This release spans review, mastering, admin, downloads, and album export — 45 frontend commits and 21 backend commits in total. Key investments: issue/attachment references in comments, an expanded admin console, a cleaner mastering stage, and safer downloads and destructive actions.',
+        "This release is about saying things precisely in comments and making every step of review, mastering, and admin feel more polished. You can now @mention an issue in a comment and point at a specific moment inside a specific attachment; the issue drawer plays audio in place; the peer-review checklist must be completed before you can submit; exported audio carries the album's catalog number automatically; and destructive actions (account deletion, delivery confirmation, and the like) are all better protected.",
     },
     sections: [
       {
         heading: {
-          'zh-CN': '评论与问题协作',
-          en: 'Comments & Issue Collaboration',
+          'zh-CN': '评论里也能把话说清楚',
+          en: 'Say it precisely — right inside a comment',
         },
         items: [
           {
             title: {
-              'zh-CN': '评论内支持 @issue:N 引用，基于曲目内本地编号',
-              en: 'Reference issues in comments with @issue:N, resolved against per-track local numbers',
+              'zh-CN': '评论里直接 @ 某个问题：@issue:1',
+              en: 'Mention an issue in a comment: @issue:1',
             },
             description: {
               'zh-CN':
-                '每个问题在所属曲目内分配一个独立的本地编号（local_number），评论中的 @issue:1 会定位到当前曲目的 1 号问题，而不再依赖全局 ID。跨曲目引用不会再互相干扰。',
+                '现在你可以在评论里写 @issue:1、@issue:2 来引用当前曲目里的问题。编号是"这首曲目内"的顺序号，不是跨曲目的大编号，看起来和对齐起来都更自然——每首曲目都从 1 号开始数。',
               en:
-                'Each issue now has its own local number within its track. Writing @issue:1 in a comment resolves to issue #1 of the current track instead of a global ID, so references stay correct across tracks.',
+                'You can now write @issue:1 or @issue:2 in any comment to reference an issue on the current track. The number is the order within this track (not a global ID), so each track starts counting from #1 — it reads like a natural conversation.',
             },
           },
           {
             title: {
-              'zh-CN': '评论附件支持带索引的时间戳语法',
-              en: 'Indexed attachment timestamp syntax',
+              'zh-CN': '精确指向某个附件的某个时间点：[2]@0:45',
+              en: 'Point at a specific moment in a specific attachment: [2]@0:45',
             },
             description: {
               'zh-CN':
-                '当一条评论包含多个音频附件时，可以用 [1]@1:23、[2]@0:45 这样的写法精确指向某个附件的某个时间点，便于评审、母带沟通中准确引用对话中的片段。',
+                '当一条评论里带了多个音频附件时，现在可以用 [1]@1:23、[2]@0:45 这样的写法，明确指"第 2 个附件的 45 秒处"。同行评审和母带沟通里的"你听听这里"再也不会有歧义。',
               en:
-                'When a comment has multiple audio attachments, you can now point at a specific one with syntax like [1]@1:23 or [2]@0:45, making references in peer review and mastering chats unambiguous.',
+                "When a comment has multiple audio attachments, you can write [1]@1:23 or [2]@0:45 to point at \"attachment 2 at 0:45\". No more ambiguity when someone says \"listen here\" in peer review or mastering chats.",
             },
           },
           {
             title: {
-              'zh-CN': '问题抽屉新增波形预览与内嵌播放控制',
-              en: 'Issue drawer gains waveform preview and inline playback controls',
+              'zh-CN': '问题抽屉里直接听',
+              en: 'Listen to an issue without leaving the page',
             },
             description: {
               'zh-CN':
-                '在曲目详情的问题抽屉里可以直接看到问题所指向的波形片段，并在不离开页面的情况下试听、跳转、定位时间点。底层预览逻辑被抽取为可复用的 composable。',
+                '点开曲目详情的问题抽屉，就能直接看到这个问题指向的波形片段，并且能原地播放、跳转、定位时间点。不用再点进问题详情页再点回来。',
               en:
-                'The issue drawer on the track detail page now embeds a waveform preview and inline playback controls, so you can listen without navigating away. The underlying preview logic has been extracted into a reusable composable.',
+                'Open the issue drawer on the track detail page and you see the waveform segment the issue points to, with playback controls right there. No more hopping to the issue detail page and back.',
             },
           },
         ],
       },
       {
         heading: {
-          'zh-CN': '后台治理（Admin）',
-          en: 'Admin Governance',
+          'zh-CN': '后台管理（Admin）',
+          en: 'Admin Console',
         },
         items: [
           {
             title: {
-              'zh-CN': '后台控制台新增治理与审计能力',
-              en: 'Admin console gains governance and audit controls',
+              'zh-CN': '后台控制台：账号、社团、专辑、审计一站式',
+              en: 'One place to manage accounts, circles, albums, and audit trails',
             },
             description: {
               'zh-CN':
-                '管理员现在拥有一组完整的治理工作流：账户状态、社团 / 专辑治理、审计记录等。后端同步提供对应的 API 与数据模型，并在 SQLite 下对迁移脚本进行了专项加固。',
+                '管理员现在在后台控制台里能完整地处理账号状态、社团和专辑的治理工作，并且能回溯关键操作的审计记录。之前需要绕远路的操作现在都能直接做。',
               en:
-                'Administrators now have a dedicated suite of governance workflows covering account status, circle / album governance, and audit trails. The backend exposes matching APIs and data models, with migrations specifically hardened for SQLite.',
+                'Admins now have a single console to manage account status, govern circles and albums, and review an audit trail of key actions — work that used to require workarounds now lives in one place.',
             },
           },
           {
             title: {
-              'zh-CN': '后台控制台完整本地化',
-              en: 'Admin console fully localized',
+              'zh-CN': '后台控制台支持中英文切换',
+              en: 'Admin console speaks both Chinese and English',
             },
             description: {
-              'zh-CN': '后台控制台所有文本接入 vue-i18n，与其余界面一致支持中英文切换。',
-              en: 'Every string in the admin console is now routed through vue-i18n and follows the same zh-CN / en toggle as the rest of the app.',
+              'zh-CN': '后台控制台的每一个文案都接入了中英文切换，和系统其他地方保持一致。',
+              en: 'Every label in the admin console is now translated, matching the zh-CN / en toggle used elsewhere.',
             },
           },
         ],
       },
       {
         heading: {
-          'zh-CN': '工作流与仪表盘',
-          en: 'Workflow & Dashboard',
+          'zh-CN': '工作流与仪表盘更顺手',
+          en: 'Smoother workflow and dashboard',
         },
         items: [
           {
             title: {
-              'zh-CN': '专辑工作流搭建效率提升',
-              en: 'Album workflow setup is faster',
+              'zh-CN': '新建专辑只需更少点击',
+              en: 'Fewer clicks to spin up a new album',
+            },
+            description: {
+              'zh-CN': '创建专辑的流程被拉直了一遍，从头走到尾需要的步骤和来回切换都变少了。',
+              en: 'The create-album flow has been straightened out — fewer steps, fewer context switches from start to finish.',
+            },
+          },
+          {
+            title: {
+              'zh-CN': '各种工作流模板行为更一致',
+              en: 'Workflow templates behave more consistently',
             },
             description: {
               'zh-CN':
-                '后端精简了专辑初始化 API，前端同步优化了新建专辑的交互路径，减少了设置一个新专辑所需的步骤与来回切换。',
+                '不管你用的是哪种同行评审 → 主催审批 → 母带 → 终审的变体，细节上的行为都对齐了，切换模板时遇到的奇怪边界情况少了很多。',
               en:
-                'The backend streamlined the album setup API, and the frontend follows through with a shorter creation flow. Fewer clicks and fewer context switches to get an album ready.',
+                'Whichever peer-review → producer-gate → mastering → final-review variant you use, the fine-grained behavior is now aligned — far fewer surprises when switching templates.',
             },
           },
           {
             title: {
-              'zh-CN': '经典工作流变体的一致性修复',
-              en: 'Consistency fixes across classic workflow variants',
+              'zh-CN': '完成一个步骤后自动回到曲目页',
+              en: 'Complete a step, land back on the track',
             },
             description: {
-              'zh-CN':
-                '针对同行评审→主催审批→母带→终审的多种变体进行了行为对齐，减少了在不同工作流模板间切换时遇到的边界情况。',
-              en:
-                'Behavior across the peer-review → producer-gate → mastering → final-review variants has been aligned, removing edge cases users hit when switching templates.',
+              'zh-CN': '完成一个工作步骤后会自动回到曲目详情页，而不是停留在已经结束的工作台上发呆。',
+              en: 'Finishing a workflow step now takes you back to the track detail view instead of leaving you on an already-finished workspace.',
             },
           },
           {
             title: {
-              'zh-CN': '工作步骤完成后的导航更合理',
-              en: 'Smarter navigation after completing a workflow step',
+              'zh-CN': '工作台抽屉里直接处理问题',
+              en: 'Handle issues right in the workspace drawer',
             },
             description: {
-              'zh-CN': '完成一个工作步骤后会自动回到曲目详情页，而不是停留在已经结束的步骤工作台上。',
-              en: 'Completing a workflow step now returns you to the track detail view instead of leaving you on a finished step workspace.',
+              'zh-CN': '工作台抽屉里就能直接创建、回复、解决问题，不用再频繁跳到独立的问题详情页。',
+              en: 'Create, reply to, and resolve issues directly in the workspace drawer — no more jumping out to the standalone issue page.',
             },
           },
           {
             title: {
-              'zh-CN': '工作台抽屉体验优化，问题可内联处理',
-              en: 'Workflow workspace drawer: inline issue handling',
+              'zh-CN': '仪表盘里，被拒曲目单独一栏',
+              en: 'Rejected tracks get their own lane on the dashboard',
             },
             description: {
-              'zh-CN': '工作台抽屉内可以直接创建 / 回复 / 处理问题，无需频繁跳转到独立的问题详情页。',
-              en: 'You can now create, reply to, and resolve issues directly in the workspace drawer instead of jumping out to the standalone issue page.',
-            },
-          },
-          {
-            title: {
-              'zh-CN': '仪表盘显式支持被拒曲目筛选',
-              en: 'Dashboard supports explicit rejected-track filtering',
-            },
-            description: {
-              'zh-CN': '被拒曲目不再混入主列表，而是独立加载、独立筛选，仪表盘的信号更干净。',
-              en: 'Rejected tracks are loaded and filtered separately instead of mixing into the main list, so the dashboard signal stays clean.',
+              'zh-CN': '被拒曲目不再混进主列表干扰视线，而是单独加载和筛选，仪表盘看起来更清爽。',
+              en: 'Rejected tracks are loaded and filtered separately instead of cluttering the main list — the dashboard reads much cleaner.',
             },
           },
         ],
       },
       {
         heading: {
-          'zh-CN': '母带阶段打磨',
-          en: 'Mastering Stage Polish',
+          'zh-CN': '母带阶段',
+          en: 'Mastering Stage',
         },
         items: [
           {
             title: {
-              'zh-CN': '曲目详情中的母带历史条目更精炼，可见性修复',
-              en: 'Refined mastering history entry on track detail',
+              'zh-CN': '母带侧边栏显示修复，历史条目更精炼',
+              en: 'Mastering sidebar visibility fixed, history entry refined',
             },
             description: {
               'zh-CN':
-                '母带侧边栏在曲目详情页的可见性问题已修复；母带历史条目本身也进行了视觉精炼。顶部的"母带沟通"大卡片被移除，改为更轻量的入口。',
+                '之前在某些情况下曲目详情页看不到母带侧边栏，这次修好了；母带历史的条目本身也做了视觉上的精简，信息更清楚。',
               en:
-                'Fixed a bug where the mastering sidebar could be hidden on the track detail page; the mastering history entry has also been visually refined. The bulky "mastering communication" hero card has been removed in favor of a lighter entry point.',
+                "A case where the mastering sidebar wouldn't show up on the track detail page is fixed, and the mastering history entries themselves have been visually simplified so the information reads more clearly.",
             },
           },
           {
             title: {
-              'zh-CN': '母带面包屑与母带沟通可见性提升',
-              en: 'Fixed mastering breadcrumbs, improved mastering chat visibility',
+              'zh-CN': '母带路由下的面包屑和入口修正',
+              en: 'Cleaner mastering breadcrumbs and entry point',
             },
             description: {
-              'zh-CN': '顶部面包屑在母带相关路由下的标签被修正；母带沟通入口的视觉权重调整得更合理。',
-              en: 'Top breadcrumbs now read correctly on mastering routes, and the mastering communication entry has a more sensible visual weight.',
+              'zh-CN': '进入母带相关页面时，顶部的面包屑现在会显示正确的路径，母带沟通的入口视觉权重也调得更合理。',
+              en: 'Top breadcrumbs now show the correct trail on mastering routes, and the mastering chat entry point has a more sensible visual weight.',
             },
           },
         ],
@@ -211,126 +209,106 @@ export const CHANGELOG: ChangelogEntry[] = [
         items: [
           {
             title: {
-              'zh-CN': '同行评审检查清单成为显式阻断项',
-              en: 'Peer-review checklist is now an explicit blocker',
+              'zh-CN': '清单必须打勾才能提交评审',
+              en: "Checklist must be complete before you can submit",
             },
             description: {
               'zh-CN':
-                '在检查清单全部勾选之前，无法提交同行评审结论。这项约束以前只是建议，现在变成硬性门槛，避免"随手过评"。',
+                '同行评审的检查清单以前是"建议"，现在变成硬性要求——必须全部勾选完才能提交结论。减少"随手过评"，让评审更扎实。',
               en:
-                'You can no longer submit a peer-review verdict while checklist items remain unchecked. What used to be a soft hint is now a hard gate, preventing accidental sign-offs.',
+                'The peer-review checklist used to be a soft reminder. Now every item must be checked before you can submit your verdict — no more accidental sign-offs.',
             },
           },
         ],
       },
       {
         heading: {
-          'zh-CN': '导出与目录号（Catalog Number）',
-          en: 'Export & Catalog Number',
+          'zh-CN': '专辑导出',
+          en: 'Album Export',
         },
         items: [
           {
             title: {
-              'zh-CN': '导出音频时写入专辑目录号',
-              en: 'Album catalog number embedded into exported audio',
+              'zh-CN': '导出的音频会自动带上专辑目录号',
+              en: 'Exported audio carries the album catalog number',
             },
             description: {
               'zh-CN':
-                '专辑的目录号（catalog number）会被写入导出音频文件的元数据中，便于交付给压盘 / 发行端使用，也便于用户本地归档。',
+                '专辑的目录号（catalog number）会自动写入导出音频文件的元数据里。交给压盘或发行时不用再手动补，本地归档时也更清楚这张碟是哪一个版本。',
               en:
-                'The album catalog number is now written into the exported audio files\' metadata, making handoff to pressing / distribution easier and improving local archiving.',
+                "The album's catalog number is now written into each exported file's metadata automatically. You won't have to patch it in by hand before handing off to pressing or distribution, and your local archive stays properly labeled.",
             },
           },
         ],
       },
       {
         heading: {
-          'zh-CN': '下载与音频缓存',
-          en: 'Downloads & Audio Cache',
+          'zh-CN': '下载与播放',
+          en: 'Downloads & Playback',
         },
         items: [
           {
             title: {
-              'zh-CN': '下载统一走音频缓存，持久化存储按字节设上限',
-              en: 'Downloads routed through the audio cache with a byte-capped persistent store',
+              'zh-CN': '听过的音频不会重复下载，本地缓存有上限',
+              en: "Already-played audio won't redownload; the local cache has a hard cap",
             },
             description: {
               'zh-CN':
-                '所有音频下载不再重复从网络拉取，而是走本地缓存层；持久化缓存大小按字节封顶，避免长期使用后磁盘占用失控。',
+                '现在系统会缓存你听过 / 下载过的音频，重复打开时不会再重新从服务器拉一遍，速度更快。同时缓存有一个容量上限，不会让你电脑越用越满。',
               en:
-                'Audio downloads now go through a local cache layer instead of hitting the network repeatedly, and the persistent cache is capped by byte size so long-term usage won\'t blow up disk footprint.',
+                "The system now caches audio you've already played or downloaded, so reopening a file doesn't fetch it again — it just plays. The cache also has a hard size limit, so it won't fill up your disk over time.",
             },
           },
           {
             title: {
-              'zh-CN': '附件音频走受保护下载路由',
-              en: 'Attachment audio is served from protected download routes',
+              'zh-CN': '评论里的音频附件受权限保护',
+              en: 'Audio attachments in comments are now permission-gated',
             },
             description: {
-              'zh-CN': '评论内的音频附件现在通过鉴权的下载路由，避免了未授权访问；同时修复了下载错误的处理路径。',
-              en: 'Comment audio attachments are now served via an auth-protected download route, and download error handling has been fixed end-to-end.',
+              'zh-CN': '评论里的音频附件只能由登录并有权限的人才能下载、播放，不再存在被直接拉取的风险。',
+              en: 'Audio attachments inside comments can only be fetched or played by signed-in users who have access — no more direct-link leakage.',
             },
           },
           {
             title: {
-              'zh-CN': '评论内附件音频排序稳定化',
-              en: 'Comment attachment audio ordering stabilized',
+              'zh-CN': '附件顺序稳定，[N] 时间戳不会错位',
+              en: "Attachment order is stable — [N] timestamps won't drift",
             },
             description: {
-              'zh-CN': '用于附件时间戳语法 [N] 的索引现在有稳定的排序，不会因为上传顺序或服务端刷新而漂移。',
-              en: 'The index used by the [N] attachment-timestamp syntax is now ordered deterministically, so it won\'t drift across uploads or server refreshes.',
+              'zh-CN': '评论内附件的编号顺序现在是稳定的，[1]、[2] 这些时间戳引用不会因为上传顺序或刷新页面而变来变去。',
+              en: "The ordering of attachments in a comment is now stable, so references like [1] and [2] in timestamp syntax don't shift around after uploads or page refreshes.",
             },
           },
         ],
       },
       {
         heading: {
-          'zh-CN': '安全性与反馈',
+          'zh-CN': '安全性与操作反馈',
           en: 'Safety & Feedback',
         },
         items: [
           {
             title: {
-              'zh-CN': '破坏性操作全面加固',
-              en: 'Destructive flows hardened end-to-end',
+              'zh-CN': '危险操作都加了二次确认',
+              en: "Dangerous actions all ask twice",
             },
             description: {
               'zh-CN':
-                '账号注销、母带交付确认、曲目拒绝等关键操作的二次确认、权限校验与失败反馈都进行了统一打磨；后端对交付确认增加了守卫条件。',
+                '注销账号、确认母带交付、拒绝曲目这类无法回头的操作，现在都会先弹出清晰的确认提示，误触成本降到最低。',
               en:
-                'Account deletion, mastering-delivery confirmation, track rejection, and similar critical flows have been given consistent confirmation dialogs, permission checks, and error feedback; the backend adds new guard conditions on delivery confirmation.',
+                "Irreversible actions like deleting your account, confirming a mastering delivery, or rejecting a track now show a clear confirmation first — much harder to set them off by accident.",
             },
           },
           {
             title: {
-              'zh-CN': '前端用户反馈状态统一',
-              en: 'Unified frontend user-feedback states',
+              'zh-CN': '加载、空状态和错误提示更整齐',
+              en: 'Cleaner loading, empty, and error states',
             },
             description: {
               'zh-CN':
-                '加载、空状态、错误提示和无障碍支持在多个视图下得到统一；注册 / 上传等边界场景的校验也更严格。',
+                '系统各处的加载骨架、空状态、错误提示与无障碍支持都做了统一；注册、上传等边界场景的校验也更严格，报错时知道是哪里出了问题。',
               en:
-                'Loading, empty, and error states (plus accessibility) have been aligned across views, and validation is tighter on edge cases like registration and upload.',
-            },
-          },
-        ],
-      },
-      {
-        heading: {
-          'zh-CN': '质量与测试',
-          en: 'Quality & Tests',
-        },
-        items: [
-          {
-            title: {
-              'zh-CN': '前后端测试覆盖全面扩展',
-              en: 'Expanded frontend and backend test coverage',
-            },
-            description: {
-              'zh-CN':
-                '前端的工作流视图、设置页等关键路径新增了覆盖；后端对工作流状态机与基础设施层也补齐了集成测试，并修正了开发套件中 R2 问题音频重定向的桩实现。',
-              en:
-                'Key paths in workflow views and settings now have frontend test coverage, and the backend adds integration tests around the workflow state machine and infra layer. The dev suite\'s R2 issue-audio redirect stub has been corrected.',
+                'Loading skeletons, empty states, error messages, and accessibility support have been unified across the app. Validation on edge cases like registration and upload is tighter too — when something fails, you can tell why.',
             },
           },
         ],
