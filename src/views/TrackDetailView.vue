@@ -252,13 +252,19 @@ watch(wsConnected, (val) => {
   if (val) wsHadConnection.value = true
 })
 
+function applyTrack(updated: Track) {
+  track.value = updated
+  trackStore.setCurrentTrack(updated)
+}
+
+let reviewAssignmentsLoadCount = 0
+
 async function loadTrack() {
   if (!track.value) loading.value = true
   loadError.value = false
   try {
     const detail = await trackApi.get(trackId.value)
-    track.value = detail.track
-    trackStore.setCurrentTrack(detail.track)
+    applyTrack(detail.track)
     issues.value = detail.issues
     const allDiscussions = detail.discussions ?? []
     generalDiscussion.discussions.value = allDiscussions.filter(d => d.phase !== 'mastering')
@@ -595,19 +601,20 @@ async function doReassign(userIds?: number[]) {
   reassigning.value = true
   try {
     const updated = await trackApi.reassignReviewer(track.value.id, userIds && userIds.length ? userIds : undefined)
-    track.value = updated
+    applyTrack(updated)
     showReassignModal.value = false
     reassignSelectedUserIds.value = []
-    try {
-      reviewAssignments.value = await trackApi.listAssignments(track.value.id)
-    } catch {
-      reviewAssignments.value = []
-    }
     if (updated.peer_reviewer_id !== null) {
       toastSuccess(t('trackDetail.reassignDone'))
     } else {
       toastError(t('trackDetail.reassignNoPool'))
     }
+    const assignmentsToken = ++reviewAssignmentsLoadCount
+    trackApi.listAssignments(updated.id)
+      .then((assignments) => {
+        if (assignmentsToken === reviewAssignmentsLoadCount) reviewAssignments.value = assignments
+      })
+      .catch(() => undefined)
   } finally {
     reassigning.value = false
   }
@@ -692,23 +699,30 @@ watch(reopenTargetStage, async (stageId) => {
   }
 })
 
+function resetReopenForm() {
+  showReopenModal.value = false
+  reopenTargetStage.value = ''
+  reopenReason.value = ''
+  reopenMasteringNotes.value = ''
+  reopenResets.value = []
+}
+
 async function handleReopen() {
   if (!track.value || !reopenTargetStage.value) return
   reopening.value = true
   try {
     if (canDirectReopen.value) {
-      await trackApi.reopen(track.value.id, reopenTargetStage.value)
+      const updated = await trackApi.reopen(track.value.id, reopenTargetStage.value)
+      applyTrack(updated)
       toastSuccess(t('trackDetail.reopenDone'))
+      // reopen may reset issues/events depending on target stage; refresh in the
+      // background so the UI updates in place without awaiting a second round-trip.
+      loadTrack()
     } else {
       await trackApi.requestReopen(track.value.id, reopenTargetStage.value, reopenReason.value, reopenMasteringNotes.value.trim() || undefined)
       toastSuccess(t('trackDetail.reopenRequested'))
     }
-    showReopenModal.value = false
-    reopenTargetStage.value = ''
-    reopenReason.value = ''
-    reopenMasteringNotes.value = ''
-    reopenResets.value = []
-    await loadTrack()
+    resetReopenForm()
   } catch (e: any) {
     toastError(e?.message || t('trackDetail.reopenFailed'))
   } finally {

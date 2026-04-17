@@ -130,8 +130,14 @@ const loadError = ref(false)
 
 async function loadIssue(id: number) {
   const token = ++loadCount
-  loading.value = true
   loadError.value = false
+  const cached = allTrackIssues.value.find(i => i.id === id)
+  if (cached) {
+    issue.value = cached
+    loading.value = false
+  } else if (issue.value?.id !== id) {
+    loading.value = true
+  }
   try {
     const fetched = await issueApi.get(id)
     if (token !== loadCount) return
