@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Info } from 'lucide-vue-next'
+import type { Issue } from '@/types'
 import {
   extractIssueReferences,
   extractMarkerIndexReferences,
   extractTimeReferences,
+  getActiveMentionContext,
   resolveTimeReferenceTarget,
+  type IssueMentionContext,
   type TimeReference,
   type TimestampTarget,
 } from '@/utils/timestamps'
@@ -16,16 +19,37 @@ const props = withDefaults(defineProps<{
   cursorPos?: number
   defaultTarget?: TimestampTarget
   visible?: boolean
+  issues?: Issue[] | null
 }>(), {
   defaultTarget: 'track',
   cursorPos: 0,
   visible: false,
+  issues: null,
 })
+
+const emit = defineEmits<{
+  select: [issue: Issue, mention: { start: number; end: number }]
+}>()
 
 const { t } = useI18n()
 
 const manualOpen = ref(false)
 const userClosed = ref(false)
+const activeIndex = ref(0)
+
+const mentionContext = computed<IssueMentionContext | null>(() => {
+  return getActiveMentionContext(props.text, props.cursorPos ?? props.text.length)
+})
+
+const pickerEnabled = computed(() => mentionContext.value !== null && Array.isArray(props.issues))
+
+const filteredIssues = computed<Issue[]>(() => {
+  if (!pickerEnabled.value) return []
+  const list = props.issues ?? []
+  const query = mentionContext.value?.query ?? ''
+  if (!query) return list
+  return list.filter(issue => issue.local_number.toString().startsWith(query))
+})
 
 const typingReference = computed(() => {
   const cursor = props.cursorPos ?? props.text.length
@@ -50,13 +74,78 @@ const typingReference = computed(() => {
 const matches = computed(() => extractTimeReferences(props.text))
 const markerMatches = computed(() => extractMarkerIndexReferences(props.text))
 const issueMatches = computed(() => extractIssueReferences(props.text))
-const isVisible = computed(() => props.visible || manualOpen.value || (typingReference.value && !userClosed.value))
+const isPickerVisible = computed(() => pickerEnabled.value && !userClosed.value)
+const isSyntaxVisible = computed(
+  () => !isPickerVisible.value && (props.visible || manualOpen.value || (typingReference.value && !userClosed.value)),
+)
+const isVisible = computed(() => isPickerVisible.value || isSyntaxVisible.value)
 
 watch(typingReference, (value) => {
   if (!value) userClosed.value = false
 })
 
+watch(mentionContext, (value) => {
+  if (value) {
+    userClosed.value = false
+    activeIndex.value = 0
+  }
+})
+
+watch(filteredIssues, (list) => {
+  if (activeIndex.value >= list.length) activeIndex.value = 0
+})
+
+function commitSelection(issue: Issue) {
+  const ctx = mentionContext.value
+  if (!ctx) return
+  emit('select', issue, { start: ctx.start, end: ctx.end })
+}
+
+function onKeydown(event: KeyboardEvent) {
+  if (!isPickerVisible.value) return
+  const list = filteredIssues.value
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    userClosed.value = true
+    return
+  }
+
+  if (!list.length) return
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    event.stopPropagation()
+    activeIndex.value = (activeIndex.value + 1) % list.length
+    return
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    event.stopPropagation()
+    activeIndex.value = (activeIndex.value - 1 + list.length) % list.length
+    return
+  }
+
+  if (event.key === 'Enter' || event.key === 'Tab') {
+    event.preventDefault()
+    event.stopPropagation()
+    const target = list[activeIndex.value]
+    if (target) commitSelection(target)
+  }
+}
+
+window.addEventListener('keydown', onKeydown, true)
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown, true)
+})
+
 function toggleManual() {
+  if (isPickerVisible.value) {
+    userClosed.value = true
+    return
+  }
   if (isVisible.value) {
     manualOpen.value = false
     userClosed.value = true
@@ -108,7 +197,47 @@ const examples = computed(() => ([
     leave-to-class="opacity-0 -translate-y-1"
   >
     <div
-      v-if="isVisible"
+      v-if="isPickerVisible"
+      class="absolute left-0 right-0 top-full z-20 mt-1.5 rounded-2xl border border-border bg-card px-2 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.32)]"
+    >
+      <p class="px-1.5 pb-1.5 text-[11px] font-mono font-semibold text-muted-foreground">
+        {{ t('timestamp.issuePickerHint') }}
+      </p>
+      <div
+        v-if="!filteredIssues.length"
+        data-issue-mention-empty
+        class="px-2 py-2 text-xs text-muted-foreground"
+      >
+        {{ t('timestamp.issuePickerEmpty') }}
+      </div>
+      <ul
+        v-else
+        data-issue-mention-list
+        role="listbox"
+        class="max-h-56 overflow-y-auto"
+      >
+        <li
+          v-for="(issue, index) in filteredIssues"
+          :key="issue.id"
+          data-issue-mention-item
+          role="option"
+          :data-local-number="issue.local_number"
+          :aria-selected="index === activeIndex ? 'true' : 'false'"
+          class="flex items-center gap-2 rounded-full px-2.5 py-1.5 cursor-pointer transition-colors"
+          :class="index === activeIndex
+            ? 'bg-primary/10 text-foreground'
+            : 'text-muted-foreground hover:bg-border/40'"
+          @mouseenter="activeIndex = index"
+          @mousedown.prevent="commitSelection(issue)"
+        >
+          <span class="font-mono text-[12px] text-primary shrink-0">#{{ issue.local_number }}</span>
+          <span class="text-sm text-foreground truncate">{{ issue.title || `#${issue.local_number}` }}</span>
+        </li>
+      </ul>
+    </div>
+
+    <div
+      v-else-if="isSyntaxVisible"
       class="absolute left-0 right-0 top-full z-20 mt-1.5 rounded-2xl border border-border bg-card px-3 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.32)]"
     >
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">

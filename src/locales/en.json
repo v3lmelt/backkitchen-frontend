@@ -509,7 +509,8 @@
     "batchMixedStatus": "Selected tracks have different statuses",
     "batchSuccess": "Action applied to {count} track(s)",
     "noTracks": "No tracks found.",
-    "colNumber": "#",
+    "colNumber": "Track No.",
+    "trackNumberLabel": "Track No. {number}",
     "exportAlbum": "Export",
     "deadlineOverdue": "{days}d overdue",
     "deadlineToday": "Due today",
@@ -583,6 +584,7 @@
     "editMetadataTitle": "Edit Track Info",
     "metadataSaved": "Track info saved",
     "metadataSaveFailed": "Failed to save",
+    "trackNumberLabel": "Track No. {number}",
     "trackSummary": "Track Summary",
     "submitter": "Submitter",
     "peerReviewer": "Peer Reviewer",
@@ -701,6 +703,9 @@
     "startLabel": "Start (s)",
     "endLabel": "End (s)",
     "checklistHeading": "Peer Review Checklist",
+    "prefillLabel": "Prefill",
+    "prefillVersion": "from source v{version}",
+    "reconfirmChecklist": "Save & Reconfirm Checklist",
     "saveChecklist": "Save Checklist",
     "requestRevision": "Request Revision",
     "passToProducer": "Pass to Producer",
@@ -710,7 +715,12 @@
     "checklistRequiredBadge": "Required",
     "checklistSavedBadge": "Saved",
     "checklistBlockerTitle": "Complete the peer review checklist first",
-    "checklistBlockerDesc": "You must check off and save the items above before submitting your review decision"
+    "checklistBlockerDesc": "You must check off and save the items above before submitting your review decision",
+    "prefillStatus": {
+      "prefilled": "Prefilled",
+      "reconfirm_required": "Reconfirm required",
+      "current_version": "Current version"
+    }
   },
   "revision": {
     "peerRevision": "Peer Revision",
@@ -934,7 +944,8 @@
     "albumRequired": "Please select an album before submitting",
     "titleRequired": "Please enter a track title",
     "artistRequired": "Please enter an artist name",
-    "fileTooLarge": "File too large, maximum allowed is {max}"
+    "fileTooLarge": "File too large, maximum allowed is {max}",
+    "unsupportedImageType": "Only JPEG, PNG, WebP, and GIF images are supported"
   },
   "settings": {
     "heading": "Album Settings",
@@ -1097,6 +1108,8 @@
     "issueReference": "Issue reference",
     "issueReferenceLabel": "Issue #{id}",
     "issueUnavailable": "Issue unavailable or you don't have access.",
+    "issuePickerHint": "Pick an issue to insert",
+    "issuePickerEmpty": "No issues on this track yet",
     "examples": {
       "point": "Single timestamp",
       "range": "Time range, plays from the start",
@@ -1172,11 +1185,22 @@
     "albumTitle": "Album Title *",
     "albumTitlePlaceholder": "Album title",
     "coverColor": "Cover Color",
-    "coverImageHint": "Click to upload cover",
+    "coverButtonLabel": "Upload album cover",
+    "coverImageHint": "Click to upload cover (JPEG/PNG/WebP/GIF, ≤ 20 MB)",
+    "coverUploadPartialFailure": "The album was created, but the cover upload failed: {message}. Please re-upload it in album settings.",
     "description": "Description",
     "descriptionPlaceholder": "Album description (optional)",
     "teamSection": "Team (optional)",
     "deadlinesSection": "Deadlines (optional)",
+    "reviewDefaults": "Review Defaults",
+    "reviewerAssignmentMode": "Default reviewer assignment",
+    "reviewerAssignmentHint": "This quick control updates the first peer review step and stays synced with the workflow editor.",
+    "checklistMode": "Peer review checklist",
+    "checklistModeCircleDefault": "Circle Default",
+    "checklistModeEnabled": "Enabled",
+    "checklistModeDisabled": "Disabled",
+    "checklistModeCircleHint": "Circle default currently resolves to {state}.",
+    "checklistModeAlbumHint": "Without a circle, this album uses its own checklist setting.",
     "workflowSection": "Workflow",
     "workflowUsingDefault": "Using default workflow",
     "workflowDesc": "Customize the track review workflow for this album. Producers can still adjust it later in settings, but deleting or renaming stages may migrate in-flight tracks.",
@@ -1200,8 +1224,10 @@
     },
     "info": {
       "coverHint": "Click to change cover",
+      "coverHintFormat": "JPEG / PNG / WebP / GIF · up to 20 MB",
       "saveCover": "Save Cover",
       "coverSaved": "Cover updated",
+      "coverUploadFailed": "Cover upload failed: {message}",
       "uploading": "Uploading...",
       "coverColor": "Cover Color"
     },
@@ -1227,7 +1253,16 @@
     },
     "checklist": {
       "readOnlyNotice": "Checklist template is set by the producer",
-      "noItems": "No checklist items"
+      "noItems": "No checklist items",
+      "modeTitle": "Checklist Policy",
+      "modeCircleHint": "Choose whether this album follows the circle default or overrides it.",
+      "modeAlbumHint": "Choose whether peer review requires a checklist for this album.",
+      "modeCircleDefault": "Circle Default",
+      "modeEnabled": "Enabled",
+      "modeDisabled": "Disabled",
+      "modeCircleResolved": "Circle default currently resolves to {state}.",
+      "modeAlbumResolved": "This album currently resolves to {state}.",
+      "modeSaved": "Checklist policy saved"
     },
     "workflow": {
       "customWorkflow": "Custom Workflow",
@@ -1289,6 +1324,9 @@
     "namePlaceholder": "e.g. Phantom Sound Studio",
     "description": "Description",
     "descriptionPlaceholder": "Circle description...",
+    "defaultChecklistLabel": "Default checklist policy",
+    "defaultChecklistEnabled": "Enabled by default",
+    "defaultChecklistDisabled": "Disabled by default",
     "website": "Website",
     "websitePlaceholder": "https://...",
     "create": "Create Circle",
@@ -1305,6 +1343,9 @@
     "name": "Circle Name",
     "description": "Description",
     "website": "Website",
+    "defaultChecklistLabel": "Default checklist policy",
+    "defaultChecklistEnabled": "Enabled by default",
+    "defaultChecklistDisabled": "Disabled by default",
     "logoUpdated": "Logo updated",
     "remove": "Remove",
     "memberRemoved": "Member removed",

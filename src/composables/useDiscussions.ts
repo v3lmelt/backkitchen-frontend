@@ -1,8 +1,9 @@
 import { ref, type Ref } from 'vue'
-import { discussionApi, resolveAssetUrl } from '@/api'
+import { discussionApi, r2Api, resolveAssetUrl, uploadToR2 } from '@/api'
 import type { Discussion, DiscussionPhase, EditHistory } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
+import { useAppStore } from '@/stores/app'
 
 export interface UseDiscussionsOptions {
   paginated?: boolean
@@ -16,6 +17,7 @@ export function useDiscussions(
 ) {
   const { t } = useI18n()
   const { error: toastError } = useToast()
+  const appStore = useAppStore()
 
   const paginated = options.paginated ?? false
   const pageSize = options.pageSize ?? 20
@@ -111,12 +113,51 @@ export function useDiscussions(
     posting.value = true
     postingProgress.value = 0
     try {
-      const d = await discussionApi.create(trackId.value, {
-        content: payload.content.trim(),
-        phase,
-        images: payload.images.length ? payload.images : undefined,
-        audios: payload.audios.length ? payload.audios : undefined,
-      }, (p) => { postingProgress.value = p })
+      let d: Discussion
+
+      if (appStore.r2Enabled && payload.audios.length > 0) {
+        const presignedResp = await r2Api.requestDiscussionAudioUpload(
+          trackId.value,
+          payload.audios.map(file => ({
+            filename: file.name,
+            content_type: file.type || 'application/octet-stream',
+            file_size: file.size,
+          })),
+        )
+        const totalSize = payload.audios.reduce((sum, file) => sum + file.size, 0)
+        let uploadedBytes = 0
+
+        for (let index = 0; index < presignedResp.uploads.length; index += 1) {
+          const file = payload.audios[index]
+          const previousBytes = uploadedBytes
+          await uploadToR2(
+            presignedResp.uploads[index].upload_url,
+            file,
+            file.type || 'application/octet-stream',
+            (percent) => {
+              const currentBytes = previousBytes + (file.size * percent / 100)
+              postingProgress.value = Math.round((currentBytes / totalSize) * 100)
+            },
+          )
+          uploadedBytes += file.size
+        }
+
+        d = await discussionApi.create(trackId.value, {
+          content: payload.content.trim(),
+          phase,
+          images: payload.images.length ? payload.images : undefined,
+          audioObjectKeys: presignedResp.uploads.map(upload => upload.object_key),
+          audioOriginalFilenames: payload.audios.map(file => file.name),
+        }, payload.images.length > 0 ? (p) => { postingProgress.value = p } : undefined)
+      } else {
+        d = await discussionApi.create(trackId.value, {
+          content: payload.content.trim(),
+          phase,
+          images: payload.images.length ? payload.images : undefined,
+          audios: payload.audios.length ? payload.audios : undefined,
+        }, (p) => { postingProgress.value = p })
+      }
+
       if (!discussions.value.some(x => x.id === d.id)) {
         discussions.value.push(d)
       }

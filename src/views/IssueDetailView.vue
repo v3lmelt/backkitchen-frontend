@@ -706,6 +706,7 @@ function openVersionCompare() {
               enable-audio
               enable-timestamp-popover
               timestamp-default-target="track"
+              :issues="allTrackIssues"
               @submit="handleStatusNoteSubmit"
             />
             <button @click="cancelStatusChange" class="btn-secondary text-sm">
@@ -903,6 +904,7 @@ function openVersionCompare() {
             enable-audio
             enable-timestamp-popover
             timestamp-default-target="attachment"
+            :issues="allTrackIssues"
             @submit="handleCommentSubmit"
           />
         </div>

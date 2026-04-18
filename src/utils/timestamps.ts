@@ -44,6 +44,28 @@ const TIME_REFERENCE_PATTERN = new RegExp(
 )
 const MARKER_REFERENCE_PATTERN = /(?<![\w])#(?<index>\d{1,3})(?![\w])/g
 const ISSUE_REFERENCE_PATTERN = /(?<![\w])@issue:(?<localNumber>\d{1,9})(?![\w])/gi
+const ISSUE_MENTION_CONTEXT_PATTERN = /(?<![\w])@(?:issue:\d{0,9}|issue|issu|iss|is|i)(?![A-Za-z])/g
+
+export interface IssueMentionContext {
+  kind: 'issue'
+  start: number
+  end: number
+  query: string
+}
+
+export function getActiveMentionContext(text: string, cursorPos: number): IssueMentionContext | null {
+  for (const match of text.matchAll(ISSUE_MENTION_CONTEXT_PATTERN)) {
+    if (match.index == null) continue
+    const start = match.index
+    const end = start + match[0].length
+    if (cursorPos < start || cursorPos > end) continue
+
+    const colonIndex = match[0].indexOf(':')
+    const query = colonIndex >= 0 ? match[0].slice(colonIndex + 1) : ''
+    return { kind: 'issue', start, end, query }
+  }
+  return null
+}
 
 export function parseTimecode(value: string): number | null {
   const trimmed = value.trim()

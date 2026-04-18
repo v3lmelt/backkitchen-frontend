@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   confirmDeliveryMock: vi.fn(),
   uploadSourceVersionMock: vi.fn(),
   uploadMasterDeliveryMock: vi.fn(),
+  checklistGetDraftMock: vi.fn(),
   checklistGetTemplateMock: vi.fn(),
   checklistSubmitMock: vi.fn(),
   downloadTrackAudioMock: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock('vue-router', () => ({
 vi.mock('@/api', () => ({
   API_ORIGIN: '',
   checklistApi: {
+    getDraft: mocks.checklistGetDraftMock,
     getTemplate: mocks.checklistGetTemplateMock,
     submit: mocks.checklistSubmitMock,
   },
@@ -205,6 +207,7 @@ describe('WorkflowStepView', () => {
     mocks.confirmDeliveryMock.mockReset()
     mocks.uploadSourceVersionMock.mockReset()
     mocks.uploadMasterDeliveryMock.mockReset()
+    mocks.checklistGetDraftMock.mockReset()
     mocks.checklistGetTemplateMock.mockReset()
     mocks.checklistSubmitMock.mockReset()
     mocks.downloadTrackAudioMock.mockReset()
@@ -219,6 +222,7 @@ describe('WorkflowStepView', () => {
     mocks.confirmDeliveryMock.mockResolvedValue({})
     mocks.uploadSourceVersionMock.mockResolvedValue({})
     mocks.uploadMasterDeliveryMock.mockResolvedValue({})
+    mocks.checklistGetDraftMock.mockRejectedValue(new Error('Checklist draft not found'))
     mocks.checklistSubmitMock.mockResolvedValue([])
   })
 
@@ -497,6 +501,7 @@ describe('WorkflowStepView', () => {
         title: 'Peer Track',
         artist: 'Nova',
         album_id: 3,
+        album_checklist_enabled: true,
         status: 'peer_review',
         file_path: '/audio.wav',
         version: 1,
@@ -566,6 +571,49 @@ describe('WorkflowStepView', () => {
       { label: 'Balance', passed: true, note: 'updated note' },
     ])
     expect(mocks.workflowTransitionMock).toHaveBeenCalledWith(9, 'pass')
+  })
+
+  it('hides the checklist workspace when the album checklist policy is disabled', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Checklist Disabled Track',
+        artist: 'Nova',
+        album_id: 3,
+        album_checklist_enabled: false,
+        status: 'peer_review',
+        file_path: '/audio.wav',
+        version: 1,
+        workflow_cycle: 1,
+        workflow_step: {
+          id: 'peer_review',
+          label: 'Peer Review',
+          type: 'review',
+          ui_variant: 'peer_review',
+          assignee_role: 'peer_reviewer',
+          order: 1,
+          transitions: { pass: 'producer_gate' },
+        },
+        workflow_transitions: [
+          { decision: 'pass', label: 'Pass' },
+        ],
+      },
+      issues: [],
+      checklist_items: [],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'peer_review', label: 'Peer Review', type: 'review', ui_variant: 'peer_review', assignee_role: 'peer_reviewer', order: 1, transitions: { pass: 'producer_gate' } },
+          { id: 'producer_gate', label: 'Producer Gate', type: 'gate', ui_variant: 'producer_gate', assignee_role: 'producer', order: 2, transitions: {} },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Peer Review Checklist')
+    expect(mocks.checklistGetDraftMock).not.toHaveBeenCalled()
   })
 
   it('supports read-only source compare during peer review', async () => {
@@ -1202,7 +1250,11 @@ describe('WorkflowStepView', () => {
     await wrapper.findAll('button').find(button => button.text().includes('Upload Revision'))!.trigger('click')
     await flushPromises()
 
-    expect(mocks.uploadSourceVersionMock).toHaveBeenCalledWith(9, file, undefined, expect.any(Function))
+    expect(mocks.uploadSourceVersionMock).toHaveBeenCalledWith(9, file, {
+      revisionNotes: undefined,
+      resolvedIssueIds: [],
+      resolutionNote: undefined,
+    }, expect.any(Function))
     expect(mocks.pushMock).toHaveBeenCalledWith({
       path: '/tracks/9',
       query: { returnTo: '/tracks/9/step/peer_revision' },

@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
 
 import { mountWithPlugins } from '@/tests/utils'
+import zhMessages from '@/locales/zh-CN.json'
 
 const mocks = vi.hoisted(() => ({
   pushMock: vi.fn(),
@@ -90,11 +93,36 @@ vi.mock('@/components/common/SkeletonLoader.vue', () => ({
 vi.mock('@/components/workflow/WorkflowEditor.vue', () => ({
   default: {
     props: ['workflowConfig', 'memberOptions'],
-    template: '<div class="workflow-editor-stub" />',
+    template: '<div class="workflow-editor-stub">{{ workflowConfig?.steps?.map(step => step.label).join(" | ") ?? "" }}</div>',
   },
 }))
 
 import AlbumNewView from './AlbumNewView.vue'
+
+function mountAlbumNewViewWithZhI18n() {
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  const i18n = createI18n({
+    legacy: false,
+    locale: 'zh-CN',
+    fallbackLocale: 'zh-CN',
+    messages: { 'zh-CN': zhMessages },
+    missingWarn: false,
+    fallbackWarn: false,
+  })
+
+  const wrapper = mount(AlbumNewView, {
+    global: {
+      plugins: [pinia, i18n],
+      stubs: {
+        transition: false,
+        RouterLink: { template: '<a><slot /></a>' },
+      },
+    },
+  })
+
+  return { wrapper, i18n }
+}
 
 describe('AlbumNewView', () => {
   beforeEach(() => {
@@ -120,6 +148,7 @@ describe('AlbumNewView', () => {
     mocks.circleListMock.mockResolvedValue([])
     mocks.circleGetMock.mockResolvedValue({
       id: 9,
+      default_checklist_enabled: true,
       members: [
         { id: 1, user_id: 1, role: 'owner', joined_at: '2024-01-01T00:00:00Z', user: { id: 1, display_name: 'Producer' } },
         { id: 2, user_id: 3, role: 'member', joined_at: '2024-01-01T00:00:00Z', user: { id: 3, display_name: 'Member' } },
@@ -165,10 +194,47 @@ describe('AlbumNewView', () => {
       member_ids: [],
       deadline: null,
       phase_deadlines: null,
+      checklist_enabled: false,
     })
     expect(wrapper.text()).toContain('Create failed')
     expect(mocks.toastErrorMock).toHaveBeenCalledWith('Create failed')
     expect(mocks.pushMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects oversized cover files before submission', async () => {
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    const fileInput = wrapper.find('input[type="file"]')
+    const file = new File([new Uint8Array(20 * 1024 * 1024 + 1)], 'cover.png', { type: 'image/png' })
+    Object.defineProperty(fileInput.element, 'files', { value: [file] })
+
+    await fileInput.trigger('change')
+
+    expect(mocks.toastErrorMock).toHaveBeenCalledWith('File too large, maximum allowed is 20 MB')
+  })
+
+  it('shows a localized warning when the album is created but cover upload fails', async () => {
+    mocks.createMock.mockResolvedValue({ id: 12 })
+    mocks.uploadCoverMock.mockRejectedValue(new Error('File too large. Maximum size is 20 MB.'))
+
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    await wrapper.find('input.input-field').setValue('Album With Cover')
+    const fileInput = wrapper.find('input[type="file"]')
+    const file = new File(['cover'], 'cover.png', { type: 'image/png' })
+    Object.defineProperty(fileInput.element, 'files', { value: [file] })
+    await fileInput.trigger('change')
+
+    await wrapper.findAll('button').find(button => button.text().includes('Create Album'))!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.uploadCoverMock).toHaveBeenCalledWith(12, expect.any(File))
+    expect(mocks.toastWarningMock).toHaveBeenCalledWith(
+      'The album was created, but the cover upload failed: File too large, maximum allowed is 20 MB. Please re-upload it in album settings.',
+    )
+    expect(mocks.pushMock).toHaveBeenCalledWith('/albums/12/settings')
   })
 
   it('filters team members to the selected circle and removes invalid picks before save', async () => {
@@ -205,6 +271,7 @@ describe('AlbumNewView', () => {
       member_ids: [3],
       deadline: null,
       phase_deadlines: null,
+      checklist_enabled: null,
     })
     expect(mocks.updateTeamMock).not.toHaveBeenCalled()
     expect(mocks.updateDeadlinesMock).not.toHaveBeenCalled()
@@ -238,7 +305,64 @@ describe('AlbumNewView', () => {
       phase_deadlines: {
         peer_review: '2025-01-05T00:00:00.000Z',
       },
+      checklist_enabled: false,
     })
     expect(mocks.updateDeadlinesMock).not.toHaveBeenCalled()
+  })
+
+  it('lets producers change the default reviewer assignment and checklist policy before creation', async () => {
+    mocks.circleListMock.mockResolvedValue([
+      { id: 9, name: 'Back Kitchen', description: null, logo_url: null, created_by: 1, member_count: 2 },
+    ])
+    mocks.circleGetMock.mockResolvedValue({
+      id: 9,
+      default_checklist_enabled: false,
+      members: [
+        { id: 1, user_id: 1, role: 'owner', joined_at: '2024-01-01T00:00:00Z', user: { id: 1, display_name: 'Producer' } },
+      ],
+    })
+    mocks.createMock.mockResolvedValue({ id: 22 })
+
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    await wrapper.findAll('button.custom-select-option').find(button => button.text() === 'Back Kitchen')!.trigger('click')
+    await flushPromises()
+
+    await wrapper.find('input.input-field').setValue('Workflow Album')
+    await wrapper.findAll('button').find(button => button.text().includes('Manual'))!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text().trim() === 'Enabled')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text().includes('Create Album'))!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.createMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Workflow Album',
+      circle_id: 9,
+      checklist_enabled: true,
+      workflow_config: expect.objectContaining({
+        steps: expect.arrayContaining([
+          expect.objectContaining({ id: 'peer_review', assignment_mode: 'manual' }),
+        ]),
+      }),
+    }))
+  })
+
+  it('keeps default workflow labels localized when the reviewer mode quick control creates the workflow config', async () => {
+    const { wrapper, i18n } = mountAlbumNewViewWithZhI18n()
+    await flushPromises()
+
+    await wrapper.findAll('button').find(button => button.text().includes(i18n.global.t('albumNew.workflowSection') as string))!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.workflow-editor-stub').text()).toBe('')
+
+    await wrapper.findAll('button').find(button => button.text().includes(i18n.global.t('workflowEditor.manual') as string))!.trigger('click')
+    await flushPromises()
+
+    const workflowText = wrapper.find('.workflow-editor-stub').text()
+    expect(workflowText).toContain(i18n.global.t('workflowSteps.peer_review'))
+    expect(workflowText).toContain(i18n.global.t('workflowSteps.mastering'))
+    expect(workflowText).not.toContain('Peer Review')
+    expect(workflowText).not.toContain('Mastering')
   })
 })

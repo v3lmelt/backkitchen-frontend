@@ -253,7 +253,7 @@
       "basicsTitle": "基本用法",
       "basicsDesc": "流程画布里的阶段会按自上而下的顺序执行。点击任意卡片即可在右侧 Inspector 面板编辑该阶段的名称、负责角色与行为开关；卡片右上角的 ↑ / ↓ 图标用于调整顺序，🗑 图标用于删除阶段。",
       "stageTypesTitle": "阶段类型",
-        "stageIntake": "接收审批 — 主催确认是否接受这次投稿。可选是否允许永久拒绝，以及是否跳过同行评审直接进入主催审核。",
+      "stageIntake": "接收审批 — 主催确认是否接受这次投稿。可选是否允许永久拒绝，以及是否跳过同行评审直接进入主催审核。",
       "stagePeerReview": "同行评审 — 同行评审人聆听曲目并标记问题，完成评审后决定通过或要求修订。支持手动指定或自动从评审池中分配。",
       "stageProducerGate": "主催审批 — 主催决定曲目是否进入母带制作，或打回修订。可启用永久拒绝，以及将曲目回退到任何更早的阶段。",
       "stageMastering": "母带制作 — 母带师上传母带成品；可选是否要求交付后确认。",
@@ -265,7 +265,7 @@
       "reviewSettingsTitle": "评审设置（同行评审）",
       "reviewSettingsDesc": "同行评审支持手动和自动两种分配方式。自动模式下可从社团成员中挑选若干人组成评审人池，并指定至少需要多少人完成评审才能推进到下一阶段。",
       "rejectTargetsTitle": "拒绝目标",
-        "rejectTargetsDesc": "接收审批、主催审批、终审可以启用「允许永久拒绝」（退稿，无法恢复）。接收审批还可以启用「主催直接审核」跳过同行评审。主催审批和终审还能添加额外回退目标，把曲目送回任何更早的阶段重新处理。",
+      "rejectTargetsDesc": "接收审批、主催审批、终审可以启用「允许永久拒绝」（退稿，无法恢复）。接收审批还可以启用「主催直接审核」跳过同行评审。主催审批和终审还能添加额外回退目标，把曲目送回任何更早的阶段重新处理。",
       "notesTitle": "注意事项",
       "note1": "阶段顺序决定推进路径，最后一个主阶段完成后曲目进入已完成状态。使用卡片右上角的箭头图标可以随时调整顺序。",
       "note2": "专辑创建后仍可在专辑设置里修改工作流，但删除或改动阶段可能影响正在进行中的曲目。",
@@ -325,11 +325,21 @@
       "revision": "{stage} 修订"
     },
     "stageKinds": {
-      "intake": { "name": "接收审批" },
-      "peer_review": { "name": "同行评审" },
-      "producer_gate": { "name": "主催审批" },
-      "mastering": { "name": "母带制作" },
-      "final_review": { "name": "终审" }
+      "intake": {
+        "name": "接收审批"
+      },
+      "peer_review": {
+        "name": "同行评审"
+      },
+      "producer_gate": {
+        "name": "主催审批"
+      },
+      "mastering": {
+        "name": "母带制作"
+      },
+      "final_review": {
+        "name": "终审"
+      }
     },
     "summary": {
       "mainStages": "主阶段数量",
@@ -400,12 +410,12 @@
     "clearRevision": "重新选择",
     "uploading": "上传中…",
     "uploadRevision": "上传修订版",
-    "deliveryPreviewHeading": "提交前试听",
-    "deliveryPreviewNotice": "请仔细检查导出设置、头尾处理与整体听感，先试听确认无误后再提交交付物。",
-    "confirmUploadDelivery": "确认提交交付物",
-    "clearSelectedDelivery": "重新选择文件",
+    "deliveryPreviewHeading": "本地预听",
+    "deliveryPreviewNotice": "上传前请试听确认文件无误。",
+    "confirmUploadDelivery": "确认上传交付物",
+    "clearSelectedDelivery": "取消选择",
     "currentDelivery": "当前交付物",
-    "deliveryUploaded": "交付物已上传",
+    "deliveryUploaded": "母带交付物已上传",
     "revisionUploaded": "修订版已上传",
     "finalApproved": "最终审核已通过",
     "currentAudio": "当前音频",
@@ -438,12 +448,6 @@
     "reviewFinalizeReady": "评审人数已满足，现在可以由评审组内成员提交最终结论。",
     "reviewWaitingForQuorum": "已收到 {completed}/{required} 份评审意见，等待更多评审人提交。",
     "reviewWaitingForAssignment": "当前阶段尚未指派评审人，需等待主催手动安排。",
-    "deliveryPreviewHeading": "本地预听",
-    "deliveryPreviewNotice": "上传前请试听确认文件无误。",
-    "confirmUploadDelivery": "确认上传交付物",
-    "clearSelectedDelivery": "取消选择",
-    "deliveryUploaded": "母带交付物已上传",
-    "currentDelivery": "当前交付物",
     "deliveryPendingConfirmation": "待母带师确认提交",
     "deliveryConfirmed": "母带师已确认提交",
     "masterVersionHistory": "母带版本历史",
@@ -577,6 +581,7 @@
     "visibilitySetPrivate": "曲目已设为仅相关人员可见",
     "workflowStatus": "工作流状态",
     "currentSourceAudio": "当前源音频",
+    "trackNumberLabel": "曲序 #{number}",
     "noAudioFile": "该曲目暂无源音频文件。",
     "issuesHeading": "问题 ({count})",
     "editMetadata": "编辑信息",
@@ -701,6 +706,9 @@
     "startLabel": "起点（秒）",
     "endLabel": "终点（秒）",
     "checklistHeading": "同行评审清单",
+    "prefillLabel": "预填",
+    "prefillVersion": "来自源版本 v{version}",
+    "reconfirmChecklist": "保存并重新确认清单",
     "saveChecklist": "保存清单",
     "requestRevision": "请求修订",
     "passToProducer": "提交至主催",
@@ -710,7 +718,12 @@
     "checklistRequiredBadge": "必填",
     "checklistSavedBadge": "已保存",
     "checklistBlockerTitle": "请先完成同行评审清单",
-    "checklistBlockerDesc": "提交审核决策前，必须勾选并保存上方的清单项目"
+    "checklistBlockerDesc": "提交审核决策前，必须勾选并保存上方的清单项目",
+    "prefillStatus": {
+      "prefilled": "已预填",
+      "reconfirm_required": "需要重新确认",
+      "current_version": "当前版本"
+    }
   },
   "revision": {
     "peerRevision": "同行修订",
@@ -857,7 +870,7 @@
     "returnRequested": "已向主催发送退回请求"
   },
   "issueDetail": {
-    "deleteCommentTitle": "删除评论",
+    "deleteCommentTitle": "删除评论？",
     "deleteCommentConfirm": "确认删除这条评论？此操作不可撤销。",
     "back": "返回",
     "created": "创建于 {date}",
@@ -903,7 +916,6 @@
     "statusUpdateFailed": "更新问题状态失败。",
     "commentUpdated": "评论已更新。",
     "commentDeleted": "评论已删除。",
-    "deleteCommentTitle": "删除评论？",
     "deleteCommentMessage": "这条评论将被永久删除。"
   },
   "upload": {
@@ -934,7 +946,8 @@
     "albumRequired": "请先选择专辑再提交",
     "titleRequired": "请输入曲目标题",
     "artistRequired": "请输入艺术家名称",
-    "fileTooLarge": "文件过大，最大允许 {max}"
+    "fileTooLarge": "文件过大，最大允许 {max}",
+    "unsupportedImageType": "仅支持 JPEG、PNG、WebP 和 GIF 图片"
   },
   "settings": {
     "heading": "专辑设置",
@@ -1148,6 +1161,8 @@
     "issueReference": "问题引用",
     "issueReferenceLabel": "问题 #{id}",
     "issueUnavailable": "问题不存在或你暂无权限查看。",
+    "issuePickerHint": "选择要插入的问题",
+    "issuePickerEmpty": "当前曲目暂无问题",
     "examples": {
       "point": "单个时间点",
       "range": "时间段，点击后从起点播放",
@@ -1223,11 +1238,22 @@
     "albumTitle": "专辑标题 *",
     "albumTitlePlaceholder": "专辑标题",
     "coverColor": "封面颜色",
-    "coverImageHint": "点击上传封面图",
+    "coverButtonLabel": "上传专辑封面",
+    "coverImageHint": "点击上传封面图（JPEG/PNG/WebP/GIF，≤ 20 MB）",
+    "coverUploadPartialFailure": "专辑已创建，但封面上传失败：{message}。请在设置页重新上传。",
     "description": "描述",
     "descriptionPlaceholder": "专辑描述（可选）",
     "teamSection": "团队（可选）",
     "deadlinesSection": "截止日期（可选）",
+    "reviewDefaults": "评审默认设置",
+    "reviewerAssignmentMode": "默认审稿人分配",
+    "reviewerAssignmentHint": "这个快捷设置会同步修改第一个同行评审阶段，并与工作流编辑器保持一致。",
+    "checklistMode": "同行评审清单",
+    "checklistModeCircleDefault": "沿用社团默认",
+    "checklistModeEnabled": "启用",
+    "checklistModeDisabled": "关闭",
+    "checklistModeCircleHint": "当前社团默认值解析为：{state}。",
+    "checklistModeAlbumHint": "未关联社团时，此专辑使用自己的 checklist 开关。",
     "workflowSection": "工作流",
     "workflowUsingDefault": "使用默认工作流",
     "workflowDesc": "自定义该专辑的曲目审核工作流。后续仍可在专辑设置中调整，但删除或改名阶段可能会迁移正在处理中的曲目。",
@@ -1251,8 +1277,10 @@
     },
     "info": {
       "coverHint": "点击更换封面图",
+      "coverHintFormat": "支持 JPEG / PNG / WebP / GIF，单张 ≤ 20 MB",
       "saveCover": "保存封面",
       "coverSaved": "封面已更新",
+      "coverUploadFailed": "封面上传失败：{message}",
       "uploading": "上传中…",
       "coverColor": "封面颜色"
     },
@@ -1278,7 +1306,16 @@
     },
     "checklist": {
       "readOnlyNotice": "Checklist 模板由主催设置",
-      "noItems": "暂无检查项"
+      "noItems": "暂无检查项",
+      "modeTitle": "Checklist 策略",
+      "modeCircleHint": "选择此专辑沿用社团默认，还是单独覆盖社团默认值。",
+      "modeAlbumHint": "选择此专辑的同行评审是否要求 checklist。",
+      "modeCircleDefault": "沿用社团默认",
+      "modeEnabled": "启用",
+      "modeDisabled": "关闭",
+      "modeCircleResolved": "当前社团默认值解析为：{state}。",
+      "modeAlbumResolved": "当前专辑实际生效为：{state}。",
+      "modeSaved": "Checklist 策略已保存"
     },
     "workflow": {
       "customWorkflow": "自定义工作流",
@@ -1340,6 +1377,9 @@
     "namePlaceholder": "例：幻音制作组",
     "description": "简介",
     "descriptionPlaceholder": "社团简介…",
+    "defaultChecklistLabel": "默认 checklist 策略",
+    "defaultChecklistEnabled": "默认启用",
+    "defaultChecklistDisabled": "默认关闭",
     "website": "官网",
     "websitePlaceholder": "https://…",
     "create": "创建社团",
@@ -1356,6 +1396,9 @@
     "name": "社团名称",
     "description": "简介",
     "website": "官网",
+    "defaultChecklistLabel": "默认 checklist 策略",
+    "defaultChecklistEnabled": "默认启用",
+    "defaultChecklistDisabled": "默认关闭",
     "logoUpdated": "Logo 已更新",
     "remove": "移除",
     "memberRemoved": "成员已移除",

@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { checklistApi, issueApi, trackApi, r2Api, uploadToR2, API_ORIGIN } from '@/api'
 import type {
   ChecklistItem,
+  ChecklistDraftItem,
+  ChecklistDraftPrefillMeta,
   ChecklistTemplateItem,
   Issue,
   StageAssignment,
@@ -56,7 +58,8 @@ const trackId = computed(() => Number(route.params.id))
 const chatSidebarRef = ref<InstanceType<typeof MasteringChatSidebar> | null>(null)
 
 const wsReloading = ref(false)
-useTrackWebSocket(trackId.value, async () => {
+const wsHadConnection = ref(false)
+const { connected: wsConnected } = useTrackWebSocket(trackId.value, async () => {
   if (wsReloading.value) return
   wsReloading.value = true
   await nextTick()
@@ -68,6 +71,9 @@ useTrackWebSocket(trackId.value, async () => {
     masteringDiscussion.applyRealtimeEvent(event, discussionId)
   },
 })
+watch(wsConnected, (connected) => {
+  if (connected) wsHadConnection.value = true
+})
 
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
@@ -76,7 +82,9 @@ const masterDeliveries = ref<MasterDelivery[]>([])
 const workflowConfig = ref<WorkflowConfig | null>(null)
 const checklistItems = ref<ChecklistItem[]>([])
 const templateItems = ref<ChecklistTemplateItem[]>([])
-const checklistDraft = ref<{ label: string; passed: boolean; note: string }[]>([])
+const checklistDraft = ref<ChecklistDraftItem[]>([])
+const checklistPrefill = ref<ChecklistDraftPrefillMeta | null>(null)
+const albumChecklistEnabled = ref(true)
 const reviewAssignments = ref<StageAssignment[]>([])
 const loading = ref(true)
 const loadError = ref('')
@@ -127,6 +135,14 @@ const defaultChecklistLabelKeyMap: Record<string, string> = {
   'Stereo Image': 'stereoImage',
   'Technical Cleanliness': 'technicalCleanliness',
 }
+
+const defaultPeerChecklistTemplateItems: ChecklistTemplateItem[] = [
+  { label: 'Arrangement', required: true, sort_order: 0 },
+  { label: 'Balance', required: true, sort_order: 1 },
+  { label: 'Low-End', required: true, sort_order: 2 },
+  { label: 'Stereo Image', required: true, sort_order: 3 },
+  { label: 'Technical Cleanliness', required: true, sort_order: 4 },
+]
 
 onMounted(loadPage)
 onMounted(() => {
@@ -325,11 +341,65 @@ const openCount = computed(() => allCycleIssues.value.filter(i => isIssueUnresol
 const resolvedCount = computed(() =>
   allCycleIssues.value.filter(i => i.status === 'resolved' || i.status === 'internal_resolved').length,
 )
+const isPeerReviewChecklistEnabled = computed(() => albumChecklistEnabled.value !== false)
 const currentUserChecklistItems = computed(() =>
   checklistItems.value.filter(item => item.reviewer_id === appStore.currentUser?.id),
 )
+const currentVersionChecklistItems = computed(() =>
+  currentUserChecklistItems.value.filter((item) => {
+    const cycleMatches =
+      track.value?.workflow_cycle == null
+      || item.workflow_cycle == null
+      || item.workflow_cycle === track.value.workflow_cycle
+    const sourceMatches =
+      currentSourceVersionId.value == null
+      || item.source_version_id == null
+      || item.source_version_id === currentSourceVersionId.value
+    return cycleMatches && sourceMatches
+  }),
+)
+const checklistDraftSnapshot = computed(() =>
+  JSON.stringify(
+    checklistDraft.value
+      .map((item) => ({
+        label: item.label,
+        passed: item.passed,
+        note: (item.note ?? '').trim(),
+      }))
+      .sort((left, right) => left.label.localeCompare(right.label)),
+  ),
+)
+const currentVersionChecklistSnapshot = computed(() =>
+  JSON.stringify(
+    currentVersionChecklistItems.value
+      .map((item) => ({
+        label: item.label,
+        passed: item.passed,
+        note: (item.note ?? '').trim(),
+      }))
+      .sort((left, right) => left.label.localeCompare(right.label)),
+  ),
+)
+const checklistDirty = computed(() =>
+  isPeerReviewChecklistEnabled.value
+  && checklistDraft.value.length > 0
+  && checklistDraftSnapshot.value !== currentVersionChecklistSnapshot.value,
+)
 const checklistPassedCount = computed(() => checklistItems.value.filter(item => item.passed).length)
-const checklistSaved = computed(() => currentUserChecklistItems.value.length > 0)
+const checklistSaved = computed(() =>
+  !isPeerReviewChecklistEnabled.value || currentVersionChecklistItems.value.length > 0,
+)
+const checklistSaveButtonLabel = computed(() =>
+  checklistPrefill.value?.reconfirm_required
+    ? t('peerReview.reconfirmChecklist')
+    : t('peerReview.saveChecklist'),
+)
+const checklistPrefillStateLabel = computed(() => {
+  const status = checklistPrefill.value?.status
+  if (!status) return ''
+  const key = `peerReview.prefillStatus.${status}`
+  return t(key, status)
+})
 const checklistByReviewer = computed(() => {
   const groups = new Map<number, { user: User | null | undefined; items: ChecklistItem[] }>()
   for (const item of checklistItems.value) {
@@ -457,17 +527,40 @@ const revisionAssigneeRoleLabel = computed(() => {
 })
 
 async function loadPeerChecklist(albumId: number) {
+  checklistPrefill.value = null
+
+  try {
+    const draft = await checklistApi.getDraft(trackId.value)
+    templateItems.value = (draft.template_items.length ? draft.template_items : defaultPeerChecklistTemplateItems)
+      .map(item => ({ ...item }))
+    checklistPrefill.value = draft.prefill
+
+    const orderedTemplateItems = templateItems.value
+      .slice()
+      .sort((a, b) => a.sort_order - b.sort_order)
+
+    const draftByLabel = new Map(
+      draft.items.map((item) => [item.label, item] as const),
+    )
+
+    checklistDraft.value = orderedTemplateItems.map((item) => {
+      const draftItem = draftByLabel.get(item.label)
+      return {
+        label: item.label,
+        passed: draftItem?.passed ?? false,
+        note: draftItem?.note ?? '',
+      }
+    })
+    return
+  } catch {
+    checklistPrefill.value = null
+  }
+
   try {
     const template = await checklistApi.getTemplate(albumId)
-    templateItems.value = template.items
+    templateItems.value = template.items.map(item => ({ ...item }))
   } catch {
-    templateItems.value = [
-      { label: 'Arrangement', required: true, sort_order: 0 },
-      { label: 'Balance', required: true, sort_order: 1 },
-      { label: 'Low-End', required: true, sort_order: 2 },
-      { label: 'Stereo Image', required: true, sort_order: 3 },
-      { label: 'Technical Cleanliness', required: true, sort_order: 4 },
-    ]
+    templateItems.value = defaultPeerChecklistTemplateItems.map(item => ({ ...item }))
   }
 
   const labels = templateItems.value
@@ -475,9 +568,9 @@ async function loadPeerChecklist(albumId: number) {
     .sort((a, b) => a.sort_order - b.sort_order)
     .map(item => item.label)
 
-  if (currentUserChecklistItems.value.length > 0) {
+  if (currentVersionChecklistItems.value.length > 0) {
     checklistDraft.value = labels.map(label => {
-      const item = currentUserChecklistItems.value.find(entry => entry.label === label)
+      const item = currentVersionChecklistItems.value.find(entry => entry.label === label)
       return { label, passed: item?.passed ?? false, note: item?.note ?? '' }
     })
     return
@@ -497,6 +590,9 @@ async function loadPage() {
     sourceVersions.value = detail.source_versions ?? []
     masterDeliveries.value = detail.master_deliveries ?? []
     workflowConfig.value = detail.workflow_config ?? null
+    albumChecklistEnabled.value = detail.album?.checklist_enabled
+      ?? detail.track.album_checklist_enabled
+      ?? false
     issues.value = detail.issues.filter(
       issue => issue.workflow_cycle === detail.track.workflow_cycle,
     )
@@ -515,10 +611,17 @@ async function loadPage() {
     }
 
     if (inferClassicVariant(detail.track.workflow_step ?? null) === 'peer_review') {
-      await loadPeerChecklist(detail.track.album_id)
+      if (albumChecklistEnabled.value !== false) {
+        await loadPeerChecklist(detail.track.album_id)
+      } else {
+        templateItems.value = []
+        checklistDraft.value = []
+        checklistPrefill.value = null
+      }
     } else {
       templateItems.value = []
       checklistDraft.value = []
+      checklistPrefill.value = null
     }
     if (
       inferClassicVariant(detail.track.workflow_step ?? null) === 'mastering'
@@ -866,8 +969,8 @@ async function executeTransition(decision: string) {
   acting.value = true
   error.value = ''
   try {
-    if (activeVariant.value === 'peer_review' && checklistDraft.value.length > 0) {
-      await persistChecklist()
+    if (inferClassicVariant(track.value.workflow_step ?? null) === 'peer_review' && checklistDirty.value) {
+      await persistChecklist(false)
     }
     const updatedTrack = await trackApi.workflowTransition(trackId.value, decision)
     if (updatedTrack.status === previousStatus) {
@@ -892,8 +995,9 @@ async function handleUpload(kind: 'revision' | 'delivery') {
     const file = uploadFile.value
     let updatedTrack: Track
     if (appStore.r2Enabled) {
-      const requestFn = kind === 'revision' ? r2Api.requestSourceVersionUpload : r2Api.requestMasterDeliveryUpload
-      const confirmFn = kind === 'revision' ? r2Api.confirmSourceVersionUpload : r2Api.confirmMasterDeliveryUpload
+      const requestFn = kind === 'revision'
+        ? r2Api.requestSourceVersionUpload
+        : r2Api.requestMasterDeliveryUpload
       const [presigned, duration] = await Promise.all([
         requestFn(trackId.value, {
           filename: file.name,
@@ -905,17 +1009,28 @@ async function handleUpload(kind: 'revision' | 'delivery') {
       await uploadToR2(presigned.upload_url, file, file.type || 'application/octet-stream', (p) => {
         uploadProgress.value = p
       })
-      const confirmParams: { upload_id: string; object_key: string; duration: number | null; revision_notes?: string | null } = {
-        upload_id: presigned.upload_id,
-        object_key: presigned.object_key,
-        duration,
+      if (kind === 'revision') {
+        updatedTrack = await r2Api.confirmSourceVersionUpload(trackId.value, {
+          upload_id: presigned.upload_id,
+          object_key: presigned.object_key,
+          duration,
+          revision_notes: revisionNotes.value.trim() || null,
+          resolved_issue_ids: [...selectedRevisionIssueIds.value],
+          resolution_note: revisionBatchNote.value.trim() || null,
+        })
+      } else {
+        updatedTrack = await r2Api.confirmMasterDeliveryUpload(trackId.value, {
+          upload_id: presigned.upload_id,
+          object_key: presigned.object_key,
+          duration,
+        })
       }
-      if (kind === 'revision' && revisionNotes.value.trim()) {
-        confirmParams.revision_notes = revisionNotes.value.trim()
-      }
-      updatedTrack = await confirmFn(trackId.value, confirmParams)
     } else if (kind === 'revision') {
-      updatedTrack = await trackApi.uploadSourceVersion(trackId.value, file, revisionNotes.value.trim() || undefined, (percent) => {
+      updatedTrack = await trackApi.uploadSourceVersion(trackId.value, file, {
+        revisionNotes: revisionNotes.value.trim() || undefined,
+        resolvedIssueIds: [...selectedRevisionIssueIds.value],
+        resolutionNote: revisionBatchNote.value.trim() || undefined,
+      }, (percent) => {
         uploadProgress.value = percent
       })
     } else {
@@ -936,6 +1051,8 @@ async function handleUpload(kind: 'revision' | 'delivery') {
     }
     uploadFile.value = null
     revisionNotes.value = ''
+    selectedRevisionIssueIds.value = []
+    revisionBatchNote.value = ''
     resetDeliveryPreview()
     toastSuccess(t('workflowStep.revisionUploaded'))
     if (updatedTrack.status !== previousStatus) {
@@ -1072,6 +1189,7 @@ async function persistChecklist(showToast = false) {
   if (showToast) {
     toastSuccess(t('peerReview.checklistSubmitted'))
   }
+  await loadPage()
 }
 
 async function submitChecklist() {
@@ -1167,7 +1285,7 @@ const genericApprovalActions = computed<WorkflowAction[]>(() =>
 
 const peerReviewActionHint = computed(() => {
   if (reviewWaitingForAssignment.value) return t('workflowStep.reviewWaitingForAssignment')
-  if (!checklistSaved.value) return t('peerReview.checklistRequiredHint')
+  if (isPeerReviewChecklistEnabled.value && !checklistSaved.value) return t('peerReview.checklistRequiredHint')
   if (currentUserCanFinalizeReview.value) return t('workflowStep.reviewFinalizeHint')
   if (reviewRequiresGroupFinalization.value && currentUserAssignment.value?.status === 'completed' && !reviewQuorumReached.value) {
     return t('workflowStep.reviewWaitingForQuorum', { completed: completedReviewCount.value, required: requiredReviewCount.value })
@@ -1261,6 +1379,13 @@ function handleIssueLeave() {
 
       <div v-if="error" class="card border border-error/40 bg-error-bg text-sm text-error">
         {{ error }}
+      </div>
+
+      <div
+        v-if="wsHadConnection && !wsConnected"
+        class="card border border-warning/40 bg-warning-bg text-xs text-warning"
+      >
+        {{ t('trackDetail.liveDisconnected') }}
       </div>
 
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1446,6 +1571,7 @@ function handleIssueLeave() {
             :track-id="trackId"
             phase="peer"
             :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
+            :issues="issues"
             @created="onIssueCreated"
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
@@ -1483,6 +1609,7 @@ function handleIssueLeave() {
         </div>
 
         <div
+          v-if="isPeerReviewChecklistEnabled"
           class="card space-y-4"
           :class="checklistSaved ? '' : 'border-warning/60 ring-1 ring-warning/40'"
         >
@@ -1496,6 +1623,26 @@ function handleIssueLeave() {
               <AlertCircle v-else class="w-3.5 h-3.5" :stroke-width="2" />
               {{ checklistSaved ? t('peerReview.checklistSavedBadge') : t('peerReview.checklistRequiredBadge') }}
             </span>
+          </div>
+          <div v-if="checklistPrefill" class="border border-border bg-background p-3 space-y-1">
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+              <span class="font-mono text-foreground">{{ t('peerReview.prefillLabel') }}</span>
+              <span
+                v-if="checklistPrefillStateLabel"
+                class="inline-flex items-center rounded-full bg-info-bg px-2 py-0.5 font-mono text-info"
+              >
+                {{ checklistPrefillStateLabel }}
+              </span>
+              <span v-if="checklistPrefill.source_version_number != null" class="text-muted-foreground">
+                {{ t('peerReview.prefillVersion', { version: checklistPrefill.source_version_number }) }}
+              </span>
+              <span v-if="checklistPrefill.updated_at" class="text-muted-foreground">
+                {{ fmtDate(checklistPrefill.updated_at) }}
+              </span>
+            </div>
+            <p v-if="checklistPrefill.reason" class="text-xs text-muted-foreground">
+              {{ checklistPrefill.reason }}
+            </p>
           </div>
           <div v-for="item in checklistDraft" :key="item.label" class="flex items-start gap-3">
             <input
@@ -1513,13 +1660,16 @@ function handleIssueLeave() {
             </div>
           </div>
           <button @click="submitChecklist" class="btn-secondary text-sm">
-            {{ t('peerReview.saveChecklist') }}
+            {{ checklistSaveButtonLabel }}
           </button>
         </div>
       </div>
     </div>
 
-    <div v-if="!checklistSaved" class="mt-4 flex items-start gap-3 border border-warning/60 bg-warning-bg px-4 py-3 text-warning">
+    <div
+      v-if="isPeerReviewChecklistEnabled && !checklistSaved"
+      class="mt-4 flex items-start gap-3 border border-warning/60 bg-warning-bg px-4 py-3 text-warning"
+    >
       <AlertCircle class="w-4 h-4 mt-0.5 flex-shrink-0" :stroke-width="2" />
       <div class="space-y-0.5">
         <div class="text-sm font-sans font-semibold">{{ t('peerReview.checklistBlockerTitle') }}</div>
@@ -1527,7 +1677,10 @@ function handleIssueLeave() {
       </div>
     </div>
 
-    <WorkflowActionBar :actions="classicActions.map(action => ({ ...action, disabled: action.disabled || !checklistSaved }))" :hint="peerReviewActionHint" />
+    <WorkflowActionBar
+      :actions="classicActions.map(action => ({ ...action, disabled: action.disabled || (isPeerReviewChecklistEnabled && !checklistSaved) }))"
+      :hint="peerReviewActionHint"
+    />
   </div>
 
   <div v-else-if="activeVariant === 'producer_gate'" class="max-w-4xl mx-auto min-h-full flex flex-col">
@@ -1637,6 +1790,7 @@ function handleIssueLeave() {
         ref="issueFormRef"
         :track-id="trackId"
         phase="producer"
+        :issues="issues"
         @created="onIssueCreated"
         @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
       >
@@ -1895,6 +2049,7 @@ function handleIssueLeave() {
             :track-id="trackId"
             phase="mastering"
             :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
+            :issues="issues"
             @created="onIssueCreated"
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
@@ -2165,6 +2320,7 @@ function handleIssueLeave() {
             :track-id="trackId"
             phase="final_review"
             :master-delivery-id="masterDelivery?.id ?? null"
+            :issues="issues"
             @created="onIssueCreated"
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
@@ -2373,6 +2529,7 @@ function handleIssueLeave() {
           :track-id="trackId"
           :phase="currentStep.id"
           :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
+          :issues="issues"
           @created="onIssueCreated"
         />
       </div>
@@ -2458,6 +2615,7 @@ function handleIssueLeave() {
           :track-id="trackId"
           :phase="currentStep.id"
           :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
+          :issues="issues"
           @created="onIssueCreated"
         />
       </div>

@@ -6,14 +6,25 @@ import { albumApi, circleApi, userApi } from '@/api'
 import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
+import {
+  ALBUM_COVER_ACCEPT,
+  localizeAlbumCoverUploadError,
+  localizeAlbumCoverValidationError,
+  validateAlbumCoverFile,
+} from '@/utils/albumCover'
 import type { CircleSummary, User, WorkflowConfig, WorkflowTemplate } from '@/types'
 import { ChevronLeft, Upload, ChevronDown, ChevronRight, HelpCircle, BookTemplate, Save } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
+import {
+  buildDefaultWorkflowConfig,
+  getFirstPeerReviewAssignmentMode,
+  setFirstPeerReviewAssignmentMode,
+} from '@/utils/workflowConfig'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
 const { error: toastError, warning: toastWarning } = useToast()
@@ -51,6 +62,11 @@ const showWorkflowGuide = ref(false)
 const workflowConfig = ref<WorkflowConfig | null>(null)
 const selectedCircleId = ref<number | null>(null)
 const circles = ref<CircleSummary[]>([])
+const selectedCircleDefaultChecklistEnabled = ref<boolean | null>(null)
+const circleChecklistDefaults = new Map<number, boolean | null>()
+type AlbumChecklistMode = 'circle_default' | 'enabled' | 'disabled'
+const albumChecklistMode = ref<AlbumChecklistMode>('disabled')
+const albumChecklistModeTouched = ref(false)
 
 // Template state
 const templates = ref<WorkflowTemplate[]>([])
@@ -68,9 +84,7 @@ const assignableUsers = computed<User[]>(() =>
 const userOptions = computed<SelectOption[]>(() =>
   assignableUsers.value.map((u) => ({ value: u.id, label: u.display_name }))
 )
-const coverButtonLabel = computed(() =>
-  locale.value === 'zh-CN' ? '上传专辑封面' : 'Upload album cover'
-)
+const coverButtonLabel = computed(() => t('albumNew.coverButtonLabel'))
 
 const circleOptions = computed<SelectOption[]>(() =>
   circles.value
@@ -106,10 +120,26 @@ const workflowMemberOptions = computed<SelectOption[]>(() => {
   return Array.from(byId.values())
 })
 
-function partialSetupWarning() {
-  return locale.value === 'zh-CN'
-    ? '专辑已创建，但部分设置保存失败，请在设置页检查。'
-    : 'Album created, but some setup options failed to save. Please review the album settings.'
+const reviewerAssignmentMode = computed<'auto' | 'manual'>({
+  get: () => getFirstPeerReviewAssignmentMode(workflowConfig.value),
+  set: (mode) => {
+    const next = workflowConfig.value ?? buildDefaultWorkflowConfig((key, fallback) => t(key, fallback))
+    workflowConfig.value = setFirstPeerReviewAssignmentMode(next, mode)
+  },
+})
+
+const checklistModeOptions = computed(() => {
+  const usesCircleDefault = selectedCircleId.value != null
+  return {
+    usesCircleDefault,
+    resolvedEnabled: albumChecklistMode.value === 'circle_default'
+      ? (selectedCircleDefaultChecklistEnabled.value ?? false)
+      : albumChecklistMode.value === 'enabled',
+  }
+})
+
+function partialSetupWarning(message: string) {
+  return t('albumNew.coverUploadPartialFailure', { message })
 }
 
 async function loadInitialOptions() {
@@ -157,6 +187,7 @@ async function loadCircleMembers(circleId: number) {
   const cached = circleMemberCache.get(circleId)
   if (cached) {
     circleMemberUsers.value = cached
+    selectedCircleDefaultChecklistEnabled.value = circleChecklistDefaults.get(circleId) ?? false
     sanitizeTeamState(cached)
     return
   }
@@ -169,6 +200,8 @@ async function loadCircleMembers(circleId: number) {
 
     const members = circle.members.map(member => member.user)
     circleMemberCache.set(circleId, members)
+    circleChecklistDefaults.set(circleId, circle.default_checklist_enabled ?? false)
+    selectedCircleDefaultChecklistEnabled.value = circle.default_checklist_enabled ?? false
     circleMemberUsers.value = members
     sanitizeTeamState(members)
   } catch (error: any) {
@@ -194,10 +227,17 @@ watch(selectedCircleId, async (circleId, previousCircleId) => {
   if (!circleId) {
     circleMembersLoading.value = false
     circleMemberUsers.value = []
+    selectedCircleDefaultChecklistEnabled.value = null
+    if (!albumChecklistModeTouched.value) {
+      albumChecklistMode.value = 'disabled'
+    }
     sanitizeTeamState(allUsers.value)
     return
   }
 
+  if (!albumChecklistModeTouched.value) {
+    albumChecklistMode.value = 'circle_default'
+  }
   await loadCircleMembers(circleId)
 })
 
@@ -239,11 +279,21 @@ onUnmounted(() => {
 })
 
 function handleCoverSelect(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
   if (!file) return
+
+  const validationError = validateAlbumCoverFile(file)
+  if (validationError) {
+    toastError(localizeAlbumCoverValidationError(validationError, t))
+    input.value = ''
+    return
+  }
+
   coverImageFile.value = file
   if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value)
   coverPreviewUrl.value = URL.createObjectURL(file)
+  input.value = ''
 }
 
 function toggleMember(userId: number) {
@@ -277,9 +327,15 @@ async function create() {
     payload.deadline = deadlineState.deadline ? new Date(deadlineState.deadline).toISOString() : null
     payload.phase_deadlines = Object.keys(phaseDeadlines).length ? phaseDeadlines : null
 
-    if (showWorkflowBuilder.value && workflowConfig.value) {
+    if (selectedCircleId.value && albumChecklistMode.value === 'circle_default') {
+      payload.checklist_enabled = null
+    } else {
+      payload.checklist_enabled = albumChecklistMode.value !== 'disabled'
+    }
+
+    if (workflowConfig.value) {
       payload.workflow_config = workflowConfig.value
-      if (selectedTemplateId.value) {
+      if (showWorkflowBuilder.value && selectedTemplateId.value) {
         payload.workflow_template_id = selectedTemplateId.value
       }
     }
@@ -292,8 +348,7 @@ async function create() {
     router.push(`/albums/${album.id}/settings`)
   } catch (error: any) {
     if (createdAlbumId !== null) {
-      const detail = error?.message ? ` ${error.message}` : ''
-      toastWarning(`${partialSetupWarning()}${detail}`.trim())
+      toastWarning(partialSetupWarning(localizeAlbumCoverUploadError(error?.message, t)))
       router.push(`/albums/${createdAlbumId}/settings`)
       return
     }
@@ -345,7 +400,7 @@ async function create() {
               </div>
             </button>
             <p class="text-xs text-muted-foreground text-center w-24">{{ t('albumNew.coverImageHint') }}</p>
-            <input ref="coverInputRef" type="file" accept="image/*" class="hidden" @change="handleCoverSelect" />
+            <input ref="coverInputRef" type="file" :accept="ALBUM_COVER_ACCEPT" class="hidden" @change="handleCoverSelect" />
           </div>
 
           <!-- 标题 + 描述 + 颜色 -->
@@ -444,6 +499,75 @@ async function create() {
             </label>
             <input v-if="deadlineEnabled.final_review" v-model="deadlineState.final_review" type="date" class="input-field w-full" />
           </div>
+        </div>
+      </div>
+
+      <div class="card space-y-4">
+        <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('albumNew.reviewDefaults') }}</h2>
+
+        <div class="space-y-2">
+          <div class="text-xs text-muted-foreground">{{ t('albumNew.reviewerAssignmentMode') }}</div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="btn-secondary text-xs"
+              :class="reviewerAssignmentMode === 'auto' ? 'border-primary text-primary' : ''"
+              @click="reviewerAssignmentMode = 'auto'"
+            >
+              {{ t('workflowEditor.auto') }}
+            </button>
+            <button
+              type="button"
+              class="btn-secondary text-xs"
+              :class="reviewerAssignmentMode === 'manual' ? 'border-primary text-primary' : ''"
+              @click="reviewerAssignmentMode = 'manual'"
+            >
+              {{ t('workflowEditor.manual') }}
+            </button>
+          </div>
+          <p class="text-xs text-muted-foreground">{{ t('albumNew.reviewerAssignmentHint') }}</p>
+        </div>
+
+        <div class="space-y-2">
+          <div class="text-xs text-muted-foreground">{{ t('albumNew.checklistMode') }}</div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-if="selectedCircleId"
+              type="button"
+              class="btn-secondary text-xs"
+              :class="albumChecklistMode === 'circle_default' ? 'border-primary text-primary' : ''"
+              @click="albumChecklistModeTouched = true; albumChecklistMode = 'circle_default'"
+            >
+              {{ t('albumNew.checklistModeCircleDefault') }}
+            </button>
+            <button
+              type="button"
+              class="btn-secondary text-xs"
+              :class="albumChecklistMode === 'enabled' ? 'border-primary text-primary' : ''"
+              @click="albumChecklistModeTouched = true; albumChecklistMode = 'enabled'"
+            >
+              {{ t('albumNew.checklistModeEnabled') }}
+            </button>
+            <button
+              type="button"
+              class="btn-secondary text-xs"
+              :class="albumChecklistMode === 'disabled' ? 'border-primary text-primary' : ''"
+              @click="albumChecklistModeTouched = true; albumChecklistMode = 'disabled'"
+            >
+              {{ t('albumNew.checklistModeDisabled') }}
+            </button>
+          </div>
+          <p class="text-xs text-muted-foreground">
+            {{
+              selectedCircleId
+                ? t('albumNew.checklistModeCircleHint', {
+                  state: checklistModeOptions.resolvedEnabled
+                    ? t('albumNew.checklistModeEnabled')
+                    : t('albumNew.checklistModeDisabled'),
+                })
+                : t('albumNew.checklistModeAlbumHint')
+            }}
+          </p>
         </div>
       </div>
 

@@ -212,4 +212,56 @@ describe('IssueCreatePanel', () => {
     expect(vm.markers).toHaveLength(1)
     expect(vm.markers[0].time_start).toBe(1)
   })
+
+  it('inserts @issue:N into the description when picking from the issue mention popover', async () => {
+    const issues = [
+      {
+        id: 11,
+        track_id: 1,
+        local_number: 7,
+        author_id: 2,
+        phase: 'peer',
+        workflow_cycle: 1,
+        source_version_id: null,
+        source_version_number: 1,
+        master_delivery_id: null,
+        title: 'Vocal balance',
+        description: '',
+        severity: 'major',
+        status: 'open',
+        markers: [],
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+        comments: [],
+      },
+    ]
+
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      attachTo: document.body,
+      props: { trackId: 1, phase: 'peer', issues },
+    })
+
+    const vm = wrapper.vm as any
+    vm.handleClick(1.0)
+    await wrapper.vm.$nextTick()
+
+    const textarea = wrapper.find('textarea')
+    const el = textarea.element as HTMLTextAreaElement
+    el.value = 'Compare @i'
+    el.selectionStart = el.value.length
+    el.selectionEnd = el.value.length
+    await textarea.trigger('input')
+    await wrapper.vm.$nextTick()
+
+    const items = wrapper.findAll('[data-issue-mention-item]')
+    expect(items).toHaveLength(1)
+    expect(items[0].text()).toContain('Vocal balance')
+
+    await items[0].trigger('mousedown')
+    await wrapper.vm.$nextTick()
+
+    expect((textarea.element as HTMLTextAreaElement).value).toBe('Compare @issue:7 ')
+
+    wrapper.unmount()
+  })
 })

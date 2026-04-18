@@ -11,7 +11,7 @@ import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
 import TimestampText from '@/components/common/TimestampText.vue'
 import { Music, Pencil, Trash2 } from 'lucide-vue-next'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   discussions: Discussion[]
   heading: string
   emptyText: string
@@ -30,7 +30,9 @@ const props = defineProps<{
   enableReferencePopover?: boolean
   hasMore?: boolean
   loadingOlder?: boolean
-}>()
+}>(), {
+  enableReferencePopover: true,
+})
 
 const emit = defineEmits<{
   submit: [payload: { content: string; images: File[]; audios: File[] }]
@@ -193,7 +195,8 @@ function confirmDelete() {
       :submitting="posting"
       :upload-progress="postingProgress"
       :enable-audio="enableAudio ?? false"
-      :enable-timestamp-popover="enableReferencePopover ?? true"
+      :enable-timestamp-popover="enableReferencePopover"
+      :issues="issues"
       @submit="emit('submit', $event)"
     />
   </div>
