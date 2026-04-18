@@ -24,6 +24,98 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.2',
+    date: '2026-04-18',
+    headline: {
+      'zh-CN': '工作流与评审体验更新',
+      en: 'Workflow and review improvements',
+    },
+    summary: {
+      'zh-CN':
+        '本次更新重点补齐了专辑级 checklist 开关、专辑创建时的审稿人分配默认值、修订上传时的问题批量关闭，以及 discussion 音频在 Cloudflare R2 下的上传链路。',
+      en:
+        'This release focuses on album-level checklist policy controls, reviewer assignment defaults during album creation, issue resolution during revision uploads, and the discussion-audio upload path when Cloudflare R2 is enabled.',
+    },
+    sections: [
+      {
+        heading: {
+          'zh-CN': '工作流与评审',
+          en: 'Workflow & Review',
+        },
+        items: [
+          {
+            title: {
+              'zh-CN': '专辑可单独开启或关闭同行评审 checklist',
+              en: 'Albums can now enable or disable the peer-review checklist independently',
+            },
+            description: {
+              'zh-CN':
+                '社团可以设置新专辑的默认 checklist 策略，专辑创建页和设置页也都可以显式覆盖。关闭后，同行评审界面会立即隐藏 checklist 主工作区并解除对应阻塞。',
+              en:
+                'Circles can define the default checklist policy for new albums, while album creation and album settings can explicitly override it. When disabled, the peer-review workspace hides the checklist UI and removes its blocker immediately.',
+            },
+          },
+          {
+            title: {
+              'zh-CN': '修订版上传支持批量关闭已处理问题',
+              en: 'Revision uploads can now resolve selected issues in one step',
+            },
+            description: {
+              'zh-CN':
+                '作者上传新源版本时，可以同时提交本次修订已解决的问题和说明备注；系统会在同一事务里写入新版本、更新问题状态并留下状态说明。',
+              en:
+                'When uploading a new source revision, submitters can now include the issues resolved in that revision and an optional note. The system updates the source version, issue statuses, and status-note comments in a single transaction.',
+            },
+          },
+          {
+            title: {
+              'zh-CN': '同行评审 checklist 草稿会保留并提示重新确认',
+              en: 'Peer-review checklist drafts now preserve prior answers and prompt reconfirmation',
+            },
+            description: {
+              'zh-CN':
+                '如果当前 reviewer 在同一轮工作流中已经提交过上一个源版本的 checklist，系统会自动预填答案，并明确提示这是来自旧版本的内容，需要重新保存确认。',
+              en:
+                'If the current reviewer has already submitted a checklist for a previous source version in the same workflow cycle, the answers are prefilled and clearly marked as needing reconfirmation before the review can be completed.',
+            },
+          },
+        ],
+      },
+      {
+        heading: {
+          'zh-CN': '上传与附件',
+          en: 'Uploads & Attachments',
+        },
+        items: [
+          {
+            title: {
+              'zh-CN': 'discussion 音频补齐了 R2 上传路径',
+              en: 'Discussion audio now supports the R2 upload path',
+            },
+            description: {
+              'zh-CN':
+                '当对象存储开启时，曲目讨论和母带讨论中的音频附件会先请求预签名上传，再把对象 key 提交给后端，和现有评论音频链路保持一致。',
+              en:
+                'When object storage is enabled, audio attachments in both track discussions and mastering discussions now use presigned uploads before submitting object keys back to the backend, matching the existing comment-audio flow.',
+            },
+          },
+          {
+            title: {
+              'zh-CN': '专辑创建页新增评审默认设置',
+              en: 'Album creation now includes review-default controls',
+            },
+            description: {
+              'zh-CN':
+                '创建专辑时可以直接设置首个同行评审阶段是自动分配还是手动分配审稿人，并且可以同时决定该专辑的 checklist 是否默认开启。',
+              en:
+                'Album creation now lets producers choose whether the first peer-review stage uses automatic or manual reviewer assignment, alongside the album’s default checklist policy.',
+            },
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: '0.1.1',
     date: '2026-04-17',
     headline: {

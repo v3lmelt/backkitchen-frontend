@@ -79,6 +79,30 @@
               class="input-field w-full disabled:opacity-60"
             />
           </div>
+          <div class="space-y-2">
+            <label class="block text-xs text-muted-foreground mb-1">{{ t('circleDetail.defaultChecklistHeading') }}</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                class="h-10 rounded-full border font-mono text-sm transition-colors disabled:opacity-60"
+                :class="editForm.default_checklist_enabled ? 'border-primary bg-primary text-background' : 'border-border bg-background text-foreground'"
+                :disabled="!canManageCircle"
+                @click="editForm.default_checklist_enabled = true"
+              >
+                {{ t('circleDetail.defaultChecklistEnabled') }}
+              </button>
+              <button
+                type="button"
+                class="h-10 rounded-full border font-mono text-sm transition-colors disabled:opacity-60"
+                :class="!editForm.default_checklist_enabled ? 'border-primary bg-primary text-background' : 'border-border bg-background text-foreground'"
+                :disabled="!canManageCircle"
+                @click="editForm.default_checklist_enabled = false"
+              >
+                {{ t('circleDetail.defaultChecklistDisabled') }}
+              </button>
+            </div>
+            <p class="text-xs text-muted-foreground">{{ t('circleDetail.defaultChecklistHint') }}</p>
+          </div>
           <div v-if="canManageCircle" class="flex justify-end">
             <button class="btn-primary" :disabled="savingInfo" @click="saveInfo">
               {{ savingInfo ? t('common.loading') : t('common.save') }}
@@ -382,7 +406,7 @@ const roleOptions = computed(() => [
 ])
 const newCodeDays = ref(7)
 
-const editForm = reactive({ name: '', description: '', website: '' })
+const editForm = reactive({ name: '', description: '', website: '', default_checklist_enabled: false })
 
 // Template state
 const templates = ref<WorkflowTemplate[]>([])
@@ -471,6 +495,7 @@ onMounted(async () => {
     editForm.name = circle.value.name
     editForm.description = circle.value.description ?? ''
     editForm.website = circle.value.website ?? ''
+    editForm.default_checklist_enabled = circle.value.default_checklist_enabled ?? false
     if (canManageCircle.value) {
       try {
         inviteCodes.value = await circleApi.listInviteCodes(id)
@@ -515,6 +540,7 @@ async function saveInfo() {
       name: editForm.name.trim() || undefined,
       description: editForm.description.trim() || null,
       website: editForm.website.trim() || null,
+      default_checklist_enabled: editForm.default_checklist_enabled,
     })
     toast.success(t('common.saved'))
   } catch (e: any) {

@@ -63,6 +63,28 @@
             :placeholder="t('circleNew.websitePlaceholder')"
           />
         </div>
+        <div class="space-y-2">
+          <label class="block text-xs text-muted-foreground mb-1">{{ t('circleNew.defaultChecklistHeading') }}</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              class="h-10 rounded-full border font-mono text-sm transition-colors"
+              :class="form.default_checklist_enabled ? 'border-primary bg-primary text-background' : 'border-border bg-background text-foreground'"
+              @click="form.default_checklist_enabled = true"
+            >
+              {{ t('circleNew.defaultChecklistEnabled') }}
+            </button>
+            <button
+              type="button"
+              class="h-10 rounded-full border font-mono text-sm transition-colors"
+              :class="!form.default_checklist_enabled ? 'border-primary bg-primary text-background' : 'border-border bg-background text-foreground'"
+              @click="form.default_checklist_enabled = false"
+            >
+              {{ t('circleNew.defaultChecklistDisabled') }}
+            </button>
+          </div>
+          <p class="text-xs text-muted-foreground">{{ t('circleNew.defaultChecklistHint') }}</p>
+        </div>
       </div>
 
       <div v-if="error" class="bg-error-bg border border-error/30 rounded-none px-4 py-3 text-sm text-error">{{ error }}</div>
@@ -103,6 +125,7 @@ const form = reactive({
   name: '',
   description: '',
   website: '',
+  default_checklist_enabled: false,
 })
 
 onMounted(() => {
@@ -133,6 +156,7 @@ async function submit() {
       name: form.name.trim(),
       description: form.description.trim() || null,
       website: form.website.trim() || null,
+      default_checklist_enabled: form.default_checklist_enabled,
     })
     if (logoFile.value) {
       await circleApi.uploadLogo(circle.id, logoFile.value)

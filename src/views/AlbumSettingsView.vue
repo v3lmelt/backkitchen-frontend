@@ -133,10 +133,14 @@ const templateItems = ref<ChecklistTemplateItem[]>([])
 const templateIsDefault = ref(false)
 const loadingTemplate = ref(false)
 const savingTemplate = ref(false)
+const savingChecklistMode = ref(false)
 const templateLoadError = ref('')
 const templateError = ref('')
 const savedTemplateSnapshot = ref('')
 const templateDirty = computed(() => JSON.stringify(templateItems.value) !== savedTemplateSnapshot.value)
+const circleDefaultChecklistEnabled = ref<boolean | null>(null)
+type AlbumChecklistMode = 'circle_default' | 'enabled' | 'disabled'
+const checklistMode = ref<AlbumChecklistMode>('enabled')
 
 // Track order state
 const tracks = ref<Track[]>([])
@@ -222,6 +226,12 @@ const roleBadgeClass = computed(() => {
   if (isMasteringEngineerOfAlbum.value) return 'bg-info-bg text-info'
   return 'bg-border text-foreground'
 })
+
+const checklistEnabledResolved = computed(() =>
+  checklistMode.value === 'circle_default'
+    ? (circleDefaultChecklistEnabled.value ?? false)
+    : checklistMode.value === 'enabled',
+)
 
 const availableTabs = computed(() => {
   const tabs: Array<{ key: AlbumSettingsTab; label: string }> = [
@@ -342,6 +352,27 @@ function syncMetadataState() {
   metadataState.circle_name = album.value.circle_name || ''
   metadataState.genres = album.value.genres ? [...album.value.genres] : []
   metadataState.genre_input = ''
+  checklistMode.value = resolveChecklistMode(album.value)
+}
+
+function resolveChecklistMode(currentAlbum: Album): AlbumChecklistMode {
+  if (currentAlbum.circle_id && currentAlbum.checklist_enabled == null) {
+    return 'circle_default'
+  }
+  return currentAlbum.checklist_enabled === false ? 'disabled' : 'enabled'
+}
+
+async function loadCircleChecklistDefault(currentAlbum: Album) {
+  if (!currentAlbum.circle_id) {
+    circleDefaultChecklistEnabled.value = null
+    return
+  }
+  try {
+    const circle = await circleApi.get(currentAlbum.circle_id)
+    circleDefaultChecklistEnabled.value = circle.default_checklist_enabled ?? false
+  } catch {
+    circleDefaultChecklistEnabled.value = false
+  }
 }
 
 function syncDeadlineState() {
@@ -582,6 +613,7 @@ onMounted(async () => {
     syncTeamState()
     syncDeadlineState()
     syncMetadataState()
+    await loadCircleChecklistDefault(albumData)
     activeTab.value = 'info'
   } catch (e: any) {
     toastError(e.message || t('common.loadFailed'))
@@ -679,6 +711,25 @@ async function saveMetadata() {
     toastError(e.message || t('common.requestFailed'))
   } finally {
     savingMetadata.value = false
+  }
+}
+
+async function saveChecklistMode() {
+  if (!album.value) return
+  savingChecklistMode.value = true
+  try {
+    const updated = await albumApi.updateMetadata(album.value.id, {
+      checklist_enabled: checklistMode.value === 'circle_default'
+        ? (circleDefaultChecklistEnabled.value ?? false)
+        : checklistMode.value === 'enabled',
+    })
+    album.value = updated
+    checklistMode.value = resolveChecklistMode(updated)
+    toastSuccess(t('albumSettings.checklist.modeSaved'))
+  } catch (e: any) {
+    toastError(e.message || t('common.requestFailed'))
+  } finally {
+    savingChecklistMode.value = false
   }
 }
 
@@ -1492,6 +1543,87 @@ async function refreshDeliveries() {
 
       <!-- Checklist tab -->
       <div v-else-if="activeTab === 'checklist'">
+        <div class="card space-y-4 mb-4">
+          <div class="space-y-1">
+            <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('albumSettings.checklist.modeTitle') }}</h3>
+            <p class="text-xs text-muted-foreground">
+              {{
+                album.circle_id
+                  ? t('albumSettings.checklist.modeCircleHint')
+                  : t('albumSettings.checklist.modeAlbumHint')
+              }}
+            </p>
+          </div>
+
+          <template v-if="canManageAlbum">
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-if="album.circle_id"
+                type="button"
+                class="btn-secondary text-xs"
+                :class="checklistMode === 'circle_default' ? 'border-primary text-primary' : ''"
+                @click="checklistMode = 'circle_default'"
+              >
+                {{ t('albumSettings.checklist.modeCircleDefault') }}
+              </button>
+              <button
+                type="button"
+                class="btn-secondary text-xs"
+                :class="checklistMode === 'enabled' ? 'border-primary text-primary' : ''"
+                @click="checklistMode = 'enabled'"
+              >
+                {{ t('albumSettings.checklist.modeEnabled') }}
+              </button>
+              <button
+                type="button"
+                class="btn-secondary text-xs"
+                :class="checklistMode === 'disabled' ? 'border-primary text-primary' : ''"
+                @click="checklistMode = 'disabled'"
+              >
+                {{ t('albumSettings.checklist.modeDisabled') }}
+              </button>
+            </div>
+            <p class="text-xs text-muted-foreground">
+              {{
+                checklistMode === 'circle_default'
+                  ? t('albumSettings.checklist.modeCircleResolved', {
+                    state: checklistEnabledResolved
+                      ? t('albumSettings.checklist.modeEnabled')
+                      : t('albumSettings.checklist.modeDisabled'),
+                  })
+                  : t('albumSettings.checklist.modeAlbumResolved', {
+                    state: checklistEnabledResolved
+                      ? t('albumSettings.checklist.modeEnabled')
+                      : t('albumSettings.checklist.modeDisabled'),
+                  })
+              }}
+            </p>
+            <div>
+              <button @click="saveChecklistMode" :disabled="savingChecklistMode" class="btn-primary text-sm">
+                {{ savingChecklistMode ? t('settings.saving') : t('common.save') }}
+              </button>
+            </div>
+          </template>
+
+          <template v-else>
+            <p class="text-xs text-muted-foreground">
+              {{
+                checklistMode === 'circle_default'
+                  ? t('albumSettings.checklist.modeCircleResolved', {
+                    state: checklistEnabledResolved
+                      ? t('albumSettings.checklist.modeEnabled')
+                      : t('albumSettings.checklist.modeDisabled'),
+                  })
+                  : t('albumSettings.checklist.modeAlbumResolved', {
+                    state: checklistEnabledResolved
+                      ? t('albumSettings.checklist.modeEnabled')
+                      : t('albumSettings.checklist.modeDisabled'),
+                  })
+              }}
+            </p>
+          </template>
+        </div>
+
         <div v-if="loadingTemplate" class="card">
           <p class="text-sm text-muted-foreground py-4 text-center">{{ t('common.loading') }}</p>
         </div>
@@ -1675,7 +1807,9 @@ async function refreshDeliveries() {
         <div v-for="aTrack in archivedTracks" :key="aTrack.id" class="card flex items-center justify-between gap-4">
           <div class="min-w-0">
             <div class="text-sm font-mono text-foreground truncate">
-              <span v-if="aTrack.track_number" class="text-muted-foreground">#{{ aTrack.track_number }}</span>
+              <span v-if="aTrack.track_number" class="text-muted-foreground">
+                {{ t('trackDetail.trackNumberLabel', { number: aTrack.track_number }) }}
+              </span>
               {{ aTrack.title }}
             </div>
             <div class="text-xs text-muted-foreground mt-0.5">

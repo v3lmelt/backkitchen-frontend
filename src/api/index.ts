@@ -9,6 +9,7 @@ import type {
   AdminRole,
   AuthResponse,
   ChecklistItem,
+  ChecklistDraftRead,
   ChecklistTemplateItem,
   ChecklistTemplateRead,
   Circle,
@@ -273,6 +274,7 @@ export const albumApi = {
     phase_deadlines?: Record<string, string> | null
     workflow_config?: WorkflowConfig | null
     workflow_template_id?: number | null
+    checklist_enabled?: boolean | null
   }) =>
     request<Album>('/albums', { method: 'POST', body: JSON.stringify(data) }),
   updateTeam: (id: number, data: { mastering_engineer_id: number | null; member_ids: number[] }) =>
@@ -311,6 +313,7 @@ export const albumApi = {
     catalog_number?: string | null
     circle_name?: string | null
     genres?: string[] | null
+    checklist_enabled?: boolean | null
   }) =>
     request<Album>(`/albums/${id}/metadata`, { method: 'PATCH', body: JSON.stringify(data) }),
   uploadCover: (id: number, file: File) => {
@@ -384,9 +387,9 @@ export const albumApi = {
 export const circleApi = {
   list: () => request<CircleSummary[]>('/circles'),
   get: (id: number) => request<Circle>(`/circles/${id}`),
-  create: (data: { name: string; description?: string | null; website?: string | null }) =>
+  create: (data: { name: string; description?: string | null; website?: string | null; default_checklist_enabled?: boolean }) =>
     request<Circle>('/circles', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: number, data: { name?: string; description?: string | null; website?: string | null }) =>
+  update: (id: number, data: { name?: string; description?: string | null; website?: string | null; default_checklist_enabled?: boolean }) =>
     request<Circle>(`/circles/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   uploadLogo: (id: number, file: File) => {
     const form = new FormData()
@@ -435,10 +438,23 @@ export const trackApi = {
   },
   get: (id: number) => request<TrackDetailResponse>(`/tracks/${id}`),
   upload: (formData: FormData) => request<Track>('/tracks', { method: 'POST', body: formData }),
-  uploadSourceVersion: (id: number, file: File, revisionNotes?: string, onProgress?: (percent: number) => void) => {
+  uploadSourceVersion: (
+    id: number,
+    file: File,
+    options?: {
+      revisionNotes?: string
+      resolvedIssueIds?: number[]
+      resolutionNote?: string
+    },
+    onProgress?: (percent: number) => void,
+  ) => {
     const form = new FormData()
     form.append('file', file)
-    if (revisionNotes) form.append('revision_notes', revisionNotes)
+    if (options?.revisionNotes) form.append('revision_notes', options.revisionNotes)
+    for (const issueId of options?.resolvedIssueIds ?? []) {
+      form.append('resolved_issue_ids', String(issueId))
+    }
+    if (options?.resolutionNote) form.append('resolution_note', options.resolutionNote)
     return uploadWithProgress<Track>(`/tracks/${id}/source-versions`, form, onProgress)
   },
   uploadMasterDelivery: (id: number, file: File, onProgress?: (percent: number) => void) => {
@@ -625,6 +641,27 @@ export const notificationApi = {
 
 export const checklistApi = {
   get: (trackId: number) => request<ChecklistItem[]>(`/tracks/${trackId}/checklist`),
+  getDraft: async (trackId: number): Promise<ChecklistDraftRead> => {
+    const draftPaths = [
+      `/tracks/${trackId}/checklist/draft`,
+      `/tracks/${trackId}/checklist-draft`,
+    ]
+
+    let lastError: unknown
+    for (const path of draftPaths) {
+      try {
+        const payload = await request<any>(path)
+        return normalizeChecklistDraft(payload)
+      } catch (error: any) {
+        lastError = error
+        if (!isChecklistDraftNotFound(error)) {
+          throw error
+        }
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error('Checklist draft not found')
+  },
   submit: (trackId: number, items: { label: string; passed: boolean; note?: string }[]) =>
     request<ChecklistItem[]>(`/tracks/${trackId}/checklist`, { method: 'POST', body: JSON.stringify({ items }) }),
   getTemplate: (albumId: number) =>
@@ -638,6 +675,76 @@ export const checklistApi = {
     request<void>(`/albums/${albumId}/checklist-template`, {
       method: 'DELETE',
     }),
+}
+
+function normalizeChecklistDraft(payload: any): ChecklistDraftRead {
+  const rawItems = Array.isArray(payload)
+    ? payload
+    : payload?.items
+      ?? payload?.draft_items
+      ?? payload?.checklist
+      ?? payload?.draft
+      ?? []
+  const rawTemplateItems = Array.isArray(payload?.template_items)
+    ? payload.template_items
+    : Array.isArray(payload?.template)
+      ? payload.template
+      : []
+
+  const prefillPayload =
+    payload?.prefill
+    ?? payload?.prefill_meta
+    ?? payload?.metadata
+    ?? payload?.meta
+    ?? (
+      payload?.prefilled_from_source_version_id != null
+      || payload?.prefilled_from_current_version === true
+      ? {
+          source_version_id: payload?.prefilled_from_source_version_id ?? null,
+          source_version_number: payload?.prefilled_from_source_version_number ?? null,
+          reconfirm_required: payload?.prefilled_from_current_version === true ? false : payload?.prefilled_from_source_version_id != null,
+          status: payload?.prefilled_from_current_version === true
+            ? 'current_version'
+            : payload?.prefilled_from_source_version_id != null
+              ? 'reconfirm_required'
+              : null,
+        }
+      : null
+    )
+
+  return {
+    items: rawItems.map((item: any) => ({
+      label: String(item?.label ?? ''),
+      passed: Boolean(item?.passed),
+      note: typeof item?.note === 'string' ? item.note : null,
+    })),
+    template_items: rawTemplateItems.map((item: any) => ({
+      label: String(item?.label ?? ''),
+      description: typeof item?.description === 'string' ? item.description : null,
+      required: item?.required !== false,
+      sort_order: typeof item?.sort_order === 'number' ? item.sort_order : 0,
+    })),
+    prefill: normalizeChecklistDraftPrefill(prefillPayload),
+  }
+}
+
+function normalizeChecklistDraftPrefill(payload: any) {
+  if (!payload || typeof payload !== 'object') return null
+
+  return {
+    source_version_id: typeof payload.source_version_id === 'number' ? payload.source_version_id : null,
+    source_version_number: typeof payload.source_version_number === 'number' ? payload.source_version_number : null,
+    workflow_cycle: typeof payload.workflow_cycle === 'number' ? payload.workflow_cycle : null,
+    updated_at: typeof payload.updated_at === 'string' ? payload.updated_at : null,
+    confirmed_at: typeof payload.confirmed_at === 'string' ? payload.confirmed_at : null,
+    reconfirm_required: typeof payload.reconfirm_required === 'boolean' ? payload.reconfirm_required : null,
+    status: typeof payload.status === 'string' ? payload.status : null,
+    reason: typeof payload.reason === 'string' ? payload.reason : null,
+  }
+}
+
+function isChecklistDraftNotFound(error: any) {
+  return error?.status === 404 || /not found/i.test(String(error?.message ?? ''))
 }
 
 export const discussionApi = {
@@ -654,14 +761,30 @@ export const discussionApi = {
     const query = qs ? `?${qs}` : ''
     return request<Discussion[]>(`/tracks/${trackId}/discussions${query}`)
   },
-  create: (trackId: number, data: { content: string; phase?: string; images?: File[]; audios?: File[] }, onProgress?: (percent: number) => void) => {
+  create: (
+    trackId: number,
+    data: {
+      content: string
+      phase?: string
+      images?: File[]
+      audios?: File[]
+      audioObjectKeys?: string[]
+      audioOriginalFilenames?: string[]
+    },
+    onProgress?: (percent: number) => void,
+  ) => {
     const form = new FormData()
     form.append('content', data.content)
     if (data.phase) form.append('phase', data.phase)
     if (data.images) {
       for (const img of data.images) form.append('images', img)
     }
-    if (data.audios) {
+    if (data.audioObjectKeys?.length) {
+      form.append('audio_object_keys', data.audioObjectKeys.join('\n'))
+      if (data.audioOriginalFilenames?.length) {
+        form.append('audio_original_filenames', data.audioOriginalFilenames.join('\n'))
+      }
+    } else if (data.audios) {
       for (const audio of data.audios) form.append('audios', audio)
     }
     if (onProgress && (data.images?.length || data.audios?.length)) {
@@ -926,6 +1049,8 @@ export const r2Api = {
     object_key: string
     duration?: number | null
     revision_notes?: string | null
+    resolved_issue_ids?: number[]
+    resolution_note?: string | null
   }) => request<Track>(`/tracks/${trackId}/source-versions/confirm-upload`, { method: 'POST', body: JSON.stringify(params) }),
 
   // Master delivery
@@ -944,6 +1069,12 @@ export const r2Api = {
   // Comment audio
   requestCommentAudioUpload: (issueId: number, files: { filename: string; content_type: string; file_size: number }[]) =>
     request<{ uploads: PresignedUploadResponse[] }>(`/issues/${issueId}/comments/request-audio-upload`, {
+      method: 'POST',
+      body: JSON.stringify({ files }),
+    }),
+
+  requestDiscussionAudioUpload: (trackId: number, files: { filename: string; content_type: string; file_size: number }[]) =>
+    request<{ uploads: PresignedUploadResponse[] }>(`/tracks/${trackId}/discussions/request-audio-upload`, {
       method: 'POST',
       body: JSON.stringify({ files }),
     }),

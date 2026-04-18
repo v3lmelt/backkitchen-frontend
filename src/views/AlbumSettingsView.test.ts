@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   albumGetWebhookMock: vi.fn(),
   albumGetWebhookDeliveriesMock: vi.fn(),
   albumUploadCoverMock: vi.fn(),
+  albumUpdateMetadataMock: vi.fn(),
   albumUpdateTeamMock: vi.fn(),
   albumArchiveMock: vi.fn(),
   albumRestoreMock: vi.fn(),
@@ -59,6 +60,7 @@ vi.mock('@/api', () => ({
     getWebhook: mocks.albumGetWebhookMock,
     getWebhookDeliveries: mocks.albumGetWebhookDeliveriesMock,
     uploadCover: mocks.albumUploadCoverMock,
+    updateMetadata: mocks.albumUpdateMetadataMock,
     archive: mocks.albumArchiveMock,
     restore: mocks.albumRestoreMock,
   },
@@ -251,6 +253,7 @@ describe('AlbumSettingsView', () => {
     mocks.albumGetWebhookMock.mockReset()
     mocks.albumGetWebhookDeliveriesMock.mockReset()
     mocks.albumUploadCoverMock.mockReset()
+    mocks.albumUpdateMetadataMock.mockReset()
     mocks.albumUpdateTeamMock.mockReset()
     mocks.albumArchiveMock.mockReset()
     mocks.albumRestoreMock.mockReset()
@@ -267,6 +270,7 @@ describe('AlbumSettingsView', () => {
     mocks.currentUser = { id: 1 }
 
     mocks.albumGetMock.mockResolvedValue(makeAlbum())
+    mocks.albumUpdateMetadataMock.mockImplementation(async (_id, data) => makeAlbum(data as Record<string, unknown>))
     mocks.albumTracksMock.mockResolvedValue([makeTrack(11, 'Track A')])
     mocks.albumActivityMock.mockResolvedValue([
       {
@@ -311,6 +315,7 @@ describe('AlbumSettingsView', () => {
     ])
     mocks.circleGetMock.mockResolvedValue({
       id: 9,
+      default_checklist_enabled: true,
       members: [
         { id: 1, user_id: 1, role: 'owner', joined_at: '2024-01-01T00:00:00Z', user: makeUser(1, 'Producer') },
         { id: 2, user_id: 3, role: 'member', joined_at: '2024-01-01T00:00:00Z', user: makeUser(3, 'Member') },
@@ -474,6 +479,29 @@ describe('AlbumSettingsView', () => {
     await flushPromises()
     expect(mocks.invitationListForAlbumMock).toHaveBeenCalledWith(5)
     expect(mocks.circleGetMock).toHaveBeenCalledWith(9)
+  })
+
+  it('saves the album checklist policy separately from the checklist template', async () => {
+    mocks.albumGetMock.mockResolvedValue(makeAlbum({ checklist_enabled: false }))
+    mocks.circleGetMock.mockResolvedValue({
+      id: 9,
+      default_checklist_enabled: false,
+      members: [
+        { id: 1, user_id: 1, role: 'owner', joined_at: '2024-01-01T00:00:00Z', user: makeUser(1, 'Producer') },
+      ],
+    })
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'Checklist Template')!.trigger('click')
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'Enabled')!.trigger('click')
+    await findButtonByText(wrapper, 'Save')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.albumUpdateMetadataMock).toHaveBeenCalledWith(5, { checklist_enabled: true })
   })
 
   it('refetches the activity feed when the event filter changes', async () => {
