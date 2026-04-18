@@ -4,8 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "changelog:build": "node scripts/changelog.mjs --write",
+    "changelog:check": "node scripts/changelog.mjs --check",
     "dev": "vite",
-    "build": "vue-tsc -b && vite build && node -e \"require('node:fs').copyFileSync('dist/index.html','dist/404.html')\"",
+    "build": "npm run changelog:check && vue-tsc -b && vite build && node -e \"require('node:fs').copyFileSync('dist/index.html','dist/404.html')\"",
     "preview": "npm run build && wrangler dev",
     "test": "vitest run",
     "deploy": "npm run build && wrangler deploy"

@@ -1,0 +1,70 @@
+{
+  "version": "0.0.2",
+  "date": "2026-04-18",
+  "headline": {
+    "zh-CN": "通知与评审体验优化",
+    "en": "Notification and Review Workflow Polish"
+  },
+  "summary": {
+    "zh-CN": "本次更新重点优化了评论与工作流通知的上下文信息和提示文案，并收紧了评审内部问题的公开权限，减少误通知与误公开。",
+    "en": "This release focuses on clearer context and copy in comment and workflow notifications, while tightening publication rules for reviewer-only issues to reduce accidental alerts and unintended exposure."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "通知与协作",
+        "en": "Notifications & Collaboration"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "评论通知现在会显示更完整的上下文",
+            "en": "Comment notifications now include fuller context"
+          },
+          "description": {
+            "zh-CN": "评论相关的飞书 / Webhook 通知现在会显示对应曲目、问题上下文和操作人，群消息里更容易判断是哪首曲子、哪条问题发生了新的互动。",
+            "en": "Feishu and webhook notifications for comments now include the related track, issue context, and actor, making it much easier to tell which track and which issue a new interaction belongs to at a glance."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "修复评论通知偶发重复发送",
+            "en": "Fixed occasional duplicate comment notifications"
+          },
+          "description": {
+            "zh-CN": "修复了同一条评论在外部通知渠道中偶发重复推送的问题，避免群内短时间收到两条内容相同的提醒。",
+            "en": "Fixed an issue where the same comment could occasionally be pushed twice through external notification channels, avoiding back-to-back duplicate alerts in group chats."
+          }
+        }
+      ]
+    },
+    {
+      "heading": {
+        "zh-CN": "评审流程",
+        "en": "Review Workflow"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "自动流程通知文案更清晰",
+            "en": "Automatic workflow notifications are clearer"
+          },
+          "description": {
+            "zh-CN": "需要手动指派评审人、评审重新开启、内部讨论问题自动结案、同行评审人数达标等自动通知已改为更清晰的表述，并会显示触发本次流程推进的操作人。",
+            "en": "Automatic notifications for manual reviewer assignment, reopened reviews, automatic closure of internal-discussion issues, and peer-review quorum now use clearer wording and show who triggered the workflow progression."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "收紧评审内部问题的公开权限",
+            "en": "Publishing reviewer-only issues is now more restricted"
+          },
+          "description": {
+            "zh-CN": "处于“待讨论”或“内部结案”状态的问题，现在只有问题创建者可以重新发布为公开问题，避免其他评审误将仅内部可见的问题暴露给曲师。",
+            "en": "Issues in \"pending discussion\" or \"internally resolved\" states can now only be republished as public issues by their original author, preventing other reviewers from accidentally exposing reviewer-only content to submitters."
+          }
+        }
+      ]
+    }
+  ]
+}
