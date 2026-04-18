@@ -1274,7 +1274,8 @@
       "activity": "活动记录"
     },
     "info": {
-      "coverHint": "点击更换封面图（JPEG/PNG/WebP/GIF，≤ 20 MB）",
+      "coverHint": "点击更换封面图",
+      "coverHintFormat": "支持 JPEG / PNG / WebP / GIF，单张 ≤ 20 MB",
       "saveCover": "保存封面",
       "coverSaved": "封面已更新",
       "coverUploadFailed": "封面上传失败：{message}",
