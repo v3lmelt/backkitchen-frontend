@@ -1108,6 +1108,8 @@
     "issueReference": "Issue reference",
     "issueReferenceLabel": "Issue #{id}",
     "issueUnavailable": "Issue unavailable or you don't have access.",
+    "issuePickerHint": "Pick an issue to insert",
+    "issuePickerEmpty": "No issues on this track yet",
     "examples": {
       "point": "Single timestamp",
       "range": "Time range, plays from the start",

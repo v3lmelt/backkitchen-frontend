@@ -1161,6 +1161,8 @@
     "issueReference": "问题引用",
     "issueReferenceLabel": "问题 #{id}",
     "issueUnavailable": "问题不存在或你暂无权限查看。",
+    "issuePickerHint": "选择要插入的问题",
+    "issuePickerEmpty": "当前曲目暂无问题",
     "examples": {
       "point": "单个时间点",
       "range": "时间段，点击后从起点播放",

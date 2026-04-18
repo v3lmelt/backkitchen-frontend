@@ -298,6 +298,7 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
           :enable-audio="true"
           enable-timestamp-popover
           :rows="2"
+          :issues="issues"
           @submit="handleSubmit"
         />
       </div>

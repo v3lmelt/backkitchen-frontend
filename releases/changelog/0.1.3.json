@@ -1,0 +1,42 @@
+{
+  "version": "0.1.3",
+  "date": "2026-04-18",
+  "headline": {
+    "zh-CN": "评论区新增 @issue 问题引用选择器",
+    "en": "@issue picker lands in all comment inputs"
+  },
+  "summary": {
+    "zh-CN": "在所有讨论和评论输入框中，输入 @i 即可弹出当前曲目问题的选择器，支持按编号过滤和键盘操作，选中后自动插入 @issue:N 并渲染为可点击的问题链接。",
+    "en": "Typing @i in any discussion or comment input now opens a picker of the current track's issues with filter-by-number and full keyboard support. Selecting an item inserts @issue:N, which renders as a clickable issue chip."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "评审与协作",
+        "en": "Review & Collaboration"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "评论区新增 @issue 问题引用选择器",
+            "en": "Comment inputs gain an @issue reference picker"
+          },
+          "description": {
+            "zh-CN": "在曲目讨论、母带讨论、母带沟通侧边栏、问题详情评论以及创建问题时的描述框中，输入 @i 即可弹出当前曲目问题列表，继续输入数字可按 local_number 前缀过滤。支持 ↑ ↓ 切换、Enter/Tab 插入、Esc 关闭、鼠标点击；选中后自动补齐为 @issue:N。",
+            "en": "Track discussions, mastering discussions, the mastering chat sidebar, issue-detail comment boxes, and the issue creation description box now all surface the same @issue picker. Typing @i opens the list of the current track's issues; additional digits filter by local_number prefix. Arrow keys navigate, Enter/Tab inserts, Escape dismisses, and the selected issue is inserted as @issue:N."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "修复：曲目讨论中的引用语法提示从未出现",
+            "en": "Fix: reference syntax hint never appeared in track discussions"
+          },
+          "description": {
+            "zh-CN": "之前 DiscussionPanel 的 enableReferencePopover 由于 Vue 可选 boolean 属性默认被规范为 false，导致讨论区从未挂载过语法提示 popover。现在该属性默认值显式为 true，讨论框在输入时间戳、标记或问题引用时都会出现语法提示。",
+            "en": "DiscussionPanel's enableReferencePopover was effectively forced to false because Vue normalizes unspecified optional boolean props to false, which meant the reference-syntax popover never mounted inside discussion inputs. The default is now explicitly true, so typing timestamps, marker references, or issue references again surfaces the syntax hint."
+          }
+        }
+      ]
+    }
+  ]
+}

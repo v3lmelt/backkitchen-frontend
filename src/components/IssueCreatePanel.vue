@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Eraser, EyeOff, Eye, ImageIcon, Info, Music, RotateCcw, X } from 'lucide-vue-next'
 import { issueApi } from '@/api'
@@ -15,6 +15,7 @@ const props = defineProps<{
   phase: string
   masterDeliveryId?: number | null
   allowInternalVisibility?: boolean
+  issues?: Issue[] | null
 }>()
 
 const emit = defineEmits<{
@@ -37,6 +38,22 @@ const issueVisibilityTouched = ref(false)
 const title = ref('')
 const description = ref('')
 const descriptionCursorPos = ref(0)
+const descriptionRef = ref<HTMLTextAreaElement | null>(null)
+
+async function handleDescriptionMentionSelect(issue: Issue, mention: { start: number; end: number }) {
+  const insertion = `@issue:${issue.local_number} `
+  const before = description.value.slice(0, mention.start)
+  const after = description.value.slice(mention.end)
+  description.value = `${before}${insertion}${after}`
+  const nextCursor = mention.start + insertion.length
+  descriptionCursorPos.value = nextCursor
+  await nextTick()
+  const el = descriptionRef.value
+  if (el) {
+    el.focus()
+    el.setSelectionRange(nextCursor, nextCursor)
+  }
+}
 const severity = ref<'critical' | 'major' | 'minor' | 'suggestion'>('major')
 const markers = ref<{ marker_type: 'point' | 'range'; time_start: number; time_end: number | null }[]>([])
 const rangeAnchor = ref<number | null>(null)
@@ -674,6 +691,7 @@ defineExpose({
       <input v-model="title" class="input-field w-full" :placeholder="t('common.issueTitlePlaceholder')" />
       <div class="relative">
         <textarea
+          ref="descriptionRef"
           v-model="description"
           class="textarea-field w-full h-20"
           :placeholder="t('common.descriptionPlaceholder')"
@@ -685,6 +703,8 @@ defineExpose({
           :text="description"
           :cursor-pos="descriptionCursorPos"
           default-target="track"
+          :issues="props.issues"
+          @select="handleDescriptionMentionSelect"
         />
       </div>
       <CustomSelect v-model="severity" :options="severityOptions" />
