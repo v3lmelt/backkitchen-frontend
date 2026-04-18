@@ -19,6 +19,8 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install dependencies
         run: npm ci
+      - name: Check changelog generation
+        run: npm run changelog:check
       - name: Run tests
         run: npm run test
       - name: Build app
