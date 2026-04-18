@@ -9,7 +9,7 @@ import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import { parseUTC } from '@/utils/time'
-import { translateStepLabel } from '@/utils/workflow'
+import { translateStepLabel, translateWorkflowStatusLabel } from '@/utils/workflow'
 import type {
   AdminActivityLogEntry,
   AdminAuditLogEntry,
@@ -111,7 +111,7 @@ const workflowAlbum = computed(() => albums.value.find(album => album.id === wor
 const workflowAlbumMembers = computed(() => workflowAlbum.value?.members.map(member => member.user) ?? [])
 const workflowStatusOptions = computed(() => {
   const steps = workflowAlbum.value?.workflow_config?.steps ?? []
-  const options = steps.map(step => ({ value: step.id, label: `${translateStepLabel(step, t)} (${step.id})` }))
+  const options = steps.map(step => ({ value: step.id, label: translateStepLabel(step, t) }))
   if (!options.some(option => option.value === 'completed')) {
     options.push({ value: 'completed', label: t('status.completed') })
   }
@@ -123,7 +123,7 @@ const workflowStatusOptions = computed(() => {
 const workflowReopenOptions = computed(() =>
   (workflowAlbum.value?.workflow_config?.steps ?? []).map(step => ({
     value: step.id,
-    label: `${translateStepLabel(step, t)} (${step.id})`,
+    label: translateStepLabel(step, t),
   })),
 )
 const userSelectOptions = computed(() =>
@@ -152,11 +152,7 @@ function translateUserRole(role: string) {
 
 function translateWorkflowStatus(status: string | null | undefined) {
   if (!status) return '-'
-  const workflowKey = `workflowSteps.${status}`
-  if (te(workflowKey)) return t(workflowKey)
-  const statusKey = `status.${status}`
-  if (te(statusKey)) return t(statusKey)
-  return status.replaceAll('_', ' ')
+  return translateWorkflowStatusLabel(status, workflowAlbum.value?.workflow_config ?? null, t, te)
 }
 
 function translateWorkflowDecision(decision: string) {

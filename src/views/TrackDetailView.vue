@@ -20,7 +20,7 @@ import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useDiscussions } from '@/composables/useDiscussions'
 import { useToast } from '@/composables/useToast'
-import { buildTrackWorkspaceRoute, translateStepLabel } from '@/utils/workflow'
+import { buildTrackWorkspaceRoute, translateStepLabel, translateWorkflowStatusLabel } from '@/utils/workflow'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { useTrackStore } from '@/stores/tracks'
 
@@ -53,9 +53,7 @@ function transitionLabel(event: WorkflowEvent): string | null {
 }
 
 function translateWorkflowStatus(status: string): string {
-  const workflowStepKey = `workflowSteps.${status}`
-  if (te(workflowStepKey)) return t(workflowStepKey)
-  return t(`status.${status}`, status)
+  return translateWorkflowStatusLabel(status, workflowConfig.value, t, te)
 }
 
 function translateWorkflowDecision(decision: string): string {
@@ -826,7 +824,9 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             <div class="min-w-0">
               <div class="flex items-center gap-1.5">
                 <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">
-                  <span v-if="track.track_number" class="text-muted-foreground font-mono">#{{ track.track_number }}</span>
+                  <span v-if="track.track_number" class="text-muted-foreground font-mono">
+                    {{ t('trackDetail.trackNumberLabel', { number: track.track_number }) }}
+                  </span>
                   {{ track.title }}
                 </h1>
                 <button

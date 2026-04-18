@@ -120,6 +120,7 @@ describe('AlbumNewView', () => {
     mocks.circleListMock.mockResolvedValue([])
     mocks.circleGetMock.mockResolvedValue({
       id: 9,
+      default_checklist_enabled: true,
       members: [
         { id: 1, user_id: 1, role: 'owner', joined_at: '2024-01-01T00:00:00Z', user: { id: 1, display_name: 'Producer' } },
         { id: 2, user_id: 3, role: 'member', joined_at: '2024-01-01T00:00:00Z', user: { id: 3, display_name: 'Member' } },
@@ -165,6 +166,7 @@ describe('AlbumNewView', () => {
       member_ids: [],
       deadline: null,
       phase_deadlines: null,
+      checklist_enabled: false,
     })
     expect(wrapper.text()).toContain('Create failed')
     expect(mocks.toastErrorMock).toHaveBeenCalledWith('Create failed')
@@ -241,6 +243,7 @@ describe('AlbumNewView', () => {
       member_ids: [3],
       deadline: null,
       phase_deadlines: null,
+      checklist_enabled: null,
     })
     expect(mocks.updateTeamMock).not.toHaveBeenCalled()
     expect(mocks.updateDeadlinesMock).not.toHaveBeenCalled()
@@ -274,7 +277,45 @@ describe('AlbumNewView', () => {
       phase_deadlines: {
         peer_review: '2025-01-05T00:00:00.000Z',
       },
+      checklist_enabled: false,
     })
     expect(mocks.updateDeadlinesMock).not.toHaveBeenCalled()
+  })
+
+  it('lets producers change the default reviewer assignment and checklist policy before creation', async () => {
+    mocks.circleListMock.mockResolvedValue([
+      { id: 9, name: 'Back Kitchen', description: null, logo_url: null, created_by: 1, member_count: 2 },
+    ])
+    mocks.circleGetMock.mockResolvedValue({
+      id: 9,
+      default_checklist_enabled: false,
+      members: [
+        { id: 1, user_id: 1, role: 'owner', joined_at: '2024-01-01T00:00:00Z', user: { id: 1, display_name: 'Producer' } },
+      ],
+    })
+    mocks.createMock.mockResolvedValue({ id: 22 })
+
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    await wrapper.findAll('button.custom-select-option').find(button => button.text() === 'Back Kitchen')!.trigger('click')
+    await flushPromises()
+
+    await wrapper.find('input.input-field').setValue('Workflow Album')
+    await wrapper.findAll('button').find(button => button.text().includes('Manual'))!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text().trim() === 'Enabled')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text().includes('Create Album'))!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.createMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Workflow Album',
+      circle_id: 9,
+      checklist_enabled: true,
+      workflow_config: expect.objectContaining({
+        steps: expect.arrayContaining([
+          expect.objectContaining({ id: 'peer_review', assignment_mode: 'manual' }),
+        ]),
+      }),
+    }))
   })
 })

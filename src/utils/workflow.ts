@@ -1,5 +1,5 @@
 import type { ComposerTranslation } from 'vue-i18n'
-import type { Track, WorkflowEvent, WorkflowStepDef } from '@/types'
+import type { Track, WorkflowConfig, WorkflowEvent, WorkflowStepDef } from '@/types'
 
 /**
  * Step IDs that ship with the default workflow config and have matching
@@ -22,6 +22,14 @@ const DEFAULT_STEP_IDS = new Set([
 interface StepLike {
   id: string
   label: string
+}
+
+export function findWorkflowStepById(
+  workflowConfig: WorkflowConfig | null | undefined,
+  stepId: string | null | undefined,
+): WorkflowStepDef | null {
+  if (!workflowConfig || !stepId) return null
+  return workflowConfig.steps.find(step => step.id === stepId) ?? null
 }
 
 interface TrackWorkspaceRouteOptions {
@@ -82,6 +90,32 @@ export function translateStepLabel(
     return t(`workflowSteps.${step.id}`, step.label)
   }
   return step.label
+}
+
+export function translateWorkflowStatusLabel(
+  status: string | null | undefined,
+  workflowConfig: WorkflowConfig | null | undefined,
+  t: ComposerTranslation,
+  te?: (key: string) => boolean,
+): string {
+  if (!status) return ''
+
+  const workflowStep = findWorkflowStepById(workflowConfig, status)
+  if (workflowStep) {
+    return translateStepLabel(workflowStep, t)
+  }
+
+  const workflowKey = `workflowSteps.${status}`
+  if (!te || te(workflowKey)) {
+    return t(workflowKey, status)
+  }
+
+  const statusKey = `status.${status}`
+  if (!te || te(statusKey)) {
+    return t(statusKey, status)
+  }
+
+  return status.replaceAll('_', ' ')
 }
 
 export function formatWorkflowEvent(

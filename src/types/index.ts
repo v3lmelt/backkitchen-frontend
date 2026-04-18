@@ -120,6 +120,7 @@ export interface Album {
   circle_name?: string | null
   genres?: string[] | null
   cover_image?: string | null
+  checklist_enabled?: boolean | null
   producer_id: number | null
   mastering_engineer_id: number | null
   deadline?: string | null
@@ -156,6 +157,7 @@ export interface Circle {
   description: string | null
   website: string | null
   logo_url: string | null
+  default_checklist_enabled?: boolean
   created_by: number
   created_at: string
   members: CircleMember[]
@@ -166,6 +168,7 @@ export interface CircleSummary {
   name: string
   description: string | null
   logo_url: string | null
+  default_checklist_enabled?: boolean
   created_by: number
   member_count: number
 }
@@ -349,6 +352,7 @@ export interface Track {
   artist: string | null
   album_id: number
   album_title?: string
+  album_checklist_enabled?: boolean | null
   file_path: string | null
   duration: number | null
   bpm: string | null
@@ -384,6 +388,7 @@ export interface Track {
 
 export interface TrackDetailResponse {
   track: Track
+  album?: Album | null
   issues: Issue[]
   checklist_items: ChecklistItem[]
   events: WorkflowEvent[]
@@ -416,6 +421,29 @@ export interface ChecklistTemplateItem {
 export interface ChecklistTemplateRead {
   items: ChecklistTemplateItem[]
   is_default: boolean
+}
+
+export interface ChecklistDraftItem {
+  label: string
+  passed: boolean
+  note?: string | null
+}
+
+export interface ChecklistDraftPrefillMeta {
+  source_version_id?: number | null
+  source_version_number?: number | null
+  workflow_cycle?: number | null
+  updated_at?: string | null
+  confirmed_at?: string | null
+  reconfirm_required?: boolean | null
+  status?: string | null
+  reason?: string | null
+}
+
+export interface ChecklistDraftRead {
+  items: ChecklistDraftItem[]
+  template_items: ChecklistTemplateItem[]
+  prefill: ChecklistDraftPrefillMeta | null
 }
 
 export interface DiscussionImage {
