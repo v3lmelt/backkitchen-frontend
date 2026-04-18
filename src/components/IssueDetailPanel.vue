@@ -666,6 +666,7 @@ async function confirmDeleteComment() {
               enable-audio
               enable-timestamp-popover
               timestamp-default-target="attachment"
+              :issues="issues"
               @submit="handleCommentSubmit"
             />
           </div>

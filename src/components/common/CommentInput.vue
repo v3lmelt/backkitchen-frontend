@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
+import type { Issue } from '@/types'
 import type { TimestampTarget } from '@/utils/timestamps'
 import { Music, ImageIcon } from 'lucide-vue-next'
 
@@ -20,6 +21,7 @@ const props = withDefaults(defineProps<{
   timestampDefaultTarget?: TimestampTarget
   rows?: number
   maxAudios?: number
+  issues?: Issue[] | null
 }>(), {
   submitting: false,
   uploadProgress: 0,
@@ -28,6 +30,7 @@ const props = withDefaults(defineProps<{
   timestampDefaultTarget: 'attachment',
   rows: 3,
   maxAudios: 3,
+  issues: null,
 })
 
 const emit = defineEmits<{
@@ -44,6 +47,22 @@ const imagePreviewUrls = ref<string[]>([])
 const selectedAudios = ref<File[]>([])
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const audioInputRef = ref<HTMLInputElement | null>(null)
+const textareaRef = ref<HTMLTextAreaElement | null>(null)
+
+async function handleIssueMentionSelect(issue: Issue, mention: { start: number; end: number }) {
+  const insertion = `@issue:${issue.local_number} `
+  const before = content.value.slice(0, mention.start)
+  const after = content.value.slice(mention.end)
+  content.value = `${before}${insertion}${after}`
+  const nextCursor = mention.start + insertion.length
+  cursorPos.value = nextCursor
+  await nextTick()
+  const el = textareaRef.value
+  if (el) {
+    el.focus()
+    el.setSelectionRange(nextCursor, nextCursor)
+  }
+}
 
 const canSubmit = computed(
   () => !props.submitting && (!!content.value.trim() || !!selectedImages.value.length || !!selectedAudios.value.length),
@@ -124,6 +143,7 @@ defineExpose({ reset })
   <div class="space-y-2">
     <div class="relative">
       <textarea
+        ref="textareaRef"
         v-model="content"
         class="textarea-field w-full text-sm pr-8"
         :placeholder="placeholder"
@@ -139,6 +159,8 @@ defineExpose({ reset })
         :text="content"
         :cursor-pos="cursorPos"
         :default-target="timestampDefaultTarget"
+        :issues="issues"
+        @select="handleIssueMentionSelect"
       />
     </div>
 

@@ -1571,6 +1571,7 @@ function handleIssueLeave() {
             :track-id="trackId"
             phase="peer"
             :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
+            :issues="issues"
             @created="onIssueCreated"
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
@@ -1789,6 +1790,7 @@ function handleIssueLeave() {
         ref="issueFormRef"
         :track-id="trackId"
         phase="producer"
+        :issues="issues"
         @created="onIssueCreated"
         @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
       >
@@ -2047,6 +2049,7 @@ function handleIssueLeave() {
             :track-id="trackId"
             phase="mastering"
             :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
+            :issues="issues"
             @created="onIssueCreated"
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
@@ -2317,6 +2320,7 @@ function handleIssueLeave() {
             :track-id="trackId"
             phase="final_review"
             :master-delivery-id="masterDelivery?.id ?? null"
+            :issues="issues"
             @created="onIssueCreated"
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
@@ -2525,6 +2529,7 @@ function handleIssueLeave() {
           :track-id="trackId"
           :phase="currentStep.id"
           :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
+          :issues="issues"
           @created="onIssueCreated"
         />
       </div>
@@ -2610,6 +2615,7 @@ function handleIssueLeave() {
           :track-id="trackId"
           :phase="currentStep.id"
           :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
+          :issues="issues"
           @created="onIssueCreated"
         />
       </div>

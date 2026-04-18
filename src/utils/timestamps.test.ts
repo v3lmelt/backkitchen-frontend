@@ -4,6 +4,7 @@ import {
   extractIssueReferences,
   extractMarkerIndexReferences,
   extractTimeReferences,
+  getActiveMentionContext,
   parseTimecode,
   resolveAttachmentReferenceIndex,
   resolveTimeReferenceTarget,
@@ -264,5 +265,76 @@ describe('splitTextWithInlineReferences', () => {
         },
       },
     ])
+  })
+})
+
+describe('getActiveMentionContext', () => {
+  it('detects @i as the start of an issue mention with empty query', () => {
+    expect(getActiveMentionContext('hello @i', 8)).toEqual({
+      kind: 'issue',
+      start: 6,
+      end: 8,
+      query: '',
+    })
+  })
+
+  it('detects intermediate prefixes (@is, @iss, @issu, @issue)', () => {
+    expect(getActiveMentionContext('@is', 3)).toEqual({ kind: 'issue', start: 0, end: 3, query: '' })
+    expect(getActiveMentionContext('@iss', 4)).toEqual({ kind: 'issue', start: 0, end: 4, query: '' })
+    expect(getActiveMentionContext('@issu', 5)).toEqual({ kind: 'issue', start: 0, end: 5, query: '' })
+    expect(getActiveMentionContext('@issue', 6)).toEqual({ kind: 'issue', start: 0, end: 6, query: '' })
+  })
+
+  it('treats @issue: with no digits as an active mention with empty query', () => {
+    expect(getActiveMentionContext('@issue:', 7)).toEqual({ kind: 'issue', start: 0, end: 7, query: '' })
+  })
+
+  it('captures the digits after the colon as the query', () => {
+    expect(getActiveMentionContext('Look @issue:12', 14)).toEqual({
+      kind: 'issue',
+      start: 5,
+      end: 14,
+      query: '12',
+    })
+  })
+
+  it('returns null when cursor is past the mention (followed by space)', () => {
+    expect(getActiveMentionContext('hello @issue:12 world', 20)).toBeNull()
+  })
+
+  it('returns null for a bare @ without an "i" character', () => {
+    expect(getActiveMentionContext('hello @', 7)).toBeNull()
+  })
+
+  it('returns null when @ is preceded by a word char (e.g. inside an email)', () => {
+    expect(getActiveMentionContext('foo@i', 5)).toBeNull()
+  })
+
+  it('treats cursor inside the middle of a fully-typed mention as active', () => {
+    // Cursor between 'e' and ':' inside '@issue:42' (position 6)
+    expect(getActiveMentionContext('@issue:42', 6)).toEqual({
+      kind: 'issue',
+      start: 0,
+      end: 9,
+      query: '42',
+    })
+  })
+
+  it('returns null once a non-mention letter breaks the prefix', () => {
+    expect(getActiveMentionContext('@issuex', 7)).toBeNull()
+  })
+
+  it('returns null once a non-digit appears after the colon', () => {
+    expect(getActiveMentionContext('@issue:1a', 9)).toBeNull()
+  })
+
+  it('handles multiple potential mentions in one text and picks the one containing the cursor', () => {
+    const text = '@issue:1 and @is'
+    expect(getActiveMentionContext(text, 16)).toEqual({
+      kind: 'issue',
+      start: 13,
+      end: 16,
+      query: '',
+    })
   })
 })

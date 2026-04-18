@@ -1195,6 +1195,7 @@ watch(olderMasterDeliveries, (deliveries) => {
           :track-id="trackId"
           phase="mastering"
           :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
+          :issues="issues"
           @created="onIssueCreated"
           @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
         >
