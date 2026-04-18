@@ -1121,6 +1121,7 @@ async function refreshDeliveries() {
             <div
               class="relative w-32 h-32 overflow-hidden border border-border"
               :class="canManageAlbum ? 'cursor-pointer group' : ''"
+              :title="canManageAlbum ? t('albumSettings.info.coverHintFormat') : undefined"
               @click="canManageAlbum && coverInputRef?.click()"
             >
               <img
@@ -1599,8 +1600,16 @@ async function refreshDeliveries() {
               }}
             </p>
             <div>
-              <button @click="saveChecklistMode" :disabled="savingChecklistMode" class="btn-primary text-sm">
-                {{ savingChecklistMode ? t('settings.saving') : t('common.save') }}
+              <button
+                @click="saveChecklistMode"
+                :disabled="savingChecklistMode"
+                class="btn-primary text-sm inline-flex items-center gap-2"
+              >
+                <span
+                  v-if="savingChecklistMode"
+                  class="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin"
+                ></span>
+                {{ t('common.save') }}
               </button>
             </div>
           </template>

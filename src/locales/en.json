@@ -1221,7 +1221,8 @@
       "activity": "Activity"
     },
     "info": {
-      "coverHint": "Click to change cover (JPEG/PNG/WebP/GIF, ≤ 20 MB)",
+      "coverHint": "Click to change cover",
+      "coverHintFormat": "JPEG / PNG / WebP / GIF · up to 20 MB",
       "saveCover": "Save Cover",
       "coverSaved": "Cover updated",
       "coverUploadFailed": "Cover upload failed: {message}",
