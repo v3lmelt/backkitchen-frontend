@@ -1,6 +1,7 @@
 import type { WorkflowConfig } from '@/types'
 
 type ReviewAssignmentMode = 'manual' | 'auto'
+type WorkflowLabelTranslator = (key: string, fallback: string) => string
 
 const DEFAULT_WORKFLOW_CONFIG: WorkflowConfig = {
   version: 2,
@@ -110,8 +111,21 @@ export function cloneWorkflowConfig(config: WorkflowConfig): WorkflowConfig {
   return JSON.parse(JSON.stringify(config)) as WorkflowConfig
 }
 
-export function buildDefaultWorkflowConfig(): WorkflowConfig {
-  return cloneWorkflowConfig(DEFAULT_WORKFLOW_CONFIG)
+function localizeWorkflowConfigLabels(
+  config: WorkflowConfig,
+  translate?: WorkflowLabelTranslator,
+): WorkflowConfig {
+  if (!translate) return config
+
+  for (const step of config.steps) {
+    step.label = translate(`workflowSteps.${step.id}`, step.label)
+  }
+
+  return config
+}
+
+export function buildDefaultWorkflowConfig(translate?: WorkflowLabelTranslator): WorkflowConfig {
+  return localizeWorkflowConfigLabels(cloneWorkflowConfig(DEFAULT_WORKFLOW_CONFIG), translate)
 }
 
 export function getFirstPeerReviewAssignmentMode(config: WorkflowConfig | null | undefined): ReviewAssignmentMode {

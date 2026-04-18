@@ -45,6 +45,16 @@
             "zh-CN": "如果当前 reviewer 在同一轮工作流中已经提交过上一个源版本的 checklist，系统会自动预填答案，并明确提示这是来自旧版本的内容，需要重新保存确认。",
             "en": "If the current reviewer has already submitted a checklist for a previous source version in the same workflow cycle, the answers are prefilled and clearly marked as needing reconfirmation before the review can be completed."
           }
+        },
+        {
+          "title": {
+            "zh-CN": "默认审稿人分配切换不再把工作流标签重置成英文",
+            "en": "Changing the default reviewer assignment no longer resets workflow labels to English"
+          },
+          "description": {
+            "zh-CN": "在新建专辑页通过快捷控件切换首个同行评审阶段的自动分配或手动指派时，下面的可视化工作流编辑器现在会保留当前界面的语言标签，不会再突然显示英文步骤名。",
+            "en": "When producers switch the first peer-review stage between automatic and manual assignment from the quick control on the new album page, the visual workflow editor now keeps step labels in the current UI language instead of unexpectedly reverting them to English."
+          }
         }
       ]
     },

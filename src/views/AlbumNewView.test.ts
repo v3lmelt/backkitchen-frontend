@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
 
 import { mountWithPlugins } from '@/tests/utils'
+import zhMessages from '@/locales/zh-CN.json'
 
 const mocks = vi.hoisted(() => ({
   pushMock: vi.fn(),
@@ -90,11 +93,36 @@ vi.mock('@/components/common/SkeletonLoader.vue', () => ({
 vi.mock('@/components/workflow/WorkflowEditor.vue', () => ({
   default: {
     props: ['workflowConfig', 'memberOptions'],
-    template: '<div class="workflow-editor-stub" />',
+    template: '<div class="workflow-editor-stub">{{ workflowConfig?.steps?.map(step => step.label).join(" | ") ?? "" }}</div>',
   },
 }))
 
 import AlbumNewView from './AlbumNewView.vue'
+
+function mountAlbumNewViewWithZhI18n() {
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  const i18n = createI18n({
+    legacy: false,
+    locale: 'zh-CN',
+    fallbackLocale: 'zh-CN',
+    messages: { 'zh-CN': zhMessages },
+    missingWarn: false,
+    fallbackWarn: false,
+  })
+
+  const wrapper = mount(AlbumNewView, {
+    global: {
+      plugins: [pinia, i18n],
+      stubs: {
+        transition: false,
+        RouterLink: { template: '<a><slot /></a>' },
+      },
+    },
+  })
+
+  return { wrapper, i18n }
+}
 
 describe('AlbumNewView', () => {
   beforeEach(() => {
@@ -317,5 +345,24 @@ describe('AlbumNewView', () => {
         ]),
       }),
     }))
+  })
+
+  it('keeps default workflow labels localized when the reviewer mode quick control creates the workflow config', async () => {
+    const { wrapper, i18n } = mountAlbumNewViewWithZhI18n()
+    await flushPromises()
+
+    await wrapper.findAll('button').find(button => button.text().includes(i18n.global.t('albumNew.workflowSection') as string))!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.workflow-editor-stub').text()).toBe('')
+
+    await wrapper.findAll('button').find(button => button.text().includes(i18n.global.t('workflowEditor.manual') as string))!.trigger('click')
+    await flushPromises()
+
+    const workflowText = wrapper.find('.workflow-editor-stub').text()
+    expect(workflowText).toContain(i18n.global.t('workflowSteps.peer_review'))
+    expect(workflowText).toContain(i18n.global.t('workflowSteps.mastering'))
+    expect(workflowText).not.toContain('Peer Review')
+    expect(workflowText).not.toContain('Mastering')
   })
 })

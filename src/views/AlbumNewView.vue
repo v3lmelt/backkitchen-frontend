@@ -123,7 +123,7 @@ const workflowMemberOptions = computed<SelectOption[]>(() => {
 const reviewerAssignmentMode = computed<'auto' | 'manual'>({
   get: () => getFirstPeerReviewAssignmentMode(workflowConfig.value),
   set: (mode) => {
-    const next = workflowConfig.value ?? buildDefaultWorkflowConfig()
+    const next = workflowConfig.value ?? buildDefaultWorkflowConfig((key, fallback) => t(key, fallback))
     workflowConfig.value = setFirstPeerReviewAssignmentMode(next, mode)
   },
 })
