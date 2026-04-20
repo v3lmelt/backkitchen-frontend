@@ -1,0 +1,62 @@
+{
+  "version": "0.1.5",
+  "date": "2026-04-20",
+  "headline": {
+    "zh-CN": "补齐多语言覆盖：邮箱验证、重置密码和社团详情页现在会跟随语言切换",
+    "en": "Fills in missing translations on email verification, reset password, and circle detail pages"
+  },
+  "summary": {
+    "zh-CN": "过去邮箱验证页整页只有英文、重置密码页的「显示/隐藏密码」无障碍标签总是英文、社团详情页的头像上传按钮和「复制邀请码」无障碍标签也不跟随语言切换；这次把这些遗漏的文案全部接入了多语言系统，切到中文时不会再突兀地冒出英文。",
+    "en": "The email verification page used to be English-only, the Show/Hide password aria-label on the reset password page was always English, and the circle detail page's upload-logo button and Copy invite code aria-label ignored the current language. This release routes all of those through the i18n system, so nothing jumps back to English when you're browsing in Chinese."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "多语言修复",
+        "en": "Localization fixes"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "邮箱验证页整页支持多语言",
+            "en": "Email verification page now fully localized"
+          },
+          "description": {
+            "zh-CN": "打开邮箱验证链接后看到的加载、成功、失败三种状态文案，以及「返回登录」按钮和各类错误提示，现在都会按当前语言显示。",
+            "en": "The loading, success, and failure copy shown when you open a verification link — plus the Back to sign in button and all error messages — now follow your current language setting."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "重置密码页的密码可见性按钮标签",
+            "en": "Password visibility toggle on the reset password page"
+          },
+          "description": {
+            "zh-CN": "密码输入框右侧眼睛图标的无障碍标签（屏幕阅读器读出的「显示密码/隐藏密码」）现在会跟随语言切换；链接缺失 token 时的报错也改为多语言文案。",
+            "en": "The accessibility label on the eye icon next to the password field (the Show password / Hide password text a screen reader reads) now follows your language, and the missing-token error on that page is translated as well."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "社团详情页的头像上传与邀请码复制标签",
+            "en": "Circle detail page's upload logo and invite code labels"
+          },
+          "description": {
+            "zh-CN": "社团详情页上传头像按钮、每个邀请码旁「复制」按钮的无障碍标签现在都会按当前语言显示，之前始终是英文。",
+            "en": "The upload-logo button and the Copy invite code aria-labels on each invite row now follow your current language; previously both were always English."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "专辑设置页的角色标签与保存失败提示",
+            "en": "Role label and save-error toast on album settings"
+          },
+          "description": {
+            "zh-CN": "专辑设置页中，管理员身份显示的「Admin」标签、保存工作流失败时的兜底提示，现在都接入了多语言。",
+            "en": "On the album settings page, the Admin role badge and the fallback toast shown when saving the workflow fails are now translated."
+          }
+        }
+      ]
+    }
+  ]
+}
