@@ -117,4 +117,35 @@ describe('useTrackWebSocket', () => {
     expect(second.close).toHaveBeenCalledTimes(1)
     expect(TestWebSocket.instances).toHaveLength(2)
   })
+
+  it('tracks reconnect attempts and resets on open', async () => {
+    localStorage.setItem('backkitchen_token', 'secret')
+    const wrapper = mountHarness(7, vi.fn())
+    const first = TestWebSocket.instances[0]
+    expect((wrapper.vm as any).reconnectAttempts).toBe(0)
+
+    first.emitClose()
+    await nextTick()
+    expect((wrapper.vm as any).reconnectAttempts).toBe(1)
+
+    vi.advanceTimersByTime(2000)
+    expect(TestWebSocket.instances).toHaveLength(2)
+    TestWebSocket.instances[1].emitOpen()
+    await nextTick()
+    expect((wrapper.vm as any).reconnectAttempts).toBe(0)
+  })
+
+  it('retry() reconnects immediately without waiting for backoff', async () => {
+    localStorage.setItem('backkitchen_token', 'secret')
+    const wrapper = mountHarness(7, vi.fn())
+    const first = TestWebSocket.instances[0]
+
+    first.emitClose()
+    await nextTick()
+    expect(TestWebSocket.instances).toHaveLength(1)
+
+    ;(wrapper.vm as any).retry()
+    await nextTick()
+    expect(TestWebSocket.instances).toHaveLength(2)
+  })
 })

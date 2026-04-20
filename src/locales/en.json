@@ -499,6 +499,8 @@
     "filtered": "filtered: {status}",
     "clearFilter": "clear",
     "submitTrack": "+ Submit Track",
+    "loadMore": "Load more ({count})",
+    "showingOf": "Showing {visible} of {total}",
     "batchModeOn": "Batch Actions",
     "batchModeOff": "Exit Batch",
     "batchSelected": "{count} selected",
@@ -624,6 +626,8 @@
     "live": "Live",
     "liveConnected": "Connected to real-time collaboration",
     "liveDisconnected": "Real-time connection lost, reconnecting…",
+    "liveReconnecting": "Connection lost — reconnecting (attempt {n})…",
+    "liveRetryNow": "Retry now",
     "timelineFilter": {
       "all": "All",
       "transitions": "Transitions",

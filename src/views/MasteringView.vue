@@ -397,7 +397,7 @@ const handleMasterDownload = () => downloadTrackAudio(masterAudioUrl, track, '_m
 // WebSocket
 const wsReloading = ref(false)
 const wsHadConnection = ref(false)
-const { connected: wsConnected } = useTrackWebSocket(trackId.value, async () => {
+const { connected: wsConnected, reconnectAttempts: wsReconnectAttempts, retry: wsRetry } = useTrackWebSocket(trackId.value, async () => {
   if (wsReloading.value) return
   wsReloading.value = true
   await nextTick()
@@ -953,10 +953,15 @@ watch(olderMasterDeliveries, (deliveries) => {
     <!-- WebSocket disconnect banner -->
     <div
       v-if="wsHadConnection && !wsConnected"
-      class="flex items-center gap-2 px-4 py-2.5 bg-warning-bg border border-warning/30 text-warning text-sm font-mono"
+      class="flex items-center justify-between gap-3 px-4 py-2.5 bg-warning-bg border border-warning/30 text-warning text-sm font-mono"
     >
-      <span class="w-2 h-2 rounded-full bg-warning animate-pulse flex-shrink-0"></span>
-      {{ t('trackDetail.liveDisconnected') }}
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="w-2 h-2 rounded-full bg-warning animate-pulse flex-shrink-0"></span>
+        <span class="truncate">{{ wsReconnectAttempts > 0 ? t('trackDetail.liveReconnecting', { n: wsReconnectAttempts }) : t('trackDetail.liveDisconnected') }}</span>
+      </div>
+      <button @click="wsRetry" class="text-xs font-mono text-warning underline underline-offset-2 hover:no-underline flex-shrink-0">
+        {{ t('trackDetail.liveRetryNow') }}
+      </button>
     </div>
 
     <!-- ① Header (compact) -->
