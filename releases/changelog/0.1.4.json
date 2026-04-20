@@ -1,0 +1,60 @@
+{
+  "version": "0.1.4",
+  "date": "2026-04-20",
+  "headline": {
+    "zh-CN": "首页曲目分页、实时连接可重试，以及全站细腻过渡动效",
+    "en": "Dashboard pagination, actionable live-connection reconnect, and subtle motion across the app"
+  },
+  "summary": {
+    "zh-CN": "大量曲目的专辑在首页现在分批渲染，列表更流畅；曲目页实时连接断开时会显示重连尝试次数并提供「立即重试」按钮；同时我们在 Toast、弹窗、侧边栏徽标、状态徽章、波形播放器、讨论列表等多处加上了低干扰的过渡动效，整体更顺滑。",
+    "en": "Albums with many tracks now render in batches on the dashboard for snappier scrolling. When the track page loses its real-time connection, the banner shows the reconnect attempt count and a Retry now button. On top of that, we've added low-key motion to toasts, modals, sidebar badges, status badges, the waveform player, and discussion lists for an overall smoother feel."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "首页与实时协作",
+        "en": "Dashboard & Real-time"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "首页曲目列表分批加载",
+            "en": "Dashboard track list now loads in batches"
+          },
+          "description": {
+            "zh-CN": "首页曲目表默认显示前 50 首，底部提供「加载更多」按钮并展示当前/总数；切换筛选或搜索会回到初始批次，避免一次渲染上百条造成的卡顿。",
+            "en": "The dashboard track table now renders the first 50 tracks and surfaces a Load more button with a visible / total counter. Switching filters or typing in search resets to the initial batch, so big album lists no longer stall the first paint."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "实时连接断开时可主动重试",
+            "en": "Retry now control on live-connection dropouts"
+          },
+          "description": {
+            "zh-CN": "曲目详情、母带、工作流三处的「实时连接已断开」横幅现在会显示第几次重连尝试，并提供「立即重试」按钮跳过指数退避等待；内部同时修复了一处可能造成双连接的竞态。",
+            "en": "The reconnect banner on the track detail, mastering, and workflow pages now shows the current attempt number and offers a Retry now button that skips the exponential-backoff wait. We also patched a race that could briefly open two sockets during manual retry."
+          }
+        }
+      ]
+    },
+    {
+      "heading": {
+        "zh-CN": "界面质感",
+        "en": "Interface polish"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "六处界面细节加入轻量过渡",
+            "en": "Subtle transitions across six surfaces"
+          },
+          "description": {
+            "zh-CN": "Toast 会从侧边滑入并带邻居挪位动画；通用弹窗背景淡入、面板缩放入场；快捷键面板、侧边栏未读徽标、曲目状态徽章、波形播放器的播放/暂停图标都加入了短促的视觉反馈；聊天和讨论消息列表统一使用一致的上滑入场。",
+            "en": "Toasts slide in from the side with neighbors easing into place; the shared modal has a backdrop fade and a scale-in panel; the shortcuts modal, sidebar unread badges, track status badges, and the waveform player's play/pause icon all gained short feedback animations; chat and discussion messages share one slide-up entrance."
+          }
+        }
+      ]
+    }
+  ]
+}

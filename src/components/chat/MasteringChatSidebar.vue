@@ -181,6 +181,7 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
               <button class="btn-secondary text-xs flex-shrink-0" @click="loadDiscussions">{{ t('common.retry') }}</button>
             </div>
           </div>
+          <TransitionGroup tag="div" name="msg" class="space-y-4">
           <div
             v-for="d in mastering.discussions.value"
             :key="d.id"
@@ -284,6 +285,7 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
               </div>
             </div>
           </div>
+          </TransitionGroup>
         </template>
       </div>
 

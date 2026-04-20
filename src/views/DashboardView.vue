@@ -18,6 +18,8 @@ import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { Music, Search } from 'lucide-vue-next'
 
 const TRACK_PAGE_SIZE = 100
+const TRACK_DISPLAY_INITIAL = 50
+const TRACK_DISPLAY_STEP = 50
 
 const router = useRouter()
 const route = useRoute()
@@ -41,6 +43,7 @@ const exportProgress = ref<{
   error: string | null
 } | null>(null)
 const showPinnedOnly = ref(false)
+const visibleTrackLimit = ref(TRACK_DISPLAY_INITIAL)
 const { hasAnyPins, isPinned, togglePin } = useDashboardPins(() => appStore.currentUser?.id ?? null)
 
 function toAlbumStats(album: Album): AlbumStats {
@@ -109,8 +112,19 @@ onMounted(loadDashboard)
 
 watch(searchQuery, () => {
   if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => loadDashboard(), 300)
+  searchTimer = setTimeout(() => {
+    visibleTrackLimit.value = TRACK_DISPLAY_INITIAL
+    loadDashboard()
+  }, 300)
 })
+
+watch(filterStatus, () => {
+  visibleTrackLimit.value = TRACK_DISPLAY_INITIAL
+})
+
+function loadMoreTracks() {
+  visibleTrackLimit.value += TRACK_DISPLAY_STEP
+}
 
 onBeforeUnmount(() => {
   if (searchTimer) clearTimeout(searchTimer)
@@ -126,6 +140,10 @@ const filteredTracks = computed(() => {
   }
   return result
 })
+
+const visibleTracks = computed(() => filteredTracks.value.slice(0, visibleTrackLimit.value))
+const hasMoreTracks = computed(() => filteredTracks.value.length > visibleTracks.value.length)
+const nextBatchSize = computed(() => Math.min(TRACK_DISPLAY_STEP, filteredTracks.value.length - visibleTracks.value.length))
 
 async function loadAllTracks(params?: { status?: TrackStatus; album_id?: number; search?: string }) {
   const allTracks: Track[] = []
@@ -216,13 +234,13 @@ const attentionAlbums = computed(() =>
 
 const groupedTracks = computed(() => {
   const groups = new Map<number, Track[]>()
-  for (const track of filteredTracks.value) {
+  for (const track of visibleTracks.value) {
     if (!groups.has(track.album_id)) groups.set(track.album_id, [])
     groups.get(track.album_id)!.push(track)
   }
   const result: { albumId: number; albumTitle: string; tracks: Track[] }[] = []
   const seen = new Set<number>()
-  for (const track of filteredTracks.value) {
+  for (const track of visibleTracks.value) {
     if (!seen.has(track.album_id)) {
       seen.add(track.album_id)
       result.push({
@@ -746,6 +764,12 @@ function openTrack(track: Track) {
           </tbody>
         </table>
       </div>
+      <div v-if="!loading && hasMoreTracks" class="hidden md:flex items-center justify-between gap-3 mt-3 text-xs text-muted-foreground">
+        <span>{{ t('dashboard.showingOf', { visible: visibleTracks.length, total: filteredTracks.length }) }}</span>
+        <button @click="loadMoreTracks" class="btn-secondary text-xs">
+          {{ t('dashboard.loadMore', { count: nextBatchSize }) }}
+        </button>
+      </div>
       <!-- Mobile card list -->
       <div v-if="!loading && filteredTracks.length > 0" class="space-y-5 md:hidden">
         <div v-for="group in groupedTracks" :key="group.albumId">
@@ -783,6 +807,12 @@ function openTrack(track: Track) {
               </div>
             </div>
           </div>
+        </div>
+        <div v-if="hasMoreTracks" class="flex flex-col items-center gap-2 pt-2">
+          <span class="text-xs text-muted-foreground">{{ t('dashboard.showingOf', { visible: visibleTracks.length, total: filteredTracks.length }) }}</span>
+          <button @click="loadMoreTracks" class="btn-secondary text-xs w-full">
+            {{ t('dashboard.loadMore', { count: nextBatchSize }) }}
+          </button>
         </div>
       </div>
     </div>

@@ -196,6 +196,8 @@ vi.mock('@/composables/useToast', () => ({
 vi.mock('@/composables/useTrackWebSocket', () => ({
   useTrackWebSocket: () => ({
     connected: ref(false),
+    reconnectAttempts: ref(0),
+    retry: vi.fn(),
   }),
 }))
 

@@ -43,7 +43,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
         class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
         @click.self="open = false"
       >
-        <div class="bg-card border border-border rounded-none w-full max-w-md shadow-xl">
+        <div class="modal-panel bg-card border border-border rounded-none w-full max-w-md shadow-xl">
           <div class="flex items-center justify-between px-5 py-4 border-b border-border">
             <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('shortcuts.title') }}</h2>
             <button @click="open = false" class="text-muted-foreground hover:text-foreground transition-colors">
@@ -78,6 +78,21 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 </template>
 
 <style scoped>
-.fade-enter-active, .fade-leave-active { transition: opacity 0.15s; }
+.fade-enter-active, .fade-leave-active { transition: opacity 0.18s ease-out; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.fade-enter-active .modal-panel {
+  animation: modal-panel-in 0.18s ease-out;
+}
+.fade-leave-active .modal-panel {
+  animation: modal-panel-out 0.14s ease-in;
+}
+@keyframes modal-panel-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes modal-panel-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.98); }
+}
 </style>

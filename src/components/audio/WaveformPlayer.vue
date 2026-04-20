@@ -1454,9 +1454,11 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
 
       <div class="flex flex-col gap-3" :class="compact ? '' : 'sm:flex-row sm:items-center sm:justify-between'">
       <div class="flex items-center gap-4">
-        <button type="button" @click="togglePlay" class="text-primary hover:text-primary-hover transition-colors">
-          <Play v-if="!isPlaying" class="w-8 h-8" fill="currentColor" :stroke-width="0" />
-          <Pause v-else class="w-8 h-8" fill="currentColor" :stroke-width="0" />
+        <button type="button" @click="togglePlay" class="text-primary hover:text-primary-hover transition-colors relative w-8 h-8">
+          <Transition name="play-icon">
+            <Play v-if="!isPlaying" class="w-8 h-8 absolute inset-0" fill="currentColor" :stroke-width="0" />
+            <Pause v-else class="w-8 h-8 absolute inset-0" fill="currentColor" :stroke-width="0" />
+          </Transition>
         </button>
         <span class="text-sm text-muted-foreground font-mono">
           {{ formatTime(activeCurrentTime) }} / {{ formatTime(activeDuration) }}
@@ -1491,3 +1493,15 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
     </div>
   </div>
 </template>
+
+<style scoped>
+.play-icon-enter-active,
+.play-icon-leave-active {
+  transition: opacity 0.12s ease-out, transform 0.12s ease-out;
+}
+.play-icon-enter-from,
+.play-icon-leave-to {
+  opacity: 0;
+  transform: scale(0.85);
+}
+</style>

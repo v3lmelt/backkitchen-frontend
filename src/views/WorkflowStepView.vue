@@ -59,7 +59,7 @@ const chatSidebarRef = ref<InstanceType<typeof MasteringChatSidebar> | null>(nul
 
 const wsReloading = ref(false)
 const wsHadConnection = ref(false)
-const { connected: wsConnected } = useTrackWebSocket(trackId.value, async () => {
+const { connected: wsConnected, reconnectAttempts: wsReconnectAttempts, retry: wsRetry } = useTrackWebSocket(trackId.value, async () => {
   if (wsReloading.value) return
   wsReloading.value = true
   await nextTick()
@@ -1383,9 +1383,12 @@ function handleIssueLeave() {
 
       <div
         v-if="wsHadConnection && !wsConnected"
-        class="card border border-warning/40 bg-warning-bg text-xs text-warning"
+        class="card border border-warning/40 bg-warning-bg text-xs text-warning flex items-center justify-between gap-3"
       >
-        {{ t('trackDetail.liveDisconnected') }}
+        <span class="truncate">{{ wsReconnectAttempts > 0 ? t('trackDetail.liveReconnecting', { n: wsReconnectAttempts }) : t('trackDetail.liveDisconnected') }}</span>
+        <button @click="wsRetry" class="font-mono underline underline-offset-2 hover:no-underline flex-shrink-0">
+          {{ t('trackDetail.liveRetryNow') }}
+        </button>
       </div>
 
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">

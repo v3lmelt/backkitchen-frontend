@@ -20,7 +20,11 @@ const colorMap = {
 </script>
 
 <template>
-  <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+  <TransitionGroup
+    tag="div"
+    name="toast"
+    class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"
+  >
     <div
       v-for="toast in toasts"
       :key="toast.id"
@@ -35,5 +39,27 @@ const colorMap = {
         <X class="w-4 h-4" />
       </button>
     </div>
-  </div>
+  </TransitionGroup>
 </template>
+
+<style scoped>
+.toast-enter-active,
+.toast-leave-active {
+  transition: transform 0.22s ease-out, opacity 0.22s ease-out;
+}
+.toast-enter-from {
+  opacity: 0;
+  transform: translateX(16px);
+}
+.toast-leave-active {
+  position: absolute;
+  right: 0;
+}
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(16px);
+}
+.toast-move {
+  transition: transform 0.22s ease-out;
+}
+</style>
