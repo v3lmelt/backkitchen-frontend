@@ -88,30 +88,50 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="body">
-    <div
-      class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-      @click.self="onBackdropClick"
-    >
+    <Transition name="modal-backdrop" appear>
       <div
-        ref="dialogRef"
-        class="bg-card border border-border rounded-none p-6 w-full relative"
-        :class="maxWidth"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="ariaLabel"
-        tabindex="-1"
+        class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+        @click.self="onBackdropClick"
       >
-        <button
-          v-if="closable"
-          ref="closeButtonRef"
-          class="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
-          @click="emit('close')"
-          :aria-label="t('common.cancel')"
-        >
-          <X class="w-4 h-4" />
-        </button>
-        <slot />
+        <Transition name="modal-panel" appear>
+          <div
+            ref="dialogRef"
+            class="bg-card border border-border rounded-none p-6 w-full relative"
+            :class="maxWidth"
+            role="dialog"
+            aria-modal="true"
+            :aria-label="ariaLabel"
+            tabindex="-1"
+          >
+            <button
+              v-if="closable"
+              ref="closeButtonRef"
+              class="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
+              @click="emit('close')"
+              :aria-label="t('common.cancel')"
+            >
+              <X class="w-4 h-4" />
+            </button>
+            <slot />
+          </div>
+        </Transition>
       </div>
-    </div>
+    </Transition>
   </Teleport>
 </template>
+
+<style scoped>
+.modal-backdrop-enter-active {
+  transition: opacity 0.18s ease-out;
+}
+.modal-backdrop-enter-from {
+  opacity: 0;
+}
+.modal-panel-enter-active {
+  transition: opacity 0.18s ease-out, transform 0.18s ease-out;
+}
+.modal-panel-enter-from {
+  opacity: 0;
+  transform: scale(0.96);
+}
+</style>
