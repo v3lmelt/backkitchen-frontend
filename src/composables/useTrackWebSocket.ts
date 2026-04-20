@@ -3,6 +3,8 @@ import { ref, onUnmounted } from 'vue'
 import { buildWsUrl } from '@/utils/url'
 
 const TOKEN_KEY = 'backkitchen_token'
+const INITIAL_RECONNECT_DELAY = 2000
+const MAX_RECONNECT_DELAY = 30000
 
 /**
  * Opens a WebSocket connection for a specific track. Reconnects automatically
@@ -15,10 +17,11 @@ export interface TrackWebSocketOptions {
 
 export function useTrackWebSocket(trackId: number, onTrackUpdated: () => void, options?: TrackWebSocketOptions) {
   const connected = ref(false)
+  const reconnectAttempts = ref(0)
   let ws: WebSocket | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let shouldReconnect = true
-  let reconnectDelay = 2000
+  let reconnectDelay = INITIAL_RECONNECT_DELAY
 
   function connect() {
     const token = localStorage.getItem(TOKEN_KEY)
@@ -33,7 +36,8 @@ export function useTrackWebSocket(trackId: number, onTrackUpdated: () => void, o
 
     ws.onopen = () => {
       connected.value = true
-      reconnectDelay = 2000
+      reconnectAttempts.value = 0
+      reconnectDelay = INITIAL_RECONNECT_DELAY
     }
 
     ws.onmessage = (event: MessageEvent) => {
@@ -63,10 +67,29 @@ export function useTrackWebSocket(trackId: number, onTrackUpdated: () => void, o
 
   function scheduleReconnect() {
     if (!shouldReconnect) return
+    reconnectAttempts.value += 1
     reconnectTimer = setTimeout(() => {
-      reconnectDelay = Math.min(reconnectDelay * 1.5, 30000)
+      reconnectDelay = Math.min(reconnectDelay * 1.5, MAX_RECONNECT_DELAY)
       connect()
     }, reconnectDelay)
+  }
+
+  function retry() {
+    if (!shouldReconnect) return
+    if (reconnectTimer !== null) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+    if (ws) {
+      // Detach so the async onclose doesn't schedule a second reconnect on
+      // top of the one we're about to kick off synchronously.
+      ws.onclose = null
+      ws.close()
+      ws = null
+    }
+    reconnectAttempts.value = 0
+    reconnectDelay = INITIAL_RECONNECT_DELAY
+    connect()
   }
 
   connect()
@@ -77,5 +100,5 @@ export function useTrackWebSocket(trackId: number, onTrackUpdated: () => void, o
     ws?.close()
   })
 
-  return { connected }
+  return { connected, reconnectAttempts, retry }
 }
