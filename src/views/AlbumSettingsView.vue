@@ -202,7 +202,7 @@ async function saveWorkflow(config: WorkflowConfig) {
     album.value = fresh
     toastSuccess(t('workflowEditor.saved'))
   } catch (e: any) {
-    toastError(e.message || 'Failed to save workflow')
+    toastError(e.message || t('workflowEditor.saveFailed'))
   } finally {
     savingWorkflow.value = false
   }
@@ -215,7 +215,7 @@ const isMemberOfAlbum = computed(() => album.value?.members.some(m => m.user_id 
 
 const userRoleInAlbum = computed(() => {
   if (isProducerOfAlbum.value) return t('roles.producer')
-  if (canManageAlbum.value) return 'Admin'
+  if (canManageAlbum.value) return t('roles.admin')
   if (isMasteringEngineerOfAlbum.value) return t('roles.masteringEngineer')
   return t('roles.member')
 })

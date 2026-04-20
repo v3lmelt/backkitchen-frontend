@@ -30,16 +30,16 @@ const passwordValid = computed(() => password.value.length >= 8)
 const passwordsMatch = computed(() => password.value === confirmPassword.value)
 const passwordToggleLabel = computed(() =>
   showPassword.value
-    ? (locale.value === 'zh-CN' ? '隐藏密码' : 'Hide password')
-    : (locale.value === 'zh-CN' ? '显示密码' : 'Show password')
+    ? t('auth.resetPassword.hidePassword')
+    : t('auth.resetPassword.showPassword')
 )
 
 onMounted(() => {
-  const t = route.query.token
-  if (typeof t === 'string' && t) {
-    token.value = t
+  const queryToken = route.query.token
+  if (typeof queryToken === 'string' && queryToken) {
+    token.value = queryToken
   } else {
-    error.value = t ? '' : 'Missing token'
+    error.value = t('auth.resetPassword.errorMissingToken')
   }
 })
 

@@ -76,7 +76,19 @@
       "submit": "重置密码",
       "errorMissingToken": "重置链接无效或缺失",
       "errorTooShort": "密码至少需要 8 个字符",
-      "errorMismatch": "两次输入的密码不一致"
+      "errorMismatch": "两次输入的密码不一致",
+      "showPassword": "显示密码",
+      "hidePassword": "隐藏密码"
+    },
+    "verifyEmail": {
+      "loadingTitle": "正在验证邮箱…",
+      "loadingSubtitle": "请稍候。",
+      "successTitle": "邮箱已验证！",
+      "successSubtitle": "正在跳转到仪表盘…",
+      "errorTitle": "验证失败",
+      "errorMissingToken": "URL 中未找到验证令牌。",
+      "errorGeneric": "验证失败，链接可能已过期。",
+      "backToLogin": "返回登录"
     },
     "langToggle": "EN"
   },
@@ -132,7 +144,8 @@
   "roles": {
     "masteringEngineer": "母带师",
     "producer": "主催",
-    "member": "成员"
+    "member": "成员",
+    "admin": "管理员"
   },
   "nav": {
     "dashboard": "仪表盘",
@@ -311,6 +324,7 @@
     "noChanges": "无更改",
     "saveWorkflow": "保存工作流",
     "saved": "工作流已保存",
+    "saveFailed": "工作流保存失败",
     "migrationWarning": "以下曲目因阶段变更已被迁移：",
     "reviewerCountTag": "{count} 人审阅",
     "assigneePinned": "指定到个人",
@@ -1400,6 +1414,8 @@
     "defaultChecklistEnabled": "默认启用",
     "defaultChecklistDisabled": "默认关闭",
     "logoUpdated": "Logo 已更新",
+    "uploadLogoLabel": "上传社团头像",
+    "copyInviteCodeLabel": "复制邀请码 {code}",
     "remove": "移除",
     "memberRemoved": "成员已移除",
     "roles": {

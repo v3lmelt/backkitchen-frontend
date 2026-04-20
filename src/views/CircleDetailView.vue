@@ -386,7 +386,7 @@ import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
@@ -431,9 +431,7 @@ const isOwner = computed(() =>
   circle.value ? circle.value.created_by === currentUserId.value : false
 )
 const canManageCircle = computed(() => isOwner.value || hasAdminRole(appStore.currentUser, 'operator'))
-const uploadLogoLabel = computed(() =>
-  locale.value === 'zh-CN' ? '上传社团头像' : 'Upload circle logo'
-)
+const uploadLogoLabel = computed(() => t('circleDetail.uploadLogoLabel'))
 
 const tabs = computed(() => {
   const base = [
@@ -639,7 +637,7 @@ function startEditTemplate(tpl: WorkflowTemplate) {
 }
 
 function inviteCodeLabel(code: string) {
-  return locale.value === 'zh-CN' ? `复制邀请码 ${code}` : `Copy invite code ${code}`
+  return t('circleDetail.copyInviteCodeLabel', { code })
 }
 
 async function confirmTemplateAction() {

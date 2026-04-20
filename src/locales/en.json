@@ -76,7 +76,19 @@
       "submit": "Reset password",
       "errorMissingToken": "Reset link is invalid or missing",
       "errorTooShort": "Password must be at least 8 characters",
-      "errorMismatch": "Passwords do not match"
+      "errorMismatch": "Passwords do not match",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password"
+    },
+    "verifyEmail": {
+      "loadingTitle": "Verifying your email…",
+      "loadingSubtitle": "Please wait a moment.",
+      "successTitle": "Email verified!",
+      "successSubtitle": "Redirecting you to the dashboard…",
+      "errorTitle": "Verification failed",
+      "errorMissingToken": "No verification token found in the URL.",
+      "errorGeneric": "Verification failed. The link may have expired.",
+      "backToLogin": "Back to sign in"
     },
     "langToggle": "中文"
   },
@@ -132,7 +144,8 @@
   "roles": {
     "masteringEngineer": "Mastering Engineer",
     "producer": "Producer",
-    "member": "Member"
+    "member": "Member",
+    "admin": "Admin"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -311,6 +324,7 @@
     "noChanges": "No changes",
     "saveWorkflow": "Save Workflow",
     "saved": "Workflow saved",
+    "saveFailed": "Failed to save workflow",
     "migrationWarning": "The following tracks were migrated due to stage changes:",
     "reviewerCountTag": "{count} reviewers",
     "assigneePinned": "Pinned assignee",
@@ -1347,6 +1361,8 @@
     "defaultChecklistEnabled": "Enabled by default",
     "defaultChecklistDisabled": "Disabled by default",
     "logoUpdated": "Logo updated",
+    "uploadLogoLabel": "Upload circle logo",
+    "copyInviteCodeLabel": "Copy invite code {code}",
     "remove": "Remove",
     "memberRemoved": "Member removed",
     "roles": {
