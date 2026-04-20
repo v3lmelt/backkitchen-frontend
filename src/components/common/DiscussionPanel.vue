@@ -109,6 +109,7 @@ function confirmDelete() {
           {{ loadingOlder ? $t('discussionPanel.loadingEarlier') : $t('discussionPanel.loadEarlier') }}
         </button>
       </div>
+      <TransitionGroup tag="div" name="msg">
       <div v-for="d in discussions" :key="d.id" class="flex gap-3 py-3 border-b border-border last:border-0">
         <div
           class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
@@ -187,6 +188,7 @@ function confirmDelete() {
           </div>
         </div>
       </div>
+      </TransitionGroup>
     </div>
     <CommentInput
       ref="commentInputRef"

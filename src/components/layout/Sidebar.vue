@@ -113,18 +113,20 @@ const navItemClass = (path: string) => [
       >
         <component :is="iconMap[item.icon]" class="w-5 h-5 flex-shrink-0" :stroke-width="2" />
         <span v-if="showLabel" class="whitespace-nowrap">{{ item.label }}</span>
-        <span
-          v-if="item.path === '/notifications' && appStore.unreadCount > 0"
-          class="ml-auto rounded-full bg-error px-2 py-0.5 text-[11px] font-mono text-white"
-        >
-          {{ appStore.unreadCount > 99 ? '99+' : appStore.unreadCount }}
-        </span>
-        <span
-          v-else-if="item.path === '/changelog' && changelogUnseen"
-          class="ml-auto rounded-full bg-primary px-2 py-0.5 text-[11px] font-mono text-background"
-        >
-          {{ t('changelog.badgeNew') }}
-        </span>
+        <Transition name="badge-pop">
+          <span
+            v-if="item.path === '/notifications' && appStore.unreadCount > 0"
+            class="ml-auto rounded-full bg-error px-2 py-0.5 text-[11px] font-mono text-white"
+          >
+            {{ appStore.unreadCount > 99 ? '99+' : appStore.unreadCount }}
+          </span>
+          <span
+            v-else-if="item.path === '/changelog' && changelogUnseen"
+            class="ml-auto rounded-full bg-primary px-2 py-0.5 text-[11px] font-mono text-background"
+          >
+            {{ t('changelog.badgeNew') }}
+          </span>
+        </Transition>
       </RouterLink>
       <RouterLink
         v-if="appStore.currentUser?.is_admin"
@@ -186,18 +188,20 @@ const navItemClass = (path: string) => [
         >
           <component :is="iconMap[item.icon]" class="w-5 h-5 flex-shrink-0" :stroke-width="2" />
           <span class="whitespace-nowrap">{{ item.label }}</span>
-          <span
-            v-if="item.path === '/notifications' && appStore.unreadCount > 0"
-            class="ml-auto rounded-full bg-error px-2 py-0.5 text-[11px] font-mono text-white"
-          >
-            {{ appStore.unreadCount > 99 ? '99+' : appStore.unreadCount }}
-          </span>
-          <span
-            v-else-if="item.path === '/changelog' && changelogUnseen"
-            class="ml-auto rounded-full bg-primary px-2 py-0.5 text-[11px] font-mono text-background"
-          >
-            {{ t('changelog.badgeNew') }}
-          </span>
+          <Transition name="badge-pop">
+            <span
+              v-if="item.path === '/notifications' && appStore.unreadCount > 0"
+              class="ml-auto rounded-full bg-error px-2 py-0.5 text-[11px] font-mono text-white"
+            >
+              {{ appStore.unreadCount > 99 ? '99+' : appStore.unreadCount }}
+            </span>
+            <span
+              v-else-if="item.path === '/changelog' && changelogUnseen"
+              class="ml-auto rounded-full bg-primary px-2 py-0.5 text-[11px] font-mono text-background"
+            >
+              {{ t('changelog.badgeNew') }}
+            </span>
+          </Transition>
         </button>
         <button
           v-if="appStore.currentUser?.is_admin"
@@ -251,5 +255,17 @@ const navItemClass = (path: string) => [
 .sidebar-slide-enter-from,
 .sidebar-slide-leave-to {
   transform: translateX(-100%);
+}
+
+.badge-pop-enter-active {
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.18s ease-out;
+}
+.badge-pop-leave-active {
+  transition: transform 0.12s ease-in, opacity 0.12s ease-in;
+}
+.badge-pop-enter-from,
+.badge-pop-leave-to {
+  opacity: 0;
+  transform: scale(0.6);
 }
 </style>

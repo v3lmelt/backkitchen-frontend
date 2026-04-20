@@ -185,3 +185,22 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Shared message-list transition (chat, discussions). */
+.msg-enter-active {
+  transition: opacity 0.22s ease-out, transform 0.22s ease-out;
+}
+.msg-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.msg-leave-active {
+  transition: opacity 0.15s ease-in;
+  position: absolute;
+}
+.msg-leave-to {
+  opacity: 0;
+}
+.msg-move {
+  transition: transform 0.22s ease-out;
+}
