@@ -184,10 +184,15 @@
   },
   "status": {
     "submitted": "Submitted",
+    "intake": "Intake",
     "peer_review": "Peer Review",
     "peer_revision": "Peer Revision",
+    "peer_review_revision": "Peer Revision",
     "producer_direct_revision": "Producer-Requested Revision",
     "producer_mastering_gate": "Producer Gate",
+    "producer_gate": "Producer Gate",
+    "producer_gate_revision": "Producer Revision",
+    "producer_revision": "Producer Revision",
     "mastering": "Mastering",
     "mastering_revision": "Master Revision",
     "final_review": "Final Review",
@@ -298,10 +303,14 @@
     "assignmentMode": "Reviewer assignment mode",
     "manual": "Manual",
     "auto": "Auto (load-balanced)",
+    "fixed": "Fixed reviewers",
     "requiredReviewers": "Required reviewer count",
     "reviewerPool": "Auto-assignment pool",
+    "fixedReviewers": "Fixed reviewers",
     "poolSelected": "{count} selected",
-    "noMembersHint": "Add eligible team members first to configure assignee overrides and auto-assignment pools.",
+    "fixedAllRequiredHint": "Fixed mode requires all {count} actually assigned reviewer(s) to finish. The submitter is excluded from their own track.",
+    "fixedSubmitterExcludedHint": "If the fixed list contains the submitter, that person is skipped for the track. If nobody remains, the producer is notified to assign reviewers manually.",
+    "noMembersHint": "Add eligible team members first to configure assignee overrides, auto-assignment pools, or fixed reviewer lists.",
     "allowPermanentReject": "Allow permanently rejecting track",
     "permanentRejectHint": "When enabled, tracks can be permanently rejected at this stage. Permanently rejected tracks cannot be recovered or resubmitted.",
     "allowProducerDirect": "Allow direct producer review",
@@ -348,7 +357,8 @@
     "summary": {
       "mainStages": "Main stages",
       "revisionLoops": "Revision loops",
-      "autoReviewStages": "Auto review stages"
+      "autoReviewStages": "Auto review stages",
+      "fixedReviewStages": "Fixed review stages"
     },
     "sections": {
       "basics": "Basics",
@@ -369,6 +379,7 @@
     },
     "validation": {
       "reviewerPoolRequired": "Stage \"{label}\" uses auto-assignment but has no reviewer candidates selected.",
+      "fixedReviewerRequired": "Stage \"{label}\" uses fixed reviewers but has no fixed reviewers selected.",
       "reviewerPoolTooSmall": "Stage \"{label}\" has fewer auto-assignment candidates than required reviewers.",
       "rejectTargetMustBeEarlier": "Stage \"{label}\" has invalid reject targets: it can only reject to earlier stages.",
       "directProducerTargetMissing": "Stage \"{label}\" has direct producer review enabled, but there is no later producer review stage to jump to.",
@@ -466,8 +477,10 @@
   "workflowSteps": {
     "intake": "Intake",
     "peer_review": "Peer Review",
+    "peer_review_revision": "Peer Revision",
     "peer_revision": "Peer Revision",
     "producer_gate": "Producer Gate",
+    "producer_gate_revision": "Producer Revision",
     "producer_revision": "Producer Revision",
     "mastering": "Mastering",
     "mastering_revision": "Mastering Revision",
@@ -665,7 +678,7 @@
     "reopenMasteringHint": "If you only need another mastering pass, choose \"Mastering\" first. Choose a revision stage only when the source audio must be changed before remastering.",
     "reopenMasteringNotesLabel": "Mastering Notes (optional)",
     "reopenMasteringNotesPlaceholder": "Instructions for the mastering engineer, e.g. \"reduce the low end\", \"keep the dynamics\"...",
-    "reopenMasteringNotesHint": "These notes will automatically update the track's mastering notes when the reopen request is approved.",
+    "reopenMasteringNotesHint": "These notes automatically update the track's mastering notes on direct reopen or after the reopen request is approved.",
     "reopenTargets": {
       "mastering": "{stage} (remaster current delivery)",
       "mastering_revision": "{stage} (revise source first, then remaster)"
@@ -1213,6 +1226,7 @@
     "reviewDefaults": "Review Defaults",
     "reviewerAssignmentMode": "Default reviewer assignment",
     "reviewerAssignmentHint": "This quick control updates the first peer review step and stays synced with the workflow editor.",
+    "fixedReviewerHint": "Choose fixed reviewers for the first peer review step in the workflow editor below. Submitters are excluded from reviewing their own tracks.",
     "checklistMode": "Peer review checklist",
     "checklistModeCircleDefault": "Circle Default",
     "checklistModeEnabled": "Enabled",

@@ -5,6 +5,96 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.6",
+    "date": "2026-05-05",
+    "headline": {
+      "zh-CN": "新增固定多人评审，并补齐重开与母带确认流程细节",
+      "en": "Adds fixed multi-reviewer assignment and tightens reopen and mastering confirmation flows"
+    },
+    "summary": {
+      "zh-CN": "同行评审现在支持自动分配、手动指派和固定多人评审三种模式。固定名单中如果包含投稿者本人，系统会在该曲目中自动排除投稿者；排除后无人可审时会通知主催手动指派。同时修复了直接重开母带备注不保存、母带页重复确认按钮、部分工作流状态文案回退和角色切换时旧请求干扰登录态的问题。",
+      "en": "Peer review now supports auto assignment, manual assignment, and fixed multi-reviewer lists. When a fixed list contains the submitter, that person is excluded for their own track; if nobody remains, the producer is notified to assign reviewers manually. This release also fixes direct-reopen mastering notes, duplicate mastering confirmation buttons, missing workflow status labels, and stale requests interfering with newer login state."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "工作流评审",
+          "en": "Workflow review"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "固定多人评审模式",
+              "en": "Fixed multi-reviewer mode"
+            },
+            "description": {
+              "zh-CN": "工作流编辑器新增「固定评审」模式，可为同行评审阶段选择固定评审名单；进入评审时会为所有非投稿者的固定评审人创建待审任务，并要求实际分配到的人全部完成评审。",
+              "en": "The workflow editor now has a Fixed reviewers mode for peer review stages. Entering review creates pending assignments for every fixed reviewer who is not the submitter, and all actually assigned reviewers must finish."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "自审排除与手动回退",
+              "en": "Self-review exclusion and manual fallback"
+            },
+            "description": {
+              "zh-CN": "自动、手动、固定三种模式都继续禁止投稿者审核自己的稿件。固定名单排除投稿者后若无人可审，系统会通知主催手动安排评审。",
+              "en": "Auto, manual, and fixed assignment all continue to prevent submitters from reviewing their own tracks. If a fixed list has no reviewer left after excluding the submitter, the producer is notified to assign reviewers manually."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "流程修复",
+          "en": "Flow fixes"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "直接重开母带阶段会保存备注",
+              "en": "Direct mastering reopen now saves notes"
+            },
+            "description": {
+              "zh-CN": "主催直接把已完成曲目重开到母带相关阶段时，弹窗里填写的母带备注现在会同步写回曲目，母带师进入页面即可看到。",
+              "en": "When a producer directly reopens a completed track into a mastering-related stage, the mastering notes entered in the dialog are now saved back to the track."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "重开同行评审不再重复显示评审人",
+              "en": "Reopened peer review no longer duplicates reviewers"
+            },
+            "description": {
+              "zh-CN": "已完成曲目重开到同行评审时，会先清理上一轮的已提交评审任务，再按当前评审模式重新生成待提交列表，避免「评审协作」中出现同一评审人的待提交和已提交重复行。",
+              "en": "When a completed track is reopened into peer review, old submitted review tasks are cleared before the current assignment mode rebuilds the pending list, preventing duplicate pending/submitted rows for the same reviewer."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "母带确认入口不再重复",
+              "en": "Mastering confirmation is no longer duplicated"
+            },
+            "description": {
+              "zh-CN": "母带页保留底部操作栏的确认交付入口，移除了卡片中重复出现的「确认上传无误」按钮。",
+              "en": "The mastering page keeps the confirmation action in the bottom action bar and removes the duplicate inline confirm-upload button."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "请求和实时连接更稳",
+              "en": "Requests and live connections are steadier"
+            },
+            "description": {
+              "zh-CN": "接口重试会重新读取当前 token；旧 token 的 401 不会清掉新登录态。曲目页在路由或登录状态变化时会关闭旧 WebSocket，并忽略旧页面请求的过期结果。",
+              "en": "API retries now re-read the current token, and a 401 from an old token no longer clears a newer login. Track pages close stale WebSockets on route or auth changes and ignore outdated page-load results."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.5",
     "date": "2026-04-20",
     "headline": {

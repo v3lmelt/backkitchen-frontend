@@ -198,4 +198,34 @@ describe('WorkflowEditor', () => {
     expect(stepById(updated as WorkflowConfig, 'intake').label).toBe('Editorial Intake')
     expect(stepById(updated as WorkflowConfig, 'peer_review').reviewer_pool).toEqual([101, 102])
   })
+
+  it('saves fixed reviewer mode with the selected reviewer list', async () => {
+    const wrapper = mountWithPlugins(WorkflowEditor, {
+      props: {
+        workflowConfig: existingWorkflow,
+        memberOptions,
+        saveable: true,
+      },
+    })
+
+    const peerCard = wrapper
+      .findAll('[role="button"]')
+      .find(node => node.text().includes('Peer Review') && node.text().includes('2 reviewers'))
+    if (!peerCard) throw new Error('Peer Review card not found')
+    await peerCard.trigger('click')
+    await flushPromises()
+
+    await findButton(wrapper, 'Fixed').trigger('click')
+    await flushPromises()
+
+    const saveButton = findButton(wrapper, 'Save Workflow')
+    expect((saveButton.element as HTMLButtonElement).disabled).toBe(false)
+    await saveButton.trigger('click')
+
+    const saved = lastSavedConfig(wrapper)
+    const peerReview = stepById(saved, 'peer_review')
+    expect(peerReview.assignment_mode).toBe('fixed')
+    expect(peerReview.reviewer_pool).toEqual([101, 102])
+    expect(peerReview.required_reviewer_count).toBe(2)
+  })
 })

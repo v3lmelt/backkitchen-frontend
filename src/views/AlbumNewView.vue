@@ -21,6 +21,7 @@ import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import {
   buildDefaultWorkflowConfig,
   getFirstPeerReviewAssignmentMode,
+  type ReviewAssignmentMode,
   setFirstPeerReviewAssignmentMode,
 } from '@/utils/workflowConfig'
 
@@ -120,7 +121,7 @@ const workflowMemberOptions = computed<SelectOption[]>(() => {
   return Array.from(byId.values())
 })
 
-const reviewerAssignmentMode = computed<'auto' | 'manual'>({
+const reviewerAssignmentMode = computed<ReviewAssignmentMode>({
   get: () => getFirstPeerReviewAssignmentMode(workflowConfig.value),
   set: (mode) => {
     const next = workflowConfig.value ?? buildDefaultWorkflowConfig((key, fallback) => t(key, fallback))
@@ -524,8 +525,19 @@ async function create() {
             >
               {{ t('workflowEditor.manual') }}
             </button>
+            <button
+              type="button"
+              class="btn-secondary text-xs"
+              :class="reviewerAssignmentMode === 'fixed' ? 'border-primary text-primary' : ''"
+              @click="reviewerAssignmentMode = 'fixed'; showWorkflowBuilder = true"
+            >
+              {{ t('workflowEditor.fixed') }}
+            </button>
           </div>
           <p class="text-xs text-muted-foreground">{{ t('albumNew.reviewerAssignmentHint') }}</p>
+          <p v-if="reviewerAssignmentMode === 'fixed'" class="text-xs text-muted-foreground">
+            {{ t('albumNew.fixedReviewerHint') }}
+          </p>
         </div>
 
         <div class="space-y-2">

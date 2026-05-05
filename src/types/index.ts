@@ -45,7 +45,7 @@ export interface WorkflowStepDef {
   // Approval-specific
   allow_permanent_reject?: boolean | null
   // Review-specific
-  assignment_mode?: 'manual' | 'auto' | null
+  assignment_mode?: 'manual' | 'auto' | 'fixed' | null
   reviewer_pool?: number[] | null
   required_reviewer_count?: number | null
   // Approval/delivery assignee override

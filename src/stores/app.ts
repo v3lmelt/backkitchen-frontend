@@ -33,6 +33,10 @@ export const useAppStore = defineStore('app', () => {
   const isAuthenticated = computed(() => Boolean(token.value && currentUser.value))
   const unreadCount = computed(() => notifications.value.filter(n => !n.is_read).length)
 
+  function notifyAuthChanged() {
+    window.dispatchEvent(new Event('backkitchen:auth-changed'))
+  }
+
   async function loadConfig() {
     try {
       const cfg = await configApi.get()
@@ -113,6 +117,7 @@ export const useAppStore = defineStore('app', () => {
     token.value = accessToken
     localStorage.setItem(USER_KEY, JSON.stringify(user))
     localStorage.setItem(TOKEN_KEY, accessToken)
+    notifyAuthChanged()
     void loadConfig()
     startNotificationChannel()
     void loadPendingInvitations()
@@ -129,6 +134,7 @@ export const useAppStore = defineStore('app', () => {
     pendingInvitations.value = []
     localStorage.removeItem(USER_KEY)
     localStorage.removeItem(TOKEN_KEY)
+    notifyAuthChanged()
   }
 
   // When the API layer detects a 401 and wipes localStorage, sync Pinia state

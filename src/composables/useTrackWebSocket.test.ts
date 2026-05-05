@@ -1,8 +1,10 @@
-import { mount } from '@vue/test-utils'
-import { defineComponent, nextTick } from 'vue'
+import { enableAutoUnmount, mount } from '@vue/test-utils'
+import { defineComponent, nextTick, ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useTrackWebSocket } from './useTrackWebSocket'
+
+enableAutoUnmount(afterEach)
 
 class TestWebSocket {
   static instances: TestWebSocket[] = []
@@ -49,6 +51,23 @@ function mountHarness(
     },
     template: '<div />',
   }))
+}
+
+function mountReactiveHarness(
+  onTrackUpdated: () => void,
+  onDiscussionEvent?: (event: string, discussionId: number) => void,
+) {
+  const activeTrackId = ref(12)
+  const wrapper = mount(defineComponent({
+    setup() {
+      return {
+        activeTrackId,
+        ...useTrackWebSocket(activeTrackId, onTrackUpdated, { onDiscussionEvent }),
+      }
+    },
+    template: '<div />',
+  }))
+  return { wrapper, activeTrackId }
 }
 
 describe('useTrackWebSocket', () => {
@@ -147,5 +166,32 @@ describe('useTrackWebSocket', () => {
     ;(wrapper.vm as any).retry()
     await nextTick()
     expect(TestWebSocket.instances).toHaveLength(2)
+  })
+
+  it('closes the old socket and reconnects when the route track changes', async () => {
+    localStorage.setItem('backkitchen_token', 'secret')
+    const { activeTrackId } = mountReactiveHarness(vi.fn())
+    const first = TestWebSocket.instances[0]
+
+    activeTrackId.value = 42
+    await nextTick()
+
+    expect(first.close).toHaveBeenCalledTimes(1)
+    expect(TestWebSocket.instances).toHaveLength(2)
+    expect(TestWebSocket.instances[1].url).toContain('/ws/tracks/42?token=secret')
+  })
+
+  it('reconnects with the latest token after an auth change event', async () => {
+    localStorage.setItem('backkitchen_token', 'old-token')
+    mountHarness(7, vi.fn())
+    const first = TestWebSocket.instances[0]
+
+    localStorage.setItem('backkitchen_token', 'new-token')
+    window.dispatchEvent(new Event('backkitchen:auth-changed'))
+    await nextTick()
+
+    expect(first.close).toHaveBeenCalledTimes(1)
+    expect(TestWebSocket.instances).toHaveLength(2)
+    expect(TestWebSocket.instances[1].url).toContain('/ws/tracks/7?token=new-token')
   })
 })

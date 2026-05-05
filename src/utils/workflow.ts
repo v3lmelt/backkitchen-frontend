@@ -10,8 +10,10 @@ import type { Track, WorkflowConfig, WorkflowEvent, WorkflowStepDef } from '@/ty
 const DEFAULT_STEP_IDS = new Set([
   'intake',
   'peer_review',
+  'peer_review_revision',
   'peer_revision',
   'producer_gate',
+  'producer_gate_revision',
   'producer_revision',
   'mastering',
   'mastering_revision',

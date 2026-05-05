@@ -1,6 +1,6 @@
 import type { WorkflowConfig } from '@/types'
 
-type ReviewAssignmentMode = 'manual' | 'auto'
+export type ReviewAssignmentMode = 'manual' | 'auto' | 'fixed'
 type WorkflowLabelTranslator = (key: string, fallback: string) => string
 
 const DEFAULT_WORKFLOW_CONFIG: WorkflowConfig = {
@@ -130,7 +130,10 @@ export function buildDefaultWorkflowConfig(translate?: WorkflowLabelTranslator):
 
 export function getFirstPeerReviewAssignmentMode(config: WorkflowConfig | null | undefined): ReviewAssignmentMode {
   const step = (config ?? DEFAULT_WORKFLOW_CONFIG).steps.find(step => step.ui_variant === 'peer_review' || step.id === 'peer_review')
-  return step?.assignment_mode === 'manual' ? 'manual' : 'auto'
+  if (step?.assignment_mode === 'manual' || step?.assignment_mode === 'fixed') {
+    return step.assignment_mode
+  }
+  return 'auto'
 }
 
 export function setFirstPeerReviewAssignmentMode(
@@ -145,6 +148,8 @@ export function setFirstPeerReviewAssignmentMode(
   step.assignment_mode = mode
   if (mode === 'manual') {
     step.reviewer_pool = null
+  } else if (mode === 'fixed' && !step.reviewer_pool) {
+    step.reviewer_pool = []
   }
   return next
 }

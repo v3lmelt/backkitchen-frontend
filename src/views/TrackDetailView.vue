@@ -235,7 +235,7 @@ onBeforeUnmount(() => {
 // Real-time: reload track data whenever another collaborator changes it
 const wsReloading = ref(false)
 const wsHadConnection = ref(false)
-const { connected: wsConnected, reconnectAttempts: wsReconnectAttempts, retry: wsRetry } = useTrackWebSocket(trackId.value, async () => {
+const { connected: wsConnected, reconnectAttempts: wsReconnectAttempts, retry: wsRetry } = useTrackWebSocket(trackId, async () => {
   if (wsReloading.value) return
   wsReloading.value = true
   await nextTick()
@@ -258,29 +258,49 @@ function applyTrack(updated: Track) {
 }
 
 let reviewAssignmentsLoadCount = 0
+let trackLoadSerial = 0
 
 async function loadTrack() {
+  const serial = ++trackLoadSerial
+  const requestedTrackId = trackId.value
   if (!track.value) loading.value = true
   loadError.value = false
   try {
-    const detail = await trackApi.get(trackId.value)
+    const detail = await trackApi.get(requestedTrackId)
+    if (serial !== trackLoadSerial || requestedTrackId !== trackId.value) return
     applyTrack(detail.track)
     issues.value = detail.issues
     events.value = detail.events
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
     workflowConfig.value = detail.workflow_config ?? null
     try {
-      reviewAssignments.value = await trackApi.listAssignments(trackId.value)
+      const assignments = await trackApi.listAssignments(requestedTrackId)
+      if (serial !== trackLoadSerial || requestedTrackId !== trackId.value) return
+      reviewAssignments.value = assignments
     } catch {
+      if (serial !== trackLoadSerial || requestedTrackId !== trackId.value) return
       reviewAssignments.value = []
     }
   } catch {
+    if (serial !== trackLoadSerial || requestedTrackId !== trackId.value) return
     trackStore.setCurrentTrack(null)
     loadError.value = true
   } finally {
-    loading.value = false
+    if (serial === trackLoadSerial && requestedTrackId === trackId.value) {
+      loading.value = false
+    }
   }
 }
+
+watch(trackId, () => {
+  track.value = null
+  issues.value = []
+  events.value = []
+  sourceVersions.value = []
+  reviewAssignments.value = []
+  workflowConfig.value = null
+  void loadTrack()
+})
 
 const audioUrl = computed(() => {
   const t = track.value
@@ -328,6 +348,9 @@ const hasMultipleReviewers = computed(() => currentStepAssignments.value.length 
 const completedReviewCount = computed(() => currentStepAssignments.value.filter(a => a.status === 'completed').length)
 const totalReviewCount = computed(() => {
   const step = track.value?.workflow_step
+  if (step?.assignment_mode === 'fixed') {
+    return Math.max(1, currentStepAssignments.value.length)
+  }
   if (step?.required_reviewer_count != null && step.required_reviewer_count > 0) {
     return step.required_reviewer_count
   }
@@ -543,7 +566,7 @@ const canReassignReviewer = computed(() =>
 )
 const isAutoAssign = computed(() => {
   const step = track.value?.workflow_step
-  return step?.assignment_mode === 'auto' || (step?.assignee_user_id != null)
+  return step?.assignment_mode === 'auto' || step?.assignment_mode === 'fixed' || (step?.assignee_user_id != null)
 })
 const showReassignModal = ref(false)
 const reassignMembers = ref<AlbumMember[]>([])
@@ -710,7 +733,11 @@ async function handleReopen() {
   reopening.value = true
   try {
     if (canDirectReopen.value) {
-      const updated = await trackApi.reopen(track.value.id, reopenTargetStage.value)
+      const updated = await trackApi.reopen(
+        track.value.id,
+        reopenTargetStage.value,
+        reopenMasteringNotes.value.trim() || undefined,
+      )
       applyTrack(updated)
       toastSuccess(t('trackDetail.reopenDone'))
       // reopen may reset issues/events depending on target stage; refresh in the

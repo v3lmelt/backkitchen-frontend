@@ -397,7 +397,7 @@ const handleMasterDownload = () => downloadTrackAudio(masterAudioUrl, track, '_m
 // WebSocket
 const wsReloading = ref(false)
 const wsHadConnection = ref(false)
-const { connected: wsConnected, reconnectAttempts: wsReconnectAttempts, retry: wsRetry } = useTrackWebSocket(trackId.value, async () => {
+const { connected: wsConnected, reconnectAttempts: wsReconnectAttempts, retry: wsRetry } = useTrackWebSocket(trackId, async () => {
   if (wsReloading.value) return
   wsReloading.value = true
   await nextTick()
@@ -429,11 +429,16 @@ onBeforeRouteLeave(() => {
   return window.confirm(t('workflowStep.leaveUploadConfirm'))
 })
 
+let dataLoadSerial = 0
+
 async function loadData() {
+  const serial = ++dataLoadSerial
+  const requestedTrackId = trackId.value
   if (!track.value) loading.value = true
   loadError.value = false
   try {
-    const detail = await trackApi.get(trackId.value)
+    const detail = await trackApi.get(requestedTrackId)
+    if (serial !== dataLoadSerial || requestedTrackId !== trackId.value) return
     track.value = detail.track
     trackStore.setCurrentTrack(detail.track)
     masterDeliveries.value = detail.master_deliveries ?? []
@@ -444,17 +449,33 @@ async function loadData() {
     )
     syncIssueDrawerFromRoute()
     try {
-      reviewAssignments.value = await trackApi.listAssignments(trackId.value)
+      const assignments = await trackApi.listAssignments(requestedTrackId)
+      if (serial !== dataLoadSerial || requestedTrackId !== trackId.value) return
+      reviewAssignments.value = assignments
     } catch {
+      if (serial !== dataLoadSerial || requestedTrackId !== trackId.value) return
       reviewAssignments.value = []
     }
   } catch {
+    if (serial !== dataLoadSerial || requestedTrackId !== trackId.value) return
     trackStore.setCurrentTrack(null)
     loadError.value = true
   } finally {
-    loading.value = false
+    if (serial === dataLoadSerial && requestedTrackId === trackId.value) {
+      loading.value = false
+    }
   }
 }
+
+watch(trackId, () => {
+  track.value = null
+  issues.value = []
+  sourceVersions.value = []
+  masterDeliveries.value = []
+  workflowConfig.value = null
+  reviewAssignments.value = []
+  void loadData()
+})
 
 function goBack() {
   const returnTo = route.query.returnTo
@@ -1302,10 +1323,6 @@ watch(olderMasterDeliveries, (deliveries) => {
           </span>
         </div>
         <div class="flex gap-2 pt-1">
-          <button v-if="canConfirmDelivery" @click="handleConfirmDelivery" class="btn-primary text-sm flex items-center gap-1.5">
-            <Check class="w-4 h-4" :stroke-width="2" />
-            {{ t('masteringPage.confirmDelivery') }}
-          </button>
           <button v-if="canApproveFinal" @click="handleApproveFinal" class="btn-primary text-sm flex items-center gap-1.5">
             <Check class="w-4 h-4" :stroke-width="2" />
             {{ t('masteringPage.approveDelivery') }}
