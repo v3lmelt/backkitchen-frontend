@@ -57,6 +57,38 @@ export const CHANGELOG: ChangelogEntry[] = [
     ]
   },
   {
+    "version": "0.1.7",
+    "date": "2026-05-05",
+    "headline": {
+      "zh-CN": "Webhook 设置新增曲师邮件提醒",
+      "en": "Adds composer email reminders to Webhook settings"
+    },
+    "summary": {
+      "zh-CN": "专辑的 Webhook 设置现在可以单独启用曲师邮件提醒。启用后，新的公开问题、公开问题回复，以及退回修订等需要曲师处理的待办，会通过已验证邮箱发送给当前曲目的提交者。",
+      "en": "Album Webhook settings can now enable composer email reminders separately. When enabled, new public issues, public issue replies, and revision requests are emailed to the current track submitter's verified email address."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "通知",
+          "en": "Notifications"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "按专辑启用曲师邮件提醒",
+              "en": "Per-album composer email reminders"
+            },
+            "description": {
+              "zh-CN": "制作人可以在专辑的 Webhook 标签页开启「邮件通知曲师」，并选择新公开问题、公开问题回复和请求修订三类触发事件。邮件只发送给对应曲目的提交者，不会写入 Webhook 发送历史。",
+              "en": "Producers can enable Email composers from an album's Webhook tab and choose new public issues, public issue replies, and revision requests as triggers. Emails go only to the related track submitter and are kept separate from Webhook delivery history."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.6",
     "date": "2026-05-05",
     "headline": {

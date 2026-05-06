@@ -13,7 +13,7 @@ import {
   localizeAlbumCoverValidationError,
   validateAlbumCoverFile,
 } from '@/utils/albumCover'
-import type { Album, ChecklistTemplateItem, Invitation, Track, User, WebhookDelivery, WorkflowConfig, WorkflowEvent } from '@/types'
+import type { Album, ChecklistTemplateItem, Invitation, Track, User, WebhookConfig, WebhookDelivery, WorkflowConfig, WorkflowEvent } from '@/types'
 import { Archive, RotateCcw, Upload } from 'lucide-vue-next'
 import { hasAdminRole } from '@/utils/admin'
 import { formatRelativeTime } from '@/utils/time'
@@ -155,7 +155,20 @@ const archiveLoadError = ref('')
 const restoringTrackId = ref<number | null>(null)
 
 // Webhook state
-const webhookState = reactive({ url: '', enabled: false, events: [] as string[], type: 'generic', secret: '', app_id: '', app_secret: '', filter_user_ids: [] as number[] })
+type WebhookConfigPayload = Omit<WebhookConfig, 'email_enabled' | 'email_events'> & Partial<Pick<WebhookConfig, 'email_enabled' | 'email_events'>>
+
+const webhookState = reactive({
+  url: '',
+  enabled: false,
+  events: [] as string[],
+  type: 'generic',
+  secret: '',
+  app_id: '',
+  app_secret: '',
+  filter_user_ids: [] as number[],
+  email_enabled: false,
+  email_events: [] as string[],
+})
 const WEBHOOK_TYPES = [
   { value: 'generic', label: 'Generic' },
   { value: 'feishu', label: '飞书 / Feishu' },
@@ -173,6 +186,8 @@ const WEBHOOK_EVENT_TYPES = [
   'track_submitted', 'track_status_changed', 'reviewer_assigned', 'reviewer_reassigned',
   'new_issue', 'issue_status_changed', 'new_comment', 'new_discussion',
 ]
+
+const COMPOSER_EMAIL_EVENT_TYPES = ['new_issue', 'new_comment', 'revision_requested']
 
 // Workflow state
 const savingWorkflow = ref(false)
@@ -395,18 +410,11 @@ function resetWebhookState() {
   webhookState.app_id = ''
   webhookState.app_secret = ''
   webhookState.filter_user_ids = []
+  webhookState.email_enabled = false
+  webhookState.email_events = []
 }
 
-function applyWebhookConfig(config: {
-  url: string
-  enabled: boolean
-  events: string[]
-  type?: string
-  secret?: string | null
-  app_id?: string | null
-  app_secret?: string | null
-  filter_user_ids?: number[] | null
-}) {
+function applyWebhookConfig(config: WebhookConfigPayload) {
   webhookState.url = config.url
   webhookState.enabled = config.enabled
   webhookState.events = [...config.events]
@@ -415,6 +423,8 @@ function applyWebhookConfig(config: {
   webhookState.app_id = config.app_id || ''
   webhookState.app_secret = config.app_secret || ''
   webhookState.filter_user_ids = config.filter_user_ids || []
+  webhookState.email_enabled = config.email_enabled ?? false
+  webhookState.email_events = config.email_events ? [...config.email_events] : []
 }
 
 async function loadAssignableUsers(currentAlbum: Album): Promise<boolean> {
@@ -1020,6 +1030,20 @@ function toggleWebhookEvent(event: string) {
   const idx = webhookState.events.indexOf(event)
   if (idx >= 0) webhookState.events.splice(idx, 1)
   else webhookState.events.push(event)
+}
+
+function toggleComposerEmailEnabled(event: Event) {
+  const checked = (event.target as HTMLInputElement).checked
+  webhookState.email_enabled = checked
+  if (checked && webhookState.email_events.length === 0) {
+    webhookState.email_events = [...COMPOSER_EMAIL_EVENT_TYPES]
+  }
+}
+
+function toggleComposerEmailEvent(event: string) {
+  const idx = webhookState.email_events.indexOf(event)
+  if (idx >= 0) webhookState.email_events.splice(idx, 1)
+  else webhookState.email_events.push(event)
 }
 
 function toggleWebhookFilterUser(userId: number) {
@@ -1899,6 +1923,31 @@ async function refreshDeliveries() {
               />
               <span class="font-mono text-xs">{{ evt }}</span>
             </label>
+          </div>
+        </div>
+        <div class="space-y-3 border border-border bg-background p-4 rounded-none">
+          <label class="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              class="checkbox"
+              :checked="webhookState.email_enabled"
+              @change="toggleComposerEmailEnabled"
+            />
+            <span>{{ t('settings.composerEmailEnabled') }}</span>
+          </label>
+          <div v-if="webhookState.email_enabled" class="space-y-2">
+            <p class="text-[11px] text-muted-foreground">{{ t('settings.composerEmailHint') }}</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label v-for="evt in COMPOSER_EMAIL_EVENT_TYPES" :key="evt" class="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  class="checkbox"
+                  :checked="webhookState.email_events.includes(evt)"
+                  @change="toggleComposerEmailEvent(evt)"
+                />
+                <span class="text-xs">{{ t(`settings.composerEmailEvents.${evt}`) }}</span>
+              </label>
+            </div>
           </div>
         </div>
         <div>

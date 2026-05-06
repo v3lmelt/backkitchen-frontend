@@ -1068,6 +1068,13 @@
     "webhookSaved": "Webhook 配置已保存",
     "webhookDeliveries": "发送历史",
     "webhookNoDeliveries": "暂无发送记录",
+    "composerEmailEnabled": "邮件通知曲师",
+    "composerEmailHint": "针对需要曲师处理的待办，向当前曲目的提交者邮箱发送提醒。收件人需要已验证邮箱。",
+    "composerEmailEvents": {
+      "new_issue": "新的公开问题",
+      "new_comment": "公开问题回复",
+      "revision_requested": "请求修订"
+    },
     "albumMetadata": "专辑元数据",
     "circleName": "社团名",
     "circleNamePlaceholder": "社团名称",

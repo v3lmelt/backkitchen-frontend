@@ -1066,6 +1066,13 @@
     "webhookSaved": "Webhook config saved",
     "webhookDeliveries": "Delivery History",
     "webhookNoDeliveries": "No deliveries yet",
+    "composerEmailEnabled": "Email composers",
+    "composerEmailHint": "Sends email to the track submitter for composer action items. Requires a verified email address.",
+    "composerEmailEvents": {
+      "new_issue": "New public issue",
+      "new_comment": "Public issue reply",
+      "revision_requested": "Revision requested"
+    },
     "albumMetadata": "Album Metadata",
     "circleName": "Circle Name",
     "circleNamePlaceholder": "Circle name",

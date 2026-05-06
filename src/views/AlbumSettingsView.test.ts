@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   albumTracksMock: vi.fn(),
   albumArchivedTracksMock: vi.fn(),
   albumGetWebhookMock: vi.fn(),
+  albumUpdateWebhookMock: vi.fn(),
+  albumTestWebhookMock: vi.fn(),
   albumGetWebhookDeliveriesMock: vi.fn(),
   albumUploadCoverMock: vi.fn(),
   albumUpdateMetadataMock: vi.fn(),
@@ -58,6 +60,8 @@ vi.mock('@/api', () => ({
     tracks: mocks.albumTracksMock,
     archivedTracks: mocks.albumArchivedTracksMock,
     getWebhook: mocks.albumGetWebhookMock,
+    updateWebhook: mocks.albumUpdateWebhookMock,
+    testWebhook: mocks.albumTestWebhookMock,
     getWebhookDeliveries: mocks.albumGetWebhookDeliveriesMock,
     uploadCover: mocks.albumUploadCoverMock,
     updateMetadata: mocks.albumUpdateMetadataMock,
@@ -251,6 +255,8 @@ describe('AlbumSettingsView', () => {
     mocks.albumTracksMock.mockReset()
     mocks.albumArchivedTracksMock.mockReset()
     mocks.albumGetWebhookMock.mockReset()
+    mocks.albumUpdateWebhookMock.mockReset()
+    mocks.albumTestWebhookMock.mockReset()
     mocks.albumGetWebhookDeliveriesMock.mockReset()
     mocks.albumUploadCoverMock.mockReset()
     mocks.albumUpdateMetadataMock.mockReset()
@@ -296,7 +302,11 @@ describe('AlbumSettingsView', () => {
       app_id: '',
       app_secret: '',
       filter_user_ids: [],
+      email_enabled: false,
+      email_events: [],
     })
+    mocks.albumUpdateWebhookMock.mockImplementation(async (_id, data) => data)
+    mocks.albumTestWebhookMock.mockResolvedValue({ success: true })
     mocks.albumGetWebhookDeliveriesMock.mockResolvedValue([])
     mocks.checklistGetTemplateMock.mockResolvedValue({
       items: [{ label: 'Balance', description: null, required: true, sort_order: 0 }],
@@ -479,6 +489,98 @@ describe('AlbumSettingsView', () => {
     await flushPromises()
     expect(mocks.invitationListForAlbumMock).toHaveBeenCalledWith(5)
     expect(mocks.circleGetMock).toHaveBeenCalledWith(9)
+  })
+
+  it('loads legacy webhook config with composer email disabled', async () => {
+    mocks.albumGetWebhookMock.mockResolvedValueOnce({
+      url: '',
+      enabled: false,
+      events: [],
+      type: 'generic',
+      secret: '',
+      app_id: '',
+      app_secret: '',
+      filter_user_ids: [],
+    })
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'Webhook')!.trigger('click')
+    await flushPromises()
+
+    const composerLabel = wrapper.findAll('label').find(label => label.text().includes('Email composers'))
+    expect(composerLabel).toBeTruthy()
+    expect((composerLabel!.find('input').element as HTMLInputElement).checked).toBe(false)
+    expect(wrapper.text()).not.toContain('New public issue')
+  })
+
+  it('defaults composer email events when enabling and saves them', async () => {
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'Webhook')!.trigger('click')
+    await flushPromises()
+
+    const composerLabel = wrapper.findAll('label').find(label => label.text().includes('Email composers'))
+    expect(composerLabel).toBeTruthy()
+    await composerLabel!.find('input').setValue(true)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('New public issue')
+    expect(wrapper.text()).toContain('Public issue reply')
+    expect(wrapper.text()).toContain('Revision requested')
+
+    await findButtonByText(wrapper, 'Save Webhook')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.albumUpdateWebhookMock).toHaveBeenCalledWith(
+      5,
+      expect.objectContaining({
+        email_enabled: true,
+        email_events: ['new_issue', 'new_comment', 'revision_requested'],
+      }),
+    )
+  })
+
+  it('saves existing composer email event selections', async () => {
+    mocks.albumGetWebhookMock.mockResolvedValueOnce({
+      url: '',
+      enabled: false,
+      events: [],
+      type: 'generic',
+      secret: '',
+      app_id: '',
+      app_secret: '',
+      filter_user_ids: [],
+      email_enabled: true,
+      email_events: ['new_comment'],
+    })
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'Webhook')!.trigger('click')
+    await flushPromises()
+
+    const replyLabel = wrapper.findAll('label').find(label => label.text().includes('Public issue reply'))
+    const issueLabel = wrapper.findAll('label').find(label => label.text().includes('New public issue'))
+    expect(replyLabel).toBeTruthy()
+    expect(issueLabel).toBeTruthy()
+    expect((replyLabel!.find('input').element as HTMLInputElement).checked).toBe(true)
+    expect((issueLabel!.find('input').element as HTMLInputElement).checked).toBe(false)
+
+    await issueLabel!.find('input').setValue(true)
+    await findButtonByText(wrapper, 'Save Webhook')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.albumUpdateWebhookMock).toHaveBeenCalledWith(
+      5,
+      expect.objectContaining({
+        email_enabled: true,
+        email_events: ['new_comment', 'new_issue'],
+      }),
+    )
   })
 
   it('saves the album checklist policy separately from the checklist template', async () => {

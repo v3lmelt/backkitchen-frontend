@@ -510,6 +510,8 @@ export interface WebhookConfig {
   app_id: string
   app_secret: string
   filter_user_ids: number[]
+  email_enabled: boolean
+  email_events: string[]
 }
 
 export interface WebhookDelivery {
