@@ -1,0 +1,52 @@
+{
+  "version": "0.1.8",
+  "date": "2026-05-05",
+  "headline": {
+    "zh-CN": "修复曲目重提与固定评审流程",
+    "en": "Fixes track resubmission and fixed-review flows"
+  },
+  "summary": {
+    "zh-CN": "可重新提交的退稿现在能在曲目详情页直接上传新源音频；固定评审允许主催参与同行评审，并修复终审退回母带后的批准状态重置。",
+    "en": "Resubmittable rejected tracks can now upload a new source from the detail page. Fixed reviews can include the producer, and final-review returns to mastering now reset approval state correctly."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "工作流",
+        "en": "Workflow"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "可重提退稿有了上传入口",
+            "en": "Resubmittable rejections now have an upload entry"
+          },
+          "description": {
+            "zh-CN": "当曲目被拒绝但允许重新提交时，曲师可以直接在曲目详情页选择新源音频并回到接收审核阶段。",
+            "en": "When a track is rejected with resubmission allowed, the submitter can choose a new source file from the detail page and return the track to intake."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "固定评审支持主催参与",
+            "en": "Fixed reviews support producer reviewers"
+          },
+          "description": {
+            "zh-CN": "固定评审池现在可以包含主催；系统会按评审分配记录判断权限和计数，提交者本人仍会被排除。",
+            "en": "Fixed reviewer pools can include the producer. Permissions and counts follow assignment records, while the track submitter remains excluded."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "终审退回母带重置批准状态",
+            "en": "Final-review returns reset approval state"
+          },
+          "description": {
+            "zh-CN": "终审退回母带后仍停留在同一工作流轮次内，但会清空当前母带的终审批准状态，后续母带版本继续按交付编号递增。",
+            "en": "Returning from final review to mastering stays in the same workflow cycle, clears current master approval state, and keeps later master versions numbered within that cycle."
+          }
+        }
+      ]
+    }
+  ]
+}

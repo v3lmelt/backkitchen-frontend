@@ -14,7 +14,7 @@ import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
 import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
-import { Archive, Check, ChevronRight, UserRoundCog, Pencil } from 'lucide-vue-next'
+import { Archive, Check, ChevronRight, UserRoundCog, Pencil, Upload } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
@@ -641,6 +641,43 @@ async function doReassign(userIds?: number[]) {
   }
 }
 
+const canResubmitRejectedTrack = computed(() =>
+  Boolean(track.value?.allowed_actions?.includes('resubmit'))
+)
+const resubmitFile = ref<File | null>(null)
+const resubmitUploading = ref(false)
+const resubmitProgress = ref(0)
+
+function onResubmitFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  resubmitFile.value = input.files?.[0] ?? null
+}
+
+async function submitRejectedTrackAgain() {
+  if (!track.value || !resubmitFile.value) return
+  resubmitUploading.value = true
+  resubmitProgress.value = 0
+  try {
+    const updated = await trackApi.uploadSourceVersion(
+      track.value.id,
+      resubmitFile.value,
+      undefined,
+      percent => { resubmitProgress.value = percent },
+    )
+    resubmitFile.value = null
+    resubmitProgress.value = 0
+    applyTrack(updated)
+    toastSuccess(t('trackDetail.resubmitDone'))
+    await router.push(buildTrackWorkspaceRoute(updated, {
+      returnTo: typeof route.query.returnTo === 'string' ? route.query.returnTo : null,
+    }))
+  } catch {
+    toastError(t('trackDetail.resubmitFailed'))
+  } finally {
+    resubmitUploading.value = false
+  }
+}
+
 const primaryActions = computed(() => {
   if (!track.value?.allowed_actions?.length) return []
   if (!track.value.workflow_step) return []
@@ -1000,6 +1037,38 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
           >
             {{ action.label }}
             <ChevronRight class="w-5 h-5 transition-transform group-hover:translate-x-0.5" :stroke-width="2.5" />
+          </button>
+        </div>
+
+        <div v-if="canResubmitRejectedTrack" class="card space-y-3 border-primary/40">
+          <div class="space-y-1">
+            <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('trackDetail.resubmitTitle') }}</h3>
+            <p class="text-xs text-muted-foreground">{{ t('trackDetail.resubmitDesc') }}</p>
+          </div>
+          <input
+            type="file"
+            accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"
+            class="input-field w-full"
+            :disabled="resubmitUploading"
+            @change="onResubmitFileChange"
+          />
+          <p v-if="resubmitFile" class="text-xs text-muted-foreground truncate">
+            {{ resubmitFile.name }}
+          </p>
+          <div v-if="resubmitUploading" class="space-y-1">
+            <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
+              <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: resubmitProgress + '%' }"></div>
+            </div>
+            <p class="text-xs text-muted-foreground text-right">{{ resubmitProgress }}%</p>
+          </div>
+          <button
+            type="button"
+            class="btn-primary w-full h-10 text-sm inline-flex items-center justify-center gap-2"
+            :disabled="!resubmitFile || resubmitUploading"
+            @click="submitRejectedTrackAgain"
+          >
+            <Upload class="w-4 h-4" :stroke-width="2" />
+            {{ resubmitUploading ? t('trackDetail.resubmitUploading') : t('trackDetail.resubmitButton') }}
           </button>
         </div>
 
