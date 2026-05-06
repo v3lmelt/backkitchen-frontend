@@ -28,7 +28,7 @@ interface EditorStage {
   label: string
   allow_producer_direct: boolean
   assignee_user_id: number | null
-  assignment_mode: 'manual' | 'auto'
+  assignment_mode: 'manual' | 'auto' | 'fixed'
   reviewer_pool: number[]
   required_reviewer_count: number
   allow_permanent_reject: boolean
@@ -259,7 +259,7 @@ function parseConfigToStages(config: WorkflowConfig | null): EditorStage[] {
       label: step.label,
       allow_producer_direct: Boolean(step.transitions.accept_producer_direct),
       assignee_user_id: step.assignee_user_id ?? null,
-      assignment_mode: (step.assignment_mode ?? 'manual') as 'manual' | 'auto',
+      assignment_mode: (step.assignment_mode ?? 'manual') as 'manual' | 'auto' | 'fixed',
       reviewer_pool: step.reviewer_pool ?? [],
       required_reviewer_count: step.required_reviewer_count ?? 1,
       allow_permanent_reject: step.allow_permanent_reject ?? meta.default_allow_permanent_reject,
@@ -341,6 +341,7 @@ const summary = computed(() => ({
   mainStageCount: stages.value.length,
   revisionCount: stages.value.filter(stage => stage.has_revision).length,
   autoReviewCount: stages.value.filter(stage => stage.kind === 'peer_review' && stage.assignment_mode === 'auto').length,
+  fixedReviewCount: stages.value.filter(stage => stage.kind === 'peer_review' && stage.assignment_mode === 'fixed').length,
 }))
 
 const fullConfig = computed<WorkflowConfig>(() => {
@@ -411,8 +412,10 @@ const fullConfig = computed<WorkflowConfig>(() => {
 
     if (meta.type === 'review') {
       step.assignment_mode = stage.assignment_mode
-      step.required_reviewer_count = stage.required_reviewer_count
-      if (stage.assignment_mode === 'auto' && stage.reviewer_pool.length > 0) {
+      step.required_reviewer_count = stage.assignment_mode === 'fixed'
+        ? Math.max(1, stage.reviewer_pool.length)
+        : stage.required_reviewer_count
+      if ((stage.assignment_mode === 'auto' || stage.assignment_mode === 'fixed') && stage.reviewer_pool.length > 0) {
         step.reviewer_pool = [...stage.reviewer_pool]
       }
       if (stage.has_revision) step.revision_step = stage.revision_id
@@ -484,12 +487,17 @@ const validationErrors = computed<string[]>(() => {
       seenRevisionIds.add(stage.revision_id)
     }
 
-    if (stage.kind === 'peer_review' && stage.assignment_mode === 'auto') {
+    if (stage.kind === 'peer_review' && (stage.assignment_mode === 'auto' || stage.assignment_mode === 'fixed')) {
       if (stage.reviewer_pool.length === 0) {
-        errors.push(t('workflowEditor.validation.reviewerPoolRequired', {
-          label: stage.label || stage.id,
-        }))
-      } else if (stage.required_reviewer_count > stage.reviewer_pool.length) {
+        errors.push(t(
+          stage.assignment_mode === 'fixed'
+            ? 'workflowEditor.validation.fixedReviewerRequired'
+            : 'workflowEditor.validation.reviewerPoolRequired',
+          {
+            label: stage.label || stage.id,
+          },
+        ))
+      } else if (stage.assignment_mode === 'auto' && stage.required_reviewer_count > stage.reviewer_pool.length) {
         errors.push(t('workflowEditor.validation.reviewerPoolTooSmall', {
           label: stage.label || stage.id,
         }))
@@ -566,7 +574,8 @@ function selectStage(stageId: string) {
   // matches the grid layout where the inspector sits in its own column.
   if (typeof window === 'undefined') return
   if (alreadySelected) return
-  if (window.matchMedia('(min-width: 1280px)').matches) return
+  const desktopQuery = typeof window.matchMedia === 'function' ? window.matchMedia('(min-width: 1280px)') : null
+  if (desktopQuery?.matches) return
   nextTick(() => {
     inspectorRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   })
@@ -611,8 +620,17 @@ function stageTypeClass(kind: StageKind): string {
 function stageQuickTags(stage: EditorStage): string[] {
   const tags: string[] = []
   if (stage.kind === 'peer_review') {
-    tags.push(stage.assignment_mode === 'auto' ? t('workflowEditor.auto') : t('workflowEditor.manual'))
-    tags.push(t('workflowEditor.reviewerCountTag', { count: stage.required_reviewer_count }))
+    const modeLabel = stage.assignment_mode === 'fixed'
+      ? t('workflowEditor.fixed')
+      : stage.assignment_mode === 'auto'
+        ? t('workflowEditor.auto')
+        : t('workflowEditor.manual')
+    tags.push(modeLabel)
+    tags.push(t('workflowEditor.reviewerCountTag', {
+      count: stage.assignment_mode === 'fixed'
+        ? Math.max(1, stage.reviewer_pool.length)
+        : stage.required_reviewer_count,
+    }))
   }
   if (stage.assignee_user_id !== null) tags.push(t('workflowEditor.assigneePinned'))
   if (stage.require_confirmation) tags.push(t('workflowEditor.confirmationTag'))
@@ -829,7 +847,7 @@ function saveConfig() {
         </div>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div class="border border-border bg-background rounded-none px-3 py-3">
           <div class="text-xs text-muted-foreground">{{ t('workflowEditor.summary.mainStages') }}</div>
           <div class="text-lg font-mono font-semibold text-foreground mt-1">{{ summary.mainStageCount }}</div>
@@ -841,6 +859,10 @@ function saveConfig() {
         <div class="border border-border bg-background rounded-none px-3 py-3">
           <div class="text-xs text-muted-foreground">{{ t('workflowEditor.summary.autoReviewStages') }}</div>
           <div class="text-lg font-mono font-semibold text-foreground mt-1">{{ summary.autoReviewCount }}</div>
+        </div>
+        <div class="border border-border bg-background rounded-none px-3 py-3">
+          <div class="text-xs text-muted-foreground">{{ t('workflowEditor.summary.fixedReviewStages') }}</div>
+          <div class="text-lg font-mono font-semibold text-foreground mt-1">{{ summary.fixedReviewCount }}</div>
         </div>
       </div>
 
@@ -1044,8 +1066,9 @@ function saveConfig() {
           <div v-if="selectedStage.kind === 'peer_review'" class="space-y-4 border border-border bg-background rounded-none p-4">
             <div>
               <label class="block text-xs text-muted-foreground mb-2">{{ t('workflowEditor.assignmentMode') }}</label>
-              <div class="grid grid-cols-2 gap-2">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <button
+                  type="button"
                   @click="selectedStage.assignment_mode = 'manual'; markChanged()"
                   :class="[
                     'h-10 rounded-full border font-mono text-xs transition-colors',
@@ -1057,6 +1080,7 @@ function saveConfig() {
                   {{ t('workflowEditor.manual') }}
                 </button>
                 <button
+                  type="button"
                   @click="selectedStage.assignment_mode = 'auto'; markChanged()"
                   :class="[
                     'h-10 rounded-full border font-mono text-xs transition-colors',
@@ -1067,10 +1091,22 @@ function saveConfig() {
                 >
                   {{ t('workflowEditor.auto') }}
                 </button>
+                <button
+                  type="button"
+                  @click="selectedStage.assignment_mode = 'fixed'; markChanged()"
+                  :class="[
+                    'h-10 rounded-full border font-mono text-xs transition-colors',
+                    selectedStage.assignment_mode === 'fixed'
+                      ? 'border-primary bg-primary text-black'
+                      : 'border-border bg-card text-foreground',
+                  ]"
+                >
+                  {{ t('workflowEditor.fixed') }}
+                </button>
               </div>
             </div>
 
-            <div>
+            <div v-if="selectedStage.assignment_mode !== 'fixed'">
               <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowEditor.requiredReviewers') }}</label>
               <input
                 v-model.number="selectedStage.required_reviewer_count"
@@ -1080,10 +1116,15 @@ function saveConfig() {
                 class="input-field w-28"
               />
             </div>
+            <div v-else class="border border-border bg-card rounded-none px-3 py-2 text-xs text-muted-foreground">
+              {{ t('workflowEditor.fixedAllRequiredHint', { count: selectedStage.reviewer_pool.length }) }}
+            </div>
 
-            <div v-if="selectedStage.assignment_mode === 'auto'" class="space-y-2">
+            <div v-if="selectedStage.assignment_mode === 'auto' || selectedStage.assignment_mode === 'fixed'" class="space-y-2">
               <div class="flex items-center justify-between gap-3">
-                <label class="block text-xs text-muted-foreground">{{ t('workflowEditor.reviewerPool') }}</label>
+                <label class="block text-xs text-muted-foreground">
+                  {{ selectedStage.assignment_mode === 'fixed' ? t('workflowEditor.fixedReviewers') : t('workflowEditor.reviewerPool') }}
+                </label>
                 <span class="text-xs text-muted-foreground">{{ t('workflowEditor.poolSelected', { count: selectedStage.reviewer_pool.length }) }}</span>
               </div>
               <div v-if="memberOptions.length" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1102,6 +1143,9 @@ function saveConfig() {
                 </label>
               </div>
               <p v-else class="text-xs text-muted-foreground">{{ t('workflowEditor.noMembersHint') }}</p>
+              <p v-if="selectedStage.assignment_mode === 'fixed'" class="text-xs text-muted-foreground">
+                {{ t('workflowEditor.fixedSubmitterExcludedHint') }}
+              </p>
             </div>
           </div>
 

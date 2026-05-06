@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { Issue, StageAssignment, Track } from '@/types'
 
-import { canUserChangeIssueStatus, canUserSubmitIssueStatus } from './reviewAssignments'
+import { activeAssignmentsForStep, canUserChangeIssueStatus, canUserSubmitIssueStatus } from './reviewAssignments'
 
 function makeTrack(overrides: Partial<Track> = {}): Track {
   return {
@@ -62,7 +62,68 @@ function makeIssue(overrides: Partial<Issue> = {}): Issue {
   } as Issue
 }
 
+function makeAssignment(overrides: Partial<StageAssignment> = {}): StageAssignment {
+  return {
+    id: 1,
+    track_id: 1,
+    stage_id: 'peer_review',
+    user_id: 40,
+    status: 'pending',
+    decision: null,
+    cancellation_reason: null,
+    assigned_at: '2026-01-01T00:00:00Z',
+    completed_at: null,
+    ...overrides,
+  }
+}
+
 describe('reviewAssignments', () => {
+  it('dedupes stale same-reviewer rows and prefers pending active assignments', () => {
+    const assignments: StageAssignment[] = [
+      makeAssignment({
+        id: 1,
+        user_id: 40,
+        status: 'completed',
+        decision: 'pass',
+        completed_at: '2026-01-01T00:30:00Z',
+      }),
+      makeAssignment({
+        id: 2,
+        user_id: 41,
+        status: 'completed',
+        decision: 'pass',
+        completed_at: '2026-01-01T00:30:00Z',
+      }),
+      makeAssignment({
+        id: 3,
+        user_id: 40,
+        status: 'pending',
+        assigned_at: '2026-01-02T00:00:00Z',
+      }),
+      makeAssignment({
+        id: 4,
+        user_id: 41,
+        status: 'pending',
+        assigned_at: '2026-01-02T00:00:00Z',
+      }),
+      makeAssignment({
+        id: 5,
+        stage_id: 'producer_gate',
+        user_id: 42,
+      }),
+      makeAssignment({
+        id: 6,
+        user_id: 43,
+        status: 'cancelled',
+      }),
+    ]
+
+    const active = activeAssignmentsForStep(assignments, 'peer_review')
+
+    expect(active.map(assignment => assignment.id)).toEqual([3, 4])
+    expect(active.every(assignment => assignment.status === 'pending')).toBe(true)
+  })
+
   it('allows only the mastering engineer to change final review issue status', () => {
     const track = makeTrack()
     const issue = makeIssue()

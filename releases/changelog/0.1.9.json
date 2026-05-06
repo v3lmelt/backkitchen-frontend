@@ -1,0 +1,42 @@
+{
+  "version": "0.1.9",
+  "date": "2026-05-06",
+  "headline": {
+    "zh-CN": "修复实时连接权限与诊断日志",
+    "en": "Fixes real-time connection permissions and diagnostics"
+  },
+  "summary": {
+    "zh-CN": "固定评审池和阶段分配中的评审人现在可以正常建立曲目实时连接；服务器也会记录 WebSocket 握手阶段的异常堆栈，便于排查偶发连接错误。",
+    "en": "Reviewers assigned through fixed reviewer pools or stage assignments can now open track real-time connections, and the server records handshake exception traces for easier diagnosis of intermittent connection errors."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "实时协作",
+        "en": "Real-time collaboration"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "评审分配权限同步到 WebSocket",
+            "en": "Review assignment permissions now apply to WebSocket access"
+          },
+          "description": {
+            "zh-CN": "曲目实时连接现在与曲目详情页使用一致的可见性规则，固定评审池或阶段分配中的评审人不会再因为旧评审字段为空而被拒绝连接。",
+            "en": "Track real-time connections now use the same visibility rules as the track detail page, so fixed-pool and stage-assigned reviewers are no longer rejected when the legacy reviewer field is empty."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "握手异常会写入后端日志",
+            "en": "Handshake failures now write backend logs"
+          },
+          "description": {
+            "zh-CN": "WebSocket 鉴权和权限检查中的意外异常会记录到后端日志，并按连接错误关闭，避免浏览器只显示 500 而服务器缺少排查线索。",
+            "en": "Unexpected errors during WebSocket authentication and access checks are logged on the backend and closed as connection errors, avoiding browser-only 500s without server-side clues."
+          }
+        }
+      ]
+    }
+  ]
+}

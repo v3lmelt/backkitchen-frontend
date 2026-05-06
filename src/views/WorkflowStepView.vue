@@ -59,7 +59,7 @@ const chatSidebarRef = ref<InstanceType<typeof MasteringChatSidebar> | null>(nul
 
 const wsReloading = ref(false)
 const wsHadConnection = ref(false)
-const { connected: wsConnected, reconnectAttempts: wsReconnectAttempts, retry: wsRetry } = useTrackWebSocket(trackId.value, async () => {
+const { connected: wsConnected, reconnectAttempts: wsReconnectAttempts, retry: wsRetry } = useTrackWebSocket(trackId, async () => {
   if (wsReloading.value) return
   wsReloading.value = true
   await nextTick()
@@ -174,7 +174,12 @@ const currentStep = computed<WorkflowStepDef | null>(() => track.value?.workflow
 const transitions = computed<WorkflowTransitionOption[]>(() => track.value?.workflow_transitions ?? [])
 const currentStepAssignments = computed(() => activeAssignmentsForStep(reviewAssignments.value, currentStep.value?.id))
 const completedReviewCount = computed(() => currentStepAssignments.value.filter(assignment => assignment.status === 'completed').length)
-const requiredReviewCount = computed(() => Math.max(1, currentStep.value?.required_reviewer_count ?? 1))
+const requiredReviewCount = computed(() => {
+  if (currentStep.value?.assignment_mode === 'fixed') {
+    return Math.max(1, currentStepAssignments.value.length)
+  }
+  return Math.max(1, currentStep.value?.required_reviewer_count ?? 1)
+})
 const currentUserAssignment = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId) return null
@@ -579,12 +584,17 @@ async function loadPeerChecklist(albumId: number) {
   checklistDraft.value = labels.map(label => ({ label, passed: false, note: '' }))
 }
 
+let pageLoadSerial = 0
+
 async function loadPage() {
+  const serial = ++pageLoadSerial
+  const requestedTrackId = trackId.value
   if (!track.value) loading.value = true
   loadError.value = ''
   error.value = ''
   try {
-    const detail = await trackApi.get(trackId.value)
+    const detail = await trackApi.get(requestedTrackId)
+    if (serial !== pageLoadSerial || requestedTrackId !== trackId.value) return
     track.value = detail.track
     trackStore.setCurrentTrack(detail.track)
     sourceVersions.value = detail.source_versions ?? []
@@ -599,20 +609,24 @@ async function loadPage() {
     syncIssueDrawerFromRoute()
     checklistItems.value = detail.checklist_items
     try {
-      reviewAssignments.value = await trackApi.listAssignments(trackId.value)
+      const assignments = await trackApi.listAssignments(requestedTrackId)
+      if (serial !== pageLoadSerial || requestedTrackId !== trackId.value) return
+      reviewAssignments.value = assignments
     } catch {
+      if (serial !== pageLoadSerial || requestedTrackId !== trackId.value) return
       reviewAssignments.value = []
     }
 
     // Redirect mastering steps to the dedicated mastering page
     if (inferClassicVariant(detail.track.workflow_step ?? null) === 'mastering') {
-      router.replace({ path: `/tracks/${trackId.value}/mastering`, query: route.query })
+      router.replace({ path: `/tracks/${requestedTrackId}/mastering`, query: route.query })
       return
     }
 
     if (inferClassicVariant(detail.track.workflow_step ?? null) === 'peer_review') {
       if (albumChecklistEnabled.value !== false) {
         await loadPeerChecklist(detail.track.album_id)
+        if (serial !== pageLoadSerial || requestedTrackId !== trackId.value) return
       } else {
         templateItems.value = []
         checklistDraft.value = []
@@ -631,13 +645,27 @@ async function loadPage() {
       masteringDiscussion.load()
     }
   } catch (err: any) {
+    if (serial !== pageLoadSerial || requestedTrackId !== trackId.value) return
     trackStore.setCurrentTrack(null)
     track.value = null
     loadError.value = err?.message || t('common.loadFailed')
   } finally {
-    loading.value = false
+    if (serial === pageLoadSerial && requestedTrackId === trackId.value) {
+      loading.value = false
+    }
   }
 }
+
+watch(trackId, () => {
+  track.value = null
+  issues.value = []
+  sourceVersions.value = []
+  masterDeliveries.value = []
+  workflowConfig.value = null
+  checklistItems.value = []
+  reviewAssignments.value = []
+  void loadPage()
+})
 
 watch(olderSourceVersions, (versions) => {
   if (!versions.some(version => version.id === selectedCompareSourceVersionId.value)) {

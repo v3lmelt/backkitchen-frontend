@@ -45,7 +45,7 @@ export interface WorkflowStepDef {
   // Approval-specific
   allow_permanent_reject?: boolean | null
   // Review-specific
-  assignment_mode?: 'manual' | 'auto' | null
+  assignment_mode?: 'manual' | 'auto' | 'fixed' | null
   reviewer_pool?: number[] | null
   required_reviewer_count?: number | null
   // Approval/delivery assignee override
@@ -510,6 +510,8 @@ export interface WebhookConfig {
   app_id: string
   app_secret: string
   filter_user_ids: number[]
+  email_enabled: boolean
+  email_events: string[]
 }
 
 export interface WebhookDelivery {

@@ -75,11 +75,14 @@ function parseErrorDetail(detail: unknown): string {
   return ''
 }
 
-function authHeaders(headers?: HeadersInit): HeadersInit {
+function requestHeaders(headers?: HeadersInit): { headers: HeadersInit; token: string | null } {
   const token = localStorage.getItem(TOKEN_KEY)
   return {
-    ...(headers || {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    headers: {
+      ...(headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    token,
   }
 }
 
@@ -91,13 +94,17 @@ export function onAuthCleared(cb: AuthClearedCallback) {
   _onAuthCleared = cb
 }
 
-function clearStoredAuth() {
+function clearStoredAuth(expectedToken?: string | null) {
+  if (expectedToken && localStorage.getItem(TOKEN_KEY) !== expectedToken) {
+    return
+  }
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem('backkitchen_user')
   _onAuthCleared?.()
 }
 
 let verifyPromise: Promise<boolean> | null = null
+let verifyPromiseToken: string | null = null
 
 /**
  * Verify whether the currently-stored token is still accepted by the server.
@@ -105,10 +112,11 @@ let verifyPromise: Promise<boolean> | null = null
  * is valid (or the check itself could not run), `false` only when the server
  * confirms the token is no longer valid.
  */
-async function verifyTokenStillValid(): Promise<boolean> {
-  const token = localStorage.getItem(TOKEN_KEY)
+async function verifyTokenStillValid(expectedToken?: string | null): Promise<boolean> {
+  const token = expectedToken || localStorage.getItem(TOKEN_KEY)
   if (!token) return false
-  if (verifyPromise) return verifyPromise
+  if (verifyPromise && verifyPromiseToken === token) return verifyPromise
+  verifyPromiseToken = token
   verifyPromise = (async () => {
     try {
       const res = await fetch(`${BASE}/auth/me`, {
@@ -121,6 +129,7 @@ async function verifyTokenStillValid(): Promise<boolean> {
       return true
     } finally {
       verifyPromise = null
+      verifyPromiseToken = null
     }
   })()
   return verifyPromise
@@ -132,10 +141,13 @@ async function verifyTokenStillValid(): Promise<boolean> {
  * unrelated 401 (or a transient backend bug) would force the user back to
  * /login mid-session.
  */
-async function handleUnauthorized(url: string): Promise<void> {
+async function handleUnauthorized(url: string, requestToken?: string | null): Promise<void> {
+  if (requestToken && localStorage.getItem(TOKEN_KEY) !== requestToken) {
+    return
+  }
   // /auth/me is the oracle itself — trust its verdict directly.
   if (url === '/auth/me' || url.startsWith('/auth/me?') || url.startsWith('/auth/me/')) {
-    clearStoredAuth()
+    clearStoredAuth(requestToken)
     return
   }
   // 401 from /auth/login means bad credentials on a fresh attempt,
@@ -143,9 +155,9 @@ async function handleUnauthorized(url: string): Promise<void> {
   if (url.startsWith('/auth/login')) {
     return
   }
-  const stillValid = await verifyTokenStillValid()
+  const stillValid = await verifyTokenStillValid(requestToken)
   if (!stillValid) {
-    clearStoredAuth()
+    clearStoredAuth(requestToken)
   }
 }
 
@@ -175,7 +187,7 @@ export function uploadWithProgress<T>(
         if (xhr.status === 401) {
           // Fire-and-forget: the upload has already failed, we just need
           // to decide whether the session should be cleared.
-          void handleUnauthorized(url)
+          void handleUnauthorized(url, token)
         }
         let msg = `Request failed: ${xhr.status}`
         try {
@@ -207,10 +219,6 @@ function shouldRetry(method: string | undefined): boolean {
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const isFormData = options?.body instanceof FormData
-  const headers: HeadersInit = isFormData
-    ? authHeaders(options?.headers)
-    : authHeaders({ 'Content-Type': 'application/json', ...options?.headers })
-
   const retryable = shouldRetry(options?.method)
   let lastError: Error | undefined
 
@@ -219,6 +227,9 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
       await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt))
     }
     try {
+      const { headers, token } = isFormData
+        ? requestHeaders(options?.headers)
+        : requestHeaders({ 'Content-Type': 'application/json', ...options?.headers })
       const res = await fetch(`${BASE}${url}`, { ...options, headers })
       if (!res.ok) {
         // Retry on server errors for idempotent requests
@@ -227,7 +238,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
         }
         const body = await res.json().catch(() => ({}))
         if (res.status === 401) {
-          await handleUnauthorized(url)
+          await handleUnauthorized(url, token)
         }
         throw new Error(parseErrorDetail(body.detail) || `Request failed: ${res.status}`)
       }
@@ -500,10 +511,10 @@ export const trackApi = {
       method: 'POST',
       body: JSON.stringify({ target_stage_id: targetStageId, reason, mastering_notes: masteringNotes || undefined }),
     }),
-  reopen: (trackId: number, targetStageId: string) =>
+  reopen: (trackId: number, targetStageId: string, masteringNotes?: string) =>
     request<Track>(`/tracks/${trackId}/reopen`, {
       method: 'POST',
-      body: JSON.stringify({ target_stage_id: targetStageId }),
+      body: JSON.stringify({ target_stage_id: targetStageId, mastering_notes: masteringNotes || undefined }),
     }),
   decideReopenRequest: (requestId: number, decision: 'approve' | 'reject') =>
     request<ReopenRequest>(`/tracks/reopen-requests/${requestId}/decide`, {

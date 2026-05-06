@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   openMock: vi.fn(),
   trackGetMock: vi.fn(),
   listAssignmentsMock: vi.fn(),
+  uploadSourceVersionMock: vi.fn(),
   trackReopenMock: vi.fn(),
   trackRequestReopenMock: vi.fn(),
   discussionCreateMock: vi.fn(),
@@ -32,6 +33,7 @@ vi.mock('@/api', () => ({
   trackApi: {
     get: mocks.trackGetMock,
     listAssignments: mocks.listAssignmentsMock,
+    uploadSourceVersion: mocks.uploadSourceVersionMock,
     reopen: mocks.trackReopenMock,
     requestReopen: mocks.trackRequestReopenMock,
   },
@@ -140,12 +142,14 @@ describe('TrackDetailView', () => {
     mocks.discussionCreateMock.mockReset()
     mocks.trackGetMock.mockReset()
     mocks.listAssignmentsMock.mockReset()
+    mocks.uploadSourceVersionMock.mockReset()
     mocks.trackReopenMock.mockReset()
     mocks.trackRequestReopenMock.mockReset()
     mocks.currentUser = { id: 2 }
     vi.stubGlobal('open', mocks.openMock)
     mocks.trackReopenMock.mockResolvedValue({})
     mocks.trackRequestReopenMock.mockResolvedValue({})
+    mocks.uploadSourceVersionMock.mockResolvedValue({})
     mocks.listAssignmentsMock.mockResolvedValue([])
     mocks.trackGetMock.mockResolvedValue({
       track: {
@@ -384,6 +388,76 @@ describe('TrackDetailView', () => {
     expect(buttons.every(button => button.text().includes('Open Intake'))).toBe(true)
 
     await buttons[0].trigger('click')
+    expect(mocks.pushMock).toHaveBeenCalledWith({ path: '/tracks/7/step/intake', query: undefined })
+  })
+
+  it('shows a resubmit upload entry for resubmittable rejected tracks', async () => {
+    const updatedTrack = {
+      id: 7,
+      album_id: 5,
+      status: 'intake',
+      title: 'Track 7',
+      artist: 'Nova',
+      version: 4,
+      workflow_cycle: 3,
+      file_path: '/audio-v4.wav',
+      submitter_id: 2,
+      producer_id: 8,
+      allowed_actions: ['accept'],
+      workflow_step: { id: 'intake', label: 'Intake', type: 'approval', assignee_role: 'producer', order: 0, transitions: {} },
+      open_issue_count: 0,
+      submitter: { display_name: 'Nova' },
+      current_source_version: { id: 401 },
+      current_master_delivery: null,
+    }
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 7,
+        album_id: 5,
+        status: 'rejected',
+        rejection_mode: 'resubmittable',
+        title: 'Track 7',
+        artist: 'Nova',
+        version: 3,
+        workflow_cycle: 2,
+        file_path: '/audio.wav',
+        submitter_id: 2,
+        producer_id: 8,
+        allowed_actions: ['resubmit'],
+        workflow_step: null,
+        open_issue_count: 0,
+        submitter: { display_name: 'Nova' },
+        current_source_version: { id: 301 },
+        current_master_delivery: null,
+      },
+      issues: [],
+      discussions: [],
+      events: [],
+      source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
+      workflow_config: { version: 2, steps: [{ id: 'intake', label: 'Intake', type: 'approval', assignee_role: 'producer', order: 0, transitions: {} }] },
+    })
+    mocks.uploadSourceVersionMock.mockResolvedValueOnce(updatedTrack)
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Resubmit source')
+    const file = new File(['RIFFdata'], 'resubmit.wav', { type: 'audio/wav' })
+    const input = wrapper.find('input[accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"]')
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true })
+    await input.trigger('change')
+
+    const submitButton = wrapper.findAll('button').find(button => button.text().includes('Upload new source'))
+    expect(submitButton).toBeTruthy()
+    await submitButton!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.uploadSourceVersionMock).toHaveBeenCalledWith(
+      7,
+      file,
+      undefined,
+      expect.any(Function),
+    )
     expect(mocks.pushMock).toHaveBeenCalledWith({ path: '/tracks/7/step/intake', query: undefined })
   })
 

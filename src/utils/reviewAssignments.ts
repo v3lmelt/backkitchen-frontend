@@ -8,9 +8,33 @@ function phaseAliases(phase: string): Set<string> {
   return new Set([phase])
 }
 
+function assignmentTime(assignment: StageAssignment): number {
+  const parsed = Date.parse(assignment.assigned_at)
+  return Number.isNaN(parsed) ? 0 : parsed
+}
+
+function shouldPreferAssignment(candidate: StageAssignment, current: StageAssignment): boolean {
+  if (candidate.status === 'pending' && current.status !== 'pending') return true
+  if (candidate.status !== 'pending' && current.status === 'pending') return false
+
+  const candidateTime = assignmentTime(candidate)
+  const currentTime = assignmentTime(current)
+  if (candidateTime !== currentTime) return candidateTime > currentTime
+
+  return candidate.id > current.id
+}
+
 export function activeAssignmentsForStep(assignments: StageAssignment[], stageId: string | null | undefined): StageAssignment[] {
   if (!stageId) return []
-  return assignments.filter(assignment => assignment.stage_id === stageId && assignment.status !== 'cancelled')
+  const activeByUser = new Map<number, StageAssignment>()
+  for (const assignment of assignments) {
+    if (assignment.stage_id !== stageId || assignment.status === 'cancelled') continue
+    const current = activeByUser.get(assignment.user_id)
+    if (!current || shouldPreferAssignment(assignment, current)) {
+      activeByUser.set(assignment.user_id, assignment)
+    }
+  }
+  return Array.from(activeByUser.values())
 }
 
 export function reviewerIdsForPhase(

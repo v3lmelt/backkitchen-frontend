@@ -14,7 +14,7 @@ import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
 import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
-import { Archive, Check, ChevronRight, UserRoundCog, Pencil } from 'lucide-vue-next'
+import { Archive, Check, ChevronRight, UserRoundCog, Pencil, Upload } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
@@ -235,7 +235,7 @@ onBeforeUnmount(() => {
 // Real-time: reload track data whenever another collaborator changes it
 const wsReloading = ref(false)
 const wsHadConnection = ref(false)
-const { connected: wsConnected, reconnectAttempts: wsReconnectAttempts, retry: wsRetry } = useTrackWebSocket(trackId.value, async () => {
+const { connected: wsConnected, reconnectAttempts: wsReconnectAttempts, retry: wsRetry } = useTrackWebSocket(trackId, async () => {
   if (wsReloading.value) return
   wsReloading.value = true
   await nextTick()
@@ -258,29 +258,49 @@ function applyTrack(updated: Track) {
 }
 
 let reviewAssignmentsLoadCount = 0
+let trackLoadSerial = 0
 
 async function loadTrack() {
+  const serial = ++trackLoadSerial
+  const requestedTrackId = trackId.value
   if (!track.value) loading.value = true
   loadError.value = false
   try {
-    const detail = await trackApi.get(trackId.value)
+    const detail = await trackApi.get(requestedTrackId)
+    if (serial !== trackLoadSerial || requestedTrackId !== trackId.value) return
     applyTrack(detail.track)
     issues.value = detail.issues
     events.value = detail.events
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
     workflowConfig.value = detail.workflow_config ?? null
     try {
-      reviewAssignments.value = await trackApi.listAssignments(trackId.value)
+      const assignments = await trackApi.listAssignments(requestedTrackId)
+      if (serial !== trackLoadSerial || requestedTrackId !== trackId.value) return
+      reviewAssignments.value = assignments
     } catch {
+      if (serial !== trackLoadSerial || requestedTrackId !== trackId.value) return
       reviewAssignments.value = []
     }
   } catch {
+    if (serial !== trackLoadSerial || requestedTrackId !== trackId.value) return
     trackStore.setCurrentTrack(null)
     loadError.value = true
   } finally {
-    loading.value = false
+    if (serial === trackLoadSerial && requestedTrackId === trackId.value) {
+      loading.value = false
+    }
   }
 }
+
+watch(trackId, () => {
+  track.value = null
+  issues.value = []
+  events.value = []
+  sourceVersions.value = []
+  reviewAssignments.value = []
+  workflowConfig.value = null
+  void loadTrack()
+})
 
 const audioUrl = computed(() => {
   const t = track.value
@@ -328,6 +348,9 @@ const hasMultipleReviewers = computed(() => currentStepAssignments.value.length 
 const completedReviewCount = computed(() => currentStepAssignments.value.filter(a => a.status === 'completed').length)
 const totalReviewCount = computed(() => {
   const step = track.value?.workflow_step
+  if (step?.assignment_mode === 'fixed') {
+    return Math.max(1, currentStepAssignments.value.length)
+  }
   if (step?.required_reviewer_count != null && step.required_reviewer_count > 0) {
     return step.required_reviewer_count
   }
@@ -543,7 +566,7 @@ const canReassignReviewer = computed(() =>
 )
 const isAutoAssign = computed(() => {
   const step = track.value?.workflow_step
-  return step?.assignment_mode === 'auto' || (step?.assignee_user_id != null)
+  return step?.assignment_mode === 'auto' || step?.assignment_mode === 'fixed' || (step?.assignee_user_id != null)
 })
 const showReassignModal = ref(false)
 const reassignMembers = ref<AlbumMember[]>([])
@@ -615,6 +638,43 @@ async function doReassign(userIds?: number[]) {
       .catch(() => undefined)
   } finally {
     reassigning.value = false
+  }
+}
+
+const canResubmitRejectedTrack = computed(() =>
+  Boolean(track.value?.allowed_actions?.includes('resubmit'))
+)
+const resubmitFile = ref<File | null>(null)
+const resubmitUploading = ref(false)
+const resubmitProgress = ref(0)
+
+function onResubmitFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  resubmitFile.value = input.files?.[0] ?? null
+}
+
+async function submitRejectedTrackAgain() {
+  if (!track.value || !resubmitFile.value) return
+  resubmitUploading.value = true
+  resubmitProgress.value = 0
+  try {
+    const updated = await trackApi.uploadSourceVersion(
+      track.value.id,
+      resubmitFile.value,
+      undefined,
+      percent => { resubmitProgress.value = percent },
+    )
+    resubmitFile.value = null
+    resubmitProgress.value = 0
+    applyTrack(updated)
+    toastSuccess(t('trackDetail.resubmitDone'))
+    await router.push(buildTrackWorkspaceRoute(updated, {
+      returnTo: typeof route.query.returnTo === 'string' ? route.query.returnTo : null,
+    }))
+  } catch {
+    toastError(t('trackDetail.resubmitFailed'))
+  } finally {
+    resubmitUploading.value = false
   }
 }
 
@@ -710,7 +770,11 @@ async function handleReopen() {
   reopening.value = true
   try {
     if (canDirectReopen.value) {
-      const updated = await trackApi.reopen(track.value.id, reopenTargetStage.value)
+      const updated = await trackApi.reopen(
+        track.value.id,
+        reopenTargetStage.value,
+        reopenMasteringNotes.value.trim() || undefined,
+      )
       applyTrack(updated)
       toastSuccess(t('trackDetail.reopenDone'))
       // reopen may reset issues/events depending on target stage; refresh in the
@@ -973,6 +1037,38 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
           >
             {{ action.label }}
             <ChevronRight class="w-5 h-5 transition-transform group-hover:translate-x-0.5" :stroke-width="2.5" />
+          </button>
+        </div>
+
+        <div v-if="canResubmitRejectedTrack" class="card space-y-3 border-primary/40">
+          <div class="space-y-1">
+            <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('trackDetail.resubmitTitle') }}</h3>
+            <p class="text-xs text-muted-foreground">{{ t('trackDetail.resubmitDesc') }}</p>
+          </div>
+          <input
+            type="file"
+            accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"
+            class="input-field w-full"
+            :disabled="resubmitUploading"
+            @change="onResubmitFileChange"
+          />
+          <p v-if="resubmitFile" class="text-xs text-muted-foreground truncate">
+            {{ resubmitFile.name }}
+          </p>
+          <div v-if="resubmitUploading" class="space-y-1">
+            <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
+              <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: resubmitProgress + '%' }"></div>
+            </div>
+            <p class="text-xs text-muted-foreground text-right">{{ resubmitProgress }}%</p>
+          </div>
+          <button
+            type="button"
+            class="btn-primary w-full h-10 text-sm inline-flex items-center justify-center gap-2"
+            :disabled="!resubmitFile || resubmitUploading"
+            @click="submitRejectedTrackAgain"
+          >
+            <Upload class="w-4 h-4" :stroke-width="2" />
+            {{ resubmitUploading ? t('trackDetail.resubmitUploading') : t('trackDetail.resubmitButton') }}
           </button>
         </div>
 

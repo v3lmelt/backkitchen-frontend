@@ -5,6 +5,222 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.9",
+    "date": "2026-05-06",
+    "headline": {
+      "zh-CN": "修复实时连接权限与诊断日志",
+      "en": "Fixes real-time connection permissions and diagnostics"
+    },
+    "summary": {
+      "zh-CN": "固定评审池和阶段分配中的评审人现在可以正常建立曲目实时连接；服务器也会记录 WebSocket 握手阶段的异常堆栈，便于排查偶发连接错误。",
+      "en": "Reviewers assigned through fixed reviewer pools or stage assignments can now open track real-time connections, and the server records handshake exception traces for easier diagnosis of intermittent connection errors."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "实时协作",
+          "en": "Real-time collaboration"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "评审分配权限同步到 WebSocket",
+              "en": "Review assignment permissions now apply to WebSocket access"
+            },
+            "description": {
+              "zh-CN": "曲目实时连接现在与曲目详情页使用一致的可见性规则，固定评审池或阶段分配中的评审人不会再因为旧评审字段为空而被拒绝连接。",
+              "en": "Track real-time connections now use the same visibility rules as the track detail page, so fixed-pool and stage-assigned reviewers are no longer rejected when the legacy reviewer field is empty."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "握手异常会写入后端日志",
+              "en": "Handshake failures now write backend logs"
+            },
+            "description": {
+              "zh-CN": "WebSocket 鉴权和权限检查中的意外异常会记录到后端日志，并按连接错误关闭，避免浏览器只显示 500 而服务器缺少排查线索。",
+              "en": "Unexpected errors during WebSocket authentication and access checks are logged on the backend and closed as connection errors, avoiding browser-only 500s without server-side clues."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.8",
+    "date": "2026-05-05",
+    "headline": {
+      "zh-CN": "修复曲目重提与固定评审流程",
+      "en": "Fixes track resubmission and fixed-review flows"
+    },
+    "summary": {
+      "zh-CN": "可重新提交的退稿现在能在曲目详情页直接上传新源音频；固定评审允许主催参与同行评审，并修复终审退回母带后的批准状态重置。",
+      "en": "Resubmittable rejected tracks can now upload a new source from the detail page. Fixed reviews can include the producer, and final-review returns to mastering now reset approval state correctly."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "工作流",
+          "en": "Workflow"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "可重提退稿有了上传入口",
+              "en": "Resubmittable rejections now have an upload entry"
+            },
+            "description": {
+              "zh-CN": "当曲目被拒绝但允许重新提交时，曲师可以直接在曲目详情页选择新源音频并回到接收审核阶段。",
+              "en": "When a track is rejected with resubmission allowed, the submitter can choose a new source file from the detail page and return the track to intake."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "固定评审支持主催参与",
+              "en": "Fixed reviews support producer reviewers"
+            },
+            "description": {
+              "zh-CN": "固定评审池现在可以包含主催；系统会按评审分配记录判断权限和计数，提交者本人仍会被排除。",
+              "en": "Fixed reviewer pools can include the producer. Permissions and counts follow assignment records, while the track submitter remains excluded."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "终审退回母带重置批准状态",
+              "en": "Final-review returns reset approval state"
+            },
+            "description": {
+              "zh-CN": "终审退回母带后仍停留在同一工作流轮次内，但会清空当前母带的终审批准状态，后续母带版本继续按交付编号递增。",
+              "en": "Returning from final review to mastering stays in the same workflow cycle, clears current master approval state, and keeps later master versions numbered within that cycle."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.7",
+    "date": "2026-05-05",
+    "headline": {
+      "zh-CN": "Webhook 设置新增曲师邮件提醒",
+      "en": "Adds composer email reminders to Webhook settings"
+    },
+    "summary": {
+      "zh-CN": "专辑的 Webhook 设置现在可以单独启用曲师邮件提醒。启用后，新的公开问题、公开问题回复，以及退回修订等需要曲师处理的待办，会通过已验证邮箱发送给当前曲目的提交者。",
+      "en": "Album Webhook settings can now enable composer email reminders separately. When enabled, new public issues, public issue replies, and revision requests are emailed to the current track submitter's verified email address."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "通知",
+          "en": "Notifications"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "按专辑启用曲师邮件提醒",
+              "en": "Per-album composer email reminders"
+            },
+            "description": {
+              "zh-CN": "制作人可以在专辑的 Webhook 标签页开启「邮件通知曲师」，并选择新公开问题、公开问题回复和请求修订三类触发事件。邮件只发送给对应曲目的提交者，不会写入 Webhook 发送历史。",
+              "en": "Producers can enable Email composers from an album's Webhook tab and choose new public issues, public issue replies, and revision requests as triggers. Emails go only to the related track submitter and are kept separate from Webhook delivery history."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.6",
+    "date": "2026-05-05",
+    "headline": {
+      "zh-CN": "新增固定多人评审，并补齐重开与母带确认流程细节",
+      "en": "Adds fixed multi-reviewer assignment and tightens reopen and mastering confirmation flows"
+    },
+    "summary": {
+      "zh-CN": "同行评审现在支持自动分配、手动指派和固定多人评审三种模式。固定名单中如果包含投稿者本人，系统会在该曲目中自动排除投稿者；排除后无人可审时会通知主催手动指派。同时修复了直接重开母带备注不保存、母带页重复确认按钮、部分工作流状态文案回退和角色切换时旧请求干扰登录态的问题。",
+      "en": "Peer review now supports auto assignment, manual assignment, and fixed multi-reviewer lists. When a fixed list contains the submitter, that person is excluded for their own track; if nobody remains, the producer is notified to assign reviewers manually. This release also fixes direct-reopen mastering notes, duplicate mastering confirmation buttons, missing workflow status labels, and stale requests interfering with newer login state."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "工作流评审",
+          "en": "Workflow review"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "固定多人评审模式",
+              "en": "Fixed multi-reviewer mode"
+            },
+            "description": {
+              "zh-CN": "工作流编辑器新增「固定评审」模式，可为同行评审阶段选择固定评审名单；进入评审时会为所有非投稿者的固定评审人创建待审任务，并要求实际分配到的人全部完成评审。",
+              "en": "The workflow editor now has a Fixed reviewers mode for peer review stages. Entering review creates pending assignments for every fixed reviewer who is not the submitter, and all actually assigned reviewers must finish."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "自审排除与手动回退",
+              "en": "Self-review exclusion and manual fallback"
+            },
+            "description": {
+              "zh-CN": "自动、手动、固定三种模式都继续禁止投稿者审核自己的稿件。固定名单排除投稿者后若无人可审，系统会通知主催手动安排评审。",
+              "en": "Auto, manual, and fixed assignment all continue to prevent submitters from reviewing their own tracks. If a fixed list has no reviewer left after excluding the submitter, the producer is notified to assign reviewers manually."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "流程修复",
+          "en": "Flow fixes"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "直接重开母带阶段会保存备注",
+              "en": "Direct mastering reopen now saves notes"
+            },
+            "description": {
+              "zh-CN": "主催直接把已完成曲目重开到母带相关阶段时，弹窗里填写的母带备注现在会同步写回曲目，母带师进入页面即可看到。",
+              "en": "When a producer directly reopens a completed track into a mastering-related stage, the mastering notes entered in the dialog are now saved back to the track."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "重开同行评审不再重复显示评审人",
+              "en": "Reopened peer review no longer duplicates reviewers"
+            },
+            "description": {
+              "zh-CN": "已完成曲目重开到同行评审时，会先清理上一轮的已提交评审任务，再按当前评审模式重新生成待提交列表，避免「评审协作」中出现同一评审人的待提交和已提交重复行。",
+              "en": "When a completed track is reopened into peer review, old submitted review tasks are cleared before the current assignment mode rebuilds the pending list, preventing duplicate pending/submitted rows for the same reviewer."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "母带确认入口不再重复",
+              "en": "Mastering confirmation is no longer duplicated"
+            },
+            "description": {
+              "zh-CN": "母带页保留底部操作栏的确认交付入口，移除了卡片中重复出现的「确认上传无误」按钮。",
+              "en": "The mastering page keeps the confirmation action in the bottom action bar and removes the duplicate inline confirm-upload button."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "请求和实时连接更稳",
+              "en": "Requests and live connections are steadier"
+            },
+            "description": {
+              "zh-CN": "接口重试会重新读取当前 token；旧 token 的 401 不会清掉新登录态。曲目页在路由或登录状态变化时会关闭旧 WebSocket，并忽略旧页面请求的过期结果。",
+              "en": "API retries now re-read the current token, and a 401 from an old token no longer clears a newer login. Track pages close stale WebSockets on route or auth changes and ignore outdated page-load results."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.5",
     "date": "2026-04-20",
     "headline": {

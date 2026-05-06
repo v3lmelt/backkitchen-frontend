@@ -62,6 +62,48 @@ describe('api client', () => {
     expect(localStorage.getItem('backkitchen_user')).toBeNull()
   })
 
+  it('does not clear a newer login when an old-token request returns 401', async () => {
+    localStorage.setItem('backkitchen_token', 'old-token')
+    localStorage.setItem('backkitchen_user', '{"id":1}')
+    fetchMock.mockImplementationOnce(async () => {
+      localStorage.setItem('backkitchen_token', 'new-token')
+      localStorage.setItem('backkitchen_user', '{"id":2}')
+      return {
+        ok: false,
+        status: 401,
+        json: async () => ({ detail: 'expired' }),
+      }
+    })
+
+    await expect(trackApi.archive(1)).rejects.toThrow('expired')
+    expect(localStorage.getItem('backkitchen_token')).toBe('new-token')
+    expect(localStorage.getItem('backkitchen_user')).toBe('{"id":2}')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-reads the current token before retrying idempotent requests', async () => {
+    localStorage.setItem('backkitchen_token', 'old-token')
+    fetchMock
+      .mockImplementationOnce(async () => {
+        localStorage.setItem('backkitchen_token', 'new-token')
+        return {
+          ok: false,
+          status: 500,
+          json: async () => ({ detail: 'try again' }),
+        }
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      })
+
+    await trackApi.list()
+
+    expect((fetchMock.mock.calls[0][1].headers as Record<string, string>).Authorization).toBe('Bearer old-token')
+    expect((fetchMock.mock.calls[1][1].headers as Record<string, string>).Authorization).toBe('Bearer new-token')
+  })
+
   it('formats array validation errors into a single message', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
