@@ -2,13 +2,14 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { checklistApi, issueApi, trackApi, r2Api, uploadToR2, API_ORIGIN } from '@/api'
+import { albumApi, checklistApi, issueApi, trackApi, r2Api, uploadToR2, API_ORIGIN } from '@/api'
 import type {
   ChecklistItem,
   ChecklistDraftItem,
   ChecklistDraftPrefillMeta,
   ChecklistTemplateItem,
   Issue,
+  AlbumMember,
   StageAssignment,
   Track,
   TrackSourceVersion,
@@ -32,7 +33,7 @@ import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
 import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
-import { ChevronLeft, Upload, AlertCircle, CheckCircle2 } from 'lucide-vue-next'
+import { ChevronLeft, Upload, AlertCircle, CheckCircle2, UserRoundCog } from 'lucide-vue-next'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useDiscussions } from '@/composables/useDiscussions'
 import { useIssuePreviewPlayback, type PreviewAction } from '@/composables/useIssuePreviewPlayback'
@@ -204,6 +205,38 @@ const currentUserCanFinalizeReview = computed(() =>
   && reviewQuorumReached.value,
 )
 const currentUserCanSubmitReview = computed(() => currentUserAssignment.value?.status === 'pending')
+const reviewerAssignmentModalOpen = ref(false)
+const reviewerAssignmentMembers = ref<AlbumMember[]>([])
+const reviewerAssignmentSelectedUserIds = ref<number[]>([])
+const reviewerAssignmentLoadingMembers = ref(false)
+const reviewerAssignmentSaving = ref(false)
+const isProducer = computed(() => {
+  const userId = appStore.currentUser?.id
+  return Boolean(userId && track.value?.producer_id === userId)
+})
+const canManageReviewAssignments = computed(() =>
+  isProducer.value && currentStep.value?.type === 'review',
+)
+const isAutomaticReviewerAssignment = computed(() => {
+  const step = currentStep.value
+  return step?.assignment_mode === 'auto' || step?.assignment_mode === 'fixed' || step?.assignee_user_id != null
+})
+const reviewerAssignmentLimit = computed(() => Math.max(1, currentStep.value?.required_reviewer_count ?? 1))
+const canSelectMoreReviewerAssignments = computed(() => reviewerAssignmentSelectedUserIds.value.length < reviewerAssignmentLimit.value)
+const reviewerAssignmentButtonLabel = computed(() =>
+  currentStepAssignments.value.length > 0
+    ? t('workflowStep.reassignReviewer')
+    : t('workflowStep.assignReviewer'),
+)
+const reviewerAssignmentSelectionSummary = computed(() => t('workflowStep.reviewerAssignmentSelectionSummary', {
+  selected: reviewerAssignmentSelectedUserIds.value.length,
+  limit: reviewerAssignmentLimit.value,
+}))
+const reviewerAssignmentConfirmDisabled = computed(() =>
+  reviewerAssignmentSaving.value
+  || reviewerAssignmentLoadingMembers.value
+  || reviewerAssignmentSelectedUserIds.value.length < reviewerAssignmentLimit.value,
+)
 
 function inferClassicVariant(step: WorkflowStepDef | null) {
   if (!step) return 'generic'
@@ -664,6 +697,9 @@ watch(trackId, () => {
   workflowConfig.value = null
   checklistItems.value = []
   reviewAssignments.value = []
+  reviewerAssignmentModalOpen.value = false
+  reviewerAssignmentMembers.value = []
+  reviewerAssignmentSelectedUserIds.value = []
   void loadPage()
 })
 
@@ -1228,6 +1264,87 @@ async function submitChecklist() {
   }
 }
 
+function prefillReviewerAssignmentSelection() {
+  reviewerAssignmentSelectedUserIds.value = currentStepAssignments.value
+    .filter(assignment => assignment.status === 'pending')
+    .map(assignment => assignment.user_id)
+    .slice(0, reviewerAssignmentLimit.value)
+}
+
+async function openReviewerAssignment() {
+  if (!track.value || !canManageReviewAssignments.value) return
+  error.value = ''
+  if (isAutomaticReviewerAssignment.value) {
+    await submitReviewerAssignment()
+    return
+  }
+
+  prefillReviewerAssignmentSelection()
+  reviewerAssignmentModalOpen.value = true
+  reviewerAssignmentLoadingMembers.value = true
+  try {
+    const album = await albumApi.get(track.value.album_id)
+    if (!track.value) return
+    reviewerAssignmentMembers.value = album.members.filter(member => member.user_id !== track.value!.submitter_id)
+  } catch (err: any) {
+    error.value = err.message || t('common.requestFailed')
+  } finally {
+    reviewerAssignmentLoadingMembers.value = false
+  }
+}
+
+function closeReviewerAssignmentModal() {
+  if (reviewerAssignmentSaving.value) return
+  reviewerAssignmentModalOpen.value = false
+}
+
+function toggleReviewerAssignmentMember(userId: number) {
+  const exists = reviewerAssignmentSelectedUserIds.value.includes(userId)
+  if (exists) {
+    reviewerAssignmentSelectedUserIds.value = reviewerAssignmentSelectedUserIds.value.filter(id => id !== userId)
+    return
+  }
+  if (!canSelectMoreReviewerAssignments.value) return
+  reviewerAssignmentSelectedUserIds.value = [...reviewerAssignmentSelectedUserIds.value, userId]
+}
+
+function isReviewerAssignmentMemberDisabled(userId: number): boolean {
+  if (reviewerAssignmentSelectedUserIds.value.includes(userId)) return false
+  return !canSelectMoreReviewerAssignments.value
+}
+
+async function submitReviewerAssignment() {
+  if (!track.value || !canManageReviewAssignments.value) return
+  const selectedUserIds = [...reviewerAssignmentSelectedUserIds.value]
+  if (!isAutomaticReviewerAssignment.value && selectedUserIds.length < reviewerAssignmentLimit.value) return
+
+  reviewerAssignmentSaving.value = true
+  error.value = ''
+  try {
+    if (isAutomaticReviewerAssignment.value) {
+      const updated = await trackApi.reassignReviewer(track.value.id)
+      if (updated.peer_reviewer_id == null) {
+        toastError(t('workflowStep.reviewerAssignmentNoPool'))
+      } else {
+        toastSuccess(t('workflowStep.reviewerAssignmentDone'))
+      }
+    } else if (currentStepAssignments.value.length === 0) {
+      await trackApi.assignReviewer(track.value.id, selectedUserIds)
+      toastSuccess(t('workflowStep.reviewerAssignmentDone'))
+    } else {
+      await trackApi.reassignReviewer(track.value.id, selectedUserIds)
+      toastSuccess(t('workflowStep.reviewerAssignmentDone'))
+    }
+    reviewerAssignmentModalOpen.value = false
+    reviewerAssignmentSelectedUserIds.value = []
+    await loadPage()
+  } catch (err: any) {
+    error.value = err.message || t('common.requestFailed')
+  } finally {
+    reviewerAssignmentSaving.value = false
+  }
+}
+
 function actionTypeForTransition(decision: string): WorkflowAction['type'] {
   if (decision === 'reject_final') return 'reject'
   if (decision.includes('reject') || decision.includes('revision') || decision === 'return') return 'return'
@@ -1502,9 +1619,22 @@ function handleIssueLeave() {
               </template>
             </p>
           </div>
-          <div class="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-mono text-muted-foreground">
-            <span class="text-foreground">{{ completedReviewCount }}/{{ requiredReviewCount }}</span>
-            <span>{{ t('workflowStep.reviewProgress') }}</span>
+          <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+            <button
+              v-if="canManageReviewAssignments"
+              type="button"
+              class="h-9 inline-flex items-center gap-2 px-3 text-xs disabled:opacity-50"
+              :class="currentStepAssignments.length > 0 ? 'btn-secondary' : 'btn-primary'"
+              :disabled="reviewerAssignmentSaving"
+              @click="openReviewerAssignment"
+            >
+              <UserRoundCog class="w-3.5 h-3.5" :stroke-width="2" />
+              {{ reviewerAssignmentSaving ? t('workflowStep.reviewerAssignmentWorking') : reviewerAssignmentButtonLabel }}
+            </button>
+            <div class="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-mono text-muted-foreground">
+              <span class="text-foreground">{{ completedReviewCount }}/{{ requiredReviewCount }}</span>
+              <span>{{ t('workflowStep.reviewProgress') }}</span>
+            </div>
           </div>
         </div>
 
@@ -2889,6 +3019,75 @@ function handleIssueLeave() {
       <WorkflowActionBar v-if="deliveryActions.length" :actions="deliveryActions" :hint="t('common.actions')" />
     </template>
   </div>
+
+  <Teleport to="body">
+    <div
+      v-if="reviewerAssignmentModalOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      @click.self="closeReviewerAssignmentModal"
+    >
+      <div class="absolute inset-0 bg-background/80" />
+      <div class="relative bg-card border border-border rounded-none p-5 w-full max-w-md space-y-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
+        <div class="space-y-1">
+          <h4 class="text-sm font-mono font-semibold text-foreground">
+            {{ currentStepAssignments.length > 0 ? t('workflowStep.reassignReviewerTitle') : t('workflowStep.assignReviewerTitle') }}
+          </h4>
+          <p class="text-xs text-muted-foreground">
+            {{ t('workflowStep.reviewerAssignmentManual') }}
+          </p>
+          <p class="text-xs font-mono text-muted-foreground">
+            {{ reviewerAssignmentSelectionSummary }}
+          </p>
+        </div>
+
+        <div v-if="reviewerAssignmentLoadingMembers" class="border border-border bg-background px-3 py-4 text-sm text-muted-foreground">
+          {{ t('common.loading') }}
+        </div>
+        <div v-else-if="reviewerAssignmentMembers.length === 0" class="border border-border bg-background px-3 py-4 text-sm text-muted-foreground">
+          {{ t('workflowStep.reviewerAssignmentNoMembers') }}
+        </div>
+        <div v-else class="space-y-1 max-h-56 overflow-y-auto">
+          <label
+            v-for="member in reviewerAssignmentMembers"
+            :key="member.user_id"
+            class="flex items-center gap-2 border border-border bg-background px-3 py-2 text-sm transition-colors"
+            :class="[
+              reviewerAssignmentSelectedUserIds.includes(member.user_id) ? 'border-primary' : '',
+              isReviewerAssignmentMemberDisabled(member.user_id) || reviewerAssignmentSaving ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-primary/60',
+            ]"
+          >
+            <input
+              type="checkbox"
+              class="checkbox"
+              :checked="reviewerAssignmentSelectedUserIds.includes(member.user_id)"
+              :disabled="isReviewerAssignmentMemberDisabled(member.user_id) || reviewerAssignmentSaving"
+              @change="toggleReviewerAssignmentMember(member.user_id)"
+            />
+            <span class="min-w-0 flex-1 truncate text-foreground">{{ member.user.display_name }}</span>
+          </label>
+        </div>
+
+        <div class="flex gap-2 pt-1">
+          <button
+            type="button"
+            class="flex-1 btn-primary h-9 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="reviewerAssignmentConfirmDisabled"
+            @click="submitReviewerAssignment"
+          >
+            {{ reviewerAssignmentSaving ? t('workflowStep.reviewerAssignmentWorking') : t('common.confirm') }}
+          </button>
+          <button
+            type="button"
+            class="flex-1 btn-secondary h-9 text-sm"
+            :disabled="reviewerAssignmentSaving"
+            @click="closeReviewerAssignmentModal"
+          >
+            {{ t('common.cancel') }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <IssueDetailPanel
     :issue="selectedIssue"

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 import { mountWithPlugins } from '@/tests/utils'
+import { useToast } from '@/composables/useToast'
 
 const mocks = vi.hoisted(() => ({
   createMock: vi.fn(),
@@ -11,10 +13,27 @@ vi.mock('@/api', () => ({
 
 import IssueCreatePanel from './IssueCreatePanel.vue'
 
+function clipboardFileItem(file: File, type = file.type): DataTransferItem {
+  return {
+    kind: 'file',
+    type,
+    getAsFile: () => file,
+  } as DataTransferItem
+}
+
+function pasteEventWith(items: DataTransferItem[]): ClipboardEvent {
+  const event = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent
+  Object.defineProperty(event, 'clipboardData', {
+    value: { items },
+  })
+  return event
+}
+
 describe('IssueCreatePanel', () => {
   beforeEach(() => {
     mocks.createMock.mockReset()
     localStorage.clear()
+    useToast().toasts.value = []
     mocks.createMock.mockResolvedValue({
       id: 99,
       phase: 'peer',
@@ -71,6 +90,67 @@ describe('IssueCreatePanel', () => {
       markers: [{ marker_type: 'point', time_start: 1.5, time_end: null }],
     })
     expect(typeof onProgress).toBe('function')
+  })
+
+  it('adds pasted clipboard images to the issue create payload', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 7, phase: 'mastering' },
+    })
+
+    const vm = wrapper.vm as any
+    vm.handleClick(1.5)
+    await wrapper.vm.$nextTick()
+
+    await wrapper.find('input').setValue('Clicks at 1:30')
+    const textarea = wrapper.find('textarea')
+    await textarea.setValue('Audible clicking artifacts')
+
+    const image = new File(['png'], 'image.png', { type: 'image/png' })
+    const pasteEvent = pasteEventWith([clipboardFileItem(image)])
+    textarea.element.dispatchEvent(pasteEvent)
+    await flushPromises()
+
+    expect(pasteEvent.defaultPrevented).toBe(true)
+
+    const submitBtn = wrapper.findAll('button').find(b => b.classes().includes('btn-primary') && b.classes().includes('text-sm'))!
+    await submitBtn.trigger('click')
+    await flushPromises()
+
+    expect(mocks.createMock).toHaveBeenCalledTimes(1)
+    const [, payload] = mocks.createMock.mock.calls[0]
+    expect(payload.images).toHaveLength(1)
+    expect(payload.images[0].name).toMatch(/^pasted-image-\d{8}-\d{3}\.png$/)
+    expect(payload.images[0].type).toBe('image/png')
+  })
+
+  it('limits pasted issue images to the existing maximum', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 7, phase: 'mastering' },
+    })
+
+    const vm = wrapper.vm as any
+    vm.handleClick(1.5)
+    await wrapper.vm.$nextTick()
+
+    await wrapper.find('input').setValue('Clicks at 1:30')
+    const textarea = wrapper.find('textarea')
+    await textarea.setValue('Audible clicking artifacts')
+
+    const files = [1, 2, 3, 4].map(index => new File([`png-${index}`], `image-${index}.png`, { type: 'image/png' }))
+    const pasteEvent = pasteEventWith(files.map(file => clipboardFileItem(file)))
+    textarea.element.dispatchEvent(pasteEvent)
+    await flushPromises()
+
+    expect(useToast().toasts.value.at(-1)?.message).toBe('At most 3 images per issue')
+
+    const submitBtn = wrapper.findAll('button').find(b => b.classes().includes('btn-primary') && b.classes().includes('text-sm'))!
+    await submitBtn.trigger('click')
+    await flushPromises()
+
+    expect(mocks.createMock).toHaveBeenCalledTimes(1)
+    const [, payload] = mocks.createMock.mock.calls[0]
+    expect(payload.images).toHaveLength(3)
+    expect(payload.images.map((file: File) => file.name)).toEqual(['image-1.png', 'image-2.png', 'image-3.png'])
   })
 
   it('defaults multi-review issues to internal visibility and submits it explicitly', async () => {
