@@ -7,6 +7,7 @@ import type { Issue } from '@/types'
 import { useToast } from '@/composables/useToast'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
+import { extractClipboardImageFiles } from '@/utils/clipboardImages'
 import { formatTimestamp, roundToMilliseconds } from '@/utils/time'
 import { extractMarkerIndexReferences, extractTimeReferences } from '@/utils/timestamps'
 
@@ -122,6 +123,12 @@ const markerSummary = computed(() => markers.value.map((marker, index) => ({
   ...marker,
   index: index + 1,
 })))
+
+const imageButtonTitle = computed(() => (
+  selectedImages.value.length >= MAX_IMAGES
+    ? t('issue.imageMaxReached', { max: MAX_IMAGES })
+    : t('issue.imagePasteHint')
+))
 
 const descriptionTimeReferences = computed(() => extractTimeReferences(description.value))
 const descriptionMarkerReferences = computed(() => extractMarkerIndexReferences(description.value).map((reference) => ({
@@ -345,9 +352,30 @@ function onImageSelect(event: Event) {
       toastError(t('upload.fileTooLarge', { max: '10 MB' }))
       continue
     }
-    selectedImages.value.push(file)
+    addImageFile(file)
   }
   input.value = ''
+}
+
+function addImageFile(file: File) {
+  selectedImages.value.push(file)
+}
+
+function handleImagePaste(event: ClipboardEvent) {
+  if (submittingIssue.value) return
+
+  const result = extractClipboardImageFiles(event, {
+    maxSizeBytes: MAX_IMAGE_SIZE,
+    maxFiles: MAX_IMAGES,
+    currentFileCount: selectedImages.value.length,
+  })
+  if (!result.hasImageItems) return
+
+  event.preventDefault()
+  for (const file of result.files) addImageFile(file)
+  if (result.rejectedUnsupported > 0) toastError(t('upload.unsupportedImageType'))
+  if (result.rejectedTooLarge > 0) toastError(t('upload.fileTooLarge', { max: '10 MB' }))
+  if (result.rejectedLimit > 0) toastError(t('issue.imageMaxReached', { max: MAX_IMAGES }))
 }
 
 function removeImage(index: number) {
@@ -587,7 +615,7 @@ defineExpose({
       </button>
     </div>
 
-    <div v-if="showForm" class="card space-y-3 border-primary/50">
+    <div v-if="showForm" class="card space-y-3 border-primary/50" @paste="handleImagePaste">
       <!-- Mode tabs -->
       <div class="flex rounded-full border border-border overflow-hidden">
         <button
@@ -766,7 +794,8 @@ defineExpose({
             type="button"
             @click="!submittingIssue && selectedImages.length < MAX_IMAGES && imageInputRef?.click()"
             :disabled="submittingIssue || selectedImages.length >= MAX_IMAGES"
-            :title="selectedImages.length >= MAX_IMAGES ? t('issue.imageMaxReached', { max: MAX_IMAGES }) : undefined"
+            :title="imageButtonTitle"
+            :aria-label="imageButtonTitle"
             class="btn-secondary inline-flex items-center gap-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ImageIcon class="w-3.5 h-3.5" :stroke-width="2" />

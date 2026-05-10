@@ -5,6 +5,7 @@ import { useToast } from '@/composables/useToast'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
 import type { Issue } from '@/types'
 import type { TimestampTarget } from '@/utils/timestamps'
+import { extractClipboardImageFiles } from '@/utils/clipboardImages'
 import { Music, ImageIcon } from 'lucide-vue-next'
 
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024  // 10 MB
@@ -72,6 +73,11 @@ const hasAttachments = computed(
   () => selectedImages.value.length > 0 || selectedAudios.value.length > 0,
 )
 
+function addImageFile(file: File) {
+  selectedImages.value.push(file)
+  imagePreviewUrls.value.push(URL.createObjectURL(file))
+}
+
 function onFileSelect(event: Event) {
   if (props.submitting) return
   const input = event.target as HTMLInputElement
@@ -81,10 +87,21 @@ function onFileSelect(event: Event) {
       toastError(t('upload.fileTooLarge', { max: '10 MB' }))
       continue
     }
-    selectedImages.value.push(file)
-    imagePreviewUrls.value.push(URL.createObjectURL(file))
+    addImageFile(file)
   }
   input.value = ''
+}
+
+function handlePaste(event: ClipboardEvent) {
+  if (props.submitting) return
+
+  const result = extractClipboardImageFiles(event, { maxSizeBytes: MAX_IMAGE_SIZE })
+  if (!result.hasImageItems) return
+
+  event.preventDefault()
+  for (const file of result.files) addImageFile(file)
+  if (result.rejectedUnsupported > 0) toastError(t('upload.unsupportedImageType'))
+  if (result.rejectedTooLarge > 0) toastError(t('upload.fileTooLarge', { max: '10 MB' }))
 }
 
 function removeImage(index: number) {
@@ -150,6 +167,7 @@ defineExpose({ reset })
         :rows="rows"
         @keydown.meta.enter="handleSubmit"
         @keydown.ctrl.enter="handleSubmit"
+        @paste="handlePaste"
         @input="(e) => cursorPos = (e.target as HTMLTextAreaElement).selectionStart"
         @click="(e) => cursorPos = (e.target as HTMLTextAreaElement).selectionStart"
         @keyup="(e) => cursorPos = (e.target as HTMLTextAreaElement).selectionStart"
@@ -198,6 +216,8 @@ defineExpose({ reset })
       <button
         @click="!submitting && fileInputRef?.click()"
         :disabled="submitting"
+        :title="t('issueDetail.imagePasteHint')"
+        :aria-label="t('issueDetail.imagePasteHint')"
         class="btn-secondary text-xs inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <ImageIcon class="w-3.5 h-3.5" :stroke-width="2" />

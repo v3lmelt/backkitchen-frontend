@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   },
   trackGetMock: vi.fn(),
   listAssignmentsMock: vi.fn(),
+  albumGetMock: vi.fn(),
+  assignReviewerMock: vi.fn(),
+  reassignReviewerMock: vi.fn(),
   issueUpdateMock: vi.fn(),
   workflowTransitionMock: vi.fn(),
   approveFinalReviewMock: vi.fn(),
@@ -50,9 +53,14 @@ vi.mock('@/api', () => ({
   issueApi: {
     update: mocks.issueUpdateMock,
   },
+  albumApi: {
+    get: mocks.albumGetMock,
+  },
   trackApi: {
     get: mocks.trackGetMock,
     listAssignments: mocks.listAssignmentsMock,
+    assignReviewer: mocks.assignReviewerMock,
+    reassignReviewer: mocks.reassignReviewerMock,
     workflowTransition: mocks.workflowTransitionMock,
     approveFinalReview: mocks.approveFinalReviewMock,
     confirmDelivery: mocks.confirmDeliveryMock,
@@ -203,6 +211,9 @@ describe('WorkflowStepView', () => {
     }
     mocks.trackGetMock.mockReset()
     mocks.listAssignmentsMock.mockReset()
+    mocks.albumGetMock.mockReset()
+    mocks.assignReviewerMock.mockReset()
+    mocks.reassignReviewerMock.mockReset()
     mocks.issueUpdateMock.mockReset()
     mocks.workflowTransitionMock.mockReset()
     mocks.approveFinalReviewMock.mockReset()
@@ -219,6 +230,9 @@ describe('WorkflowStepView', () => {
     mocks.waveformTogglePlayMock.mockReset()
     mocks.workflowTransitionMock.mockResolvedValue({})
     mocks.listAssignmentsMock.mockResolvedValue([])
+    mocks.albumGetMock.mockResolvedValue({ members: [] })
+    mocks.assignReviewerMock.mockResolvedValue([])
+    mocks.reassignReviewerMock.mockResolvedValue({ peer_reviewer_id: 2 })
     mocks.issueUpdateMock.mockImplementation(async (id: number, data: { status?: string }) => ({ id, status: data.status ?? 'open' }))
     mocks.approveFinalReviewMock.mockResolvedValue({})
     mocks.confirmDeliveryMock.mockResolvedValue({})
@@ -616,6 +630,83 @@ describe('WorkflowStepView', () => {
 
     expect(wrapper.text()).not.toContain('Peer Review Checklist')
     expect(mocks.checklistGetDraftMock).not.toHaveBeenCalled()
+  })
+
+  it('lets producers assign reviewers from the peer review step page', async () => {
+    mocks.route = {
+      params: { id: '9', stepId: 'peer_review' },
+      query: {},
+      path: '/tracks/9/step/peer_review',
+      fullPath: '/tracks/9/step/peer_review',
+    }
+    mocks.albumGetMock.mockResolvedValueOnce({
+      members: [
+        { id: 1, user_id: 2, user: { id: 2, display_name: 'Nova' } },
+        { id: 2, user_id: 3, user: { id: 3, display_name: 'Author' } },
+      ],
+    })
+    mocks.trackGetMock.mockResolvedValue({
+      track: {
+        id: 9,
+        title: 'Peer Track',
+        artist: 'Nova',
+        album_id: 5,
+        album_checklist_enabled: false,
+        status: 'peer_review',
+        file_path: '/audio.wav',
+        version: 1,
+        workflow_cycle: 1,
+        producer_id: 1,
+        submitter_id: 3,
+        peer_reviewer_id: null,
+        workflow_step: {
+          id: 'peer_review',
+          label: 'Peer Review',
+          type: 'review',
+          ui_variant: 'peer_review',
+          assignee_role: 'peer_reviewer',
+          assignment_mode: 'manual',
+          required_reviewer_count: 1,
+          order: 1,
+          transitions: { pass: 'producer_gate' },
+        },
+        workflow_transitions: [{ decision: 'pass', label: 'Pass' }],
+      },
+      issues: [],
+      checklist_items: [],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'peer_review', label: 'Peer Review', type: 'review', ui_variant: 'peer_review', assignee_role: 'peer_reviewer', assignment_mode: 'manual', required_reviewer_count: 1, order: 1, transitions: { pass: 'producer_gate' } },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView, {
+      global: { stubs: { Teleport: true, teleport: true } },
+    })
+    await flushPromises()
+
+    const assignButton = wrapper.findAll('button').find(button => button.text().includes('Assign reviewers'))
+    expect(assignButton).toBeTruthy()
+
+    await assignButton!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.albumGetMock).toHaveBeenCalledWith(5)
+    expect(wrapper.text()).toContain('Nova')
+    expect(wrapper.text()).not.toContain('Author')
+
+    await wrapper.find('input[type="checkbox"]').setValue(true)
+    await flushPromises()
+
+    const confirmButton = wrapper.findAll('button').find(button => button.text() === 'Confirm')
+    expect(confirmButton).toBeTruthy()
+
+    await confirmButton!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.assignReviewerMock).toHaveBeenCalledWith(9, [2])
   })
 
   it('supports read-only source compare during peer review', async () => {

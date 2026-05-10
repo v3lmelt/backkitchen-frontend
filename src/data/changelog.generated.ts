@@ -5,6 +5,56 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.10",
+    "date": "2026-05-07",
+    "headline": {
+      "zh-CN": "同行评审页支持快速分配审稿人",
+      "en": "Peer review page now supports quick reviewer assignment"
+    },
+    "summary": {
+      "zh-CN": "主催现在可以在同行评审步骤页直接分配或重新分配审稿人，不必返回曲目详情页处理空置的评审阶段。",
+      "en": "Producers can now assign or reassign reviewers directly from the peer review step page instead of returning to track details when a review stage is unassigned."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "评审分配",
+          "en": "Review assignment"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "主催可在评审协作卡片中分配审稿人",
+              "en": "Producers can assign reviewers from the coordination card"
+            },
+            "description": {
+              "zh-CN": "同行评审页的评审协作卡片新增分配入口：手动模式会打开成员选择弹窗，自动或固定评审池则可一键重新触发分配。",
+              "en": "The review coordination card now includes an assignment control: manual stages open a member picker, while auto and fixed-pool stages can rerun assignment with one click."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "评论附件",
+          "en": "Comment attachments"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "评论和问题表单支持直接粘贴图片",
+              "en": "Comments and issue forms now accept pasted images"
+            },
+            "description": {
+              "zh-CN": "在问题评论、状态说明、讨论消息和新建问题表单中，可直接从剪贴板粘贴 JPEG、PNG、WebP 或 GIF 图片作为附件。",
+              "en": "Issue comments, status notes, discussion messages, and new issue forms now let you paste JPEG, PNG, WebP, or GIF images from the clipboard as attachments."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.9",
     "date": "2026-05-06",
     "headline": {
