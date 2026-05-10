@@ -1,0 +1,32 @@
+{
+  "version": "0.1.11",
+  "date": "2026-05-10",
+  "headline": {
+    "zh-CN": "头像刷新后不再显示为坏图",
+    "en": "Avatars now keep rendering after refresh"
+  },
+  "summary": {
+    "zh-CN": "修复头像上传成功后刷新页面会从前端站点路径加载图片的问题。头像现在会使用与其他上传资源一致的后端资源地址。",
+    "en": "Fixes avatar images loading from the frontend site path after a successful upload. Avatars now use the same backend asset URL handling as other uploaded resources."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "个人资料",
+        "en": "Profile"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "修复头像上传后的刷新显示",
+            "en": "Fixed avatar display after refresh"
+          },
+          "description": {
+            "zh-CN": "个人资料页和侧边栏头像现在会解析到正确的上传资源地址，在前端和后端分开部署时不会再请求错误的 `/uploads` 路径。",
+            "en": "Profile and sidebar avatars now resolve to the correct uploaded asset URL, so split frontend/backend deployments no longer request the wrong `/uploads` path."
+          }
+        }
+      ]
+    }
+  ]
+}

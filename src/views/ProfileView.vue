@@ -3,7 +3,7 @@ import { ref, computed, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Camera, Trash2 } from 'lucide-vue-next'
-import { authApi } from '@/api'
+import { authApi, resolveUploadUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
 import { parseUTC } from '@/utils/time'
@@ -53,7 +53,7 @@ const avatarInputRef = ref<HTMLInputElement | null>(null)
 const avatarUrl = computed(() => {
   const img = appStore.currentUser?.avatar_image
   if (!img) return null
-  return `/uploads/${img}`
+  return resolveUploadUrl(img) || null
 })
 
 function triggerAvatarUpload() {
