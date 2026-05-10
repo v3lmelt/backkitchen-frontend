@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { issueApi, resolveAssetUrl, trackApi } from './index'
+import { issueApi, resolveAssetUrl, resolveUploadUrl, trackApi } from './index'
 
 const fetchMock = vi.fn()
 
@@ -13,6 +13,7 @@ describe('api client', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
   })
 
   it('adds auth and json headers for json requests', async () => {
@@ -126,6 +127,20 @@ describe('api client', () => {
 
   it('resolves relative asset urls to api origin', () => {
     expect(resolveAssetUrl('/uploads/comment_images/abc.png')).toBe('/uploads/comment_images/abc.png')
+  })
+
+  it('normalizes uploaded asset paths without duplicating uploads prefix', () => {
+    expect(resolveUploadUrl('avatars/user.png')).toBe('/uploads/avatars/user.png')
+    expect(resolveUploadUrl('uploads/avatars/user.png')).toBe('/uploads/avatars/user.png')
+    expect(resolveUploadUrl('/uploads/avatars/user.png')).toBe('/uploads/avatars/user.png')
+  })
+
+  it('resolves uploaded asset paths against configured api origin', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.test')
+    vi.resetModules()
+    const { resolveUploadUrl: resolveUploadUrlWithOrigin } = await import('./index')
+
+    expect(resolveUploadUrlWithOrigin('avatars/user.png')).toBe('https://api.example.test/uploads/avatars/user.png')
   })
 
   it('appends token params for protected attachment audio urls', () => {

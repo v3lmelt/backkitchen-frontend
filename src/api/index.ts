@@ -67,6 +67,16 @@ export function resolveAssetUrl(url: string | null | undefined): string {
   return isProtectedAssetUrl(resolved) ? withAssetToken(resolved) : resolved
 }
 
+export function resolveUploadUrl(path: string | null | undefined): string {
+  if (!path) return ''
+  if (/^https?:\/\//i.test(path)) return resolveAssetUrl(path)
+
+  if (path.startsWith('/uploads/')) return resolveAssetUrl(path)
+  if (path.startsWith('uploads/')) return resolveAssetUrl(`/${path}`)
+
+  return resolveAssetUrl(`/uploads/${path.replace(/^\/+/, '')}`)
+}
+
 function parseErrorDetail(detail: unknown): string {
   if (typeof detail === 'string') return detail
   if (Array.isArray(detail)) {

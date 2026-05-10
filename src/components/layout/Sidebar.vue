@@ -3,6 +3,7 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
+import { resolveUploadUrl } from '@/api'
 import { LayoutGrid, Upload, Archive, Smile, Lock, X, Bell, Megaphone } from 'lucide-vue-next'
 import { CHANGELOG_SEEN_EVENT, CHANGELOG_SEEN_KEY, LATEST_CHANGELOG_VERSION } from '@/data/changelog'
 
@@ -65,6 +66,7 @@ const isActive = (path: string) => {
 const collapsed = computed(() => appStore.sidebarCollapsed)
 const isMobileDrawer = computed(() => appStore.mobileSidebarOpen)
 const showLabel = computed(() => isMobileDrawer.value || !collapsed.value)
+const avatarUrl = computed(() => resolveUploadUrl(appStore.currentUser?.avatar_image))
 
 function handleNav(path: string) {
   router.push(path)
@@ -141,8 +143,8 @@ const navItemClass = (path: string) => [
     <div class="border-t border-[rgba(255,255,255,0.1)] p-3">
       <div v-if="appStore.currentUser" class="flex items-center gap-2 overflow-hidden">
         <img
-          v-if="appStore.currentUser.avatar_image"
-          :src="`/uploads/${appStore.currentUser.avatar_image}`"
+          v-if="avatarUrl"
+          :src="avatarUrl"
           alt="avatar"
           class="w-8 h-8 rounded-full object-cover flex-shrink-0"
         />
@@ -216,8 +218,8 @@ const navItemClass = (path: string) => [
       <div class="border-t border-[rgba(255,255,255,0.1)] p-3">
         <div v-if="appStore.currentUser" class="flex items-center gap-2 overflow-hidden">
           <img
-            v-if="appStore.currentUser.avatar_image"
-            :src="`/uploads/${appStore.currentUser.avatar_image}`"
+            v-if="avatarUrl"
+            :src="avatarUrl"
             alt="avatar"
             class="w-8 h-8 rounded-full object-cover flex-shrink-0"
           />
