@@ -1,0 +1,32 @@
+{
+  "version": "0.1.13",
+  "date": "2026-05-11",
+  "headline": {
+    "zh-CN": "修复波形音频偶发加载失败",
+    "en": "Fixes intermittent waveform audio loading failures"
+  },
+  "summary": {
+    "zh-CN": "波形播放器现在会直接使用已缓存的音频数据，不再让 Wavesurfer 重新抓取浏览器内部的 blob 地址，减少偶发的 Failed to fetch 播放失败。",
+    "en": "The waveform player now loads cached audio data directly instead of asking Wavesurfer to fetch browser-internal blob URLs again, reducing intermittent Failed to fetch playback errors."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "音频播放",
+        "en": "Audio playback"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "减少波形播放器的 Failed to fetch 错误",
+            "en": "Reduced Failed to fetch errors in the waveform player"
+          },
+          "description": {
+            "zh-CN": "当前源音频、版本对比和下载音频都会复用同一份缓存数据；播放器会直接读取 Blob 内容，避免对 blob: 地址进行第二次 fetch。",
+            "en": "Current source audio, version comparison, and downloads now reuse the same cached data. The player reads Blob contents directly, avoiding a second fetch of blob: URLs."
+          }
+        }
+      ]
+    }
+  ]
+}

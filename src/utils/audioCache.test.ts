@@ -44,6 +44,7 @@ async function loadAudioCacheModule() {
   const urlModule = await import('./url')
   return {
     loadAudioCached: module.loadAudioCached,
+    loadAudioBlobCached: module.loadAudioBlobCached,
     resolveAudioUrl: vi.mocked(urlModule.resolveAudioUrl),
   }
 }
@@ -100,6 +101,25 @@ describe('audioCache', () => {
     expect(result).toBe('blob:mock-url')
     expect(fetchMock).not.toHaveBeenCalled()
     expect(resolveAudioUrl).not.toHaveBeenCalled()
+    expect(progress).toHaveBeenLastCalledWith(100)
+  })
+
+  it('serves cached blobs directly without creating an object URL', async () => {
+    const { cache } = makeCacheMock([{ url: `${BASE}/api/tracks/1/audio?v=3`, size: 128 }])
+    vi.stubGlobal('caches', { open: vi.fn().mockResolvedValue(cache) })
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL')
+
+    const { loadAudioBlobCached, resolveAudioUrl } = await loadAudioCacheModule()
+    const progress = vi.fn()
+
+    const result = await loadAudioBlobCached(`${BASE}/api/tracks/1/audio?v=3`, progress)
+
+    expect(result).toBeInstanceOf(Blob)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(resolveAudioUrl).not.toHaveBeenCalled()
+    expect(createObjectUrl).not.toHaveBeenCalled()
     expect(progress).toHaveBeenLastCalledWith(100)
   })
 
