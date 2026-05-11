@@ -48,6 +48,7 @@ export interface WorkflowStepDef {
   assignment_mode?: 'manual' | 'auto' | 'fixed' | null
   reviewer_pool?: number[] | null
   required_reviewer_count?: number | null
+  revision_decision_policy?: 'quorum_final' | 'first_revision_request' | null
   // Approval/delivery assignee override
   assignee_user_id?: number | null
   // Delivery-specific

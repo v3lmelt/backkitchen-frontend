@@ -141,4 +141,24 @@ describe('reviewAssignments', () => {
     expect(canUserChangeIssueStatus(40, track, issue, assignments)).toBe(true)
     expect(canUserSubmitIssueStatus(10, track, issue)).toBe(true)
   })
+
+  it('keeps revision-request-cancelled reviewers on internal issue status permissions', () => {
+    const track = makeTrack({ status: 'peer_revision', peer_reviewer_id: null })
+    const issue = makeIssue({
+      phase: 'peer',
+      author_id: 40,
+      status: 'pending_discussion',
+      source_version_id: 5,
+      master_delivery_id: null,
+    })
+    const assignments: StageAssignment[] = [
+      makeAssignment({
+        user_id: 41,
+        status: 'cancelled',
+        cancellation_reason: 'revision_requested',
+      }),
+    ]
+
+    expect(canUserChangeIssueStatus(41, track, issue, assignments)).toBe(true)
+  })
 })

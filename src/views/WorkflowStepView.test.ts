@@ -632,6 +632,180 @@ describe('WorkflowStepView', () => {
     expect(mocks.checklistGetDraftMock).not.toHaveBeenCalled()
   })
 
+  it('shows separate revision suggestion and direct re-upload actions in early revision mode', async () => {
+    mocks.listAssignmentsMock.mockResolvedValueOnce([
+      {
+        id: 1,
+        track_id: 9,
+        stage_id: 'peer_review',
+        user_id: 1,
+        status: 'pending',
+        decision: null,
+        cancellation_reason: null,
+        assigned_at: '2024-01-01T00:00:00Z',
+        completed_at: null,
+      },
+      {
+        id: 2,
+        track_id: 9,
+        stage_id: 'peer_review',
+        user_id: 2,
+        status: 'pending',
+        decision: null,
+        cancellation_reason: null,
+        assigned_at: '2024-01-01T00:00:00Z',
+        completed_at: null,
+      },
+    ])
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Early Revision Track',
+        artist: 'Nova',
+        album_id: 3,
+        album_checklist_enabled: false,
+        status: 'peer_review',
+        file_path: '/audio.wav',
+        version: 1,
+        workflow_cycle: 1,
+        workflow_step: {
+          id: 'peer_review',
+          label: 'Peer Review',
+          type: 'review',
+          ui_variant: 'peer_review',
+          assignee_role: 'peer_reviewer',
+          order: 1,
+          transitions: { pass: 'producer_gate', needs_revision: 'peer_revision' },
+          required_reviewer_count: 2,
+          revision_step: 'peer_revision',
+          revision_decision_policy: 'first_revision_request',
+        },
+        workflow_transitions: [
+          { decision: 'pass', label: 'Pass' },
+          { decision: 'needs_revision', label: 'Needs Revision' },
+          { decision: 'request_revision_now', label: 'Request Revision Now' },
+        ],
+      },
+      issues: [],
+      checklist_items: [],
+      workflow_config: {
+        version: 2,
+        steps: [
+          {
+            id: 'peer_review',
+            label: 'Peer Review',
+            type: 'review',
+            ui_variant: 'peer_review',
+            assignee_role: 'peer_reviewer',
+            order: 1,
+            transitions: { pass: 'producer_gate', needs_revision: 'peer_revision' },
+            required_reviewer_count: 2,
+            revision_step: 'peer_revision',
+            revision_decision_policy: 'first_revision_request',
+          },
+          { id: 'peer_revision', label: 'Peer Revision', type: 'revision', assignee_role: 'submitter', order: 2, return_to: 'peer_review', transitions: {} },
+          { id: 'producer_gate', label: 'Producer Gate', type: 'approval', assignee_role: 'producer', order: 3, transitions: {} },
+        ],
+      },
+    })
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValueOnce(true)
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    expect(wrapper.find('.workflow-action-bar').text()).toContain('Submit Revision Recommendation')
+    expect(wrapper.find('.workflow-action-bar').text()).toContain('Request Re-upload')
+
+    const directButton = wrapper.findAll('button').find(button => button.text().includes('Request Re-upload'))
+    expect(directButton).toBeTruthy()
+    await directButton!.trigger('click')
+    await flushPromises()
+
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(mocks.workflowTransitionMock).toHaveBeenCalledWith(9, 'request_revision_now')
+  })
+
+  it('lets a completed revision recommendation trigger direct re-upload', async () => {
+    mocks.listAssignmentsMock.mockResolvedValueOnce([
+      {
+        id: 1,
+        track_id: 9,
+        stage_id: 'peer_review',
+        user_id: 1,
+        status: 'completed',
+        decision: 'needs_revision',
+        cancellation_reason: null,
+        assigned_at: '2024-01-01T00:00:00Z',
+        completed_at: '2024-01-01T00:05:00Z',
+      },
+      {
+        id: 2,
+        track_id: 9,
+        stage_id: 'peer_review',
+        user_id: 2,
+        status: 'pending',
+        decision: null,
+        cancellation_reason: null,
+        assigned_at: '2024-01-01T00:00:00Z',
+        completed_at: null,
+      },
+    ])
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Submitted Recommendation Track',
+        artist: 'Nova',
+        album_id: 3,
+        album_checklist_enabled: false,
+        status: 'peer_review',
+        file_path: '/audio.wav',
+        version: 1,
+        workflow_cycle: 1,
+        workflow_step: {
+          id: 'peer_review',
+          label: 'Peer Review',
+          type: 'review',
+          ui_variant: 'peer_review',
+          assignee_role: 'peer_reviewer',
+          order: 1,
+          transitions: { pass: 'producer_gate', needs_revision: 'peer_revision' },
+          required_reviewer_count: 2,
+          revision_step: 'peer_revision',
+          revision_decision_policy: 'first_revision_request',
+        },
+        workflow_transitions: [
+          { decision: 'request_revision_now', label: 'Request Revision Now' },
+        ],
+      },
+      issues: [],
+      checklist_items: [],
+      workflow_config: {
+        version: 2,
+        steps: [
+          {
+            id: 'peer_review',
+            label: 'Peer Review',
+            type: 'review',
+            ui_variant: 'peer_review',
+            assignee_role: 'peer_reviewer',
+            order: 1,
+            transitions: { pass: 'producer_gate', needs_revision: 'peer_revision' },
+            required_reviewer_count: 2,
+            revision_step: 'peer_revision',
+            revision_decision_policy: 'first_revision_request',
+          },
+          { id: 'peer_revision', label: 'Peer Revision', type: 'revision', assignee_role: 'submitter', order: 2, return_to: 'peer_review', transitions: {} },
+          { id: 'producer_gate', label: 'Producer Gate', type: 'approval', assignee_role: 'producer', order: 3, transitions: {} },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    expect(wrapper.find('.workflow-action-bar').text()).toContain('Request Re-upload from Submitted Recommendation')
+  })
+
   it('lets producers assign reviewers from the peer review step page', async () => {
     mocks.route = {
       params: { id: '9', stepId: 'peer_review' },
