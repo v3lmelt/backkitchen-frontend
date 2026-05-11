@@ -1,0 +1,32 @@
+{
+  "version": "0.1.16",
+  "date": "2026-05-11",
+  "headline": {
+    "zh-CN": "新增同行评审快速返修模式",
+    "en": "Adds an expedited peer-review revision mode"
+  },
+  "summary": {
+    "zh-CN": "主催现在可以在工作流中开启“任一评审打回即返修”模式。评审人仍可先提交建议打回，也可以在问题明确时直接要求曲师重新上传；内部待讨论项会保留为评审内部讨论。",
+    "en": "Producers can now enable an “any reviewer can request re-upload” mode for peer review. Reviewers may still submit a revision recommendation first, or request a re-upload immediately when the issue is clear; internal discussion items remain internal."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "评审流程",
+        "en": "Review workflow"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "建议打回和直接返修分开处理",
+            "en": "Revision recommendations and direct re-upload are now separate"
+          },
+          "description": {
+            "zh-CN": "开启新模式后，评审人可以先记录“建议打回”，也可以确认后直接让曲目进入修订阶段。未完成的内部待讨论 issue 不会自动结案，仍可由评审组继续处理或发布给曲师。",
+            "en": "When the new mode is enabled, reviewers can record a revision recommendation first or confirm a direct move into revision. Unfinished internal discussion issues are no longer auto-closed and can still be handled by the review group or published to the submitter."
+          }
+        }
+      ]
+    }
+  ]
+}
