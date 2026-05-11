@@ -2,7 +2,7 @@ import { ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import type { Track } from '@/types'
-import { loadAudioCached } from '@/utils/audioCache'
+import { loadAudioBlobCached } from '@/utils/audioCache'
 
 export function useAudioDownload() {
   const { t } = useI18n()
@@ -15,13 +15,11 @@ export function useAudioDownload() {
     downloadProgress.value = 0
     try {
       // Route through the shared audio cache so downloads reuse bytes that
-      // playback has already fetched (and vice versa).  `loadAudioCached`
+      // playback has already fetched (and vice versa).  `loadAudioBlobCached`
       // handles URL resolution, streaming progress, and persistence.
-      const blobUrl = await loadAudioCached(url, (percent) => {
+      const blob = await loadAudioBlobCached(url, (percent) => {
         downloadProgress.value = Math.min(Math.max(percent, 0), 99)
       })
-      const res = await fetch(blobUrl)
-      const blob = await res.blob()
       downloadProgress.value = 100
       triggerDownload(blob, filename)
     } catch {

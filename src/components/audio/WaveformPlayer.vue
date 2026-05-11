@@ -9,7 +9,7 @@ import { resolveAssetUrl } from '@/api'
 import { useTrackPlaybackPreference } from '@/composables/useTrackPlaybackPreference'
 import { useAppStore } from '@/stores/app'
 import { formatTimestamp, formatTimestampShort, roundToMilliseconds } from '@/utils/time'
-import { loadAudioCached } from '@/utils/audioCache'
+import { loadAudioBlobCached } from '@/utils/audioCache'
 
 type InteractionMode = 'seek' | 'annotate'
 type PlaybackScope = 'source' | 'master' | 'local'
@@ -950,8 +950,8 @@ onMounted(async () => {
   loadedAudioUrl = props.audioUrl
   isPrimaryLoading.value = true
   primaryLoadProgress.value = 0
-  loadAudioCached(props.audioUrl, (p) => updatePrimaryLoading(p))
-    .then(blobUrl => ws.load(blobUrl))
+  loadAudioBlobCached(props.audioUrl, (p) => updatePrimaryLoading(p))
+    .then(blob => ws.loadBlob(blob))
     .catch((err) => {
       loadedAudioUrl = ''
       isPrimaryLoading.value = false
@@ -971,8 +971,8 @@ watch(() => props.audioUrl, async (newUrl) => {
   isPrimaryLoading.value = true
   primaryLoadProgress.value = 0
   try {
-    const blobUrl = await loadAudioCached(newUrl, (p) => updatePrimaryLoading(p))
-    await wavesurfer.value.load(blobUrl)
+    const blob = await loadAudioBlobCached(newUrl, (p) => updatePrimaryLoading(p))
+    await wavesurfer.value.loadBlob(blob)
   } catch (err) {
     loadedAudioUrl = ''
     isPrimaryLoading.value = false
@@ -1104,8 +1104,8 @@ watch(compareSourceUrl, async (newCompareUrl) => {
   compareWaveSurfer.value = ws
   applyCompareMode(abMode.value)
 
-  loadAudioCached(newCompareUrl, (p) => updateCompareLoading(p))
-    .then(blobUrl => ws.load(blobUrl))
+  loadAudioBlobCached(newCompareUrl, (p) => updateCompareLoading(p))
+    .then(blob => ws.loadBlob(blob))
     .catch((err) => {
       isCompareLoading.value = false
       isCompareReady.value = false

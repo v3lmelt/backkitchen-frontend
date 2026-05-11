@@ -8,6 +8,7 @@ const enableDragSelectionMock = vi.fn()
 const regionsOnMock = vi.fn()
 const createMediaElementSourceMock = vi.fn()
 const createGainMock = vi.fn()
+const loadAudioBlobCachedMock = vi.hoisted(() => vi.fn())
 
 type FakeGainNode = {
   gain: {
@@ -22,6 +23,7 @@ type HandlerMap = Record<string, (...args: any[]) => void>
 type WaveSurferInstance = {
   handlers: HandlerMap
   load: ReturnType<typeof vi.fn>
+  loadBlob: ReturnType<typeof vi.fn>
   playPause: ReturnType<typeof vi.fn>
   play: ReturnType<typeof vi.fn>
   pause: ReturnType<typeof vi.fn>
@@ -52,12 +54,7 @@ vi.mock('wavesurfer.js/dist/plugins/regions.js', () => ({
 }))
 
 vi.mock('@/utils/audioCache', () => ({
-  loadAudioCached: (url: string) => {
-    const token = localStorage.getItem('backkitchen_token')
-    if (!token) return Promise.resolve(url)
-    const sep = url.includes('?') ? '&' : '?'
-    return Promise.resolve(`${url}${sep}token=${token}`)
-  },
+  loadAudioBlobCached: loadAudioBlobCachedMock,
 }))
 
 vi.mock('wavesurfer.js', () => ({
@@ -68,6 +65,7 @@ vi.mock('wavesurfer.js', () => ({
       const instance: WaveSurferInstance = {
         handlers,
         load: vi.fn(),
+        loadBlob: vi.fn(),
         playPause: vi.fn(),
         play: vi.fn(),
         pause: vi.fn(),
@@ -86,6 +84,7 @@ vi.mock('wavesurfer.js', () => ({
           handlers[event] = handler
         },
         load: instance.load,
+        loadBlob: instance.loadBlob,
         playPause: instance.playPause,
         play: instance.play,
         pause: instance.pause,
@@ -118,6 +117,10 @@ describe('WaveformPlayer', () => {
     regionsOnMock.mockReset()
     createMediaElementSourceMock.mockReset()
     createGainMock.mockReset()
+    loadAudioBlobCachedMock.mockReset()
+    loadAudioBlobCachedMock.mockImplementation(async (url: string) => {
+      return new Blob([url], { type: 'audio/mpeg' })
+    })
     localStorage.clear()
 
     vi.stubGlobal('AudioContext', vi.fn(() => ({
@@ -146,7 +149,7 @@ describe('WaveformPlayer', () => {
     })
   })
 
-  it('loads cached audio URL and enables drag selection', async () => {
+  it('loads cached audio blobs with loadBlob and enables drag selection', async () => {
     localStorage.setItem('backkitchen_token', 'token-1')
     mountWithPlugins(WaveformPlayer, {
       props: {
@@ -159,9 +162,12 @@ describe('WaveformPlayer', () => {
 
     await flushWaveformMount()
 
-    expect(waveSurferInstances[0].load).toHaveBeenCalledWith(
-      '/api/tracks/1/audio?token=token-1',
+    expect(loadAudioBlobCachedMock).toHaveBeenCalledWith(
+      '/api/tracks/1/audio',
+      expect.any(Function),
     )
+    expect(waveSurferInstances[0].loadBlob).toHaveBeenCalledWith(expect.any(Blob))
+    expect(waveSurferInstances[0].load).not.toHaveBeenCalled()
     expect(enableDragSelectionMock).toHaveBeenCalledTimes(1)
   })
 
@@ -218,6 +224,12 @@ describe('WaveformPlayer', () => {
     await flushWaveformMount()
 
     expect(waveSurferInstances).toHaveLength(2)
+    expect(loadAudioBlobCachedMock).toHaveBeenCalledWith(
+      '/api/tracks/1/source-versions/2/audio',
+      expect.any(Function),
+    )
+    expect(waveSurferInstances[1].loadBlob).toHaveBeenCalledWith(expect.any(Blob))
+    expect(waveSurferInstances[1].load).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('Loading B 0%')
 
     waveSurferInstances[0].setVolume.mockClear()

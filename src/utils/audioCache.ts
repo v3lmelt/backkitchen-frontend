@@ -8,8 +8,9 @@ import { resolveAudioUrl } from './url'
  * a stable content identifier.
  *
  * Layer 1 (in-memory Map):
- *   Stores Blob object URLs for instant same-session access when
+ *   Stores Blobs in memory for instant same-session access when
  *   navigating between views (e.g. TrackDetail → PeerReview).
+ *   Object URLs are created lazily for compatibility callers that still need a URL.
  *   Cleared on page refresh.
  *
  * Layer 2 (Cache API — persistent):
@@ -30,7 +31,7 @@ const MAX_PERSISTENT_BYTES = 1.5 * 1024 * 1024 * 1024
 
 interface CacheEntry {
   blob: Blob
-  objectUrl: string
+  objectUrl?: string
   /** Timestamp of last access — used for LRU eviction. */
   lastAccess: number
 }
@@ -38,7 +39,7 @@ interface CacheEntry {
 const _cache = new Map<string, CacheEntry>()
 
 /** In-flight fetch promises — prevents duplicate concurrent fetches for the same key. */
-const _pending = new Map<string, Promise<string>>()
+const _pending = new Map<string, Promise<Blob>>()
 
 /**
  * Strip auth tokens so callers that accidentally pass an authed URL still
@@ -81,7 +82,7 @@ function _evictMemoryIfNeeded() {
     }
     if (oldestKey) {
       const entry = _cache.get(oldestKey)!
-      URL.revokeObjectURL(entry.objectUrl)
+      if (entry.objectUrl) URL.revokeObjectURL(entry.objectUrl)
       _cache.delete(oldestKey)
     }
   }
@@ -136,17 +137,25 @@ async function _persistBlob(cache: Cache, key: string, blob: Blob): Promise<void
   }
 }
 
-function _storeInMemory(key: string, blob: Blob): string {
-  const objectUrl = URL.createObjectURL(blob)
-  _cache.set(key, { blob, objectUrl, lastAccess: Date.now() })
+function _storeInMemory(key: string, blob: Blob): Blob {
+  const previous = _cache.get(key)
+  if (previous?.objectUrl) URL.revokeObjectURL(previous.objectUrl)
+  _cache.set(key, { blob, lastAccess: Date.now() })
   _evictMemoryIfNeeded()
-  return objectUrl
+  return blob
+}
+
+function _objectUrlForEntry(entry: CacheEntry): string {
+  entry.lastAccess = Date.now()
+  if (!entry.objectUrl) {
+    entry.objectUrl = URL.createObjectURL(entry.blob)
+  }
+  return entry.objectUrl
 }
 
 /**
- * Resolve an audio URL to a cached object URL.
+ * Resolve an audio URL to a cached Blob.
  *
- * Returns a blob: URL that WaveSurfer can load directly.
  * On cache hit (memory or persistent) the network is skipped entirely.
  *
  * @param rawUrl  The unresolved audio URL (as passed via the audioUrl prop).
@@ -155,12 +164,18 @@ function _storeInMemory(key: string, blob: Blob): string {
  *                a dev-mode warning) so entries stay stable across sessions.
  * @param onProgress  Optional callback receiving download percentage (0–100).
  */
-export async function loadAudioCached(
+export async function loadAudioBlobCached(
   rawUrl: string,
   onProgress?: (percent: number) => void,
-): Promise<string> {
+): Promise<Blob> {
   // Blob URLs are already local — pass through
-  if (rawUrl.startsWith('blob:')) return rawUrl
+  if (rawUrl.startsWith('blob:')) {
+    const response = await fetch(rawUrl)
+    if (!response.ok) throw new Error(`Audio fetch failed: ${response.status}`)
+    const blob = await response.blob()
+    onProgress?.(100)
+    return blob
+  }
 
   const key = _normalizeKey(rawUrl)
   _warnIfUnversioned(key)
@@ -170,7 +185,7 @@ export async function loadAudioCached(
   if (cached) {
     cached.lastAccess = Date.now()
     onProgress?.(100)
-    return cached.objectUrl
+    return cached.blob
   }
 
   // De-duplicate concurrent fetches for the same URL
@@ -236,4 +251,25 @@ export async function loadAudioCached(
   } finally {
     _pending.delete(key)
   }
+}
+
+/**
+ * Resolve an audio URL to a cached object URL.
+ *
+ * Compatibility wrapper for callers that still require a blob: URL. New audio
+ * playback code should prefer `loadAudioBlobCached` and pass the Blob directly
+ * to WaveSurfer with `loadBlob()`.
+ */
+export async function loadAudioCached(
+  rawUrl: string,
+  onProgress?: (percent: number) => void,
+): Promise<string> {
+  // Blob URLs are already local; pass through.
+  if (rawUrl.startsWith('blob:')) return rawUrl
+
+  const key = _normalizeKey(rawUrl)
+  await loadAudioBlobCached(rawUrl, onProgress)
+  const cached = _cache.get(key)
+  if (!cached) throw new Error('Audio cache entry missing after load.')
+  return _objectUrlForEntry(cached)
 }
