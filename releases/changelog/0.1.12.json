@@ -1,0 +1,32 @@
+{
+  "version": "0.1.12",
+  "date": "2026-05-11",
+  "headline": {
+    "zh-CN": "修复旧评审记录残留问题",
+    "en": "Fixes stale review record cleanup"
+  },
+  "summary": {
+    "zh-CN": "删除曲目后，旧的评审分配、播放偏好和通知引用会被正确清理，避免新曲目复用编号时看到不属于自己的历史评审记录。",
+    "en": "Deleted tracks now clean up old review assignments, playback preferences, and notification links correctly, preventing reused track IDs from showing unrelated historical review records."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "评审流程",
+        "en": "Review workflow"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "旧评审分配不会再挂到新曲目上",
+            "en": "Old review assignments no longer attach to new tracks"
+          },
+          "description": {
+            "zh-CN": "后端现在会启用 SQLite 外键检查，并在删除曲目前清理会阻塞删除或造成误关联的引用；迁移也会清除历史数据库中已失效的评审分配和通知链接。",
+            "en": "The backend now enables SQLite foreign-key checks and clears references that could block deletion or create false links before a track is removed. The migration also cleans invalid historical review assignments and notification links."
+          }
+        }
+      ]
+    }
+  ]
+}
