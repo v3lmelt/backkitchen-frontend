@@ -243,6 +243,90 @@ describe('TrackDetailView', () => {
     expect(wrapper.findAll('button').some(button => button.text() === 'Open Mastering Page')).toBe(false)
   })
 
+  it('dedupes duplicate active reviewer assignments in the summary', async () => {
+    mocks.currentUser = { id: 8 }
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 7,
+        album_id: 5,
+        status: 'peer_review',
+        title: 'Track 7',
+        artist: 'Nova',
+        version: 3,
+        workflow_cycle: 2,
+        file_path: '/audio.wav',
+        submitter_id: 2,
+        producer_id: 8,
+        allowed_actions: ['peer_review'],
+        workflow_step: {
+          id: 'peer_review',
+          label: 'Peer Review',
+          type: 'review',
+          assignee_role: 'peer_reviewer',
+          assignment_mode: 'manual',
+          required_reviewer_count: 2,
+          order: 0,
+          transitions: {},
+        },
+        open_issue_count: 0,
+        submitter: { display_name: 'Nova' },
+        peer_reviewer: { id: 4, display_name: 'Echo' },
+        current_source_version: { id: 301 },
+        current_master_delivery: null,
+      },
+      issues: [],
+      discussions: [],
+      events: [],
+      source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
+    })
+    mocks.listAssignmentsMock.mockResolvedValueOnce([
+      {
+        id: 10,
+        track_id: 7,
+        stage_id: 'peer_review',
+        user_id: 4,
+        status: 'completed',
+        decision: 'pass',
+        assigned_at: '2024-01-03T00:00:00Z',
+        completed_at: '2024-01-03T00:10:00Z',
+        cancellation_reason: null,
+        user: { id: 4, display_name: 'Echo' },
+      },
+      {
+        id: 11,
+        track_id: 7,
+        stage_id: 'peer_review',
+        user_id: 4,
+        status: 'completed',
+        decision: 'pass',
+        assigned_at: '2024-01-04T00:00:00Z',
+        completed_at: '2024-01-04T00:10:00Z',
+        cancellation_reason: null,
+        user: { id: 4, display_name: 'Echo' },
+      },
+      {
+        id: 12,
+        track_id: 7,
+        stage_id: 'peer_review',
+        user_id: 5,
+        status: 'pending',
+        decision: null,
+        assigned_at: '2024-01-04T00:00:00Z',
+        completed_at: null,
+        cancellation_reason: null,
+        user: { id: 5, display_name: 'Mika' },
+      },
+    ])
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('1/2')
+    expect(wrapper.text()).not.toContain('2/2')
+    expect(wrapper.text().match(/Echo/g)).toHaveLength(1)
+    expect(wrapper.text()).toContain('Mika')
+  })
+
   it('shows a mastering history entry after the track is reopened before mastering', async () => {
     mocks.trackGetMock.mockResolvedValueOnce({
       track: {
