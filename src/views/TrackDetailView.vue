@@ -21,6 +21,7 @@ import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useDiscussions } from '@/composables/useDiscussions'
 import { useToast } from '@/composables/useToast'
 import { buildTrackWorkspaceRoute, translateStepLabel, translateWorkflowStatusLabel } from '@/utils/workflow'
+import { activeAssignmentsForStep } from '@/utils/reviewAssignments'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { useTrackStore } from '@/stores/tracks'
 
@@ -341,7 +342,7 @@ const currentIssueList = computed(() => {
 const currentStepAssignments = computed(() => {
   const step = track.value?.workflow_step
   if (!step || step.type !== 'review') return []
-  return reviewAssignments.value.filter(a => a.stage_id === step.id && a.status !== 'cancelled')
+  return activeAssignmentsForStep(reviewAssignments.value, step.id)
 })
 
 const hasMultipleReviewers = computed(() => currentStepAssignments.value.length > 0)

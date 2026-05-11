@@ -1,0 +1,32 @@
+{
+  "version": "0.1.14",
+  "date": "2026-05-11",
+  "headline": {
+    "zh-CN": "修复重复评审分配显示",
+    "en": "Fixes duplicate review assignment display"
+  },
+  "summary": {
+    "zh-CN": "同一评审人在同一评审阶段不会再因为历史分配被重复计数；曲目摘要会按当前有效评审人去重显示，并且后端会阻止新的重复有效分配。",
+    "en": "The same reviewer is no longer counted multiple times within one review stage. Track summaries now display current active reviewers once, and the backend prevents new duplicate active assignments."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "评审流程",
+        "en": "Review workflow"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "评审人列表按当前有效分配去重",
+            "en": "Reviewer lists now dedupe active assignments"
+          },
+          "description": {
+            "zh-CN": "重新进入同行评审或管理员重新分配评审人时，旧的有效分配会被正确关闭；已有重复记录会在迁移中标记为已取代，不会再把同一评审人显示为多个人。",
+            "en": "When a track re-enters peer review or an administrator reassigns reviewers, older active assignments are closed correctly. Existing duplicate records are marked as superseded by the migration so one reviewer no longer appears as multiple reviewers."
+          }
+        }
+      ]
+    }
+  ]
+}
