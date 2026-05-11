@@ -5,17 +5,45 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    "version": "0.1.16",
+    "version": "0.1.15",
     "date": "2026-05-11",
     "headline": {
-      "zh-CN": "新增同行评审快速返修模式",
-      "en": "Adds an expedited peer-review revision mode"
+      "zh-CN": "新增亮色主题与同行评审快速返修模式",
+      "en": "Adds a light theme and expedited peer-review revision mode"
     },
     "summary": {
-      "zh-CN": "主催现在可以在工作流中开启“任一评审打回即返修”模式。评审人仍可先提交建议打回，也可以在问题明确时直接要求曲师重新上传；内部待讨论项会保留为评审内部讨论。",
-      "en": "Producers can now enable an “any reviewer can request re-upload” mode for peer review. Reviewers may still submit a revision recommendation first, or request a re-upload immediately when the issue is clear; internal discussion items remain internal."
+      "zh-CN": "Back Kitchen 现在保留默认暗色外观，同时新增可切换的亮色主题；主催也可以在工作流中开启“任一评审打回即返修”模式，让评审人把建议打回和直接要求重新上传分开处理。",
+      "en": "Back Kitchen now keeps the dark theme as the default while adding a switchable light theme. Producers can also enable an “any reviewer can request re-upload” workflow mode so reviewers can separate revision recommendations from direct re-upload requests."
     },
     "sections": [
+      {
+        "heading": {
+          "zh-CN": "界面主题",
+          "en": "Interface theme"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "可在暗色与亮色之间切换",
+              "en": "Switch between dark and light"
+            },
+            "description": {
+              "zh-CN": "页头和登录相关页面新增主题按钮；亮色主题使用暖白背景、浅灰分层和橙色主操作，便于在明亮环境中预览和审核。",
+              "en": "The header and auth pages now include a theme button. The light theme uses warm off-white backgrounds, soft dividers, and orange primary actions for brighter review environments."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "优化亮色主题状态色和封面占位图",
+              "en": "Refines light-theme badges and cover placeholders"
+            },
+            "description": {
+              "zh-CN": "亮色主题下通知、更新徽标、主按钮和工作流编辑器的阶段高亮改为更柔和的语义色片；专辑进度条改为更明亮但低饱和的图表色。没有上传封面的专辑现在使用随主题变化的浅色唱片占位图。",
+              "en": "In the light theme, notification and update badges, primary buttons, and workflow-editor stage highlights now use softer semantic chips, while album progress bars use brighter low-saturation chart colors. Albums without covers render a theme-aware placeholder instead of the fixed dark record art."
+            }
+          }
+        ]
+      },
       {
         "heading": {
           "zh-CN": "评审流程",
