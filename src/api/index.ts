@@ -852,7 +852,7 @@ export const authApi = {
       body: JSON.stringify({ token, new_password }),
     }),
   me: () => request<User>('/auth/me'),
-  updateProfile: (data: { display_name?: string; email?: string; feishu_contact?: string | null }) =>
+  updateProfile: (data: { display_name?: string; email?: string }) =>
     request<User>('/auth/me', { method: 'PATCH', body: JSON.stringify(data) }),
   changePassword: (data: { current_password: string; new_password: string }) =>
     request<void>('/auth/me/change-password', { method: 'POST', body: JSON.stringify(data) }),

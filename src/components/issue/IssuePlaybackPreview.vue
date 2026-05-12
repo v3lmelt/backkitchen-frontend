@@ -239,13 +239,13 @@ onBeforeUnmount(() => stopScrub())
         <div
           v-if="marker.isRange"
           class="pointer-events-none absolute top-0 bottom-0 transition-colors"
-          :class="activeMarkerIndex === marker.index ? 'bg-primary/45' : 'bg-primary/25'"
+          :class="activeMarkerIndex === marker.index ? 'bg-waveform-marker/40' : 'bg-waveform-marker/22'"
           :style="{ left: `${marker.leftPct}%`, width: `${marker.widthPct}%` }"
         ></div>
         <div
           v-else
           class="pointer-events-none absolute top-0 bottom-0 w-0.5 -translate-x-1/2 transition-colors"
-          :class="activeMarkerIndex === marker.index ? 'bg-primary' : 'bg-primary/80'"
+          :class="activeMarkerIndex === marker.index ? 'bg-waveform-marker' : 'bg-waveform-marker/80'"
           :style="{ left: `${marker.leftPct}%` }"
         ></div>
       </template>
@@ -269,8 +269,8 @@ onBeforeUnmount(() => stopScrub())
         v-for="marker in markerLayouts"
         :key="`${marker.key}-hit`"
         type="button"
-        class="issue-preview-marker-hit absolute top-0 bottom-0 bg-transparent transition-colors hover:bg-primary/10 focus:outline-none focus-visible:bg-primary/15"
-        :class="{ 'ring-1 ring-primary/60': activeMarkerIndex === marker.index }"
+        class="issue-preview-marker-hit absolute top-0 bottom-0 bg-transparent transition-colors hover:bg-waveform-marker/12 focus:outline-none focus-visible:bg-waveform-marker/18"
+        :class="{ 'ring-1 ring-waveform-marker/60': activeMarkerIndex === marker.index }"
         :style="{ left: `${marker.renderLeftPct}%`, width: `${marker.renderWidthPct}%` }"
         :aria-label="t('issueDetail.previewPlayMarker', { label: marker.label })"
         :title="marker.label"
@@ -279,7 +279,7 @@ onBeforeUnmount(() => stopScrub())
       >
         <span
           v-if="markerLayouts.length > 1"
-          class="pointer-events-none absolute top-0.5 left-1 text-[10px] font-mono font-semibold text-primary"
+          class="pointer-events-none absolute top-0.5 left-1 text-[10px] font-mono font-semibold text-waveform-marker"
         >{{ sortedMarkerIndices.indexOf(marker.index) + 1 }}</span>
       </button>
     </div>

@@ -119,7 +119,7 @@ const hasInlineAction = computed(() => !!(props.actions?.length && currentIndex.
         <div
           :class="[
             'w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium shrink-0',
-            i <= currentIndex ? 'bg-primary text-black' : 'bg-border text-muted-foreground'
+            i <= currentIndex ? 'bg-button-primary text-button-primary-foreground' : 'bg-border text-muted-foreground'
           ]"
         >
           <Check v-if="i < currentIndex" class="w-3 h-3" :stroke-width="3" />
@@ -148,8 +148,8 @@ const hasInlineAction = computed(() => !!(props.actions?.length && currentIndex.
             :key="action.label"
             @click="action.handler()"
             class="workflow-bridge-btn group flex items-center gap-1.5 rounded-full font-mono font-semibold text-xs px-3.5 h-7 whitespace-nowrap transition-all shrink-0 mx-1
-                   bg-primary hover:bg-primary-hover text-black border-2 border-primary-hover
-                   shadow-[0_0_14px_rgba(255,132,0,0.25)] hover:shadow-[0_0_22px_rgba(255,132,0,0.45)]"
+                   bg-button-primary hover:bg-button-primary-hover text-button-primary-foreground border-2 border-button-primary-hover
+                   shadow-[0_0_14px_rgb(var(--color-button-primary)_/_0.25)] hover:shadow-[0_0_22px_rgb(var(--color-button-primary)_/_0.42)]"
           >
             {{ action.label }}
             <ChevronRight class="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" :stroke-width="2.5" />
@@ -174,7 +174,7 @@ const hasInlineAction = computed(() => !!(props.actions?.length && currentIndex.
   animation: bridge-glow 3s ease-in-out infinite;
 }
 @keyframes bridge-glow {
-  0%, 100% { box-shadow: 0 0 14px rgba(255, 132, 0, 0.2); }
-  50% { box-shadow: 0 0 24px rgba(255, 132, 0, 0.4); }
+  0%, 100% { box-shadow: 0 0 14px rgb(var(--color-button-primary) / 0.2); }
+  50% { box-shadow: 0 0 24px rgb(var(--color-button-primary) / 0.36); }
 }
 </style>

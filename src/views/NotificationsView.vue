@@ -150,7 +150,7 @@ onMounted(async () => {
           <button
             type="button"
             class="rounded-full px-3 py-1.5 text-xs font-mono transition-colors"
-            :class="statusFilter === 'all' ? 'bg-primary text-background' : 'bg-border text-muted-foreground hover:text-foreground'"
+            :class="statusFilter === 'all' ? 'bg-button-primary text-button-primary-foreground' : 'bg-border text-muted-foreground hover:text-foreground'"
             @click="statusFilter = 'all'"
           >
             {{ t('notifications.all') }}
@@ -158,7 +158,7 @@ onMounted(async () => {
           <button
             type="button"
             class="rounded-full px-3 py-1.5 text-xs font-mono transition-colors"
-            :class="statusFilter === 'unread' ? 'bg-primary text-background' : 'bg-border text-muted-foreground hover:text-foreground'"
+            :class="statusFilter === 'unread' ? 'bg-button-primary text-button-primary-foreground' : 'bg-border text-muted-foreground hover:text-foreground'"
             @click="statusFilter = 'unread'"
           >
             {{ t('notifications.unread') }}
@@ -166,7 +166,7 @@ onMounted(async () => {
           <button
             type="button"
             class="rounded-full px-3 py-1.5 text-xs font-mono transition-colors"
-            :class="statusFilter === 'read' ? 'bg-primary text-background' : 'bg-border text-muted-foreground hover:text-foreground'"
+            :class="statusFilter === 'read' ? 'bg-button-primary text-button-primary-foreground' : 'bg-border text-muted-foreground hover:text-foreground'"
             @click="statusFilter = 'read'"
           >
             {{ t('notifications.read') }}
@@ -209,7 +209,7 @@ onMounted(async () => {
               >
                 {{ notificationTypeLabel(notification.type) }}
               </span>
-              <span v-if="!notification.is_read" class="rounded-full bg-primary px-2.5 py-1 text-[11px] font-mono text-background">
+              <span v-if="!notification.is_read" class="rounded-full border border-warning/25 bg-warning-bg px-2.5 py-1 text-[11px] font-mono text-warning">
                 {{ t('notifications.unread') }}
               </span>
             </div>

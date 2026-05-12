@@ -341,6 +341,11 @@ const typeBadgeClass: Record<MainStepType, string> = {
   delivery: 'bg-success-bg text-success',
 }
 
+const selectedStageCardClass = 'border-primary/35 bg-primary/5 shadow-[inset_3px_0_0_rgb(var(--color-primary)/0.38)]'
+const selectedOptionClass = 'border-primary/40 bg-primary/10 text-primary'
+const unselectedOptionClass = 'border-border bg-background text-foreground hover:border-primary/30'
+const unselectedOptionOnCardClass = 'border-border bg-card text-foreground hover:border-primary/30'
+
 const memberOptions = computed(() => props.memberOptions)
 
 const summary = computed(() => ({
@@ -668,6 +673,12 @@ function revisionActionLabel(stage: EditorStage): string {
   return t('workflowEditor.stageActions.reject')
 }
 
+function revisionDecisionPolicyHint(policy: RevisionDecisionPolicy): string {
+  return policy === 'first_revision_request'
+    ? t('workflowEditor.revisionDecisionFirstRequestHint')
+    : t('workflowEditor.revisionDecisionQuorumHint')
+}
+
 function primaryTargetLabel(index: number): string {
   return stages.value[index + 1]?.label || t('workflowEditor.terminal.completed')
 }
@@ -922,7 +933,7 @@ function saveConfig() {
               :class="[
                 'group w-full text-left border rounded-none transition-all cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
                 selectedStageId === stage.id
-                  ? 'border-primary bg-background shadow-[inset_3px_0_0_#FF8400]'
+                  ? selectedStageCardClass
                   : 'border-border bg-card hover:bg-background/80',
               ]"
             >
@@ -1047,8 +1058,8 @@ function saveConfig() {
                 :class="[
                   'h-10 rounded-full border font-mono text-xs transition-colors',
                   selectedStage.kind === kind
-                    ? 'border-primary bg-primary text-black'
-                    : 'border-border bg-background text-foreground',
+                    ? selectedOptionClass
+                    : unselectedOptionClass,
                 ]"
               >
                 {{ stageKindLabel(kind) }}
@@ -1086,8 +1097,8 @@ function saveConfig() {
                   :class="[
                     'h-10 rounded-full border font-mono text-xs transition-colors',
                     selectedStage.assignment_mode === 'manual'
-                      ? 'border-primary bg-primary text-black'
-                      : 'border-border bg-card text-foreground',
+                      ? selectedOptionClass
+                      : unselectedOptionOnCardClass,
                   ]"
                 >
                   {{ t('workflowEditor.manual') }}
@@ -1098,8 +1109,8 @@ function saveConfig() {
                   :class="[
                     'h-10 rounded-full border font-mono text-xs transition-colors',
                     selectedStage.assignment_mode === 'auto'
-                      ? 'border-primary bg-primary text-black'
-                      : 'border-border bg-card text-foreground',
+                      ? selectedOptionClass
+                      : unselectedOptionOnCardClass,
                   ]"
                 >
                   {{ t('workflowEditor.auto') }}
@@ -1110,8 +1121,8 @@ function saveConfig() {
                   :class="[
                     'h-10 rounded-full border font-mono text-xs transition-colors',
                     selectedStage.assignment_mode === 'fixed'
-                      ? 'border-primary bg-primary text-black'
-                      : 'border-border bg-card text-foreground',
+                      ? selectedOptionClass
+                      : unselectedOptionOnCardClass,
                   ]"
                 >
                   {{ t('workflowEditor.fixed') }}
@@ -1277,7 +1288,7 @@ function saveConfig() {
                     :class="[
                       'min-h-10 rounded-full border px-3 py-2 font-mono text-xs transition-colors',
                       selectedStage.revision_decision_policy === 'quorum_final'
-                        ? 'border-primary bg-primary text-black'
+                        ? 'border-primary bg-primary text-primary-foreground'
                         : 'border-border bg-card text-foreground',
                     ]"
                   >
@@ -1289,14 +1300,16 @@ function saveConfig() {
                     :class="[
                       'min-h-10 rounded-full border px-3 py-2 font-mono text-xs transition-colors',
                       selectedStage.revision_decision_policy === 'first_revision_request'
-                        ? 'border-primary bg-primary text-black'
+                        ? 'border-primary bg-primary text-primary-foreground'
                         : 'border-border bg-card text-foreground',
                     ]"
                   >
                     {{ t('workflowEditor.revisionDecisionFirstRequest') }}
                   </button>
                 </div>
-                <p class="text-xs text-muted-foreground">{{ t('workflowEditor.revisionDecisionPolicyHint') }}</p>
+                <p class="text-xs text-muted-foreground">
+                  {{ revisionDecisionPolicyHint(selectedStage.revision_decision_policy) }}
+                </p>
               </div>
             </template>
           </div>

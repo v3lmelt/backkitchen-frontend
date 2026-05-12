@@ -621,12 +621,12 @@ defineExpose({
         <button
           @click="switchMode('timed')"
           class="flex-1 px-3 py-1.5 text-xs font-mono font-medium transition-colors"
-          :class="issueMode === 'timed' ? 'bg-primary text-background' : 'text-muted-foreground hover:text-foreground'"
+          :class="issueMode === 'timed' ? 'bg-button-primary text-button-primary-foreground' : 'text-muted-foreground hover:text-foreground'"
         >{{ t('issue.timedMarkers') }}</button>
         <button
           @click="switchMode('general')"
           class="flex-1 px-3 py-1.5 text-xs font-mono font-medium transition-colors"
-          :class="issueMode === 'general' ? 'bg-primary text-background' : 'text-muted-foreground hover:text-foreground'"
+          :class="issueMode === 'general' ? 'bg-button-primary text-button-primary-foreground' : 'text-muted-foreground hover:text-foreground'"
         >{{ t('issue.generalIssue') }}</button>
       </div>
 
@@ -684,7 +684,7 @@ defineExpose({
             <span class="text-[10px] font-mono text-muted-foreground w-5 shrink-0">#{{ marker.index }}</span>
             <span
               class="h-2 w-2 shrink-0 rounded-full"
-              :style="{ background: marker.marker_type === 'point' ? '#B2B2FF' : '#FF8400' }"
+              :style="{ background: marker.marker_type === 'point' ? 'rgb(var(--color-info))' : 'rgb(var(--color-primary))' }"
               :aria-label="marker.marker_type === 'point' ? t('issueType.point') : t('issueType.range')"
             />
             <span class="text-xs font-mono text-foreground truncate">

@@ -92,6 +92,10 @@
     },
     "langToggle": "EN"
   },
+  "theme": {
+    "switchToLight": "切换到亮色主题",
+    "switchToDark": "切换到暗色主题"
+  },
   "common": {
     "removeMemberTitle": "移除成员",
     "removeMemberConfirm": "确认移除 {name}？此操作会立即生效。",
@@ -324,6 +328,8 @@
     "revisionDecisionQuorum": "达到人数后统一决定",
     "revisionDecisionFirstRequest": "任一评审打回即返修",
     "revisionDecisionPolicyHint": "开启后仍可先提交建议打回；只有点击直接返修动作时，曲目才会进入修订阶段。",
+    "revisionDecisionQuorumHint": "评审人先提交个人评审意见；达到所需人数后，再由评审组统一提交最终结论，曲目才会进入修订阶段。",
+    "revisionDecisionFirstRequestHint": "评审人仍可先提交建议打回；只有点击直接返修动作时，曲目才会立即进入修订阶段。",
     "firstRevisionRequestTag": "单份打回可返修",
     "extraRejectTargets": "额外打回目标（退回到之前的阶段）",
     "addRejectTarget": "添加打回目标",
@@ -1077,10 +1083,6 @@
     "webhookUrl": "Webhook URL",
     "webhookSecret": "签名密钥",
     "webhookSecretPlaceholder": "选填，用于签名校验",
-    "feishuMentionTitle": "{'@'}提及配置（需要飞书应用凭据来解析用户）",
-    "feishuAppId": "飞书 App ID",
-    "feishuAppSecret": "飞书 App Secret",
-    "feishuMentionHint": "填写后，事件涉及的用户若在个人资料中配置了飞书联系方式，将在群消息中被 {'@'}。需要在飞书开放平台创建应用并开通「通过邮箱或手机号获取用户 ID」权限。",
     "webhookFilterUsers": "关注成员",
     "webhookFilterUsersHint": "不选则推送所有事件；勾选后只推送与选中成员相关的事件。",
     "webhookEnabled": "启用 Webhook",
@@ -1123,9 +1125,6 @@
     "displayName": "显示名称",
     "username": "用户名",
     "email": "邮箱地址",
-    "feishuContact": "飞书联系方式",
-    "feishuContactPlaceholder": "飞书绑定的邮箱或手机号",
-    "feishuContactHint": "用于飞书群 Webhook 中 {'@'}提及你。填写你在飞书中绑定的邮箱或手机号。",
     "save": "保存更改",
     "saving": "保存中…",
     "saveSuccess": "资料已更新。",

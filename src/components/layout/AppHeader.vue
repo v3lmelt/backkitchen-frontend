@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { trackApi } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useTrackStore } from '@/stores/tracks'
+import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import type { Notification } from '@/types'
 import { formatRelativeTime } from '@/utils/time'
 import { buildTrackWorkspaceRoute, buildTrackWorkspaceRouteById, translateStepLabel } from '@/utils/workflow'
@@ -232,24 +233,25 @@ function handleMenuToggle() {
       >
         {{ locale === 'zh-CN' ? 'EN' : '中文' }}
       </button>
+      <ThemeToggle />
 
       <!-- 通知铃铛 -->
       <div v-if="appStore.currentUser" class="relative" data-notification-panel>
-        <button @click.stop="showNotifications = !showNotifications" class="relative p-2 rounded-lg hover:bg-white/10 transition-colors text-muted-foreground hover:text-foreground">
+        <button @click.stop="showNotifications = !showNotifications" class="relative p-2 rounded-lg hover:bg-border/60 transition-colors text-muted-foreground hover:text-foreground">
           <Bell class="h-5 w-5" :stroke-width="2" />
           <span
             v-if="appStore.notificationChannelConnected"
-            class="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-success"
+            class="absolute bottom-1 right-1 h-2 w-2 rounded-full border border-background bg-success/70"
           ></span>
           <span v-if="appStore.unreadCount > 0"
-            class="absolute -top-1 -right-1 bg-error text-white text-xs rounded-full h-4 w-4 flex items-center justify-center font-mono font-bold">
+            class="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border border-error/25 bg-error-bg px-1 text-[10px] font-mono font-bold text-error">
             {{ appStore.unreadCount > 9 ? '9+' : appStore.unreadCount }}
           </span>
         </button>
 
         <!-- 通知下拉面板 -->
         <div v-if="showNotifications"
-          class="fixed left-4 right-4 top-14 mt-1 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-card border border-border rounded-none shadow-[0_1px_1.75px_rgba(0,0,0,0.05)] z-50 overflow-hidden">
+          class="fixed left-4 right-4 top-14 mt-1 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-card border border-border rounded-none shadow-[var(--shadow-card)] z-50 overflow-hidden">
           <div class="flex items-center justify-between px-4 py-3 border-b border-border">
             <span class="font-mono font-semibold text-sm text-foreground">{{ t('notifications.title') }}</span>
             <button v-if="appStore.unreadCount > 0"
@@ -267,9 +269,9 @@ function handleMenuToggle() {
               :key="notif.id"
               @click="handleNotificationClick(notif)"
               class="w-full text-left px-4 py-3 border-b border-border hover:bg-background transition-colors"
-              :class="{ 'bg-warning-bg': !notif.is_read }">
+              :class="{ 'bg-warning-bg/55': !notif.is_read }">
               <div class="flex items-start gap-2">
-                <span class="mt-1.5 h-2 w-2 rounded-full flex-shrink-0" :class="notif.is_read ? '' : 'bg-primary'"></span>
+                <span class="mt-1.5 h-2 w-2 rounded-full flex-shrink-0" :class="notif.is_read ? '' : 'bg-warning/70'"></span>
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-medium text-foreground truncate">{{ notif.title }}</p>
                   <p class="text-xs text-muted-foreground mt-0.5 line-clamp-2">{{ notif.body }}</p>

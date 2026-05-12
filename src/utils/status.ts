@@ -1,23 +1,23 @@
 /** Known status → colour mappings (legacy workflow). */
 const KNOWN_COLORS: Record<string, string> = {
-  submitted: '#B2B2FF',
-  intake: '#B2B2FF',
-  peer_review: '#FF8400',
-  peer_revision: '#CC6A00',
-  peer_review_revision: '#CC6A00',
-  producer_mastering_gate: '#B2B2FF',
-  producer_gate: '#B2B2FF',
-  producer_gate_revision: '#CC6A00',
-  producer_revision: '#CC6A00',
-  mastering: '#FF8400',
-  mastering_revision: '#CC6A00',
-  final_review: '#B2B2FF',
-  completed: '#B6FFCE',
-  rejected: '#FF5C33',
+  submitted: 'rgb(var(--color-chart-intake))',
+  intake: 'rgb(var(--color-chart-intake))',
+  peer_review: 'rgb(var(--color-chart-review))',
+  peer_revision: 'rgb(var(--color-chart-revision))',
+  peer_review_revision: 'rgb(var(--color-chart-revision))',
+  producer_mastering_gate: 'rgb(var(--color-chart-gate))',
+  producer_gate: 'rgb(var(--color-chart-gate))',
+  producer_gate_revision: 'rgb(var(--color-chart-revision))',
+  producer_revision: 'rgb(var(--color-chart-revision))',
+  mastering: 'rgb(var(--color-chart-mastering))',
+  mastering_revision: 'rgb(var(--color-chart-revision))',
+  final_review: 'rgb(var(--color-chart-gate))',
+  completed: 'rgb(var(--color-chart-completed))',
+  rejected: 'rgb(var(--color-chart-rejected))',
 }
 
 /** Default colour for custom / unknown step IDs. */
-const DEFAULT_COLOR = '#B2B2FF'
+const DEFAULT_COLOR = 'rgb(var(--color-chart-fallback))'
 
 /**
  * Look up the colour for any track status string.

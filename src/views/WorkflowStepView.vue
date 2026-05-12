@@ -3058,7 +3058,7 @@ function handleIssueLeave() {
       @click.self="closeReviewerAssignmentModal"
     >
       <div class="absolute inset-0 bg-background/80" />
-      <div class="relative bg-card border border-border rounded-none p-5 w-full max-w-md space-y-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
+      <div class="relative bg-card border border-border rounded-none p-5 w-full max-w-md space-y-4 shadow-[var(--popover-shadow)]">
         <div class="space-y-1">
           <h4 class="text-sm font-mono font-semibold text-foreground">
             {{ currentStepAssignments.length > 0 ? t('workflowStep.reassignReviewerTitle') : t('workflowStep.assignReviewerTitle') }}

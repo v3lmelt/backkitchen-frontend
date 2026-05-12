@@ -257,4 +257,30 @@ describe('WorkflowEditor', () => {
     const peerReview = stepById(saved, 'peer_review')
     expect(peerReview.revision_decision_policy).toBe('first_revision_request')
   })
+
+  it('updates the revision trigger hint when switching peer review policy', async () => {
+    const wrapper = mountWithPlugins(WorkflowEditor, {
+      props: {
+        workflowConfig: existingWorkflow,
+        memberOptions,
+        saveable: true,
+      },
+    })
+
+    const peerCard = wrapper
+      .findAll('[role="button"]')
+      .find(node => node.text().includes('Peer Review') && node.text().includes('2 reviewers'))
+    if (!peerCard) throw new Error('Peer Review card not found')
+    await peerCard.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('After the required reviewer count is reached')
+    expect(wrapper.text()).not.toContain('only when a direct re-upload action is confirmed')
+
+    await findButton(wrapper, 'Any reviewer can request re-upload').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('only when a direct re-upload action is confirmed')
+    expect(wrapper.text()).not.toContain('After the required reviewer count is reached')
+  })
 })

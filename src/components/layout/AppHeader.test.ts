@@ -47,6 +47,8 @@ function setRoute(overrides: Record<string, unknown>) {
 describe('AppHeader', () => {
   beforeEach(() => {
     localStorage.clear()
+    document.documentElement.removeAttribute('data-theme')
+    document.documentElement.classList.remove('dark', 'light')
     mocks.pushMock.mockReset()
     mocks.trackGetMock.mockReset()
     mocks.notificationMarkReadMock.mockReset()
@@ -194,5 +196,20 @@ describe('AppHeader', () => {
       path: '/tracks/9/step/producer_gate',
       query: { returnTo: '/tracks/9/step/producer_gate', issue: '21' },
     })
+  })
+
+  it('toggles and persists the light theme', async () => {
+    const wrapper = mountWithPlugins(AppHeader)
+    const toggle = wrapper.find('[data-testid="theme-toggle"]')
+
+    expect(toggle.attributes('aria-label')).toBe('Switch to light theme')
+
+    await toggle.trigger('click')
+    await nextTick()
+
+    expect(localStorage.getItem('backkitchen_theme')).toBe('light')
+    expect(document.documentElement.dataset.theme).toBe('light')
+    expect(document.documentElement.classList.contains('light')).toBe(true)
+    expect(wrapper.find('[data-testid="theme-toggle"]').attributes('aria-label')).toBe('Switch to dark theme')
   })
 })

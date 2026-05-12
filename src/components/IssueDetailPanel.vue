@@ -134,7 +134,7 @@ const visibleComments = computed(() => {
 
 function statusActionClass(status: IssueStatus): string {
   if (pendingStatus.value === status) {
-    if (status === 'resolved') return 'bg-primary text-black'
+    if (status === 'resolved') return 'bg-success-bg text-success border border-success/30'
     if (status === 'internal_resolved') return 'bg-info-bg text-info border border-info/30'
     if (status === 'disagreed') return 'bg-error-bg text-error border border-error/30'
     return 'bg-warning-bg text-warning border border-warning/30'
@@ -372,7 +372,7 @@ async function confirmDeleteComment() {
     <Transition name="idp-fade">
       <div
         v-if="issue"
-        class="fixed inset-0 z-40 bg-black/50"
+        class="fixed inset-0 z-40 bg-overlay/50"
         @click="emit('close')"
       />
     </Transition>
@@ -465,7 +465,7 @@ async function confirmDeleteComment() {
                   :src="resolveAssetUrl(audio.audio_url)"
                   controls
                   class="w-full h-8"
-                  style="accent-color: #FF8400;"
+                  style="accent-color: rgb(var(--color-primary));"
                 />
               </div>
             </div>
@@ -566,7 +566,7 @@ async function confirmDeleteComment() {
                       :src="resolveAssetUrl(audio.audio_url)"
                       controls
                       class="w-full h-8"
-                      style="accent-color: #FF8400;"
+                      style="accent-color: rgb(var(--color-primary));"
                     />
                   </div>
                 </div>
@@ -643,7 +643,7 @@ async function confirmDeleteComment() {
                       :src="resolveAssetUrl(audio.audio_url)"
                       controls
                       class="w-full h-8"
-                      style="accent-color: #FF8400;"
+                      style="accent-color: rgb(var(--color-primary));"
                     />
                   </div>
                 </div>

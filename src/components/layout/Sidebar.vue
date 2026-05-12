@@ -74,9 +74,25 @@ function handleNav(path: string) {
 }
 
 const navItemClass = (path: string) => [
-  'flex items-center gap-3 px-3 rounded-full text-sm transition-colors',
-  isActive(path) ? 'bg-[#2a2a30] text-white' : 'text-[#fafafa]/70 hover:text-white hover:bg-white/5',
+  'relative flex w-full items-center rounded-full text-sm transition-colors',
+  showLabel.value ? 'gap-3 px-3' : 'justify-center px-0',
+  isActive(path) ? 'bg-sidebar-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/60',
 ]
+
+const navBadgeClass = (tone: 'error' | 'warning') => [
+  'rounded-full border font-mono',
+  showLabel.value
+    ? 'ml-auto px-2 py-0.5 text-[11px]'
+    : 'absolute right-0 top-1 flex h-5 min-w-5 items-center justify-center px-1 py-0 text-[10px] leading-none',
+  tone === 'error'
+    ? 'border-error/25 bg-error-bg text-error'
+    : 'border-warning/25 bg-warning-bg text-warning',
+]
+
+const profileLinkClass = computed(() => [
+  'flex w-full items-center gap-2 overflow-hidden rounded-full p-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary',
+  isActive('/profile') ? 'bg-sidebar-accent text-foreground' : 'text-foreground hover:bg-sidebar-accent/60',
+])
 </script>
 
 <template>
@@ -84,7 +100,7 @@ const navItemClass = (path: string) => [
   <Transition name="sidebar-backdrop">
     <div
       v-if="isMobileDrawer"
-      class="fixed inset-0 bg-black/60 z-40 md:hidden"
+      class="fixed inset-0 bg-overlay/60 z-40 md:hidden"
       @click="appStore.closeMobileSidebar()"
     />
   </Transition>
@@ -92,15 +108,15 @@ const navItemClass = (path: string) => [
   <!-- Desktop sidebar -->
   <aside
     :class="[
-      'bg-sidebar border-r border-[rgba(255,255,255,0.1)] flex flex-col transition-all duration-200',
+      'bg-sidebar border-r border-border flex flex-col transition-all duration-200',
       'hidden md:flex',
       collapsed ? 'md:w-16' : 'md:w-60'
     ]"
   >
-    <div class="h-14 flex items-center px-4 border-b border-[rgba(255,255,255,0.1)]">
+    <div class="h-14 flex items-center px-4 border-b border-border">
       <div class="flex items-center gap-2 overflow-hidden">
         <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-          <span class="text-black font-bold text-sm">BK</span>
+          <span class="text-primary-foreground font-bold text-sm">BK</span>
         </div>
         <span v-if="showLabel" class="font-mono font-semibold text-foreground whitespace-nowrap">BACK KITCHEN</span>
       </div>
@@ -118,13 +134,13 @@ const navItemClass = (path: string) => [
         <Transition name="badge-pop">
           <span
             v-if="item.path === '/notifications' && appStore.unreadCount > 0"
-            class="ml-auto rounded-full bg-error px-2 py-0.5 text-[11px] font-mono text-white"
+            :class="navBadgeClass('error')"
           >
             {{ appStore.unreadCount > 99 ? '99+' : appStore.unreadCount }}
           </span>
           <span
             v-else-if="item.path === '/changelog' && changelogUnseen"
-            class="ml-auto rounded-full bg-primary px-2 py-0.5 text-[11px] font-mono text-background"
+            :class="navBadgeClass('warning')"
           >
             {{ t('changelog.badgeNew') }}
           </span>
@@ -140,8 +156,13 @@ const navItemClass = (path: string) => [
       </RouterLink>
     </nav>
 
-    <div class="border-t border-[rgba(255,255,255,0.1)] p-3">
-      <div v-if="appStore.currentUser" class="flex items-center gap-2 overflow-hidden">
+    <div class="border-t border-border p-3">
+      <RouterLink
+        v-if="appStore.currentUser"
+        to="/profile"
+        :aria-label="t('header.pages.profile')"
+        :class="profileLinkClass"
+      >
         <img
           v-if="avatarUrl"
           :src="avatarUrl"
@@ -159,7 +180,7 @@ const navItemClass = (path: string) => [
           <div class="text-sm font-medium text-foreground truncate">{{ appStore.currentUser.display_name }}</div>
           <div class="text-xs text-muted-foreground truncate">{{ roleLabel }}</div>
         </div>
-      </div>
+      </RouterLink>
     </div>
   </aside>
 
@@ -167,12 +188,12 @@ const navItemClass = (path: string) => [
   <Transition name="sidebar-slide">
     <aside
       v-if="isMobileDrawer"
-      class="fixed inset-y-0 left-0 w-60 bg-sidebar border-r border-[rgba(255,255,255,0.1)] flex flex-col z-50 md:hidden"
+      class="fixed inset-y-0 left-0 w-60 bg-sidebar border-r border-border flex flex-col z-50 md:hidden"
     >
-      <div class="h-14 flex items-center justify-between px-4 border-b border-[rgba(255,255,255,0.1)]">
+      <div class="h-14 flex items-center justify-between px-4 border-b border-border">
         <div class="flex items-center gap-2 overflow-hidden">
           <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-            <span class="text-black font-bold text-sm">BK</span>
+            <span class="text-primary-foreground font-bold text-sm">BK</span>
           </div>
           <span class="font-mono font-semibold text-foreground whitespace-nowrap">BACK KITCHEN</span>
         </div>
@@ -193,13 +214,13 @@ const navItemClass = (path: string) => [
           <Transition name="badge-pop">
             <span
               v-if="item.path === '/notifications' && appStore.unreadCount > 0"
-              class="ml-auto rounded-full bg-error px-2 py-0.5 text-[11px] font-mono text-white"
+              :class="navBadgeClass('error')"
             >
               {{ appStore.unreadCount > 99 ? '99+' : appStore.unreadCount }}
             </span>
             <span
               v-else-if="item.path === '/changelog' && changelogUnseen"
-              class="ml-auto rounded-full bg-primary px-2 py-0.5 text-[11px] font-mono text-background"
+              :class="navBadgeClass('warning')"
             >
               {{ t('changelog.badgeNew') }}
             </span>
@@ -215,8 +236,14 @@ const navItemClass = (path: string) => [
         </button>
       </nav>
 
-      <div class="border-t border-[rgba(255,255,255,0.1)] p-3">
-        <div v-if="appStore.currentUser" class="flex items-center gap-2 overflow-hidden">
+      <div class="border-t border-border p-3">
+        <RouterLink
+          v-if="appStore.currentUser"
+          to="/profile"
+          :aria-label="t('header.pages.profile')"
+          :class="profileLinkClass"
+          @click="appStore.closeMobileSidebar()"
+        >
           <img
             v-if="avatarUrl"
             :src="avatarUrl"
@@ -234,7 +261,7 @@ const navItemClass = (path: string) => [
             <div class="text-sm font-medium text-foreground truncate">{{ appStore.currentUser.display_name }}</div>
             <div class="text-xs text-muted-foreground truncate">{{ roleLabel }}</div>
           </div>
-        </div>
+        </RouterLink>
       </div>
     </aside>
   </Transition>

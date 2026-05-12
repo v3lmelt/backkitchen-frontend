@@ -1033,8 +1033,8 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
             :key="action.key"
             @click="action.handler()"
             class="workflow-cta-btn group w-full flex items-center justify-between gap-2 rounded-full font-mono font-semibold px-5 h-11 text-sm transition-all
-                   bg-primary hover:bg-primary-hover text-black
-                   shadow-[0_0_16px_rgba(255,132,0,0.25)] hover:shadow-[0_0_24px_rgba(255,132,0,0.45)]"
+                   bg-button-primary hover:bg-button-primary-hover text-button-primary-foreground
+                   shadow-[0_0_16px_rgb(var(--color-primary)_/_0.25)] hover:shadow-[0_0_24px_rgb(var(--color-primary)_/_0.45)]"
           >
             {{ action.label }}
             <ChevronRight class="w-5 h-5 transition-transform group-hover:translate-x-0.5" :stroke-width="2.5" />
@@ -1207,7 +1207,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
               :key="f"
               @click="timelineFilter = f; timelineExpanded = false"
               class="px-2.5 py-1 rounded-full text-xs font-mono transition-colors"
-              :class="timelineFilter === f ? 'bg-primary text-background' : 'bg-border text-muted-foreground hover:text-foreground'"
+              :class="timelineFilter === f ? 'bg-button-primary text-button-primary-foreground' : 'bg-border text-muted-foreground hover:text-foreground'"
             >
               {{ t(`trackDetail.timelineFilter.${f}`) }}
             </button>
@@ -1294,7 +1294,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
         <!-- Reassign reviewer modal (manual mode) -->
         <Teleport to="body">
           <div v-if="showReassignModal" class="fixed inset-0 z-50 flex items-center justify-center" @click.self="showReassignModal = false">
-            <div class="absolute inset-0 bg-black/60" />
+            <div class="absolute inset-0 bg-overlay/60" />
             <div class="relative bg-card border border-border rounded-none p-5 w-full max-w-sm space-y-3 shadow-lg">
               <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('trackDetail.reassignReviewerTitle') }}</h4>
               <p class="text-xs text-muted-foreground">{{ t('trackDetail.reassignReviewerManual') }}</p>
@@ -1390,8 +1390,8 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
           :key="'m-' + action.key"
           @click="action.handler()"
           class="workflow-cta-btn group flex items-center gap-2 rounded-full font-mono font-semibold px-5 h-10 text-sm leading-none transition-all
-                 bg-primary hover:bg-primary-hover text-black
-                 shadow-[0_0_16px_rgba(255,132,0,0.25)] hover:shadow-[0_0_24px_rgba(255,132,0,0.45)]"
+                 bg-button-primary hover:bg-button-primary-hover text-button-primary-foreground
+                 shadow-[0_0_16px_rgb(var(--color-primary)_/_0.25)] hover:shadow-[0_0_24px_rgb(var(--color-primary)_/_0.45)]"
         >
           {{ action.label }}
           <ChevronRight class="w-4 h-4 transition-transform group-hover:translate-x-0.5" :stroke-width="2.5" />
@@ -1416,7 +1416,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
   animation: cta-glow 3s ease-in-out infinite;
 }
 @keyframes cta-glow {
-  0%, 100% { box-shadow: 0 0 16px rgba(255, 132, 0, 0.2); }
-  50% { box-shadow: 0 0 28px rgba(255, 132, 0, 0.4); }
+  0%, 100% { box-shadow: 0 0 16px rgb(var(--color-primary) / 0.2); }
+  50% { box-shadow: 0 0 28px rgb(var(--color-primary) / 0.4); }
 }
 </style>

@@ -76,7 +76,6 @@ export interface User {
   avatar_image?: string | null
   email?: string
   email_verified?: boolean
-  feishu_contact?: string | null
   is_admin: boolean
   admin_role?: AdminRole
   suspended_at?: string | null
@@ -508,8 +507,6 @@ export interface WebhookConfig {
   events: string[]
   type: string
   secret: string
-  app_id: string
-  app_secret: string
   filter_user_ids: number[]
   email_enabled: boolean
   email_events: string[]

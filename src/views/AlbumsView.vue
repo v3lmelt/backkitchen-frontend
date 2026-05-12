@@ -5,9 +5,9 @@ import { useI18n } from 'vue-i18n'
 import { albumApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Album } from '@/types'
-import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { Music, Archive, Search } from 'lucide-vue-next'
 import EmptyState from '@/components/common/EmptyState.vue'
+import AlbumCoverImage from '@/components/common/AlbumCoverImage.vue'
 import { parseUTC } from '@/utils/time'
 
 const { t } = useI18n()
@@ -171,7 +171,7 @@ function roleBadgeClass(album: Album): string {
       <div
         v-for="album in displayedAlbums"
         :key="album.id"
-        class="relative bg-card border border-border rounded-none overflow-hidden shadow-[0_1px_1.75px_rgba(0,0,0,0.05)] group"
+        class="relative bg-card border border-border rounded-none overflow-hidden shadow-[var(--shadow-card)] group"
       >
         <button
           @click="router.push(`/albums/${album.id}/settings`)"
@@ -179,8 +179,8 @@ function roleBadgeClass(album: Album): string {
         >
           <!-- Cover image or default placeholder -->
           <div class="w-full h-32 overflow-hidden">
-            <img
-              :src="album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : albumPlaceholder"
+            <AlbumCoverImage
+              :src="album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : null"
               :alt="album.title"
               class="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200"
               :class="{ 'opacity-60 grayscale': album.archived_at }"

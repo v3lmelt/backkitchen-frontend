@@ -17,7 +17,7 @@
         >
           <img v-if="circle.logo_url" :src="`${API_ORIGIN}/uploads/${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
           <Smile v-else class="w-6 h-6 text-muted-foreground" :stroke-width="1.5" />
-          <div v-if="canManageCircle" class="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <div v-if="canManageCircle" class="absolute inset-0 bg-overlay/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <Upload class="w-3.5 h-3.5 text-white" :stroke-width="2" />
           </div>
         </button>
@@ -85,7 +85,7 @@
               <button
                 type="button"
                 class="h-10 rounded-full border font-mono text-sm transition-colors disabled:opacity-60"
-                :class="editForm.default_checklist_enabled ? 'border-primary bg-primary text-background' : 'border-border bg-background text-foreground'"
+                :class="editForm.default_checklist_enabled ? 'border-button-primary bg-button-primary text-button-primary-foreground' : 'border-border bg-background text-foreground'"
                 :disabled="!canManageCircle"
                 @click="editForm.default_checklist_enabled = true"
               >
@@ -94,7 +94,7 @@
               <button
                 type="button"
                 class="h-10 rounded-full border font-mono text-sm transition-colors disabled:opacity-60"
-                :class="!editForm.default_checklist_enabled ? 'border-primary bg-primary text-background' : 'border-border bg-background text-foreground'"
+                :class="!editForm.default_checklist_enabled ? 'border-button-primary bg-button-primary text-button-primary-foreground' : 'border-border bg-background text-foreground'"
                 :disabled="!canManageCircle"
                 @click="editForm.default_checklist_enabled = false"
               >
