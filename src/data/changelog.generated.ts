@@ -5,6 +5,96 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.15",
+    "date": "2026-05-11",
+    "headline": {
+      "zh-CN": "新增亮色主题与同行评审快速返修模式",
+      "en": "Adds a light theme and expedited peer-review revision mode"
+    },
+    "summary": {
+      "zh-CN": "Back Kitchen 现在保留默认暗色外观，同时新增可切换的亮色主题；主催也可以在工作流中开启“任一评审打回即返修”模式，让评审人把建议打回和直接要求重新上传分开处理。",
+      "en": "Back Kitchen now keeps the dark theme as the default while adding a switchable light theme. Producers can also enable an “any reviewer can request re-upload” workflow mode so reviewers can separate revision recommendations from direct re-upload requests."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "界面主题",
+          "en": "Interface theme"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "可在暗色与亮色之间切换",
+              "en": "Switch between dark and light"
+            },
+            "description": {
+              "zh-CN": "页头和登录相关页面新增主题按钮；亮色主题使用暖白背景、浅灰分层和橙色主操作，便于在明亮环境中预览和审核。",
+              "en": "The header and auth pages now include a theme button. The light theme uses warm off-white backgrounds, soft dividers, and orange primary actions for brighter review environments."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "优化亮色主题状态色和封面占位图",
+              "en": "Refines light-theme badges and cover placeholders"
+            },
+            "description": {
+              "zh-CN": "亮色主题下通知、更新徽标、侧栏角标、主按钮、勾选框、波形标注和工作流编辑器的阶段高亮改为更柔和的语义色片；已解决的波形标注不再使用突兀的绿色，专辑进度条改为更明亮但低饱和的图表色。没有上传封面的专辑现在使用随主题变化的浅色唱片占位图。",
+              "en": "In the light theme, notification and update badges, sidebar badges, primary buttons, checkboxes, waveform markers, and workflow-editor stage highlights now use softer semantic chips. Resolved waveform markers no longer use the prominent green, while album progress bars use brighter low-saturation chart colors. Albums without covers render a theme-aware placeholder instead of the fixed dark record art."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "侧栏新增个人中心入口",
+              "en": "Adds a sidebar profile shortcut"
+            },
+            "description": {
+              "zh-CN": "侧栏底部的头像与用户名区域现在可以直接进入个人中心；桌面折叠状态和移动端抽屉中也保持相同入口。",
+              "en": "The sidebar avatar and name area now opens the profile page directly, including collapsed desktop and mobile drawer layouts."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "移除飞书提及前端配置",
+              "en": "Removes Feishu mention setup from the frontend"
+            },
+            "description": {
+              "zh-CN": "专辑 Webhook 设置不再显示飞书 App ID、App Secret 与 @ 提及配置；个人资料页也不再显示飞书联系方式字段。",
+              "en": "Album webhook settings no longer show Feishu App ID, App Secret, or @mention setup fields, and profile settings no longer show the Feishu contact field."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "评审流程",
+          "en": "Review workflow"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "建议打回和直接返修分开处理",
+              "en": "Revision recommendations and direct re-upload are now separate"
+            },
+            "description": {
+              "zh-CN": "开启新模式后，评审人可以先记录“建议打回”，也可以确认后直接让曲目进入修订阶段。未完成的内部待讨论 issue 不会自动结案，仍可由评审组继续处理或发布给曲师。",
+              "en": "When the new mode is enabled, reviewers can record a revision recommendation first or confirm a direct move into revision. Unfinished internal discussion issues are no longer auto-closed and can still be handled by the review group or published to the submitter."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "工作流编辑器说明随模式切换",
+              "en": "Workflow editor hints now follow the selected mode"
+            },
+            "description": {
+              "zh-CN": "返修触发方式在“达到人数后统一决定”和“任一评审打回即返修”之间切换时，下方说明会同步解释当前模式的实际行为。",
+              "en": "When switching the revision trigger between quorum-based decisions and immediate re-upload requests, the helper text now explains the currently selected behavior."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.14",
     "date": "2026-05-11",
     "headline": {

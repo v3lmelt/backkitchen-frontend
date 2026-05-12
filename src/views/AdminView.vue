@@ -1014,7 +1014,7 @@ onMounted(() => {
                 v-for="action in workflowActions"
                 :key="action"
                 class="px-3 py-1.5 text-xs rounded-full border transition-colors"
-                :class="workflowAction === action ? 'bg-primary text-black border-primary' : 'border-border'"
+                :class="workflowAction === action ? 'bg-button-primary text-button-primary-foreground border-button-primary' : 'border-border'"
                 @click="workflowAction = action"
               >
                 {{ translateWorkflowActionLabel(action) }}
@@ -1036,7 +1036,7 @@ onMounted(() => {
                 :key="member.id"
                 class="flex items-center gap-2 text-sm"
               >
-                <input v-model="workflowTargetUserIds" type="checkbox" :value="member.id" class="accent-primary" />
+                <input v-model="workflowTargetUserIds" type="checkbox" :value="member.id" class="checkbox" />
                 <span>{{ member.display_name }}</span>
               </label>
             </div>

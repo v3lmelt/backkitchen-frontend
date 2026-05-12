@@ -299,8 +299,6 @@ describe('AlbumSettingsView', () => {
       events: [],
       type: 'generic',
       secret: '',
-      app_id: '',
-      app_secret: '',
       filter_user_ids: [],
       email_enabled: false,
       email_events: [],
@@ -498,8 +496,6 @@ describe('AlbumSettingsView', () => {
       events: [],
       type: 'generic',
       secret: '',
-      app_id: '',
-      app_secret: '',
       filter_user_ids: [],
     })
 
@@ -550,8 +546,6 @@ describe('AlbumSettingsView', () => {
       events: [],
       type: 'generic',
       secret: '',
-      app_id: '',
-      app_secret: '',
       filter_user_ids: [],
       email_enabled: true,
       email_events: ['new_comment'],

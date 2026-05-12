@@ -1,5 +1,7 @@
 import type { Issue, StageAssignment, Track } from '@/types'
 
+const REVISION_REQUESTED_CANCEL_REASON = 'revision_requested'
+
 function phaseAliases(phase: string): Set<string> {
   if (phase === 'peer' || phase === 'peer_review') return new Set(['peer', 'peer_review'])
   if (phase === 'producer' || phase === 'producer_gate') return new Set(['producer', 'producer_gate'])
@@ -47,7 +49,13 @@ export function reviewerIdsForPhase(
   const aliases = phaseAliases(phase)
   const assignmentReviewerIds = Array.from(new Set(
     assignments
-      .filter(assignment => assignment.status !== 'cancelled' && aliases.has(assignment.stage_id))
+      .filter(assignment =>
+        aliases.has(assignment.stage_id)
+        && (
+          assignment.status !== 'cancelled'
+          || assignment.cancellation_reason === REVISION_REQUESTED_CANCEL_REASON
+        ),
+      )
       .map(assignment => assignment.user_id),
   ))
   if (assignmentReviewerIds.length > 0) return assignmentReviewerIds

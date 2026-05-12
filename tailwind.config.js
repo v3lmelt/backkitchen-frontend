@@ -1,4 +1,10 @@
 /** @type {import('tailwindcss').Config} */
+const colorVar = (name) => ({ opacityValue }) => (
+  opacityValue === undefined
+    ? `rgb(var(${name}))`
+    : `rgb(var(${name}) / ${opacityValue})`
+)
+
 export default {
   content: [
     "./index.html",
@@ -11,38 +17,47 @@ export default {
         mono: ['"JetBrains Mono"', '"Noto Sans SC"', '"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei"', '"SimHei"', 'ui-monospace', 'monospace', 'sans-serif'],
       },
       colors: {
-        background: '#111111',
-        card: '#1A1A1A',
-        foreground: '#FFFFFF',
-        'muted-foreground': '#B8B9B6',
-        border: '#2E2E2E',
-        sidebar: '#18181b',
-        'sidebar-accent': '#2a2a30',
+        background: colorVar('--color-background'),
+        card: colorVar('--color-card'),
+        foreground: colorVar('--color-foreground'),
+        'muted-foreground': colorVar('--color-muted-foreground'),
+        border: colorVar('--color-border'),
+        sidebar: colorVar('--color-sidebar'),
+        'sidebar-accent': colorVar('--color-sidebar-accent'),
+        overlay: colorVar('--color-overlay'),
+        'primary-foreground': colorVar('--color-primary-foreground'),
+        'button-primary': {
+          DEFAULT: colorVar('--color-button-primary'),
+          hover: colorVar('--color-button-primary-hover'),
+          foreground: colorVar('--color-button-primary-foreground'),
+        },
         primary: {
-          DEFAULT: '#FF8400',
-          hover: '#CC6A00',
-          light: '#FFB366',
+          DEFAULT: colorVar('--color-primary'),
+          hover: colorVar('--color-primary-hover'),
+          light: colorVar('--color-primary-light'),
+          foreground: colorVar('--color-primary-foreground'),
         },
         cyan: {
-          DEFAULT: '#22D3EE',
-          dark: '#0891B2',
+          DEFAULT: colorVar('--color-cyan'),
+          dark: colorVar('--color-cyan-dark'),
         },
         success: {
-          DEFAULT: '#B6FFCE',
-          bg: '#222924',
+          DEFAULT: colorVar('--color-success'),
+          bg: colorVar('--color-success-bg'),
         },
         warning: {
-          DEFAULT: '#FF8400',
-          bg: '#291C0F',
+          DEFAULT: colorVar('--color-warning'),
+          bg: colorVar('--color-warning-bg'),
         },
         error: {
-          DEFAULT: '#FF5C33',
-          bg: '#24100B',
+          DEFAULT: colorVar('--color-error'),
+          bg: colorVar('--color-error-bg'),
         },
         info: {
-          DEFAULT: '#B2B2FF',
-          bg: '#222229',
+          DEFAULT: colorVar('--color-info'),
+          bg: colorVar('--color-info-bg'),
         },
+        'waveform-marker': colorVar('--color-waveform-marker'),
       },
     },
   },

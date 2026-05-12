@@ -48,6 +48,7 @@ export interface WorkflowStepDef {
   assignment_mode?: 'manual' | 'auto' | 'fixed' | null
   reviewer_pool?: number[] | null
   required_reviewer_count?: number | null
+  revision_decision_policy?: 'quorum_final' | 'first_revision_request' | null
   // Approval/delivery assignee override
   assignee_user_id?: number | null
   // Delivery-specific
@@ -75,7 +76,6 @@ export interface User {
   avatar_image?: string | null
   email?: string
   email_verified?: boolean
-  feishu_contact?: string | null
   is_admin: boolean
   admin_role?: AdminRole
   suspended_at?: string | null
@@ -507,8 +507,6 @@ export interface WebhookConfig {
   events: string[]
   type: string
   secret: string
-  app_id: string
-  app_secret: string
   filter_user_ids: number[]
   email_enabled: boolean
   email_events: string[]

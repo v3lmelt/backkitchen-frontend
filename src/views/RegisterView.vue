@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { authApi } from '@/api'
+import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import { Music, AlertCircle, Eye, EyeOff, Mail, CheckCircle2, Check, Circle } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
@@ -97,19 +98,21 @@ async function handleResend() {
 <template>
   <div class="relative flex h-screen w-screen items-center justify-center bg-background overflow-hidden">
     <!-- Subtle radial glow -->
-    <div class="pointer-events-none absolute inset-0" style="background: radial-gradient(ellipse 600px 400px at 50% 40%, rgba(255,132,0,0.06), transparent)"></div>
+    <div class="pointer-events-none absolute inset-0" style="background: radial-gradient(ellipse 600px 400px at 50% 40%, rgb(var(--color-primary) / 0.06), transparent)"></div>
 
-    <!-- Language toggle -->
-    <button
-      class="fixed top-4 right-4 px-3 py-2 text-xs font-mono text-muted-foreground hover:text-foreground border border-border rounded-full transition-colors z-50"
-      @click="toggleLocale"
-    >{{ t('auth.langToggle') }}</button>
+    <div class="fixed top-4 right-4 z-50 flex items-center gap-2">
+      <ThemeToggle />
+      <button
+        class="px-3 py-2 text-xs font-mono text-muted-foreground hover:text-foreground border border-border rounded-full transition-colors"
+        @click="toggleLocale"
+      >{{ t('auth.langToggle') }}</button>
+    </div>
 
     <div class="relative z-10 w-full max-w-[400px] px-6 overflow-y-auto max-h-screen py-8 animate-fade-in">
       <!-- Logo -->
       <div class="flex items-center justify-center gap-3 mb-10">
         <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center shrink-0">
-          <Music class="w-5 h-5 text-background" :stroke-width="2" />
+          <Music class="w-5 h-5 text-primary-foreground" :stroke-width="2" />
         </div>
         <span class="font-mono text-2xl font-bold text-foreground leading-none">BackKitchen</span>
       </div>
@@ -273,7 +276,7 @@ async function handleResend() {
               class="btn-primary w-full flex items-center justify-center gap-2 font-mono"
               :disabled="loading"
             >
-              <span v-if="loading" class="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin"></span>
+              <span v-if="loading" class="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin"></span>
               {{ loading ? t('auth.register.creating') : t('auth.register.create') }}
             </button>
           </form>

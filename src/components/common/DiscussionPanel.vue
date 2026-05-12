@@ -113,7 +113,7 @@ function confirmDelete() {
       <div v-for="d in discussions" :key="d.id" class="flex gap-3 py-3 border-b border-border last:border-0">
         <div
           class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-          :style="{ backgroundColor: d.author?.avatar_color || '#6366f1' }"
+          :style="{ backgroundColor: d.author?.avatar_color || 'rgb(var(--color-info))' }"
         >
           {{ d.author?.display_name?.charAt(0) || '?' }}
         </div>
@@ -182,7 +182,7 @@ function confirmDelete() {
                 :src="resolveAssetUrl(audio.audio_url)"
                 controls
                 class="w-full h-8"
-                style="accent-color: #FF8400;"
+                style="accent-color: rgb(var(--color-primary));"
               />
             </div>
           </div>

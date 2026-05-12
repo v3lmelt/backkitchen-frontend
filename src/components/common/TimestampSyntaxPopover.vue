@@ -198,7 +198,7 @@ const examples = computed(() => ([
   >
     <div
       v-if="isPickerVisible"
-      class="absolute left-0 right-0 top-full z-20 mt-1.5 rounded-2xl border border-border bg-card px-2 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.32)]"
+      class="absolute left-0 right-0 top-full z-20 mt-1.5 rounded-2xl border border-border bg-card px-2 py-2 shadow-[var(--shadow-popover)]"
     >
       <p class="px-1.5 pb-1.5 text-[11px] font-mono font-semibold text-muted-foreground">
         {{ t('timestamp.issuePickerHint') }}
@@ -238,7 +238,7 @@ const examples = computed(() => ([
 
     <div
       v-else-if="isSyntaxVisible"
-      class="absolute left-0 right-0 top-full z-20 mt-1.5 rounded-2xl border border-border bg-card px-3 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.32)]"
+      class="absolute left-0 right-0 top-full z-20 mt-1.5 rounded-2xl border border-border bg-card px-3 py-2.5 shadow-[var(--shadow-popover)]"
     >
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <span class="text-[11px] font-mono font-semibold text-muted-foreground shrink-0">{{ t('timestamp.syntaxTitle') }}</span>

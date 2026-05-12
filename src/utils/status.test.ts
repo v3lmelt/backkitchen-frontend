@@ -13,14 +13,14 @@ describe('TRACK_STATUS_COLORS', () => {
     }
   })
 
-  it('uses hex color format', () => {
+  it('uses theme token color format', () => {
     for (const color of Object.values(TRACK_STATUS_COLORS)) {
-      expect(color).toMatch(/^#[0-9A-Fa-f]{6}$/)
+      expect(color).toMatch(/^rgb\(var\(--color-[a-z-]+\)\)$/)
     }
   })
 
-  it('maps completed to green and rejected to red', () => {
-    expect(TRACK_STATUS_COLORS.completed).toBe('#B6FFCE')
-    expect(TRACK_STATUS_COLORS.rejected).toBe('#FF5C33')
+  it('maps completed and rejected to chart status tokens', () => {
+    expect(TRACK_STATUS_COLORS.completed).toBe('rgb(var(--color-chart-completed))')
+    expect(TRACK_STATUS_COLORS.rejected).toBe('rgb(var(--color-chart-rejected))')
   })
 })

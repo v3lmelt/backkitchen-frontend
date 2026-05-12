@@ -16,8 +16,8 @@ describe('WorkflowProgress', () => {
       props: { status: 'submitted' },
     })
     const circles = wrapper.findAll('.w-6')
-    // First step should be active (bg-primary)
-    expect(circles[0].classes()).toContain('bg-primary')
+    // First step should be active
+    expect(circles[0].classes()).toContain('bg-button-primary')
     // Second step should be inactive
     expect(circles[1].classes()).toContain('bg-border')
   })
@@ -28,10 +28,10 @@ describe('WorkflowProgress', () => {
     })
     const circles = wrapper.findAll('.w-6')
     // Steps 0-3 (submitted, peer, gate, mastering) should be active
-    expect(circles[0].classes()).toContain('bg-primary')
-    expect(circles[1].classes()).toContain('bg-primary')
-    expect(circles[2].classes()).toContain('bg-primary')
-    expect(circles[3].classes()).toContain('bg-primary')
+    expect(circles[0].classes()).toContain('bg-button-primary')
+    expect(circles[1].classes()).toContain('bg-button-primary')
+    expect(circles[2].classes()).toContain('bg-button-primary')
+    expect(circles[3].classes()).toContain('bg-button-primary')
     // Step 4 (final) should be inactive
     expect(circles[4].classes()).toContain('bg-border')
   })
@@ -51,7 +51,7 @@ describe('WorkflowProgress', () => {
     })
     const circles = wrapper.findAll('.w-6')
     for (const circle of circles) {
-      expect(circle.classes()).toContain('bg-primary')
+      expect(circle.classes()).toContain('bg-button-primary')
     }
   })
 
@@ -61,8 +61,8 @@ describe('WorkflowProgress', () => {
     })
     const circles = wrapper.findAll('.w-6')
     // peer is index 1, so steps 0-1 should be active
-    expect(circles[0].classes()).toContain('bg-primary')
-    expect(circles[1].classes()).toContain('bg-primary')
+    expect(circles[0].classes()).toContain('bg-button-primary')
+    expect(circles[1].classes()).toContain('bg-button-primary')
     expect(circles[2].classes()).toContain('bg-border')
   })
 })

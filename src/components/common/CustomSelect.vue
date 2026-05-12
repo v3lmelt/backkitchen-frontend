@@ -264,10 +264,10 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 40px;
   padding: 0 16px;
-  background: var(--color-background, #111111);
-  border: 1px solid var(--color-border, #2E2E2E);
+  background: rgb(var(--color-background));
+  border: 1px solid rgb(var(--color-border));
   border-radius: 9999px;
-  color: var(--color-foreground, #FFFFFF);
+  color: rgb(var(--color-foreground));
   font-family: theme('fontFamily.sans');
   font-size: 14px;
   cursor: pointer;
@@ -276,19 +276,19 @@ onBeforeUnmount(() => {
 }
 
 .custom-select-trigger:hover {
-  border-color: rgba(255, 132, 0, 0.4);
+  border-color: rgb(var(--color-primary) / 0.4);
 }
 
 .custom-select-trigger:focus-visible {
   outline: none;
-  border-color: var(--color-primary, #FF8400);
-  box-shadow: 0 0 0 1px var(--color-primary, #FF8400);
+  border-color: rgb(var(--color-primary));
+  box-shadow: 0 0 0 1px rgb(var(--color-primary));
 }
 
 .custom-select-chevron {
   width: 14px;
   height: 14px;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgb(var(--color-muted-foreground));
 }
 
 /* Small size */
@@ -310,8 +310,8 @@ onBeforeUnmount(() => {
   left: 0;
   right: 0;
   z-index: 50;
-  background: var(--color-card, #1A1A1A);
-  border: 1px solid var(--color-border, #2E2E2E);
+  background: rgb(var(--color-card));
+  border: 1px solid rgb(var(--color-border));
   max-height: 200px;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -332,7 +332,7 @@ onBeforeUnmount(() => {
   background: transparent;
   border: 0;
   font-size: 14px;
-  color: var(--color-foreground, #FFFFFF);
+  color: rgb(var(--color-foreground));
   cursor: pointer;
   transition: background-color 0.1s;
   text-align: left;
@@ -345,13 +345,13 @@ onBeforeUnmount(() => {
 }
 
 .custom-select-option:hover {
-  background: var(--color-border, #2E2E2E);
+  background: rgb(var(--color-border) / 0.7);
 }
 
 .custom-select-option:focus-visible,
 .custom-select-option.is-active {
   outline: none;
-  background: var(--color-border, #2E2E2E);
+  background: rgb(var(--color-border) / 0.7);
 }
 
 /* Selected indicator dot */
@@ -365,7 +365,7 @@ onBeforeUnmount(() => {
 }
 
 .custom-select-option.is-selected .custom-select-dot {
-  background: var(--color-primary, #FF8400);
+  background: rgb(var(--color-primary));
 }
 
 /* Transition */
@@ -390,7 +390,7 @@ onBeforeUnmount(() => {
 }
 
 .custom-select-dropdown::-webkit-scrollbar-thumb {
-  background: #2E2E2E;
+  background: rgb(var(--color-border));
   border-radius: 2px;
 }
 </style>

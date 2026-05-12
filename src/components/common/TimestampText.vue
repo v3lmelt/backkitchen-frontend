@@ -134,7 +134,7 @@ onBeforeUnmount(() => {
       <button
         v-else-if="segment.type === 'time' && interactive"
         type="button"
-        class="mx-0.5 inline-flex items-center rounded-full bg-warning-bg px-2 py-0.5 align-baseline font-mono text-[0.95em] font-medium text-warning transition-colors hover:bg-primary hover:text-background focus:outline-none focus:ring-1 focus:ring-primary"
+        class="mx-0.5 inline-flex items-center rounded-full bg-warning-bg px-2 py-0.5 align-baseline font-mono text-[0.95em] font-medium text-warning transition-colors hover:bg-button-primary hover:text-button-primary-foreground focus:outline-none focus:ring-1 focus:ring-primary"
         @click="activate(segment.value)"
       >
         {{ segment.value.raw }}
@@ -149,7 +149,7 @@ onBeforeUnmount(() => {
         <button
           v-if="interactive && resolveIssue(segment.value)"
           type="button"
-          class="mx-0.5 inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 align-baseline font-mono text-[0.95em] font-medium text-primary transition-colors hover:bg-primary hover:text-background focus:outline-none focus:ring-1 focus:ring-primary"
+          class="mx-0.5 inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 align-baseline font-mono text-[0.95em] font-medium text-primary transition-colors hover:bg-button-primary hover:text-button-primary-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           @click="activateIssue(resolveIssue(segment.value)!)"
           @mouseenter="showIssuePreview(resolveIssue(segment.value)!, $event)"
           @mouseleave="scheduleHideIssuePreview"
@@ -175,7 +175,7 @@ onBeforeUnmount(() => {
       <button
         v-else-if="interactive"
         type="button"
-        class="mx-0.5 inline-flex items-center rounded-full bg-info-bg px-2 py-0.5 align-baseline font-mono text-[0.95em] font-medium text-info transition-colors hover:bg-primary hover:text-background focus:outline-none focus:ring-1 focus:ring-primary"
+        class="mx-0.5 inline-flex items-center rounded-full bg-info-bg px-2 py-0.5 align-baseline font-mono text-[0.95em] font-medium text-info transition-colors hover:bg-button-primary hover:text-button-primary-foreground focus:outline-none focus:ring-1 focus:ring-primary"
         @click="activateMarker(segment.value)"
       >
         {{ segment.value.raw }}
@@ -192,7 +192,7 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <div
       v-if="interactive && hoveredIssue"
-      class="fixed z-[80] max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-card/95 px-3 py-2.5 text-left shadow-[0_12px_32px_rgba(0,0,0,0.28)] backdrop-blur"
+      class="fixed z-[80] max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-card/95 px-3 py-2.5 text-left shadow-[var(--shadow-tooltip)] backdrop-blur"
       :style="issuePreviewStyle"
       @mouseenter="clearHidePreviewTimer"
       @mouseleave="scheduleHideIssuePreview"

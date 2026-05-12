@@ -43,7 +43,6 @@ const activeTab = ref<Tab>('profile')
 const profileForm = reactive({
   display_name: appStore.currentUser?.display_name ?? '',
   email: appStore.currentUser?.email ?? '',
-  feishu_contact: appStore.currentUser?.feishu_contact ?? '',
 })
 
 const avatarUploading = ref(false)
@@ -138,7 +137,6 @@ async function saveProfile() {
     const updated = await authApi.updateProfile({
       display_name: profileForm.display_name,
       email: profileForm.email || undefined,
-      feishu_contact: profileForm.feishu_contact || null,
     })
     appStore.setAuth(updated, appStore.token!)
     profileSuccess.value = t('profile.saveSuccess')
@@ -188,14 +186,14 @@ async function changePassword() {
         <div
           v-else
           class="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold font-mono text-foreground"
-          :style="{ backgroundColor: appStore.currentUser?.avatar_color || '#2E2E2E' }"
+          :style="{ backgroundColor: appStore.currentUser?.avatar_color || 'rgb(var(--color-border))' }"
         >
           {{ avatarInitial }}
         </div>
         <button
           @click="triggerAvatarUpload"
           :disabled="avatarUploading"
-          class="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          class="absolute inset-0 rounded-full bg-overlay/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
         >
           <Camera class="w-5 h-5 text-white" :stroke-width="2" />
         </button>
@@ -271,12 +269,6 @@ async function changePassword() {
           <div>
             <label class="block text-xs text-muted-foreground mb-1">{{ t('profile.email') }}</label>
             <input v-model="profileForm.email" type="email" class="input-field w-full" />
-          </div>
-
-          <div>
-            <label class="block text-xs text-muted-foreground mb-1">{{ t('profile.feishuContact') }}</label>
-            <input v-model="profileForm.feishu_contact" class="input-field w-full" :placeholder="t('profile.feishuContactPlaceholder')" />
-            <p class="text-[11px] text-muted-foreground mt-1">{{ t('profile.feishuContactHint') }}</p>
           </div>
 
           <div v-if="profileError" class="text-xs text-destructive">{{ profileError }}</div>

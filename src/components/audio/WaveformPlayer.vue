@@ -10,6 +10,7 @@ import { useTrackPlaybackPreference } from '@/composables/useTrackPlaybackPrefer
 import { useAppStore } from '@/stores/app'
 import { formatTimestamp, formatTimestampShort, roundToMilliseconds } from '@/utils/time'
 import { loadAudioBlobCached } from '@/utils/audioCache'
+import { THEME_CHANGED_EVENT } from '@/utils/theme'
 
 type InteractionMode = 'seek' | 'annotate'
 type PlaybackScope = 'source' | 'master' | 'local'
@@ -108,10 +109,48 @@ const compareCurrentTime = ref(0)
 const activeDuration = computed(() => abMode.value === 'B' && compareDuration.value > 0 ? compareDuration.value : duration.value)
 const activeCurrentTime = computed(() => abMode.value === 'B' && compareDuration.value > 0 ? compareCurrentTime.value : currentTime.value)
 const markerTimelineDuration = computed(() => activeDuration.value)
-// Draft (currently-being-edited) markers use the primary orange with a dashed
-// edge — distinct from the solid "major" severity even though they share hue.
-const DRAFT_EDGE = '#FF8400'
-const DRAFT_FILL = 'rgba(255, 132, 0, 0.22)'
+// Draft and major issue markers use a dedicated waveform-marker token so the
+// light theme can keep annotations brighter without changing the brand accent.
+const FALLBACK_RGB: Record<string, string> = {
+  '--color-primary': '255 132 0',
+  '--color-primary-light': '255 179 102',
+  '--color-error': '255 92 51',
+  '--color-info': '178 178 255',
+  '--color-muted-foreground': '184 185 182',
+  '--color-success': '182 255 206',
+  '--color-waveform-wave': '74 74 90',
+  '--color-waveform-progress': '34 211 238',
+  '--color-waveform-marker': '255 132 0',
+  '--color-waveform-resolved-marker': '182 255 206',
+}
+
+function tokenColor(token: string, alpha?: number): string {
+  return alpha == null ? `rgb(var(${token}))` : `rgb(var(${token}) / ${alpha})`
+}
+
+function resolvedTokenColor(token: string, alpha?: number): string {
+  let value = FALLBACK_RGB[token] ?? '255 132 0'
+  if (typeof window !== 'undefined') {
+    const resolved = getComputedStyle(document.documentElement).getPropertyValue(token).trim()
+    if (resolved) value = resolved
+  }
+  return alpha == null ? `rgb(${value})` : `rgb(${value} / ${alpha})`
+}
+
+function waveformWaveColor(alpha?: number): string {
+  return resolvedTokenColor('--color-waveform-wave', alpha)
+}
+
+function waveformProgressColor(alpha?: number): string {
+  return resolvedTokenColor('--color-waveform-progress', alpha)
+}
+
+function compareColor(alpha?: number): string {
+  return resolvedTokenColor('--color-primary-light', alpha)
+}
+
+const DRAFT_EDGE = tokenColor('--color-waveform-marker')
+const DRAFT_FILL = tokenColor('--color-waveform-marker', 0.22)
 const selectionVisualColor = DRAFT_FILL
 const MIN_GAIN_DB = -24
 const MAX_GAIN_DB = 24
@@ -133,39 +172,39 @@ const gainDb = computed(() => {
 const hasActiveGain = computed(() => Math.abs(gainDb.value) >= 0.05)
 
 // Severity tones — all values sourced from the design system tokens in
-// CLAUDE.md (error / primary / info / muted-foreground).
+// AGENTS.md (error / waveform-marker / info / muted-foreground).
 const RANGE_TONES: Record<string, { edge: string; fill: string; soft: string; glow: string }> = {
   critical: {
-    edge: '#FF5C33',
-    fill: 'rgba(255, 92, 51, 0.78)',
-    soft: 'rgba(255, 92, 51, 0.30)',
-    glow: 'rgba(255, 92, 51, 0.22)',
+    edge: tokenColor('--color-error'),
+    fill: tokenColor('--color-error', 0.78),
+    soft: tokenColor('--color-error', 0.30),
+    glow: tokenColor('--color-error', 0.22),
   },
   major: {
-    edge: '#FF8400',
-    fill: 'rgba(255, 132, 0, 0.78)',
-    soft: 'rgba(255, 132, 0, 0.28)',
-    glow: 'rgba(255, 132, 0, 0.22)',
+    edge: tokenColor('--color-waveform-marker'),
+    fill: tokenColor('--color-waveform-marker', 0.76),
+    soft: tokenColor('--color-waveform-marker', 0.26),
+    glow: tokenColor('--color-waveform-marker', 0.20),
   },
   minor: {
-    edge: '#B2B2FF',
-    fill: 'rgba(178, 178, 255, 0.70)',
-    soft: 'rgba(178, 178, 255, 0.24)',
-    glow: 'rgba(178, 178, 255, 0.20)',
+    edge: tokenColor('--color-info'),
+    fill: tokenColor('--color-info', 0.70),
+    soft: tokenColor('--color-info', 0.24),
+    glow: tokenColor('--color-info', 0.20),
   },
   suggestion: {
-    edge: '#B8B9B6',
-    fill: 'rgba(184, 185, 182, 0.62)',
-    soft: 'rgba(184, 185, 182, 0.22)',
-    glow: 'rgba(184, 185, 182, 0.18)',
+    edge: tokenColor('--color-muted-foreground'),
+    fill: tokenColor('--color-muted-foreground', 0.62),
+    soft: tokenColor('--color-muted-foreground', 0.22),
+    glow: tokenColor('--color-muted-foreground', 0.18),
   },
 }
 
 const RESOLVED_TONE = {
-  edge: '#B6FFCE',
-  fill: 'rgba(182, 255, 206, 0.58)',
-  soft: 'rgba(182, 255, 206, 0.22)',
-  glow: 'rgba(182, 255, 206, 0.18)',
+  edge: tokenColor('--color-waveform-resolved-marker'),
+  fill: tokenColor('--color-waveform-resolved-marker', 0.58),
+  soft: tokenColor('--color-waveform-resolved-marker', 0.22),
+  glow: tokenColor('--color-waveform-resolved-marker', 0.18),
 }
 
 type MarkerStatus = 'unresolved' | 'resolved'
@@ -394,7 +433,7 @@ function pointGroupDotStyle(group: PointMarkerGroup) {
   const hovered = group.issues.some(issue => issue.id === props.hoveredIssueId)
   return {
     background: tone.edge,
-    boxShadow: hovered ? `0 0 0 2px ${tone.soft}, 0 0 6px ${tone.glow}` : `0 0 0 1px rgba(0,0,0,0.4)`,
+    boxShadow: hovered ? `0 0 0 2px ${tone.soft}, 0 0 6px ${tone.glow}` : `0 0 0 1px ${tokenColor('--color-overlay', 0.4)}`,
     transform: hovered ? 'scale(1.2)' : 'scale(1)',
   }
 }
@@ -428,7 +467,7 @@ function rangeRulerTooltipStyle(issue: Issue) {
   const tone = isIssueResolvedLike(issue.status) ? RESOLVED_TONE : rangeTone(issue.severity)
   return {
     borderColor: tone.edge,
-    boxShadow: '0 4px 12px rgba(0,0,0,0.32)',
+    boxShadow: `0 4px 12px ${tokenColor('--color-overlay', 0.32)}`,
   }
 }
 
@@ -547,7 +586,7 @@ function applyCompareMode(mode: 'A' | 'B') {
     wavesurfer.value.setVolume(1)
     setNodeGain(primaryGateGainNode.value, 1)
     setNodeGain(compareGateGainNode.value, 0)
-    wavesurfer.value.setOptions({ waveColor: '#4A4A5A', progressColor: '#22D3EE', cursorWidth: 2 })
+    wavesurfer.value.setOptions({ waveColor: waveformWaveColor(), progressColor: waveformProgressColor(), cursorWidth: 2 })
     return
   }
 
@@ -556,8 +595,8 @@ function applyCompareMode(mode: 'A' | 'B') {
     compareWaveSurfer.value.setVolume(0)
     setNodeGain(primaryGateGainNode.value, 1)
     setNodeGain(compareGateGainNode.value, 0)
-    wavesurfer.value.setOptions({ waveColor: '#4A4A5A', progressColor: '#22D3EE', cursorWidth: 2 })
-    compareWaveSurfer.value.setOptions({ waveColor: 'rgba(249,115,22,0.15)', progressColor: 'rgba(249,115,22,0.2)', cursorWidth: 0 })
+    wavesurfer.value.setOptions({ waveColor: waveformWaveColor(), progressColor: waveformProgressColor(), cursorWidth: 2 })
+    compareWaveSurfer.value.setOptions({ waveColor: compareColor(0.15), progressColor: compareColor(0.2), cursorWidth: 0 })
     // Keep compare playing in sync so switching back to B is instant
     if (wavesurfer.value.isPlaying() && !compareWaveSurfer.value.isPlaying()) {
       syncCompareToPrimaryTime()
@@ -571,8 +610,8 @@ function applyCompareMode(mode: 'A' | 'B') {
   compareWaveSurfer.value.setVolume(1)
   setNodeGain(primaryGateGainNode.value, 0)
   setNodeGain(compareGateGainNode.value, 1)
-  wavesurfer.value.setOptions({ waveColor: 'rgba(74,74,90,0.15)', progressColor: 'rgba(34,211,238,0.2)', cursorWidth: 0 })
-  compareWaveSurfer.value.setOptions({ waveColor: 'rgba(249,115,22,0.28)', progressColor: '#FB923C', cursorWidth: 0 })
+  wavesurfer.value.setOptions({ waveColor: waveformWaveColor(0.15), progressColor: waveformProgressColor(0.2), cursorWidth: 0 })
+  compareWaveSurfer.value.setOptions({ waveColor: compareColor(0.28), progressColor: compareColor(), cursorWidth: 0 })
   // Ensure compare is actually playing when primary is playing
   if (wavesurfer.value.isPlaying() && !compareWaveSurfer.value.isPlaying()) {
     syncCompareToPrimaryTime()
@@ -778,7 +817,7 @@ function renderSelectionRegion() {
   if (element) {
     element.style.outline = `2px dashed ${DRAFT_EDGE}`
     element.style.outlineOffset = '-2px'
-    element.style.boxShadow = 'inset 0 0 0 1px rgba(255, 132, 0, 0.28)'
+    element.style.boxShadow = `inset 0 0 0 1px ${tokenColor('--color-waveform-marker', 0.28)}`
     element.style.borderTop = `2px solid ${DRAFT_EDGE}`
     element.style.borderBottom = `2px solid ${DRAFT_EDGE}`
   }
@@ -841,7 +880,13 @@ function updateCompareLoading(percent: number) {
   compareLoadProgress.value = Math.min(100, Math.max(0, Math.round(percent)))
 }
 
+function handleThemeChanged() {
+  applyCompareMode(abMode.value)
+  renderIssueRegions()
+}
+
 onMounted(async () => {
+  window.addEventListener(THEME_CHANGED_EVENT, handleThemeChanged)
   if (!container.value) return
 
   const [{ default: WaveSurfer }, { default: RegionsPlugin }] = await Promise.all([
@@ -854,8 +899,8 @@ onMounted(async () => {
 
   const ws = WaveSurfer.create({
     container: container.value,
-    waveColor: '#4A4A5A',
-    progressColor: '#22D3EE',
+    waveColor: waveformWaveColor(),
+    progressColor: waveformProgressColor(),
     cursorColor: 'transparent',
     cursorWidth: 0,
     height: props.height || 128,
@@ -1061,8 +1106,8 @@ watch(compareSourceUrl, async (newCompareUrl) => {
   const { default: WaveSurfer } = await import('wavesurfer.js')
   const ws = WaveSurfer.create({
     container: compareContainer,
-    waveColor: 'rgba(249,115,22,0.5)',
-    progressColor: 'rgba(249,115,22,0.7)',
+    waveColor: compareColor(0.5),
+    progressColor: compareColor(0.7),
     height: props.height || 128,
     barWidth: 2,
     barGap: 1,
@@ -1186,6 +1231,7 @@ function exportPeaks(maxLength = 400): number[] {
 }
 
 onBeforeUnmount(() => {
+  window.removeEventListener(THEME_CHANGED_EVENT, handleThemeChanged)
   disconnectGraph('primary')
   disconnectGraph('compare')
   wavesurfer.value?.destroy()
@@ -1224,7 +1270,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
           role="tab"
           :aria-selected="mode === 'annotate'"
           class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-mono transition-colors min-h-[32px] touch-manipulation"
-          :class="mode === 'annotate' ? 'bg-primary text-background shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+          :class="mode === 'annotate' ? 'bg-button-primary text-button-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
           @click="setMode('annotate')"
         >
           <MapPin class="h-3.5 w-3.5" :stroke-width="2" />
@@ -1338,7 +1384,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
         </div>
         <div
           ref="container"
-          class="relative overflow-hidden rounded-none bg-[#0D0D0D] transition-[z-index] touch-manipulation"
+          class="relative overflow-hidden rounded-none bg-[rgb(var(--color-waveform-surface))] transition-[z-index] touch-manipulation"
           :class="[abMode === 'A' ? 'z-[2]' : 'z-0', selectable && mode === 'annotate' ? 'cursor-crosshair' : 'cursor-pointer']"
           :style="{ height: `${props.height || 128}px` }"
           @pointermove="onWaveformPointerMove"
@@ -1349,7 +1395,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
           v-if="(draftPointList.length || draftRangeList.length || draftRangeAnchorLeft !== null) && markerTimelineDuration > 0"
           class="pointer-events-none absolute inset-0 z-10"
         >
-          <!-- Draft range fills — primary orange with dashed outline -->
+          <!-- Draft range fills — waveform marker with dashed outline -->
           <div
             v-for="(dr, i) in draftRangeList"
             :key="`dr-${i}`"
@@ -1362,15 +1408,15 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
               borderRight: `2px dashed ${DRAFT_EDGE}`,
             }"
           />
-          <!-- Draft point lines — primary orange dashed -->
+          <!-- Draft point lines — waveform marker dashed -->
           <template v-for="(dp, i) in draftPointList" :key="`dp-${i}`">
             <div
               class="absolute top-0 bottom-0"
               :style="{ left: dp.left, width: '0', borderLeft: `2px dashed ${DRAFT_EDGE}`, opacity: 0.9 }"
             />
             <span
-              class="absolute -top-3 flex h-3.5 w-3.5 -translate-x-1/2 items-center justify-center rounded-full text-[8px] font-mono font-bold leading-none text-background"
-              :style="{ left: dp.left, background: DRAFT_EDGE, boxShadow: '0 0 0 1px rgba(0,0,0,0.4)' }"
+              class="absolute -top-3 flex h-3.5 w-3.5 -translate-x-1/2 items-center justify-center rounded-full text-[8px] font-mono font-bold leading-none text-primary-foreground"
+              :style="{ left: dp.left, background: DRAFT_EDGE, boxShadow: `0 0 0 1px ${tokenColor('--color-overlay', 0.4)}` }"
             >{{ dp.index }}</span>
           </template>
           <template v-if="draftRangeAnchorLeft !== null">
@@ -1383,8 +1429,8 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
               }"
             />
             <span
-              class="absolute -top-3 flex h-3.5 w-3.5 -translate-x-1/2 items-center justify-center rounded-full text-[8px] font-mono font-bold leading-none text-background"
-              :style="{ left: draftRangeAnchorLeft, background: DRAFT_EDGE, boxShadow: '0 0 0 1px rgba(0,0,0,0.4)' }"
+              class="absolute -top-3 flex h-3.5 w-3.5 -translate-x-1/2 items-center justify-center rounded-full text-[8px] font-mono font-bold leading-none text-primary-foreground"
+              :style="{ left: draftRangeAnchorLeft, background: DRAFT_EDGE, boxShadow: `0 0 0 1px ${tokenColor('--color-overlay', 0.4)}` }"
             >A</span>
           </template>
         </div>
@@ -1410,11 +1456,11 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
           class="absolute inset-0 pointer-events-none transition-[z-index]"
           :class="abMode === 'B' ? 'z-[2]' : 'z-0'"
         ></div>
-        <div v-if="isCompareMode" class="absolute top-2 right-2 flex items-center gap-1 bg-black/60 rounded-lg p-1 z-10">
+        <div v-if="isCompareMode" class="absolute top-2 right-2 flex items-center gap-1 bg-overlay/60 rounded-lg p-1 z-10">
           <button
             type="button"
             @click="setAbMode('A')"
-            :class="['px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'A' ? 'bg-primary text-background' : 'text-muted-foreground hover:text-white']">
+            :class="['px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'A' ? 'bg-button-primary text-button-primary-foreground' : 'text-muted-foreground hover:text-foreground']">
             A
           </button>
           <button
@@ -1422,7 +1468,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
             @click="setAbMode('B')"
             :class="[
               'px-2 py-0.5 rounded text-xs font-bold transition-colors',
-              abMode === 'B' ? 'bg-primary text-background' : 'text-muted-foreground hover:text-white',
+              abMode === 'B' ? 'bg-button-primary text-button-primary-foreground' : 'text-muted-foreground hover:text-foreground',
               isCompareLoading ? 'cursor-wait' : '',
             ]">
             B

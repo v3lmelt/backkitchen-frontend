@@ -22,7 +22,7 @@
           >
             <img v-if="logoPreviewUrl" :src="logoPreviewUrl" alt="" class="w-full h-full object-cover" />
             <Smile v-else class="w-6 h-6 text-muted-foreground" :stroke-width="1.5" />
-            <div class="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <div class="absolute inset-0 bg-overlay/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <Upload class="w-4 h-4 text-white" :stroke-width="2" />
             </div>
           </button>
@@ -69,7 +69,7 @@
             <button
               type="button"
               class="h-10 rounded-full border font-mono text-sm transition-colors"
-              :class="form.default_checklist_enabled ? 'border-primary bg-primary text-background' : 'border-border bg-background text-foreground'"
+              :class="form.default_checklist_enabled ? 'border-button-primary bg-button-primary text-button-primary-foreground' : 'border-border bg-background text-foreground'"
               @click="form.default_checklist_enabled = true"
             >
               {{ t('circleNew.defaultChecklistEnabled') }}
@@ -77,7 +77,7 @@
             <button
               type="button"
               class="h-10 rounded-full border font-mono text-sm transition-colors"
-              :class="!form.default_checklist_enabled ? 'border-primary bg-primary text-background' : 'border-border bg-background text-foreground'"
+              :class="!form.default_checklist_enabled ? 'border-button-primary bg-button-primary text-button-primary-foreground' : 'border-border bg-background text-foreground'"
               @click="form.default_checklist_enabled = false"
             >
               {{ t('circleNew.defaultChecklistDisabled') }}

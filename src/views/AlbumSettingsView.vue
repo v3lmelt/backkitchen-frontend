@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import draggable from 'vuedraggable'
 import { albumApi, trackApi, checklistApi, invitationApi, userApi, circleApi, API_ORIGIN } from '@/api'
-import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
 import {
@@ -23,6 +22,7 @@ import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
+import AlbumCoverImage from '@/components/common/AlbumCoverImage.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const { t, locale } = useI18n()
@@ -163,8 +163,6 @@ const webhookState = reactive({
   events: [] as string[],
   type: 'generic',
   secret: '',
-  app_id: '',
-  app_secret: '',
   filter_user_ids: [] as number[],
   email_enabled: false,
   email_events: [] as string[],
@@ -407,8 +405,6 @@ function resetWebhookState() {
   webhookState.events = []
   webhookState.type = 'generic'
   webhookState.secret = ''
-  webhookState.app_id = ''
-  webhookState.app_secret = ''
   webhookState.filter_user_ids = []
   webhookState.email_enabled = false
   webhookState.email_events = []
@@ -420,8 +416,6 @@ function applyWebhookConfig(config: WebhookConfigPayload) {
   webhookState.events = [...config.events]
   webhookState.type = config.type || 'generic'
   webhookState.secret = config.secret || ''
-  webhookState.app_id = config.app_id || ''
-  webhookState.app_secret = config.app_secret || ''
   webhookState.filter_user_ids = config.filter_user_ids || []
   webhookState.email_enabled = config.email_enabled ?? false
   webhookState.email_events = config.email_events ? [...config.email_events] : []
@@ -1096,7 +1090,11 @@ async function refreshDeliveries() {
     <!-- Album header -->
     <div class="flex items-center gap-4">
       <div class="w-10 h-10 flex-shrink-0 overflow-hidden border border-border">
-        <img :src="album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : albumPlaceholder" class="w-full h-full object-cover" />
+        <AlbumCoverImage
+          :src="album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : null"
+          :alt="album.title"
+          class="w-full h-full object-cover"
+        />
       </div>
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-3 flex-wrap">
@@ -1148,13 +1146,14 @@ async function refreshDeliveries() {
               :title="canManageAlbum ? t('albumSettings.info.coverHintFormat') : undefined"
               @click="canManageAlbum && coverInputRef?.click()"
             >
-              <img
-                :src="coverPreviewUrl || (album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : albumPlaceholder)"
+              <AlbumCoverImage
+                :src="coverPreviewUrl || (album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : null)"
+                :alt="album.title"
                 class="absolute inset-0 w-full h-full object-cover"
               />
               <div
                 v-if="canManageAlbum"
-                class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                class="absolute inset-0 bg-overlay/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
               >
                 <Upload class="w-6 h-6 text-white" :stroke-width="2" />
               </div>
@@ -1757,7 +1756,7 @@ async function refreshDeliveries() {
             class="space-y-1"
           >
             <template #item="{ element, index }">
-              <div class="flex items-center gap-3 px-3 py-2 border border-border bg-background hover:bg-white/5 transition-colors cursor-move drag-handle">
+              <div class="flex items-center gap-3 px-3 py-2 border border-border bg-background hover:bg-border/50 transition-colors cursor-move drag-handle">
                 <span class="text-xs text-muted-foreground font-mono w-6 text-right flex-shrink-0">{{ index + 1 }}</span>
                 <span class="text-sm font-medium text-foreground flex-1 truncate">{{ element.title }}</span>
                 <span class="text-xs text-muted-foreground truncate max-w-[120px]">{{ element.artist }}</span>
@@ -1894,18 +1893,6 @@ async function refreshDeliveries() {
         <div v-if="webhookState.type === 'feishu'">
           <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.webhookSecret') }}</label>
           <input v-model="webhookState.secret" type="password" class="input-field w-full text-sm" :placeholder="t('settings.webhookSecretPlaceholder')" />
-        </div>
-        <div v-if="webhookState.type === 'feishu'" class="space-y-4 p-4 bg-background border border-border rounded-none">
-          <div class="text-xs text-muted-foreground">{{ t('settings.feishuMentionTitle') }}</div>
-          <div>
-            <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.feishuAppId') }}</label>
-            <input v-model="webhookState.app_id" class="input-field w-full text-sm" placeholder="cli_xxxxxxxx" />
-          </div>
-          <div>
-            <label class="block text-xs text-muted-foreground mb-1">{{ t('settings.feishuAppSecret') }}</label>
-            <input v-model="webhookState.app_secret" type="password" class="input-field w-full text-sm" />
-          </div>
-          <p class="text-[11px] text-muted-foreground">{{ t('settings.feishuMentionHint') }}</p>
         </div>
         <label class="flex items-center gap-2 text-sm text-foreground cursor-pointer">
           <input type="checkbox" class="checkbox" v-model="webhookState.enabled" />

@@ -40,7 +40,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
     <Transition name="fade">
       <div
         v-if="open"
-        class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+        class="fixed inset-0 bg-overlay/60 flex items-center justify-center z-50 p-4"
         @click.self="open = false"
       >
         <div class="modal-panel bg-card border border-border rounded-none w-full max-w-md shadow-xl">

@@ -14,7 +14,7 @@ import { TRACK_STATUS_COLORS } from '@/utils/status'
 import { buildTrackWorkspaceRoute, translateStepLabel } from '@/utils/workflow'
 import { useDashboardPins } from '@/composables/useDashboardPins'
 import { useToast } from '@/composables/useToast'
-import albumPlaceholder from '@/assets/album-placeholder.svg'
+import AlbumCoverImage from '@/components/common/AlbumCoverImage.vue'
 import { Music, Search } from 'lucide-vue-next'
 
 const TRACK_PAGE_SIZE = 100
@@ -58,7 +58,7 @@ function toAlbumStats(album: Album): AlbumStats {
 }
 
 function statusColor(status: string): string {
-  return TRACK_STATUS_COLORS[status as TrackStatus] ?? '#6b7280'
+  return TRACK_STATUS_COLORS[status as TrackStatus] ?? 'rgb(var(--color-muted-foreground))'
 }
 
 function nonZeroStatuses(byStatus: Partial<Record<TrackStatus, number>>): [TrackStatus, number][] {
@@ -373,8 +373,8 @@ function openTrack(track: Track) {
         <div v-for="inv in appStore.pendingInvitations" :key="inv.id" class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-3 bg-card rounded-none border border-border">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 overflow-hidden rounded-none border border-border flex-shrink-0">
-              <img
-                :src="inv.album?.cover_image ? `${API_ORIGIN}/uploads/${inv.album.cover_image}` : albumPlaceholder"
+              <AlbumCoverImage
+                :src="inv.album?.cover_image ? `${API_ORIGIN}/uploads/${inv.album.cover_image}` : null"
                 :alt="inv.album?.title || ''"
                 class="w-full h-full object-cover"
               />
@@ -567,8 +567,8 @@ function openTrack(track: Track) {
         >
           <!-- Cover image or placeholder — no color bar -->
           <div class="w-full h-28 overflow-hidden">
-            <img
-              :src="album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : albumPlaceholder"
+            <AlbumCoverImage
+              :src="album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : null"
               :alt="album.title"
               class="w-full h-full object-cover"
             />
@@ -606,7 +606,7 @@ function openTrack(track: Track) {
             </div>
 
             <template v-if="albumStatsMap[album.id]">
-              <div class="flex h-1.5 overflow-hidden gap-px mb-2">
+              <div class="flex h-1.5 overflow-hidden gap-px mb-2 bg-border/35">
                 <div
                   v-for="[statusKey, count] in albumNonZeroStatuses[album.id]"
                   :key="statusKey"
@@ -731,7 +731,7 @@ function openTrack(track: Track) {
                 v-for="track in group.tracks"
                 :key="track.id"
                 @click="router.push({ path: `/tracks/${track.id}`, query: { returnTo: route.path } })"
-                class="border-b border-border last:border-0 hover:bg-white/5 cursor-pointer transition-colors"
+                class="border-b border-border last:border-0 hover:bg-border/50 cursor-pointer transition-colors"
               >
                 <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ track.track_number || '—' }}</td>
                 <td class="px-4 py-3">
@@ -782,7 +782,7 @@ function openTrack(track: Track) {
               v-for="track in group.tracks"
               :key="track.id"
                @click="router.push({ path: `/tracks/${track.id}`, query: { returnTo: route.path } })"
-              class="bg-card border border-border p-3 cursor-pointer active:bg-white/5 transition-colors"
+              class="bg-card border border-border p-3 cursor-pointer active:bg-border/50 transition-colors"
             >
               <div class="flex items-center justify-between gap-2 mb-1.5">
                 <div class="flex items-center gap-2 min-w-0">
@@ -820,7 +820,7 @@ function openTrack(track: Track) {
 
   <!-- Export progress overlay -->
   <Teleport to="body">
-    <div v-if="exportProgress" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+    <div v-if="exportProgress" class="fixed inset-0 z-50 flex items-center justify-center bg-overlay/60">
       <div class="bg-card border border-border rounded-none p-6 w-full max-w-md space-y-4">
         <h3 class="font-mono font-semibold text-foreground">{{ t('export.title') }}</h3>
 

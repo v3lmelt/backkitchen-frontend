@@ -53,6 +53,7 @@ const { success: toastSuccess, error: toastError } = useToast()
 const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
 
 const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
+const DIRECT_REVISION_REQUEST_DECISION = 'request_revision_now'
 const appStore = useAppStore()
 const trackStore = useTrackStore()
 const trackId = computed(() => Number(route.params.id))
@@ -205,6 +206,14 @@ const currentUserCanFinalizeReview = computed(() =>
   && reviewQuorumReached.value,
 )
 const currentUserCanSubmitReview = computed(() => currentUserAssignment.value?.status === 'pending')
+const reviewUsesFirstRevisionRequest = computed(() =>
+  currentStep.value?.type === 'review'
+  && currentStep.value.revision_decision_policy === 'first_revision_request',
+)
+const currentUserHasRevisionSuggestion = computed(() =>
+  currentUserAssignment.value?.status === 'completed'
+  && currentUserAssignment.value.decision === 'needs_revision',
+)
 const reviewerAssignmentModalOpen = ref(false)
 const reviewerAssignmentMembers = ref<AlbumMember[]>([])
 const reviewerAssignmentSelectedUserIds = ref<number[]>([])
@@ -1030,6 +1039,10 @@ async function executeTransition(decision: string) {
     const confirmed = window.confirm(t('producer.rejectFinalConfirm'))
     if (!confirmed) return
   }
+  if (decision === DIRECT_REVISION_REQUEST_DECISION) {
+    const confirmed = window.confirm(t('workflowStep.directRevisionConfirm'))
+    if (!confirmed) return
+  }
   acting.value = true
   error.value = ''
   try {
@@ -1208,6 +1221,11 @@ function resolveForwardTargetLabel(decision: string): string | null {
 }
 
 function transitionLabel(decision: string, fallbackLabel: string) {
+  if (decision === DIRECT_REVISION_REQUEST_DECISION) {
+    return currentUserHasRevisionSuggestion.value
+      ? t('workflowStep.directRevisionFromSubmitted')
+      : t('workflowStep.directRevisionNow')
+  }
   if (activeVariant.value === 'intake' && decision === 'accept') {
     const label = resolveForwardTargetLabel('accept')
     if (label) return t('workflowStep.forwardToStep', { step: label })
@@ -1223,7 +1241,11 @@ function transitionLabel(decision: string, fallbackLabel: string) {
     }
     if (currentUserCanSubmitReview.value) {
       if (decision === 'pass' || decision === 'approve') return t('workflowStep.reviewSubmitApprove')
-      if (decision.includes('revision') || decision.includes('reject')) return t('workflowStep.reviewSubmitRevision')
+      if (decision.includes('revision') || decision.includes('reject')) {
+        return reviewUsesFirstRevisionRequest.value
+          ? t('workflowStep.reviewSuggestRevision')
+          : t('workflowStep.reviewSubmitRevision')
+      }
     }
   }
   if (decision.startsWith('reject_to_')) {
@@ -1433,9 +1455,16 @@ const peerReviewActionHint = computed(() => {
   if (isPeerReviewChecklistEnabled.value && !checklistSaved.value) return t('peerReview.checklistRequiredHint')
   if (currentUserCanFinalizeReview.value) return t('workflowStep.reviewFinalizeHint')
   if (reviewRequiresGroupFinalization.value && currentUserAssignment.value?.status === 'completed' && !reviewQuorumReached.value) {
+    if (reviewUsesFirstRevisionRequest.value && currentUserHasRevisionSuggestion.value) {
+      return t('workflowStep.reviewWaitingForQuorumEarlyRevision')
+    }
     return t('workflowStep.reviewWaitingForQuorum', { completed: completedReviewCount.value, required: requiredReviewCount.value })
   }
-  if (currentUserCanSubmitReview.value) return t('workflowStep.reviewSubmitHint')
+  if (currentUserCanSubmitReview.value) {
+    return reviewUsesFirstRevisionRequest.value
+      ? t('workflowStep.reviewSubmitHintEarlyRevision')
+      : t('workflowStep.reviewSubmitHint')
+  }
   return t('peerReview.actionHint')
 })
 
@@ -1612,10 +1641,12 @@ function handleIssueLeave() {
                 {{ t('workflowStep.reviewFinalizeReady') }}
               </template>
               <template v-else-if="reviewRequiresGroupFinalization && currentUserAssignment?.status === 'completed' && !reviewQuorumReached">
-                {{ t('workflowStep.reviewWaitingForQuorum', { completed: completedReviewCount, required: requiredReviewCount }) }}
+                {{ reviewUsesFirstRevisionRequest && currentUserHasRevisionSuggestion
+                  ? t('workflowStep.reviewWaitingForQuorumEarlyRevision')
+                  : t('workflowStep.reviewWaitingForQuorum', { completed: completedReviewCount, required: requiredReviewCount }) }}
               </template>
               <template v-else>
-                {{ t('workflowStep.reviewSubmitHint') }}
+                {{ reviewUsesFirstRevisionRequest ? t('workflowStep.reviewSubmitHintEarlyRevision') : t('workflowStep.reviewSubmitHint') }}
               </template>
             </p>
           </div>
@@ -3027,7 +3058,7 @@ function handleIssueLeave() {
       @click.self="closeReviewerAssignmentModal"
     >
       <div class="absolute inset-0 bg-background/80" />
-      <div class="relative bg-card border border-border rounded-none p-5 w-full max-w-md space-y-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
+      <div class="relative bg-card border border-border rounded-none p-5 w-full max-w-md space-y-4 shadow-[var(--popover-shadow)]">
         <div class="space-y-1">
           <h4 class="text-sm font-mono font-semibold text-foreground">
             {{ currentStepAssignments.length > 0 ? t('workflowStep.reassignReviewerTitle') : t('workflowStep.assignReviewerTitle') }}

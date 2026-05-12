@@ -44,7 +44,7 @@ onMounted(() => {
     <article
       v-for="entry in CHANGELOG"
       :key="entry.version"
-      class="bg-card border border-border rounded-none p-6 space-y-5 shadow-[0_1px_1.75px_rgba(0,0,0,0.05)]"
+      class="bg-card border border-border rounded-none p-6 space-y-5 shadow-[var(--shadow-card)]"
     >
       <div class="min-w-0">
         <div class="flex items-center gap-2 flex-wrap">

@@ -3,7 +3,6 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { albumApi, circleApi, userApi } from '@/api'
-import albumPlaceholder from '@/assets/album-placeholder.svg'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
 import {
@@ -17,6 +16,7 @@ import { ChevronLeft, Upload, ChevronDown, ChevronRight, HelpCircle, BookTemplat
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
+import AlbumCoverImage from '@/components/common/AlbumCoverImage.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import {
   buildDefaultWorkflowConfig,
@@ -392,11 +392,12 @@ async function create() {
               :aria-label="coverButtonLabel"
               @click="coverInputRef?.click()"
             >
-              <img
-                :src="coverPreviewUrl || albumPlaceholder"
+              <AlbumCoverImage
+                :src="coverPreviewUrl"
+                :alt="coverButtonLabel"
                 class="absolute inset-0 w-full h-full object-cover"
               />
-              <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <div class="absolute inset-0 bg-overlay/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <Upload class="w-6 h-6 text-white" :stroke-width="2" />
               </div>
             </button>
@@ -672,7 +673,7 @@ async function create() {
           </div>
 
           <!-- Template list modal -->
-          <div v-if="showTemplateList" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="showTemplateList = false">
+          <div v-if="showTemplateList" class="fixed inset-0 bg-overlay/50 flex items-center justify-center z-50" @click.self="showTemplateList = false">
             <div class="bg-card border border-border rounded-none p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto space-y-4">
               <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowTemplate.selectTemplate') }}</h3>
               <div v-if="templates.length === 0" class="text-sm text-muted-foreground py-4 text-center">
@@ -693,7 +694,7 @@ async function create() {
           </div>
 
           <!-- Save template modal -->
-          <div v-if="showSaveTemplate" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="showSaveTemplate = false">
+          <div v-if="showSaveTemplate" class="fixed inset-0 bg-overlay/50 flex items-center justify-center z-50" @click.self="showSaveTemplate = false">
             <div class="bg-card border border-border rounded-none p-6 w-full max-w-md space-y-4">
               <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowTemplate.saveAsTemplate') }}</h3>
               <div>

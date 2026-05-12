@@ -99,8 +99,8 @@ onBeforeUnmount(() => {
   animation: status-flash 0.6s ease-out;
 }
 @keyframes status-flash {
-  0%   { box-shadow: 0 0 0 0 rgba(255, 132, 0, 0.55); }
-  40%  { box-shadow: 0 0 0 6px rgba(255, 132, 0, 0.25); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 132, 0, 0); }
+  0%   { box-shadow: 0 0 0 0 rgb(var(--color-primary) / 0.55); }
+  40%  { box-shadow: 0 0 0 6px rgb(var(--color-primary) / 0.25); }
+  100% { box-shadow: 0 0 0 0 rgb(var(--color-primary) / 0); }
 }
 </style>

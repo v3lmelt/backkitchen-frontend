@@ -121,7 +121,7 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
       <MessageSquare class="w-5 h-5" :stroke-width="2" />
       <span
         v-if="unreadCount > 0"
-        class="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-primary text-[10px] font-mono font-bold text-black px-1"
+        class="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full border border-warning/25 bg-warning-bg text-[10px] font-mono font-bold text-warning px-1"
       >
         {{ unreadCount > 99 ? '99+' : unreadCount }}
       </span>
@@ -191,7 +191,7 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
             <!-- Avatar -->
             <div
               class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-              :style="{ backgroundColor: d.author?.avatar_color || '#6366f1' }"
+              :style="{ backgroundColor: d.author?.avatar_color || 'rgb(var(--color-info))' }"
             >
               {{ d.author?.display_name?.charAt(0) || '?' }}
             </div>
@@ -258,7 +258,7 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
                         :src="resolveAssetUrl(audio.audio_url)"
                         controls
                         class="w-full h-7"
-                        style="accent-color: #FF8400;"
+                        style="accent-color: rgb(var(--color-primary));"
                       />
                     </div>
                   </div>

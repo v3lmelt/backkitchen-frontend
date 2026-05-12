@@ -218,13 +218,13 @@ function confirmPending() {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #FF8400;
+  background: rgb(var(--color-primary));
   animation: pulse 2.4s ease-in-out infinite;
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1;   transform: scale(1);    box-shadow: 0 0 0 0 rgba(255,132,0,0.4); }
-  50%       { opacity: 0.5; transform: scale(0.75); box-shadow: 0 0 0 4px rgba(255,132,0,0);  }
+  0%, 100% { opacity: 1;   transform: scale(1);    box-shadow: 0 0 0 0 rgb(var(--color-primary) / 0.4); }
+  50%       { opacity: 0.5; transform: scale(0.75); box-shadow: 0 0 0 4px rgb(var(--color-primary) / 0);  }
 }
 
 /* ── Ghost secondary button ── */
@@ -246,7 +246,7 @@ function confirmPending() {
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #B8B9B6;
+  color: rgb(var(--color-muted-foreground));
 }
 
 .decision-group {
@@ -256,9 +256,9 @@ function confirmPending() {
   justify-content: flex-end;
   width: 100%;
   padding: 0.25rem;
-  border: 1px solid #2E2E2E;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 9999px;
-  background: #1A1A1A;
+  background: rgb(var(--color-card));
 }
 
 .grouped-btn {
@@ -269,31 +269,31 @@ function confirmPending() {
 
 .grouped-btn-return {
   background: transparent;
-  color: #FFFFFF;
+  color: rgb(var(--color-foreground));
 }
 
 .grouped-btn-return:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgb(var(--color-border) / 0.5);
 }
 
 .grouped-btn-reject {
   background: transparent;
-  color: #FF5C33;
-  border-color: rgba(255, 92, 51, 0.22);
+  color: rgb(var(--color-error));
+  border-color: rgb(var(--color-error) / 0.22);
 }
 
 .grouped-btn-reject:hover:not(:disabled) {
-  background: rgba(255, 92, 51, 0.1);
+  background: rgb(var(--color-error) / 0.1);
 }
 
 .grouped-btn-advance {
-  background: #FF8400;
-  color: #111111;
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-foreground));
   font-weight: 600;
 }
 
 .grouped-btn-advance:hover:not(:disabled) {
-  background: #CC6A00;
+  background: rgb(var(--color-primary-hover));
 }
 
 @media (min-width: 640px) {
@@ -312,12 +312,12 @@ function confirmPending() {
 
 /* ── Primary advance button ── */
 .advance-btn {
-  background: #FF8400;
-  color: #111111;
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-foreground));
 }
 
 .advance-btn:hover:not(:disabled) {
-  background: #E87800;
+  background: rgb(var(--color-primary-hover));
 }
 
 /* shimmer layer */
@@ -327,7 +327,7 @@ function confirmPending() {
   background: linear-gradient(
     105deg,
     transparent 35%,
-    rgba(255, 255, 255, 0.18) 50%,
+    rgb(255 255 255 / 0.18) 50%,
     transparent 65%
   );
   transform: translateX(-100%);
@@ -341,12 +341,12 @@ function confirmPending() {
 
 /* subtle idle glow on advance */
 .advance-btn:not(:disabled) {
-  box-shadow: 0 0 18px rgba(255, 132, 0, 0.22);
+  box-shadow: 0 0 18px rgb(var(--color-primary) / 0.22);
   animation: idle-glow 3s ease-in-out infinite;
 }
 
 @keyframes idle-glow {
-  0%, 100% { box-shadow: 0 0 18px rgba(255,132,0,0.20); }
-  50%       { box-shadow: 0 0 28px rgba(255,132,0,0.40); }
+  0%, 100% { box-shadow: 0 0 18px rgb(var(--color-primary) / 0.20); }
+  50%       { box-shadow: 0 0 28px rgb(var(--color-primary) / 0.40); }
 }
 </style>

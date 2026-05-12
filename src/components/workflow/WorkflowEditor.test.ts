@@ -156,6 +156,7 @@ describe('WorkflowEditor', () => {
     expect(peerReview.reviewer_pool).toEqual([101, 102])
     expect(peerReview.required_reviewer_count).toBe(2)
     expect(peerReview.revision_step).toBe('peer_review_revision')
+    expect(peerReview.revision_decision_policy).toBeUndefined()
     expect(stepById(saved, 'peer_review_revision')).toMatchObject({
       type: 'revision',
       return_to: 'peer_review',
@@ -227,5 +228,59 @@ describe('WorkflowEditor', () => {
     expect(peerReview.assignment_mode).toBe('fixed')
     expect(peerReview.reviewer_pool).toEqual([101, 102])
     expect(peerReview.required_reviewer_count).toBe(2)
+  })
+
+  it('saves the first revision request policy for peer review', async () => {
+    const wrapper = mountWithPlugins(WorkflowEditor, {
+      props: {
+        workflowConfig: existingWorkflow,
+        memberOptions,
+        saveable: true,
+      },
+    })
+
+    const peerCard = wrapper
+      .findAll('[role="button"]')
+      .find(node => node.text().includes('Peer Review') && node.text().includes('2 reviewers'))
+    if (!peerCard) throw new Error('Peer Review card not found')
+    await peerCard.trigger('click')
+    await flushPromises()
+
+    await findButton(wrapper, 'Any reviewer can request re-upload').trigger('click')
+    await flushPromises()
+
+    const saveButton = findButton(wrapper, 'Save Workflow')
+    expect((saveButton.element as HTMLButtonElement).disabled).toBe(false)
+    await saveButton.trigger('click')
+
+    const saved = lastSavedConfig(wrapper)
+    const peerReview = stepById(saved, 'peer_review')
+    expect(peerReview.revision_decision_policy).toBe('first_revision_request')
+  })
+
+  it('updates the revision trigger hint when switching peer review policy', async () => {
+    const wrapper = mountWithPlugins(WorkflowEditor, {
+      props: {
+        workflowConfig: existingWorkflow,
+        memberOptions,
+        saveable: true,
+      },
+    })
+
+    const peerCard = wrapper
+      .findAll('[role="button"]')
+      .find(node => node.text().includes('Peer Review') && node.text().includes('2 reviewers'))
+    if (!peerCard) throw new Error('Peer Review card not found')
+    await peerCard.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('After the required reviewer count is reached')
+    expect(wrapper.text()).not.toContain('only when a direct re-upload action is confirmed')
+
+    await findButton(wrapper, 'Any reviewer can request re-upload').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('only when a direct re-upload action is confirmed')
+    expect(wrapper.text()).not.toContain('After the required reviewer count is reached')
   })
 })

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en" class="dark" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -9,6 +9,20 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet" />
+    <script>
+      (() => {
+        try {
+          const stored = localStorage.getItem('backkitchen_theme')
+          const theme = stored === 'light' || stored === 'dark' ? stored : 'dark'
+          const root = document.documentElement
+          root.dataset.theme = theme
+          root.classList.toggle('dark', theme === 'dark')
+          root.classList.toggle('light', theme === 'light')
+        } catch {
+          document.documentElement.dataset.theme = 'dark'
+        }
+      })()
+    </script>
   </head>
   <body class="font-sans">
     <div id="app"></div>

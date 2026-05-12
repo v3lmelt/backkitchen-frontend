@@ -41,7 +41,7 @@
         v-for="circle in circles"
         :key="circle.id"
         :to="`/circles/${circle.id}`"
-        class="bg-card border border-border rounded-none shadow-[0_1px_1.75px_rgba(0,0,0,0.05)] p-6 flex gap-4 items-start hover:border-primary/50 transition-colors"
+        class="bg-card border border-border rounded-none shadow-[var(--shadow-card)] p-6 flex gap-4 items-start hover:border-primary/50 transition-colors"
       >
         <!-- logo -->
         <div class="shrink-0 w-12 h-12 rounded-full overflow-hidden bg-border flex items-center justify-center">

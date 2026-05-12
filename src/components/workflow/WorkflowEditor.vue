@@ -21,6 +21,7 @@ interface MemberOption {
 
 type StageKind = 'intake' | 'peer_review' | 'producer_gate' | 'mastering' | 'final_review'
 type MainStepType = 'review' | 'approval' | 'delivery'
+type RevisionDecisionPolicy = 'quorum_final' | 'first_revision_request'
 
 interface EditorStage {
   id: string
@@ -31,6 +32,7 @@ interface EditorStage {
   assignment_mode: 'manual' | 'auto' | 'fixed'
   reviewer_pool: number[]
   required_reviewer_count: number
+  revision_decision_policy: RevisionDecisionPolicy
   allow_permanent_reject: boolean
   require_confirmation: boolean
   has_revision: boolean
@@ -220,6 +222,7 @@ function createStage(kind: StageKind, existingIds: string[]): EditorStage {
     assignment_mode: kind === 'peer_review' ? 'auto' : 'manual',
     reviewer_pool: [],
     required_reviewer_count: 1,
+    revision_decision_policy: 'quorum_final',
     allow_permanent_reject: meta.default_allow_permanent_reject,
     require_confirmation: meta.default_require_confirmation,
     has_revision: meta.default_has_revision,
@@ -262,6 +265,9 @@ function parseConfigToStages(config: WorkflowConfig | null): EditorStage[] {
       assignment_mode: (step.assignment_mode ?? 'manual') as 'manual' | 'auto' | 'fixed',
       reviewer_pool: step.reviewer_pool ?? [],
       required_reviewer_count: step.required_reviewer_count ?? 1,
+      revision_decision_policy: step.revision_decision_policy === 'first_revision_request'
+        ? 'first_revision_request'
+        : 'quorum_final',
       allow_permanent_reject: step.allow_permanent_reject ?? meta.default_allow_permanent_reject,
       require_confirmation: step.require_confirmation ?? meta.default_require_confirmation,
       has_revision: meta.supports_revision && !!revisionTarget,
@@ -334,6 +340,11 @@ const typeBadgeClass: Record<MainStepType, string> = {
   approval: 'bg-warning-bg text-warning',
   delivery: 'bg-success-bg text-success',
 }
+
+const selectedStageCardClass = 'border-primary/35 bg-primary/5 shadow-[inset_3px_0_0_rgb(var(--color-primary)/0.38)]'
+const selectedOptionClass = 'border-primary/40 bg-primary/10 text-primary'
+const unselectedOptionClass = 'border-border bg-background text-foreground hover:border-primary/30'
+const unselectedOptionOnCardClass = 'border-border bg-card text-foreground hover:border-primary/30'
 
 const memberOptions = computed(() => props.memberOptions)
 
@@ -419,6 +430,9 @@ const fullConfig = computed<WorkflowConfig>(() => {
         step.reviewer_pool = [...stage.reviewer_pool]
       }
       if (stage.has_revision) step.revision_step = stage.revision_id
+      if (stage.has_revision && stage.revision_decision_policy === 'first_revision_request') {
+        step.revision_decision_policy = 'first_revision_request'
+      }
     }
 
     if (meta.type === 'approval') {
@@ -631,6 +645,9 @@ function stageQuickTags(stage: EditorStage): string[] {
         ? Math.max(1, stage.reviewer_pool.length)
         : stage.required_reviewer_count,
     }))
+    if (stage.has_revision && stage.revision_decision_policy === 'first_revision_request') {
+      tags.push(t('workflowEditor.firstRevisionRequestTag'))
+    }
   }
   if (stage.assignee_user_id !== null) tags.push(t('workflowEditor.assigneePinned'))
   if (stage.require_confirmation) tags.push(t('workflowEditor.confirmationTag'))
@@ -654,6 +671,12 @@ function revisionActionLabel(stage: EditorStage): string {
   if (stage.kind === 'peer_review') return t('workflowEditor.stageActions.needsRevision')
   if (stage.kind === 'mastering') return t('workflowEditor.stageActions.requestRevision')
   return t('workflowEditor.stageActions.reject')
+}
+
+function revisionDecisionPolicyHint(policy: RevisionDecisionPolicy): string {
+  return policy === 'first_revision_request'
+    ? t('workflowEditor.revisionDecisionFirstRequestHint')
+    : t('workflowEditor.revisionDecisionQuorumHint')
 }
 
 function primaryTargetLabel(index: number): string {
@@ -804,6 +827,7 @@ function updateSelectedKind(kind: StageKind) {
   stage.assignment_mode = kind === 'peer_review' ? 'auto' : 'manual'
   stage.reviewer_pool = []
   stage.required_reviewer_count = 1
+  stage.revision_decision_policy = 'quorum_final'
   stage.allow_permanent_reject = meta.default_allow_permanent_reject
   stage.require_confirmation = meta.default_require_confirmation
   stage.has_revision = meta.default_has_revision
@@ -909,7 +933,7 @@ function saveConfig() {
               :class="[
                 'group w-full text-left border rounded-none transition-all cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
                 selectedStageId === stage.id
-                  ? 'border-primary bg-background shadow-[inset_3px_0_0_#FF8400]'
+                  ? selectedStageCardClass
                   : 'border-border bg-card hover:bg-background/80',
               ]"
             >
@@ -1034,8 +1058,8 @@ function saveConfig() {
                 :class="[
                   'h-10 rounded-full border font-mono text-xs transition-colors',
                   selectedStage.kind === kind
-                    ? 'border-primary bg-primary text-black'
-                    : 'border-border bg-background text-foreground',
+                    ? selectedOptionClass
+                    : unselectedOptionClass,
                 ]"
               >
                 {{ stageKindLabel(kind) }}
@@ -1073,8 +1097,8 @@ function saveConfig() {
                   :class="[
                     'h-10 rounded-full border font-mono text-xs transition-colors',
                     selectedStage.assignment_mode === 'manual'
-                      ? 'border-primary bg-primary text-black'
-                      : 'border-border bg-card text-foreground',
+                      ? selectedOptionClass
+                      : unselectedOptionOnCardClass,
                   ]"
                 >
                   {{ t('workflowEditor.manual') }}
@@ -1085,8 +1109,8 @@ function saveConfig() {
                   :class="[
                     'h-10 rounded-full border font-mono text-xs transition-colors',
                     selectedStage.assignment_mode === 'auto'
-                      ? 'border-primary bg-primary text-black'
-                      : 'border-border bg-card text-foreground',
+                      ? selectedOptionClass
+                      : unselectedOptionOnCardClass,
                   ]"
                 >
                   {{ t('workflowEditor.auto') }}
@@ -1097,8 +1121,8 @@ function saveConfig() {
                   :class="[
                     'h-10 rounded-full border font-mono text-xs transition-colors',
                     selectedStage.assignment_mode === 'fixed'
-                      ? 'border-primary bg-primary text-black'
-                      : 'border-border bg-card text-foreground',
+                      ? selectedOptionClass
+                      : unselectedOptionOnCardClass,
                   ]"
                 >
                   {{ t('workflowEditor.fixed') }}
@@ -1253,6 +1277,39 @@ function saveConfig() {
                   <MoveRight class="w-3 h-3 inline mx-1" />
                   <span>{{ t('workflowEditor.returnToCurrent') }}</span>
                 </span>
+              </div>
+
+              <div v-if="selectedStage.kind === 'peer_review'" class="space-y-2">
+                <label class="block text-xs text-muted-foreground">{{ t('workflowEditor.revisionDecisionPolicy') }}</label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    @click="selectedStage.revision_decision_policy = 'quorum_final'; markChanged()"
+                    :class="[
+                      'min-h-10 rounded-full border px-3 py-2 font-mono text-xs transition-colors',
+                      selectedStage.revision_decision_policy === 'quorum_final'
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border bg-card text-foreground',
+                    ]"
+                  >
+                    {{ t('workflowEditor.revisionDecisionQuorum') }}
+                  </button>
+                  <button
+                    type="button"
+                    @click="selectedStage.revision_decision_policy = 'first_revision_request'; markChanged()"
+                    :class="[
+                      'min-h-10 rounded-full border px-3 py-2 font-mono text-xs transition-colors',
+                      selectedStage.revision_decision_policy === 'first_revision_request'
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border bg-card text-foreground',
+                    ]"
+                  >
+                    {{ t('workflowEditor.revisionDecisionFirstRequest') }}
+                  </button>
+                </div>
+                <p class="text-xs text-muted-foreground">
+                  {{ revisionDecisionPolicyHint(selectedStage.revision_decision_policy) }}
+                </p>
               </div>
             </template>
           </div>
