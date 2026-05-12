@@ -5,6 +5,38 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.16",
+    "date": "2026-05-12",
+    "headline": {
+      "zh-CN": "修正最近更新的审核跳转",
+      "en": "Fixes recent-update review navigation"
+    },
+    "summary": {
+      "zh-CN": "Dashboard 顶部的「最近更新」现在会按当前用户权限打开曲目：有待处理动作时进入对应审核工作台，没有动作权限时只打开普通曲目详情页。",
+      "en": "The Dashboard recent-updates panel now opens tracks according to the current user's permissions: tracks with pending actions still open the review workspace, while tracks without action permission open the normal track detail page."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "Dashboard",
+          "en": "Dashboard"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "最近更新不再误入审核界面",
+              "en": "Recent updates no longer open review pages incorrectly"
+            },
+            "description": {
+              "zh-CN": "没有审核动作权限的用户点击「最近更新」里的曲目时，会停留在曲目详情上下文，不再跳转到该曲目的审核阶段页面。",
+              "en": "When users without review action permission click a track in Recent Updates, they now land in the track detail context instead of being sent to that track's review-stage page."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.15",
     "date": "2026-05-11",
     "headline": {

@@ -217,4 +217,16 @@ describe('DashboardView', () => {
       query: { returnTo: '/dashboard' },
     })
   })
+
+  it('opens recent tracks without actions on the track detail page', async () => {
+    const wrapper = mountWithPlugins(DashboardView)
+    await flushPromises()
+
+    await wrapper.findAll('button').find(button => button.text().includes('Submitted Song'))!.trigger('click')
+
+    expect(mocks.pushMock).toHaveBeenCalledWith({
+      path: '/tracks/11',
+      query: { returnTo: '/dashboard' },
+    })
+  })
 })

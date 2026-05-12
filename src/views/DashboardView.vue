@@ -357,7 +357,15 @@ function openAlbumSettings(albumId: number) {
 }
 
 function openTrack(track: Track) {
-  router.push(buildTrackWorkspaceRoute(track, { returnTo: route.fullPath }))
+  if ((track.allowed_actions?.length ?? 0) > 0) {
+    router.push(buildTrackWorkspaceRoute(track, { returnTo: route.fullPath }))
+    return
+  }
+
+  router.push({
+    path: `/tracks/${track.id}`,
+    query: { returnTo: route.fullPath },
+  })
 }
 </script>
 
