@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { Discussion, EditHistory, Issue } from '@/types'
+import type { Discussion, EditHistory, Issue, User } from '@/types'
 import { resolveAssetUrl } from '@/api'
 import { formatLocaleDate, formatDuration } from '@/utils/time'
 import { useAppStore } from '@/stores/app'
@@ -27,6 +27,7 @@ const props = withDefaults(defineProps<{
   loadError?: string
   enableAudio?: boolean
   issues?: Issue[] | null
+  mentionUsers?: User[] | null
   enableReferencePopover?: boolean
   hasMore?: boolean
   loadingOlder?: boolean
@@ -154,6 +155,7 @@ function confirmDelete() {
             <TimestampText
               :text="d.content"
               :issues="issues"
+              :mention-users="mentionUsers"
               class="text-sm text-foreground mt-1"
               @issueActivate="(target) => emit('openIssue', target.id)"
             />
@@ -199,6 +201,7 @@ function confirmDelete() {
       :enable-audio="enableAudio ?? false"
       :enable-timestamp-popover="enableReferencePopover"
       :issues="issues"
+      :mention-users="mentionUsers"
       @submit="emit('submit', $event)"
     />
   </div>

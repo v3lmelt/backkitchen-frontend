@@ -3,7 +3,7 @@ import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
-import type { Issue } from '@/types'
+import type { Issue, User } from '@/types'
 import type { TimestampTarget } from '@/utils/timestamps'
 import { extractClipboardImageFiles } from '@/utils/clipboardImages'
 import { Music, ImageIcon } from 'lucide-vue-next'
@@ -23,6 +23,7 @@ const props = withDefaults(defineProps<{
   rows?: number
   maxAudios?: number
   issues?: Issue[] | null
+  mentionUsers?: User[] | null
 }>(), {
   submitting: false,
   uploadProgress: 0,
@@ -32,6 +33,7 @@ const props = withDefaults(defineProps<{
   rows: 3,
   maxAudios: 3,
   issues: null,
+  mentionUsers: null,
 })
 
 const emit = defineEmits<{
@@ -52,6 +54,21 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null)
 
 async function handleIssueMentionSelect(issue: Issue, mention: { start: number; end: number }) {
   const insertion = `@issue:${issue.local_number} `
+  const before = content.value.slice(0, mention.start)
+  const after = content.value.slice(mention.end)
+  content.value = `${before}${insertion}${after}`
+  const nextCursor = mention.start + insertion.length
+  cursorPos.value = nextCursor
+  await nextTick()
+  const el = textareaRef.value
+  if (el) {
+    el.focus()
+    el.setSelectionRange(nextCursor, nextCursor)
+  }
+}
+
+async function handleUserMentionSelect(user: User, mention: { start: number; end: number }) {
+  const insertion = `@user:${user.id} `
   const before = content.value.slice(0, mention.start)
   const after = content.value.slice(mention.end)
   content.value = `${before}${insertion}${after}`
@@ -178,7 +195,9 @@ defineExpose({ reset })
         :cursor-pos="cursorPos"
         :default-target="timestampDefaultTarget"
         :issues="issues"
+        :mention-users="mentionUsers"
         @select="handleIssueMentionSelect"
+        @select-user="handleUserMentionSelect"
       />
     </div>
 

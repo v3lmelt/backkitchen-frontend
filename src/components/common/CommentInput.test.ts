@@ -3,7 +3,7 @@ import { flushPromises } from '@vue/test-utils'
 
 import { mountWithPlugins } from '@/tests/utils'
 import { useToast } from '@/composables/useToast'
-import type { Issue } from '@/types'
+import type { Issue, User } from '@/types'
 
 import CommentInput from './CommentInput.vue'
 
@@ -33,6 +33,18 @@ function makeIssue(overrides: Partial<Issue> & Pick<Issue, 'id' | 'local_number'
 const issues: Issue[] = [
   makeIssue({ id: 11, local_number: 1, title: 'Vocal balance' }),
   makeIssue({ id: 12, local_number: 5, title: 'Bass too loud' }),
+]
+
+const mentionUsers: User[] = [
+  {
+    id: 31,
+    username: 'echo',
+    display_name: 'Echo',
+    role: 'member',
+    avatar_color: '#4a5270',
+    is_admin: false,
+    created_at: '2024-01-01T00:00:00Z',
+  },
 ]
 
 async function typeInto(textarea: ReturnType<ReturnType<typeof mountWithPlugins>['find']>, value: string) {
@@ -174,6 +186,58 @@ describe('CommentInput (issue mention picker)', () => {
     await typeInto(textarea, 'See @i')
 
     expect(wrapper.find('[data-issue-mention-list]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('replaces an active @ mention with @user:ID and a trailing space', async () => {
+    const wrapper = mountWithPlugins(CommentInput, {
+      attachTo: document.body,
+      props: {
+        placeholder: 'p',
+        submitLabel: 's',
+        enableTimestampPopover: true,
+        mentionUsers,
+      },
+    })
+
+    const textarea = wrapper.find('textarea')
+    await typeInto(textarea, 'Ping @')
+
+    const items = wrapper.findAll('[data-user-mention-item]')
+    expect(items).toHaveLength(1)
+    await items[0].trigger('mousedown')
+    await flushPromises()
+
+    const el = textarea.element as HTMLTextAreaElement
+    expect(el.value).toBe('Ping @user:31 ')
+    expect(el.selectionStart).toBe('Ping @user:31 '.length)
+
+    wrapper.unmount()
+  })
+
+  it('replaces the whole @user: prefix token when choosing by keyboard', async () => {
+    const wrapper = mountWithPlugins(CommentInput, {
+      attachTo: document.body,
+      props: {
+        placeholder: 'p',
+        submitLabel: 's',
+        enableTimestampPopover: true,
+        mentionUsers,
+      },
+    })
+
+    const textarea = wrapper.find('textarea')
+    await typeInto(textarea, 'Ping @user:3')
+
+    const items = wrapper.findAll('[data-user-mention-item]')
+    expect(items).toHaveLength(1)
+    pressKey('Tab')
+    await flushPromises()
+
+    const el = textarea.element as HTMLTextAreaElement
+    expect(el.value).toBe('Ping @user:31 ')
+    expect(el.selectionStart).toBe('Ping @user:31 '.length)
 
     wrapper.unmount()
   })

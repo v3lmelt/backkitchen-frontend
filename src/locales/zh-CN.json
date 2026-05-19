@@ -1224,15 +1224,21 @@
     "attachmentAudio": "附件音频",
     "markerReference": "问题标记",
     "issueReference": "问题引用",
+    "userReference": "人员提及",
     "issueReferenceLabel": "问题 #{id}",
     "issueUnavailable": "问题不存在或你暂无权限查看。",
+    "userUnavailable": "用户不存在或你暂无权限查看。",
     "issuePickerHint": "选择要插入的问题",
     "issuePickerEmpty": "当前曲目暂无问题",
+    "userPickerHint": "可提及的人 / 选择后会插入 {'@'}user:ID",
+    "userPickerId": "ID {id}",
+    "userPickerEmpty": "没有匹配的人",
     "examples": {
       "point": "单个时间点",
       "range": "时间段，点击后从起点播放",
       "marker": "按标记序号定位（按添加顺序）",
       "issue": "引用某个问题",
+      "user": "提及可见参与者（插入 {'@'}user:ID）",
       "track": "显式指定曲目音频",
       "attachment": "显式指定附件音频（a1/a2...）"
     }

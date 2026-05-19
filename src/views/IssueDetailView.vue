@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { issueApi, commentApi, r2Api, uploadToR2, trackApi, API_ORIGIN, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Comment, EditHistory, Issue, IssueStatus, StageAssignment } from '@/types'
+import type { Comment, EditHistory, Issue, IssueStatus, MentionCandidates, StageAssignment, User } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import TimestampText from '@/components/common/TimestampText.vue'
@@ -32,6 +32,12 @@ const showUnresolvedOnly = ref(false)
 const currentSourceVersionNumber = ref<number | null>(null)
 const cachedTrack = ref<import('@/types').Track | null>(null)
 const reviewAssignments = ref<StageAssignment[]>([])
+const mentionCandidates = ref<MentionCandidates>({
+  general: [],
+  mastering: [],
+  issue_public: [],
+  issue_internal: [],
+})
 
 const issueIsOutdated = computed(() => {
   if (!issue.value || issue.value.source_version_number == null || currentSourceVersionNumber.value == null) return false
@@ -113,6 +119,24 @@ const shouldHideInternalComments = computed(() =>
   Boolean(cachedTrack.value && appStore.currentUser?.id === cachedTrack.value.submitter_id),
 )
 
+function isInternalIssueStatus(status: IssueStatus | string | null | undefined): boolean {
+  return status === 'pending_discussion' || status === 'internal_resolved'
+}
+
+function mentionUsersForVisibility(visibility: string | null | undefined): User[] {
+  return visibility === 'internal' ? mentionCandidates.value.issue_internal : mentionCandidates.value.issue_public
+}
+
+const activeIssueMentionUsers = computed(() => (
+  isInternalIssueStatus(issue.value?.status) ? mentionCandidates.value.issue_internal : mentionCandidates.value.issue_public
+))
+
+const statusNoteMentionUsers = computed(() => (
+  isInternalIssueStatus(issue.value?.status) || isInternalIssueStatus(pendingStatus.value)
+    ? mentionCandidates.value.issue_internal
+    : mentionCandidates.value.issue_public
+))
+
 const commentSortOrder = ref<'desc' | 'asc'>('desc')
 
 const visibleComments = computed(() => {
@@ -152,6 +176,7 @@ async function loadIssue(id: number) {
       allTrackIssues.value = all
       currentSourceVersionNumber.value = detail.track.version
       cachedTrack.value = detail.track
+      mentionCandidates.value = detail.mention_candidates ?? { general: [], mastering: [], issue_public: [], issue_internal: [] }
       reviewAssignments.value = assignments
       cachedTrackId = fetched.track_id
     }
@@ -650,6 +675,7 @@ function openVersionCompare() {
           <TimestampText
             :text="issue.description"
             :issues="allTrackIssues"
+            :mention-users="activeIssueMentionUsers"
             class="text-sm text-foreground"
             @activate="(reference, target) => handleIssueDescriptionReference(reference, target)"
             @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
@@ -707,6 +733,7 @@ function openVersionCompare() {
               enable-timestamp-popover
               timestamp-default-target="track"
               :issues="allTrackIssues"
+              :mention-users="statusNoteMentionUsers"
               @submit="handleStatusNoteSubmit"
             />
             <button @click="cancelStatusChange" class="btn-secondary text-sm">
@@ -753,6 +780,7 @@ function openVersionCompare() {
                 <TimestampText
                   :text="comment.content"
                   :issues="allTrackIssues"
+                  :mention-users="mentionUsersForVisibility(comment.visibility)"
                   class="text-sm text-foreground"
                   :default-target="comment.audios?.length ? 'attachment' : 'track'"
                   @activate="(reference, target) => handleCommentReference(comment, reference, target)"
@@ -846,6 +874,7 @@ function openVersionCompare() {
                 v-else
                 :text="comment.content"
                 :issues="allTrackIssues"
+                :mention-users="mentionUsersForVisibility(comment.visibility)"
                 class="text-sm text-foreground"
                 :default-target="comment.audios?.length ? 'attachment' : 'track'"
                 @activate="(reference, target) => handleCommentReference(comment, reference, target)"
@@ -905,6 +934,7 @@ function openVersionCompare() {
             enable-timestamp-popover
             timestamp-default-target="attachment"
             :issues="allTrackIssues"
+            :mention-users="activeIssueMentionUsers"
             @submit="handleCommentSubmit"
           />
         </div>

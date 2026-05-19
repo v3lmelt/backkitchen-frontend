@@ -31,6 +31,7 @@ import { useDiscussions } from '@/composables/useDiscussions'
 import { useIssuePreviewPlayback, type PreviewAction } from '@/composables/useIssuePreviewPlayback'
 import { useToast } from '@/composables/useToast'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
+import { emptyMentionCandidates } from '@/utils/mentionCandidates'
 import { ChevronLeft, ChevronDown, Upload, Check } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -48,6 +49,7 @@ const track = ref<Track | null>(null)
 const masterDeliveries = ref<MasterDelivery[]>([])
 const workflowConfig = ref<WorkflowConfig | null>(null)
 const issues = ref<Issue[]>([])
+const mentionCandidates = ref(emptyMentionCandidates())
 const sourceVersions = ref<TrackSourceVersion[]>([])
 const reviewAssignments = ref<StageAssignment[]>([])
 const loading = ref(true)
@@ -447,6 +449,7 @@ async function loadData() {
     issues.value = (detail.issues ?? []).filter(
       (issue: Issue) => issue.workflow_cycle === detail.track.workflow_cycle,
     )
+    mentionCandidates.value = detail.mention_candidates ?? emptyMentionCandidates()
     syncIssueDrawerFromRoute()
     try {
       const assignments = await trackApi.listAssignments(requestedTrackId)
@@ -470,6 +473,7 @@ async function loadData() {
 watch(trackId, () => {
   track.value = null
   issues.value = []
+  mentionCandidates.value = emptyMentionCandidates()
   sourceVersions.value = []
   masterDeliveries.value = []
   workflowConfig.value = null
@@ -1067,6 +1071,7 @@ watch(olderMasterDeliveries, (deliveries) => {
           v-if="canSeeMasteringDiscussion"
           :discussions="masteringDiscussion.discussions.value"
           :issues="issues"
+          :mention-users="mentionCandidates.mastering"
           :heading="t('masteringPage.discussionsHeading', { count: masteringDiscussion.discussions.value.length })"
           :empty-text="t('masteringPage.noDiscussions')"
           :placeholder="t('masteringPage.discussionPlaceholder')"
@@ -1222,6 +1227,7 @@ watch(olderMasterDeliveries, (deliveries) => {
           phase="mastering"
           :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
           :issues="issues"
+          :mention-users="reviewAllowsInternalIssueVisibility ? mentionCandidates.issue_internal : mentionCandidates.issue_public"
           @created="onIssueCreated"
           @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
         >
@@ -1235,6 +1241,8 @@ watch(olderMasterDeliveries, (deliveries) => {
           :statuses="stageBatchActions"
           :note="stageBatchNote"
           :loading="batchUpdatingIssues"
+          :issues="issues"
+          :mention-users="mentionCandidates.issue_internal"
           @update:note="stageBatchNote = $event"
           @clear="selectedStageIssueIds = []; stageBatchNote = ''"
           @apply="applyBatchIssueStatusChange($event)"
@@ -1385,6 +1393,7 @@ watch(olderMasterDeliveries, (deliveries) => {
     :track="track"
     :assignments="reviewAssignments"
     :issues="issues"
+    :mention-candidates="mentionCandidates"
     :preview="selectedIssuePreview"
     @close="closeIssueDrawer"
     @updated="onIssueUpdated"
@@ -1399,6 +1408,7 @@ watch(olderMasterDeliveries, (deliveries) => {
     :track-id="trackId"
     :track-completed="track.status === 'completed'"
     :issues="issues"
+    :mention-users="mentionCandidates.mastering"
     @open-issue="openLinkedIssue"
   />
 </template>

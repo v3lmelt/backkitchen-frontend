@@ -84,6 +84,13 @@ export interface User {
   created_at: string
 }
 
+export interface MentionCandidates {
+  general: User[]
+  mastering: User[]
+  issue_public: User[]
+  issue_internal: User[]
+}
+
 export interface AuthResponse {
   access_token: string
   token_type: string
@@ -396,6 +403,7 @@ export interface TrackDetailResponse {
   master_deliveries?: MasterDelivery[]
   discussions?: Discussion[]
   workflow_config?: WorkflowConfig | null
+  mention_candidates?: MentionCandidates
 }
 
 export interface Notification {

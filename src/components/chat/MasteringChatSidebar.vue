@@ -3,7 +3,7 @@ import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Discussion, Issue } from '@/types'
+import type { Discussion, Issue, User } from '@/types'
 import { formatLocaleDate, formatDuration } from '@/utils/time'
 import { useDiscussions } from '@/composables/useDiscussions'
 import CommentInput from '@/components/common/CommentInput.vue'
@@ -16,6 +16,7 @@ const props = defineProps<{
   trackId: number
   trackCompleted?: boolean
   issues?: Issue[] | null
+  mentionUsers?: User[] | null
 }>()
 
 const emit = defineEmits<{
@@ -227,6 +228,7 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
                   <TimestampText
                     :text="d.content"
                     :issues="issues"
+                    :mention-users="mentionUsers"
                     class="text-sm text-foreground"
                     @issueActivate="(target) => emit('openIssue', target.id)"
                   />
@@ -301,6 +303,7 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
           enable-timestamp-popover
           :rows="2"
           :issues="issues"
+          :mention-users="mentionUsers"
           @submit="handleSubmit"
         />
       </div>

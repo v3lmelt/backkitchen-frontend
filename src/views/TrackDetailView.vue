@@ -24,6 +24,7 @@ import { buildTrackWorkspaceRoute, translateStepLabel, translateWorkflowStatusLa
 import { activeAssignmentsForStep } from '@/utils/reviewAssignments'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { useTrackStore } from '@/stores/tracks'
+import { emptyMentionCandidates } from '@/utils/mentionCandidates'
 
 const route = useRoute()
 const router = useRouter()
@@ -171,6 +172,7 @@ const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
+const mentionCandidates = ref(emptyMentionCandidates())
 const events = ref<WorkflowEvent[]>([])
 const sourceVersions = ref<TrackSourceVersion[]>([])
 const reviewAssignments = ref<StageAssignment[]>([])
@@ -271,6 +273,7 @@ async function loadTrack() {
     if (serial !== trackLoadSerial || requestedTrackId !== trackId.value) return
     applyTrack(detail.track)
     issues.value = detail.issues
+    mentionCandidates.value = detail.mention_candidates ?? emptyMentionCandidates()
     events.value = detail.events
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
     workflowConfig.value = detail.workflow_config ?? null
@@ -296,6 +299,7 @@ async function loadTrack() {
 watch(trackId, () => {
   track.value = null
   issues.value = []
+  mentionCandidates.value = emptyMentionCandidates()
   events.value = []
   sourceVersions.value = []
   reviewAssignments.value = []
@@ -996,6 +1000,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
           <DiscussionPanel
             :discussions="generalDiscussion.discussions.value"
             :issues="issues"
+            :mention-users="mentionCandidates.general"
             :heading="t('trackDetail.discussionsHeading', { count: generalDiscussion.discussions.value.length })"
             :empty-text="t('trackDetail.noDiscussions')"
             :placeholder="t('trackDetail.discussionPlaceholder')"
@@ -1405,6 +1410,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
       :track-id="trackId"
       :track-completed="track.status === 'completed'"
       :issues="issues"
+      :mention-users="mentionCandidates.mastering"
       @open-issue="openIssueReference"
     />
   </div>

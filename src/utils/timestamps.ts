@@ -27,6 +27,13 @@ export interface IssueReference {
   length: number
 }
 
+export interface UserMentionReference {
+  raw: string
+  userId: number
+  index: number
+  length: number
+}
+
 export type TimeReferenceSegment =
   | { type: 'text'; value: string }
   | { type: 'reference'; value: TimeReference }
@@ -36,6 +43,7 @@ export type InlineReferenceSegment =
   | { type: 'time'; value: TimeReference }
   | { type: 'marker'; value: MarkerIndexReference }
   | { type: 'issue'; value: IssueReference }
+  | { type: 'user'; value: UserMentionReference }
 
 const TIME_VALUE = '\\d{1,2}:\\d{2}(?::\\d{2})?(?:\\.\\d{1,3})?'
 const TIME_REFERENCE_PATTERN = new RegExp(
@@ -45,6 +53,9 @@ const TIME_REFERENCE_PATTERN = new RegExp(
 const MARKER_REFERENCE_PATTERN = /(?<![\w])#(?<index>\d{1,3})(?![\w])/g
 const ISSUE_REFERENCE_PATTERN = /(?<![\w])@issue:(?<localNumber>\d{1,9})(?![\w])/gi
 const ISSUE_MENTION_CONTEXT_PATTERN = /(?<![\w])@(?:issue:\d{0,9}|issue|issu|iss|is|i)(?![A-Za-z])/g
+const USER_MENTION_REFERENCE_PATTERN = /(?<![\w])@user:(?<userId>\d{1,9})(?![\w])/gi
+const USER_ID_MENTION_CONTEXT_PATTERN = /(?<![\w])@user(?::(?<query>\d{0,9})?)?(?![\w])/gi
+const USER_NAME_MENTION_CONTEXT_PATTERN = /(?<![\w])@(?<query>[^\s@:#]{0,40})/gu
 
 export interface IssueMentionContext {
   kind: 'issue'
@@ -53,7 +64,17 @@ export interface IssueMentionContext {
   query: string
 }
 
-export function getActiveMentionContext(text: string, cursorPos: number): IssueMentionContext | null {
+export interface UserMentionContext {
+  kind: 'user'
+  start: number
+  end: number
+  query: string
+  queryType: 'name' | 'id'
+}
+
+export type MentionContext = IssueMentionContext | UserMentionContext
+
+export function getActiveMentionContext(text: string, cursorPos: number): MentionContext | null {
   for (const match of text.matchAll(ISSUE_MENTION_CONTEXT_PATTERN)) {
     if (match.index == null) continue
     const start = match.index
@@ -63,6 +84,23 @@ export function getActiveMentionContext(text: string, cursorPos: number): IssueM
     const colonIndex = match[0].indexOf(':')
     const query = colonIndex >= 0 ? match[0].slice(colonIndex + 1) : ''
     return { kind: 'issue', start, end, query }
+  }
+  for (const match of text.matchAll(USER_ID_MENTION_CONTEXT_PATTERN)) {
+    if (match.index == null) continue
+    const start = match.index
+    const end = start + match[0].length
+    if (cursorPos < start + 1 || cursorPos > end) continue
+    const query = match.groups?.query ?? ''
+    return { kind: 'user', start, end, query, queryType: 'id' }
+  }
+  for (const match of text.matchAll(USER_NAME_MENTION_CONTEXT_PATTERN)) {
+    if (match.index == null) continue
+    const start = match.index
+    const end = start + match[0].length
+    if (cursorPos < start + 1 || cursorPos > end) continue
+    if (text[end] === ':') continue
+    const query = match.groups?.query ?? ''
+    return { kind: 'user', start, end, query, queryType: 'name' }
   }
   return null
 }
@@ -177,6 +215,27 @@ export function extractIssueReferences(text: string): IssueReference[] {
   return references
 }
 
+export function extractUserMentionReferences(text: string): UserMentionReference[] {
+  const matches = text.matchAll(new RegExp(USER_MENTION_REFERENCE_PATTERN))
+  const references: UserMentionReference[] = []
+
+  for (const match of matches) {
+    const userIdRaw = match.groups?.userId
+    if (!userIdRaw || match.index == null) continue
+    const userId = Number(userIdRaw)
+    if (!Number.isInteger(userId) || userId <= 0) continue
+
+    references.push({
+      raw: match[0],
+      userId,
+      index: match.index,
+      length: match[0].length,
+    })
+  }
+
+  return references
+}
+
 export function splitTextWithTimeReferences(text: string): TimeReferenceSegment[] {
   const references = extractTimeReferences(text)
   if (!references.length) return [{ type: 'text', value: text }]
@@ -204,8 +263,9 @@ export function splitTextWithInlineReferences(text: string): InlineReferenceSegm
   const timeReferences = extractTimeReferences(text)
   const markerReferences = extractMarkerIndexReferences(text)
   const issueReferences = extractIssueReferences(text)
+  const userMentionReferences = extractUserMentionReferences(text)
 
-  if (!timeReferences.length && !markerReferences.length && !issueReferences.length) {
+  if (!timeReferences.length && !markerReferences.length && !issueReferences.length && !userMentionReferences.length) {
     return [{ type: 'text', value: text }]
   }
 
@@ -213,6 +273,7 @@ export function splitTextWithInlineReferences(text: string): InlineReferenceSegm
     | { type: 'time'; index: number; length: number; value: TimeReference }
     | { type: 'marker'; index: number; length: number; value: MarkerIndexReference }
     | { type: 'issue'; index: number; length: number; value: IssueReference }
+    | { type: 'user'; index: number; length: number; value: UserMentionReference }
   > = [
     ...timeReferences.map(reference => ({
       type: 'time' as const,
@@ -228,6 +289,12 @@ export function splitTextWithInlineReferences(text: string): InlineReferenceSegm
     })),
     ...issueReferences.map(reference => ({
       type: 'issue' as const,
+      index: reference.index,
+      length: reference.length,
+      value: reference,
+    })),
+    ...userMentionReferences.map(reference => ({
+      type: 'user' as const,
       index: reference.index,
       length: reference.length,
       value: reference,
@@ -250,6 +317,8 @@ export function splitTextWithInlineReferences(text: string): InlineReferenceSegm
       segments.push({ type: 'time', value: reference.value })
     } else if (reference.type === 'issue') {
       segments.push({ type: 'issue', value: reference.value })
+    } else if (reference.type === 'user') {
+      segments.push({ type: 'user', value: reference.value })
     } else {
       segments.push({ type: 'marker', value: reference.value })
     }
