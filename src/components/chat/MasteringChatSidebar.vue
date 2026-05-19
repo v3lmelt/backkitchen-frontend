@@ -333,6 +333,7 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
           :rows="2"
           :issues="issues"
           :mention-users="mentionUsers"
+          timestamp-popover-placement="top"
           @submit="handleSubmit"
         />
       </div>

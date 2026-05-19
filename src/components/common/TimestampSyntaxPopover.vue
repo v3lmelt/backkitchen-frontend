@@ -22,12 +22,14 @@ const props = withDefaults(defineProps<{
   visible?: boolean
   issues?: Issue[] | null
   mentionUsers?: User[] | null
+  placement?: 'bottom' | 'top'
 }>(), {
   defaultTarget: 'track',
   cursorPos: 0,
   visible: false,
   issues: null,
   mentionUsers: null,
+  placement: 'bottom',
 })
 
 const emit = defineEmits<{
@@ -111,6 +113,17 @@ const isSyntaxVisible = computed(
   () => !isPickerVisible.value && (props.visible || manualOpen.value || (typingReference.value && !userClosed.value)),
 )
 const isVisible = computed(() => isPickerVisible.value || isSyntaxVisible.value)
+const popoverPositionClass = computed(() => (
+  props.placement === 'top'
+    ? 'absolute left-0 right-0 bottom-full z-20 mb-1.5 rounded-2xl border border-border bg-card shadow-[var(--shadow-popover)]'
+    : 'absolute left-0 right-0 top-full z-20 mt-1.5 rounded-2xl border border-border bg-card shadow-[var(--shadow-popover)]'
+))
+const transitionFromClass = computed(() => (
+  props.placement === 'top' ? 'opacity-0 translate-y-1' : 'opacity-0 -translate-y-1'
+))
+const transitionToClass = computed(() => (
+  props.placement === 'top' ? 'opacity-0 translate-y-1' : 'opacity-0 -translate-y-1'
+))
 
 watch(typingReference, (value) => {
   if (!value) userClosed.value = false
@@ -239,15 +252,16 @@ const examples = computed(() => ([
 
   <Transition
     enter-active-class="transition-all duration-150 ease-out"
-    enter-from-class="opacity-0 -translate-y-1"
+    :enter-from-class="transitionFromClass"
     enter-to-class="opacity-100 translate-y-0"
     leave-active-class="transition-all duration-100 ease-in"
     leave-from-class="opacity-100 translate-y-0"
-    leave-to-class="opacity-0 -translate-y-1"
+    :leave-to-class="transitionToClass"
   >
     <div
       v-if="isPickerVisible"
-      class="absolute left-0 right-0 top-full z-20 mt-1.5 rounded-2xl border border-border bg-card px-2 py-2 shadow-[var(--shadow-popover)]"
+      data-timestamp-popover
+      :class="[popoverPositionClass, 'px-2 py-2']"
     >
       <p v-if="mentionContext?.kind === 'issue'" class="px-1.5 pb-1.5 text-[11px] font-mono font-semibold text-muted-foreground">
         {{ t('timestamp.issuePickerHint') }}
@@ -333,7 +347,8 @@ const examples = computed(() => ([
 
     <div
       v-else-if="isSyntaxVisible"
-      class="absolute left-0 right-0 top-full z-20 mt-1.5 rounded-2xl border border-border bg-card px-3 py-2.5 shadow-[var(--shadow-popover)]"
+      data-timestamp-popover
+      :class="[popoverPositionClass, 'px-3 py-2.5']"
     >
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <span class="text-[11px] font-mono font-semibold text-muted-foreground shrink-0">{{ t('timestamp.syntaxTitle') }}</span>

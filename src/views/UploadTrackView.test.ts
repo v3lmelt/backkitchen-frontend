@@ -55,6 +55,7 @@ describe('UploadTrackView', () => {
     mocks.uploadToR2Mock.mockReset()
     mocks.appStoreState.r2Enabled = false
     mocks.appStoreState.currentUser = { id: 99 }
+    localStorage.clear()
     mocks.albumListMock.mockResolvedValue([
       { id: 1, title: 'Album A' },
       { id: 2, title: 'Album B' },
@@ -111,6 +112,46 @@ describe('UploadTrackView', () => {
 
     expect(mocks.uploadWithProgressMock).toHaveBeenCalledWith('/tracks', expect.any(FormData), expect.any(Function))
     expect(mocks.pushMock).toHaveBeenCalledWith({ path: '/tracks/42', query: { returnTo: '/upload' } })
+  })
+
+  it('hides proxy submission controls when the selected album belongs to another producer', async () => {
+    mocks.albumListMock.mockResolvedValue([{ id: 1, title: 'Album A', producer_id: 100 }])
+
+    const wrapper = mountWithPlugins(UploadTrackView)
+    await flushPromises()
+
+    expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Upload for an external composer')
+  })
+
+  it('clears proxy submission state when switching away from an owned album', async () => {
+    mocks.albumListMock.mockResolvedValue([
+      { id: 1, title: 'Owned Album', producer_id: 99 },
+      { id: 2, title: 'Other Album', producer_id: 100 },
+    ])
+
+    const wrapper = mountWithPlugins(UploadTrackView)
+    await flushPromises()
+
+    await wrapper.find('input[type="checkbox"]').setValue(true)
+    await wrapper.find('input[placeholder="Name shown to the producer and mastering engineer"]').setValue('Offline Composer')
+
+    await wrapper.find('.custom-select-trigger').trigger('click')
+    await flushPromises()
+    await wrapper.findAll('.custom-select-option').find(option => option.text().includes('Other Album'))!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false)
+
+    await wrapper.find('.custom-select-trigger').trigger('click')
+    await flushPromises()
+    await wrapper.findAll('.custom-select-option').find(option => option.text().includes('Owned Album'))!.trigger('click')
+    await flushPromises()
+
+    const checkbox = wrapper.find('input[type="checkbox"]')
+    expect(checkbox.exists()).toBe(true)
+    expect((checkbox.element as HTMLInputElement).checked).toBe(false)
+    expect(wrapper.find('input[placeholder="Name shown to the producer and mastering engineer"]').exists()).toBe(false)
   })
 
   it('uploads a proxy submission with an external composer name', async () => {

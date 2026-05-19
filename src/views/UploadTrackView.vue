@@ -46,6 +46,12 @@ const needsFileReselect = ref(false)
 const savedFileName = ref('')
 const submitted = ref(false)
 
+function clearProxySubmission() {
+  form.value.proxy_submission = false
+  form.value.external_submitter_name = ''
+  proxyNameError.value = ''
+}
+
 function validateTitle() {
   titleError.value = form.value.title.trim() ? '' : t('upload.titleRequired')
 }
@@ -53,14 +59,17 @@ function validateArtist() {
   artistError.value = form.value.artist.trim() ? '' : t('upload.artistRequired')
 }
 function validateProxySubmitterName() {
-  proxyNameError.value = form.value.proxy_submission && !form.value.external_submitter_name.trim()
+  proxyNameError.value = form.value.proxy_submission && canProxySubmission.value && !form.value.external_submitter_name.trim()
     ? t('upload.proxyNameRequired')
     : ''
 }
 function toggleProxySubmission() {
+  if (!canProxySubmission.value) {
+    clearProxySubmission()
+    return
+  }
   if (!form.value.proxy_submission) {
-    form.value.external_submitter_name = ''
-    proxyNameError.value = ''
+    clearProxySubmission()
     return
   }
   if (form.value.external_submitter_name.trim() && !form.value.artist.trim()) {
@@ -95,7 +104,15 @@ const selectedAlbum = computed(() =>
 )
 
 const canProxySubmission = computed(() =>
-  Boolean(selectedAlbum.value?.producer_id && selectedAlbum.value.producer_id === appStore.currentUser?.id)
+  selectedAlbum.value?.producer_id != null
+  && appStore.currentUser?.id != null
+  && selectedAlbum.value.producer_id === appStore.currentUser.id
+)
+
+const proxySubmitterNameMissing = computed(() =>
+  form.value.proxy_submission
+  && canProxySubmission.value
+  && !form.value.external_submitter_name.trim()
 )
 
 const hasDraft = computed(() => {
@@ -155,8 +172,7 @@ function restoreDraft() {
       external_submitter_name: typeof draft.external_submitter_name === 'string' ? draft.external_submitter_name : '',
     }
     if (form.value.proxy_submission && !canProxySubmission.value) {
-      form.value.proxy_submission = false
-      form.value.external_submitter_name = ''
+      clearProxySubmission()
     }
     savedFileName.value = typeof draft.saved_file_name === 'string' ? draft.saved_file_name : ''
     needsFileReselect.value = Boolean(savedFileName.value)
@@ -196,9 +212,7 @@ watch(form, () => {
 
 watch(canProxySubmission, (allowed) => {
   if (!allowed && form.value.proxy_submission) {
-    form.value.proxy_submission = false
-    form.value.external_submitter_name = ''
-    proxyNameError.value = ''
+    clearProxySubmission()
   }
 })
 
@@ -248,6 +262,9 @@ function onDrop(e: DragEvent) {
 }
 
 async function upload() {
+  if (form.value.proxy_submission && !canProxySubmission.value) {
+    clearProxySubmission()
+  }
   if (form.value.proxy_submission && !form.value.artist.trim() && form.value.external_submitter_name.trim()) {
     form.value.artist = form.value.external_submitter_name.trim()
   }
@@ -448,10 +465,10 @@ function formatFileSize(bytes: number): string {
         </button>
         <button
           @click="upload"
-          :disabled="uploading || !selectedFile || !form.title || !form.artist || (form.proxy_submission && !form.external_submitter_name.trim())"
+          :disabled="uploading || !selectedFile || !form.title || !form.artist || proxySubmitterNameMissing"
           :class="[
             'flex-1 text-sm font-medium px-4 py-3 rounded-full transition-colors',
-            uploading || !selectedFile || !form.title || !form.artist || (form.proxy_submission && !form.external_submitter_name.trim())
+            uploading || !selectedFile || !form.title || !form.artist || proxySubmitterNameMissing
               ? 'bg-border text-muted-foreground cursor-not-allowed'
               : 'btn-primary'
           ]"

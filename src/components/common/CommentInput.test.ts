@@ -216,6 +216,28 @@ describe('CommentInput (issue mention picker)', () => {
     wrapper.unmount()
   })
 
+  it('passes top placement to the mention picker for bottom-docked inputs', async () => {
+    const wrapper = mountWithPlugins(CommentInput, {
+      attachTo: document.body,
+      props: {
+        placeholder: 'p',
+        submitLabel: 's',
+        enableTimestampPopover: true,
+        timestampPopoverPlacement: 'top',
+        mentionUsers,
+      },
+    })
+
+    const textarea = wrapper.find('textarea')
+    await typeInto(textarea, 'Ping @')
+
+    const popover = wrapper.find('[data-timestamp-popover]')
+    expect(popover.classes()).toContain('bottom-full')
+    expect(popover.classes()).not.toContain('top-full')
+
+    wrapper.unmount()
+  })
+
   it('replaces the whole @user: prefix token when choosing by keyboard', async () => {
     const wrapper = mountWithPlugins(CommentInput, {
       attachTo: document.body,

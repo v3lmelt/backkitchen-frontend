@@ -24,6 +24,7 @@ const props = withDefaults(defineProps<{
   maxAudios?: number
   issues?: Issue[] | null
   mentionUsers?: User[] | null
+  timestampPopoverPlacement?: 'bottom' | 'top'
 }>(), {
   submitting: false,
   uploadProgress: 0,
@@ -34,6 +35,7 @@ const props = withDefaults(defineProps<{
   maxAudios: 3,
   issues: null,
   mentionUsers: null,
+  timestampPopoverPlacement: 'bottom',
 })
 
 const emit = defineEmits<{
@@ -196,6 +198,7 @@ defineExpose({ reset })
         :default-target="timestampDefaultTarget"
         :issues="issues"
         :mention-users="mentionUsers"
+        :placement="timestampPopoverPlacement"
         @select="handleIssueMentionSelect"
         @select-user="handleUserMentionSelect"
       />

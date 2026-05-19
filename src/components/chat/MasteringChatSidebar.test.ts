@@ -41,7 +41,8 @@ vi.mock('@/composables/useDiscussions', () => ({
 
 vi.mock('@/components/common/CommentInput.vue', () => ({
   default: {
-    template: '<div class="comment-input-stub" />',
+    props: ['timestampPopoverPlacement'],
+    template: '<div class="comment-input-stub">{{ timestampPopoverPlacement }}</div>',
   },
 }))
 
@@ -92,5 +93,16 @@ describe('MasteringChatSidebar', () => {
     panel = wrapper.find('[data-testid="mastering-chat-panel"]')
     expect(panel.classes()).toContain('w-[360px]')
     expect(panel.classes()).not.toContain('inset-0')
+  })
+
+  it('opens mention candidates above the bottom-docked chat input', async () => {
+    const wrapper = mountWithPlugins(MasteringChatSidebar, {
+      props: { trackId: 7 },
+    })
+
+    await wrapper.find('button[title="Open mastering communication"]').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.comment-input-stub').text()).toBe('top')
   })
 })

@@ -296,6 +296,25 @@ describe('TimestampSyntaxPopover (issue picker mode)', () => {
     wrapper.unmount()
   })
 
+  it('can render the picker above the input when placement is top', () => {
+    const wrapper = mountWithPlugins(TimestampSyntaxPopover, {
+      attachTo: document.body,
+      props: {
+        text: 'Loop @',
+        cursorPos: 6,
+        mentionUsers: users,
+        placement: 'top',
+      },
+    })
+
+    const popover = wrapper.find('[data-timestamp-popover]')
+    expect(popover.classes()).toContain('bottom-full')
+    expect(popover.classes()).toContain('mb-1.5')
+    expect(popover.classes()).not.toContain('top-full')
+
+    wrapper.unmount()
+  })
+
   it('filters user picker by display name or username', () => {
     const wrapper = mountWithPlugins(TimestampSyntaxPopover, {
       attachTo: document.body,

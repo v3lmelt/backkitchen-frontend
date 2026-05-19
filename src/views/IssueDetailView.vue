@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { issueApi, commentApi, r2Api, uploadToR2, trackApi, API_ORIGIN, resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
+import { useTrackStore } from '@/stores/tracks'
 import type { Comment, EditHistory, Issue, IssueStatus, MentionCandidates, StageAssignment, User } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
@@ -22,6 +23,7 @@ const route = useRoute()
 const router = useRouter()
 const { t, locale } = useI18n()
 const appStore = useAppStore()
+const trackStore = useTrackStore()
 const { success: toastSuccess } = useToast()
 const issueId = computed(() => Number(route.params.id))
 
@@ -156,6 +158,9 @@ async function loadIssue(id: number) {
   const token = ++loadCount
   loadError.value = false
   const cached = allTrackIssues.value.find(i => i.id === id)
+  if (!cached || cached.track_id !== trackStore.currentTrack?.id) {
+    trackStore.setCurrentTrack(null)
+  }
   if (cached) {
     issue.value = cached
     loading.value = false
@@ -176,6 +181,7 @@ async function loadIssue(id: number) {
       allTrackIssues.value = all
       currentSourceVersionNumber.value = detail.track.version
       cachedTrack.value = detail.track
+      trackStore.setCurrentTrack(detail.track)
       mentionCandidates.value = detail.mention_candidates ?? { general: [], mastering: [], issue_public: [], issue_internal: [] }
       reviewAssignments.value = assignments
       cachedTrackId = fetched.track_id
