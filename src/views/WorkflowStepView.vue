@@ -45,6 +45,7 @@ import { translateStepLabel } from '@/utils/workflow'
 import { hashId } from '@/utils/hash'
 import { extractAudioDuration } from '@/utils/audio'
 import { activeAssignmentsForStep, canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
+import { emptyMentionCandidates } from '@/utils/mentionCandidates'
 
 const route = useRoute()
 const router = useRouter()
@@ -80,6 +81,7 @@ watch(wsConnected, (connected) => {
 const track = ref<Track | null>(null)
 const isProxySubmission = computed(() => Boolean(track.value?.is_proxy_submission && track.value.external_submitter_name))
 const issues = ref<Issue[]>([])
+const mentionCandidates = ref(emptyMentionCandidates())
 const sourceVersions = ref<TrackSourceVersion[]>([])
 const masterDeliveries = ref<MasterDelivery[]>([])
 const workflowConfig = ref<WorkflowConfig | null>(null)
@@ -649,6 +651,7 @@ async function loadPage() {
     issues.value = detail.issues.filter(
       issue => issue.workflow_cycle === detail.track.workflow_cycle,
     )
+    mentionCandidates.value = detail.mention_candidates ?? emptyMentionCandidates()
     syncIssueDrawerFromRoute()
     checklistItems.value = detail.checklist_items
     try {
@@ -702,6 +705,7 @@ async function loadPage() {
 watch(trackId, () => {
   track.value = null
   issues.value = []
+  mentionCandidates.value = emptyMentionCandidates()
   sourceVersions.value = []
   masterDeliveries.value = []
   workflowConfig.value = null
@@ -1765,6 +1769,7 @@ function handleIssueLeave() {
             phase="peer"
             :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
             :issues="issues"
+            :mention-users="reviewAllowsInternalIssueVisibility ? mentionCandidates.issue_internal : mentionCandidates.issue_public"
             @created="onIssueCreated"
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
@@ -1778,6 +1783,8 @@ function handleIssueLeave() {
             :statuses="stageBatchActions"
             :note="stageBatchNote"
             :loading="batchUpdatingIssues"
+            :issues="issues"
+            :mention-users="mentionCandidates.issue_internal"
             @update:note="stageBatchNote = $event"
             @clear="selectedStageIssueIds = []; stageBatchNote = ''"
             @apply="applyStageBatchStatus($event)"
@@ -1984,6 +1991,7 @@ function handleIssueLeave() {
         :track-id="trackId"
         phase="producer"
         :issues="issues"
+        :mention-users="mentionCandidates.issue_public"
         @created="onIssueCreated"
         @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
       >
@@ -2128,6 +2136,8 @@ function handleIssueLeave() {
           :statuses="producerBatchActions"
           :note="producerBatchNote"
           :loading="batchUpdatingIssues"
+          :issues="issues"
+          :mention-users="mentionCandidates.issue_internal"
           @update:note="producerBatchNote = $event"
           @clear="selectedProducerIssueIds = []; producerBatchNote = ''"
           @apply="applyProducerBatchStatus($event)"
@@ -2243,6 +2253,7 @@ function handleIssueLeave() {
             phase="mastering"
             :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
             :issues="issues"
+            :mention-users="reviewAllowsInternalIssueVisibility ? mentionCandidates.issue_internal : mentionCandidates.issue_public"
             @created="onIssueCreated"
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
@@ -2256,6 +2267,8 @@ function handleIssueLeave() {
             :statuses="stageBatchActions"
             :note="stageBatchNote"
             :loading="batchUpdatingIssues"
+            :issues="issues"
+            :mention-users="mentionCandidates.issue_internal"
             @update:note="stageBatchNote = $event"
             @clear="selectedStageIssueIds = []; stageBatchNote = ''"
             @apply="applyStageBatchStatus($event)"
@@ -2398,6 +2411,7 @@ function handleIssueLeave() {
       <DiscussionPanel
         :discussions="masteringDiscussion.discussions.value"
         :issues="issues"
+        :mention-users="mentionCandidates.mastering"
         :heading="t('mastering.discussionHeading', { count: masteringDiscussion.discussions.value.length })"
         :empty-text="t('mastering.noDiscussions')"
         :placeholder="t('mastering.discussionPlaceholder')"
@@ -2514,6 +2528,7 @@ function handleIssueLeave() {
             phase="final_review"
             :master-delivery-id="masterDelivery?.id ?? null"
             :issues="issues"
+            :mention-users="mentionCandidates.issue_public"
             @created="onIssueCreated"
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
@@ -2527,6 +2542,8 @@ function handleIssueLeave() {
             :statuses="stageBatchActions"
             :note="stageBatchNote"
             :loading="batchUpdatingIssues"
+            :issues="issues"
+            :mention-users="mentionCandidates.issue_internal"
             @update:note="stageBatchNote = $event"
             @clear="selectedStageIssueIds = []; stageBatchNote = ''"
             @apply="applyStageBatchStatus($event)"
@@ -2701,6 +2718,8 @@ function handleIssueLeave() {
           :statuses="stageBatchActions"
           :note="stageBatchNote"
           :loading="batchUpdatingIssues"
+          :issues="issues"
+          :mention-users="mentionCandidates.issue_internal"
           @update:note="stageBatchNote = $event"
           @clear="selectedStageIssueIds = []; stageBatchNote = ''"
           @apply="applyStageBatchStatus($event)"
@@ -2726,6 +2745,7 @@ function handleIssueLeave() {
           :phase="currentStep.id"
           :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
           :issues="issues"
+          :mention-users="reviewAllowsInternalIssueVisibility ? mentionCandidates.issue_internal : mentionCandidates.issue_public"
           @created="onIssueCreated"
         />
       </div>
@@ -2787,6 +2807,8 @@ function handleIssueLeave() {
           :statuses="stageBatchActions"
           :note="stageBatchNote"
           :loading="batchUpdatingIssues"
+          :issues="issues"
+          :mention-users="mentionCandidates.issue_internal"
           @update:note="stageBatchNote = $event"
           @clear="selectedStageIssueIds = []; stageBatchNote = ''"
           @apply="applyStageBatchStatus($event)"
@@ -2812,6 +2834,7 @@ function handleIssueLeave() {
           :phase="currentStep.id"
           :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
           :issues="issues"
+          :mention-users="reviewAllowsInternalIssueVisibility ? mentionCandidates.issue_internal : mentionCandidates.issue_public"
           @created="onIssueCreated"
         />
       </div>
@@ -2876,6 +2899,8 @@ function handleIssueLeave() {
           :statuses="revisionBatchActions"
           :note="revisionBatchNote"
           :loading="batchUpdatingIssues"
+          :issues="issues"
+          :mention-users="mentionCandidates.issue_internal"
           @update:note="revisionBatchNote = $event"
           @clear="selectedRevisionIssueIds = []; revisionBatchNote = ''"
           @apply="applyRevisionBatchStatus($event)"
@@ -3129,6 +3154,7 @@ function handleIssueLeave() {
     :track="track"
     :assignments="reviewAssignments"
     :issues="issues"
+    :mention-candidates="mentionCandidates"
     :preview="selectedIssuePreview"
     @close="closeIssueDrawer"
     @updated="onIssueUpdated"
@@ -3143,6 +3169,7 @@ function handleIssueLeave() {
     :track-id="trackId"
     :track-completed="track.status === 'completed'"
     :issues="issues"
+    :mention-users="mentionCandidates.mastering"
     @open-issue="openLinkedIssue"
   />
 </template>

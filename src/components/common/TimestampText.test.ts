@@ -135,4 +135,37 @@ describe('TimestampText', () => {
 
     wrapper.unmount()
   })
+
+  it('renders @user:ID as a display-name chip when the user is available', () => {
+    const wrapper = mountWithPlugins(TimestampText, {
+      props: {
+        text: 'Please ask @user:42 for notes',
+        mentionUsers: [{
+          id: 42,
+          username: 'nova',
+          display_name: 'Nova',
+          role: 'member',
+          avatar_color: '#4a5270',
+          is_admin: false,
+          created_at: '2024-01-01T00:00:00Z',
+        }],
+      },
+    })
+
+    expect(wrapper.text()).toContain('@Nova')
+    expect(wrapper.text()).not.toContain('@user:42')
+  })
+
+  it('marks unknown @user:ID references unavailable', () => {
+    const wrapper = mountWithPlugins(TimestampText, {
+      props: {
+        text: 'Please ask @user:999 for notes',
+        mentionUsers: [],
+      },
+    })
+
+    const deletedPill = wrapper.find('span.line-through')
+    expect(deletedPill.exists()).toBe(true)
+    expect(deletedPill.text()).toBe('@user:999')
+  })
 })

@@ -12,8 +12,8 @@ export const CHANGELOG: ChangelogEntry[] = [
       "en": "Collaboration and track submission improvements"
     },
     "summary": {
-      "zh-CN": "本次更新加入主催代传外部曲师曲目的流程，并优化管理后台的曲目救援操作，减少不必要的必填原因。",
-      "en": "This update adds producer proxy uploads for external composers and streamlines admin track rescue operations by removing unnecessary required reasons."
+      "zh-CN": "本次更新加入主催代传外部曲师曲目的流程，支持在评论入口 @ 人协作，并优化管理后台的曲目救援操作，减少不必要的必填原因。",
+      "en": "This update adds producer proxy uploads for external composers, supports @ mentions in comment entry points, and streamlines admin track rescue operations by removing unnecessary required reasons."
     },
     "sections": [
       {
@@ -48,6 +48,34 @@ export const CHANGELOG: ChangelogEntry[] = [
             "description": {
               "zh-CN": "曲目救援区的原因输入框已标记为选填；留空时系统不再自动写入默认文案，审计记录会保留为空原因。",
               "en": "The reason field in the track rescue area is now marked optional. Leaving it blank no longer inserts default copy, and audit entries keep the reason empty."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "协作",
+          "en": "Collaboration"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "所有评论入口支持 @ 人",
+              "en": "All comment entry points support @ people"
+            },
+            "description": {
+              "zh-CN": "在讨论、母带沟通、问题回复、问题状态备注和问题创建描述中输入 @、@姓名、@user、@user: 或 @user:数字会弹出当前上下文可见参与者列表；@user:数字会按用户 ID 前缀过滤。支持方向键、Enter/Tab、Esc 和鼠标选择。内部 issue 不会向曲师暴露候选人，也不会因为 @ 通知曲师。",
+              "en": "Typing @, @name, @user, @user:, or @user:digits in discussions, mastering communication, issue replies, issue status notes, and issue descriptions opens the participant picker for that context; @user:digits filters by user ID prefix. Arrow-key, Enter/Tab, Escape, and mouse selection are supported. Internal issues do not expose submitters as candidates and do not notify submitters through mentions."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "提及显示为人员 chip",
+              "en": "Mentions render as person chips"
+            },
+            "description": {
+              "zh-CN": "系统会把选中的用户保存为 @user:ID，普通用户无需手动输入 ID；阅读时会显示为 @显示名 chip。无权访问或已不可用的用户引用会以不可用样式显示，避免误以为通知仍然有效。",
+              "en": "Selected users are stored as @user:ID so regular users do not need to know IDs manually; when reading, they appear as @display-name chips. References to unavailable or unauthorized users render with an unavailable style so stale mentions are not mistaken for active notifications."
             }
           }
         ]

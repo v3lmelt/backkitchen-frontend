@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 
 import { mountWithPlugins } from '@/tests/utils'
-import type { Issue } from '@/types'
+import type { Issue, User } from '@/types'
 
 import TimestampSyntaxPopover from './TimestampSyntaxPopover.vue'
 
@@ -30,6 +30,27 @@ const issues: Issue[] = [
   makeIssue({ id: 11, local_number: 1, title: 'Vocal balance' }),
   makeIssue({ id: 12, local_number: 2, title: 'Bass too loud' }),
   makeIssue({ id: 13, local_number: 12, title: 'Click at 1:30' }),
+]
+
+const users: User[] = [
+  {
+    id: 21,
+    username: 'kira',
+    display_name: 'Kira',
+    role: 'producer',
+    avatar_color: '#ff8400',
+    is_admin: false,
+    created_at: '2024-01-01T00:00:00Z',
+  },
+  {
+    id: 31,
+    username: 'nova',
+    display_name: 'Nova',
+    role: 'member',
+    avatar_color: '#4a5270',
+    is_admin: false,
+    created_at: '2024-01-01T00:00:00Z',
+  },
 ]
 
 function pressKey(key: string) {
@@ -226,6 +247,112 @@ describe('TimestampSyntaxPopover (issue picker mode)', () => {
 
     expect(wrapper.find('[data-issue-mention-list]').exists()).toBe(false)
     expect(wrapper.text()).toContain('Reference Syntax')
+
+    wrapper.unmount()
+  })
+
+  it('keeps @issue picker priority when user mention candidates are also provided', () => {
+    const wrapper = mountWithPlugins(TimestampSyntaxPopover, {
+      attachTo: document.body,
+      props: {
+        text: '@issue:1',
+        cursorPos: 8,
+        issues,
+        mentionUsers: users,
+      },
+    })
+
+    expect(wrapper.find('[data-issue-mention-list]').exists()).toBe(true)
+    expect(wrapper.find('[data-user-mention-list]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('renders the user picker for bare @ and inserts the active user with Enter', async () => {
+    const wrapper = mountWithPlugins(TimestampSyntaxPopover, {
+      attachTo: document.body,
+      props: {
+        text: 'Loop @',
+        cursorPos: 6,
+        mentionUsers: users,
+      },
+    })
+
+    const items = wrapper.findAll('[data-user-mention-item]')
+    expect(items).toHaveLength(2)
+    expect(items[0].text()).toContain('@Kira')
+    expect(items[0].text()).toContain('ID 21')
+
+    const enterEvent = pressKey('Enter')
+    await flushPromises()
+
+    const emitted = wrapper.emitted('selectUser')
+    expect(emitted).toHaveLength(1)
+    const [user, mention] = emitted![0] as [User, { start: number; end: number }]
+    expect(user.id).toBe(21)
+    expect(mention).toEqual({ start: 5, end: 6 })
+    expect(enterEvent.defaultPrevented).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('filters user picker by display name or username', () => {
+    const wrapper = mountWithPlugins(TimestampSyntaxPopover, {
+      attachTo: document.body,
+      props: {
+        text: '@nov',
+        cursorPos: 4,
+        mentionUsers: users,
+      },
+    })
+
+    const items = wrapper.findAll('[data-user-mention-item]')
+    expect(items).toHaveLength(1)
+    expect(items[0].text()).toContain('@Nova')
+
+    wrapper.unmount()
+  })
+
+  it('renders all user candidates for @user and @user:', () => {
+    const exactWrapper = mountWithPlugins(TimestampSyntaxPopover, {
+      attachTo: document.body,
+      props: {
+        text: '@user',
+        cursorPos: 5,
+        mentionUsers: users,
+      },
+    })
+
+    expect(exactWrapper.findAll('[data-user-mention-item]')).toHaveLength(2)
+    exactWrapper.unmount()
+
+    const tokenWrapper = mountWithPlugins(TimestampSyntaxPopover, {
+      attachTo: document.body,
+      props: {
+        text: '@user:',
+        cursorPos: 6,
+        mentionUsers: users,
+      },
+    })
+
+    expect(tokenWrapper.findAll('[data-user-mention-item]')).toHaveLength(2)
+    tokenWrapper.unmount()
+  })
+
+  it('filters @user: input by user ID prefix', () => {
+    const wrapper = mountWithPlugins(TimestampSyntaxPopover, {
+      attachTo: document.body,
+      props: {
+        text: '@user:3',
+        cursorPos: 7,
+        mentionUsers: users,
+      },
+    })
+
+    const items = wrapper.findAll('[data-user-mention-item]')
+    expect(items).toHaveLength(1)
+    expect(items[0].text()).toContain('@Nova')
+    expect(items[0].text()).toContain('ID 31')
 
     wrapper.unmount()
   })

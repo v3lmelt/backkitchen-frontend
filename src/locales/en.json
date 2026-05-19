@@ -1183,15 +1183,21 @@
     "attachmentAudio": "Attachment audio",
     "markerReference": "Issue marker",
     "issueReference": "Issue reference",
+    "userReference": "User mention",
     "issueReferenceLabel": "Issue #{id}",
     "issueUnavailable": "Issue unavailable or you don't have access.",
+    "userUnavailable": "User unavailable or you don't have access.",
     "issuePickerHint": "Pick an issue to insert",
     "issuePickerEmpty": "No issues on this track yet",
+    "userPickerHint": "People you can mention / inserts {'@'}user:ID",
+    "userPickerId": "ID {id}",
+    "userPickerEmpty": "No matching people",
     "examples": {
       "point": "Single timestamp",
       "range": "Time range, plays from the start",
       "marker": "Jump by marker index (in add order)",
       "issue": "Open an issue reference",
+      "user": "Mention a visible participant (inserts {'@'}user:ID)",
       "track": "Explicitly target track audio",
       "attachment": "Explicitly target attachment audio (a1/a2...)"
     }
