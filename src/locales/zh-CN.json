@@ -1825,6 +1825,9 @@
   "chat": {
     "title": "母带沟通",
     "openChat": "打开母带沟通",
+    "closeChat": "关闭母带沟通",
+    "enterFullscreen": "全屏显示母带沟通",
+    "exitFullscreen": "退出母带沟通全屏",
     "launchHint": "侧边栏随时展开",
     "unreadCount": "{count} 条未读",
     "placeholder": "输入消息…",

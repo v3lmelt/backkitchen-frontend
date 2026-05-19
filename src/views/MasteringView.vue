@@ -1231,7 +1231,9 @@ watch(olderMasterDeliveries, (deliveries) => {
           phase="mastering"
           :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
           :issues="issues"
-          :mention-users="reviewAllowsInternalIssueVisibility ? mentionCandidates.issue_internal : mentionCandidates.issue_public"
+          :mention-users="mentionCandidates.issue_public"
+          :public-mention-users="mentionCandidates.issue_public"
+          :internal-mention-users="mentionCandidates.issue_internal"
           @created="onIssueCreated"
           @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
         >

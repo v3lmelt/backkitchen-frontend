@@ -18,6 +18,8 @@ const props = defineProps<{
   allowInternalVisibility?: boolean
   issues?: Issue[] | null
   mentionUsers?: User[] | null
+  publicMentionUsers?: User[] | null
+  internalMentionUsers?: User[] | null
 }>()
 
 const emit = defineEmits<{
@@ -32,7 +34,7 @@ const showForm = ref(false)
 const issueMode = ref<'timed' | 'general'>('timed')
 
 function defaultIssueVisibility(): 'public' | 'internal' {
-  return props.allowInternalVisibility === true ? 'internal' : 'public'
+  return 'public'
 }
 
 const issueVisibility = ref<'public' | 'internal'>(defaultIssueVisibility())
@@ -93,6 +95,13 @@ const IMAGE_ACCEPT = 'image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,
 const draftStorageKey = computed(() => {
   const delivery = props.masterDeliveryId == null ? 'none' : String(props.masterDeliveryId)
   return `${ISSUE_DRAFT_STORAGE_PREFIX}:${props.trackId}:${props.phase}:${delivery}`
+})
+
+const activeMentionUsers = computed(() => {
+  if (issueVisibility.value === 'internal') {
+    return props.internalMentionUsers ?? props.mentionUsers
+  }
+  return props.publicMentionUsers ?? props.mentionUsers
 })
 
 let markerHintTimer: ReturnType<typeof setTimeout> | null = null
@@ -748,7 +757,7 @@ defineExpose({
           :cursor-pos="descriptionCursorPos"
           default-target="track"
           :issues="props.issues"
-          :mention-users="props.mentionUsers"
+          :mention-users="activeMentionUsers"
           @select="handleDescriptionMentionSelect"
           @select-user="handleDescriptionUserMentionSelect"
         />

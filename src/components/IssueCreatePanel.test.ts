@@ -153,7 +153,7 @@ describe('IssueCreatePanel', () => {
     expect(payload.images.map((file: File) => file.name)).toEqual(['image-1.png', 'image-2.png', 'image-3.png'])
   })
 
-  it('defaults multi-review issues to internal visibility and submits it explicitly', async () => {
+  it('defaults multi-review issues to public visibility and submits it explicitly', async () => {
     const wrapper = mountWithPlugins(IssueCreatePanel, {
       props: { trackId: 9, phase: 'peer', allowInternalVisibility: true },
     })
@@ -172,7 +172,56 @@ describe('IssueCreatePanel', () => {
 
     expect(mocks.createMock).toHaveBeenCalledTimes(1)
     const [, payload] = mocks.createMock.mock.calls[0]
+    expect(payload.visibility).toBe('public')
+  })
+
+  it('submits internal visibility after the reviewer toggles it manually', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 9, phase: 'peer', allowInternalVisibility: true },
+    })
+
+    const vm = wrapper.vm as any
+    vm.handleClick(4.2)
+    await wrapper.vm.$nextTick()
+
+    const visibilityToggle = wrapper.findAll('button').find(b => b.text().includes('Public'))!
+    await visibilityToggle.trigger('click')
+    await wrapper.find('input').setValue('Needs balance tweak')
+    await wrapper.find('textarea').setValue('Low end is masking the vocal')
+
+    const submitBtn = wrapper.findAll('button').find(b => b.classes().includes('btn-primary') && b.classes().includes('text-sm'))!
+    await submitBtn.trigger('click')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(mocks.createMock).toHaveBeenCalledTimes(1)
+    const [, payload] = mocks.createMock.mock.calls[0]
     expect(payload.visibility).toBe('internal')
+  })
+
+  it('switches mention candidates with public and internal visibility', async () => {
+    const publicMentionUsers = [{ id: 1, display_name: 'Submitter' }]
+    const internalMentionUsers = [{ id: 2, display_name: 'Reviewer' }]
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: {
+        trackId: 9,
+        phase: 'peer',
+        allowInternalVisibility: true,
+        publicMentionUsers,
+        internalMentionUsers,
+      },
+    })
+
+    const vm = wrapper.vm as any
+    vm.handleClick(4.2)
+    await wrapper.vm.$nextTick()
+
+    expect(vm.activeMentionUsers).toEqual(publicMentionUsers)
+
+    const visibilityToggle = wrapper.findAll('button').find(b => b.text().includes('Public'))!
+    await visibilityToggle.trigger('click')
+
+    expect(vm.activeMentionUsers).toEqual(internalMentionUsers)
   })
 
   it('emits created event after successful submit', async () => {

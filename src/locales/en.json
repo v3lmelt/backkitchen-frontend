@@ -1823,6 +1823,9 @@
   "chat": {
     "title": "Mastering Communication",
     "openChat": "Open mastering communication",
+    "closeChat": "Close mastering communication",
+    "enterFullscreen": "Expand mastering communication",
+    "exitFullscreen": "Exit full-screen mastering communication",
     "launchHint": "Open from the side anytime",
     "unreadCount": "{count} unread",
     "placeholder": "Type a message…",
