@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, albumApi, API_ORIGIN } from '@/api'
+import { trackApi, albumApi, r2Api, uploadToR2, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Track, Issue, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember, StageAssignment } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
@@ -24,6 +24,8 @@ import { buildTrackWorkspaceRoute, translateStepLabel, translateWorkflowStatusLa
 import { activeAssignmentsForStep } from '@/utils/reviewAssignments'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { useTrackStore } from '@/stores/tracks'
+import { emptyMentionCandidates } from '@/utils/mentionCandidates'
+import { extractAudioDuration } from '@/utils/audio'
 
 const route = useRoute()
 const router = useRouter()
@@ -171,6 +173,7 @@ const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
+const mentionCandidates = ref(emptyMentionCandidates())
 const events = ref<WorkflowEvent[]>([])
 const sourceVersions = ref<TrackSourceVersion[]>([])
 const reviewAssignments = ref<StageAssignment[]>([])
@@ -271,6 +274,7 @@ async function loadTrack() {
     if (serial !== trackLoadSerial || requestedTrackId !== trackId.value) return
     applyTrack(detail.track)
     issues.value = detail.issues
+    mentionCandidates.value = detail.mention_candidates ?? emptyMentionCandidates()
     events.value = detail.events
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
     workflowConfig.value = detail.workflow_config ?? null
@@ -296,6 +300,7 @@ async function loadTrack() {
 watch(trackId, () => {
   track.value = null
   issues.value = []
+  mentionCandidates.value = emptyMentionCandidates()
   events.value = []
   sourceVersions.value = []
   reviewAssignments.value = []
@@ -679,6 +684,145 @@ async function submitRejectedTrackAgain() {
   }
 }
 
+const pendingSourceFollowupRequest = computed(() => track.value?.pending_source_followup_request ?? null)
+const canRequestSourceFollowup = computed(() =>
+  Boolean(track.value?.allowed_actions?.includes('request_source_followup'))
+)
+const canDecideSourceFollowup = computed(() =>
+  Boolean(track.value?.allowed_actions?.includes('decide_source_followup'))
+)
+const canCancelSourceFollowup = computed(() =>
+  Boolean(track.value?.allowed_actions?.includes('cancel_source_followup'))
+)
+const sourceFollowupFile = ref<File | null>(null)
+const sourceFollowupReason = ref('')
+const sourceFollowupUploading = ref(false)
+const sourceFollowupProgress = ref(0)
+const sourceFollowupTargetStage = ref('')
+const sourceFollowupDeciding = ref(false)
+
+function sourceFollowupTargetIsMasteringRelated(step: WorkflowStepDef): boolean {
+  return step.type === 'delivery'
+    || step.ui_variant === 'mastering'
+    || step.id.includes('master')
+    || step.id.includes('mastering')
+}
+
+const sourceFollowupTargetStages = computed<WorkflowStepDef[]>(() => {
+  if (!workflowConfig.value) return []
+  const steps = workflowConfig.value.steps
+  const deliveryOrders = steps.filter(step => step.type === 'delivery').map(step => step.order)
+  const firstDeliveryOrder = deliveryOrders.length ? Math.min(...deliveryOrders) : null
+  return steps
+    .filter(step => step.type !== 'revision')
+    .filter(step => firstDeliveryOrder == null || step.order <= firstDeliveryOrder)
+    .filter(step => isProducer.value || sourceFollowupTargetIsMasteringRelated(step))
+    .slice()
+    .sort((a, b) => a.order - b.order)
+})
+
+watch(sourceFollowupTargetStages, (stages) => {
+  if (stages.some(stage => stage.id === sourceFollowupTargetStage.value)) {
+    return
+  }
+  const preferredStage = stages.find(sourceFollowupTargetIsMasteringRelated) ?? stages[0]
+  sourceFollowupTargetStage.value = preferredStage?.id ?? ''
+})
+
+function onSourceFollowupFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  sourceFollowupFile.value = input.files?.[0] ?? null
+}
+
+function resetSourceFollowupForm() {
+  sourceFollowupFile.value = null
+  sourceFollowupReason.value = ''
+  sourceFollowupProgress.value = 0
+}
+
+async function submitSourceFollowupRequest() {
+  if (!track.value || !sourceFollowupFile.value || !sourceFollowupReason.value.trim()) return
+  sourceFollowupUploading.value = true
+  sourceFollowupProgress.value = 0
+  try {
+    const file = sourceFollowupFile.value
+    let updated: Track
+    if (appStore.r2Enabled) {
+      const [presigned, duration] = await Promise.all([
+        r2Api.requestSourceFollowupUpload(track.value.id, {
+          filename: file.name,
+          content_type: file.type || 'application/octet-stream',
+          file_size: file.size,
+        }),
+        extractAudioDuration(file).catch(() => null),
+      ])
+      await uploadToR2(presigned.upload_url, file, file.type || 'application/octet-stream', (percent) => {
+        sourceFollowupProgress.value = percent
+      })
+      updated = await r2Api.confirmSourceFollowupUpload(track.value.id, {
+        upload_id: presigned.upload_id,
+        object_key: presigned.object_key,
+        duration,
+        reason: sourceFollowupReason.value.trim(),
+      })
+    } else {
+      updated = await trackApi.createSourceFollowup(
+        track.value.id,
+        file,
+        sourceFollowupReason.value.trim(),
+        percent => { sourceFollowupProgress.value = percent },
+      )
+    }
+    applyTrack(updated)
+    resetSourceFollowupForm()
+    showReopenModal.value = false
+    toastSuccess(t('trackDetail.sourceFollowup.requested'))
+    await loadTrack()
+  } catch (e: any) {
+    toastError(e?.message || t('trackDetail.sourceFollowup.requestFailed'))
+  } finally {
+    sourceFollowupUploading.value = false
+  }
+}
+
+async function decideSourceFollowup(decision: 'approve' | 'reject') {
+  const request = pendingSourceFollowupRequest.value
+  if (!request) return
+  if (decision === 'approve' && !sourceFollowupTargetStage.value) return
+  sourceFollowupDeciding.value = true
+  try {
+    const updated = await trackApi.decideSourceFollowup(request.id, {
+      decision,
+      target_stage_id: decision === 'approve' ? sourceFollowupTargetStage.value : null,
+    })
+    applyTrack(updated)
+    toastSuccess(decision === 'approve'
+      ? t('trackDetail.sourceFollowup.approved')
+      : t('trackDetail.sourceFollowup.rejected'))
+    await loadTrack()
+  } catch (e: any) {
+    toastError(e?.message || t('trackDetail.sourceFollowup.decideFailed'))
+  } finally {
+    sourceFollowupDeciding.value = false
+  }
+}
+
+async function cancelSourceFollowup() {
+  const request = pendingSourceFollowupRequest.value
+  if (!request) return
+  sourceFollowupDeciding.value = true
+  try {
+    const updated = await trackApi.cancelSourceFollowup(request.id)
+    applyTrack(updated)
+    toastSuccess(t('trackDetail.sourceFollowup.cancelled'))
+    await loadTrack()
+  } catch (e: any) {
+    toastError(e?.message || t('trackDetail.sourceFollowup.cancelFailed'))
+  } finally {
+    sourceFollowupDeciding.value = false
+  }
+}
+
 const primaryActions = computed(() => {
   if (!track.value?.allowed_actions?.length) return []
   if (!track.value.workflow_step) return []
@@ -698,8 +842,14 @@ watch(() => primaryActions.value.length, async () => {
 // Reopen logic
 const isMasteringEngineer = computed(() => track.value?.mastering_engineer_id === appStore.currentUser?.id)
 const isSubmitter = computed(() => track.value?.submitter_id === appStore.currentUser?.id)
+const isProxySubmission = computed(() => Boolean(track.value?.is_proxy_submission && track.value.external_submitter_name))
 const canDirectReopen = computed(() => track.value?.status === 'completed' && (isProducer.value || isMasteringEngineer.value))
 const canRequestReopen = computed(() => track.value?.status === 'completed' && isSubmitter.value && !isProducer.value && !isMasteringEngineer.value)
+const completedProcessMode = ref<'reopen' | 'source_followup'>('reopen')
+const completedProcessButtonLabel = computed(() => {
+  if (track.value?.status === 'completed' && canRequestSourceFollowup.value) return t('trackDetail.processCompleted')
+  return canDirectReopen.value ? t('trackDetail.reopen') : t('trackDetail.requestReopen')
+})
 const showReopenModal = ref(false)
 const reopenTargetStage = ref('')
 const reopenReason = ref('')
@@ -760,6 +910,7 @@ watch(reopenTargetStage, async (stageId) => {
 
 function resetReopenForm() {
   showReopenModal.value = false
+  completedProcessMode.value = 'reopen'
   reopenTargetStage.value = ''
   reopenReason.value = ''
   reopenMasteringNotes.value = ''
@@ -996,6 +1147,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
           <DiscussionPanel
             :discussions="generalDiscussion.discussions.value"
             :issues="issues"
+            :mention-users="mentionCandidates.general"
             :heading="t('trackDetail.discussionsHeading', { count: generalDiscussion.discussions.value.length })"
             :empty-text="t('trackDetail.noDiscussions')"
             :placeholder="t('trackDetail.discussionPlaceholder')"
@@ -1041,6 +1193,89 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
           </button>
         </div>
 
+        <div v-if="pendingSourceFollowupRequest" class="card space-y-3 border-warning/30">
+          <div class="space-y-1">
+            <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('trackDetail.sourceFollowup.pendingTitle') }}</h3>
+            <p class="text-xs text-muted-foreground">{{ t('trackDetail.sourceFollowup.pendingDesc') }}</p>
+          </div>
+          <div class="border border-border bg-background p-3 space-y-1">
+            <p class="text-xs font-mono text-muted-foreground">{{ t('trackDetail.sourceFollowup.reason') }}</p>
+            <p class="text-sm text-foreground whitespace-pre-wrap">{{ pendingSourceFollowupRequest.reason }}</p>
+          </div>
+          <div v-if="canDecideSourceFollowup" class="space-y-3">
+            <div class="space-y-1">
+              <label class="text-xs text-muted-foreground">{{ t('trackDetail.sourceFollowup.targetStage') }}</label>
+              <select v-model="sourceFollowupTargetStage" class="select-field w-full">
+                <option v-for="stage in sourceFollowupTargetStages" :key="stage.id" :value="stage.id">
+                  {{ reopenStageOptionLabel(stage) }}
+                </option>
+              </select>
+            </div>
+            <div class="flex gap-2">
+              <button
+                type="button"
+                class="btn-primary flex-1 h-9 text-sm disabled:opacity-50"
+                :disabled="sourceFollowupDeciding || !sourceFollowupTargetStage"
+                @click="decideSourceFollowup('approve')"
+              >
+                {{ sourceFollowupDeciding ? t('common.loading') : t('trackDetail.sourceFollowup.approve') }}
+              </button>
+              <button
+                type="button"
+                class="flex-1 rounded-full bg-error text-white h-9 text-sm font-mono disabled:opacity-50"
+                :disabled="sourceFollowupDeciding"
+                @click="decideSourceFollowup('reject')"
+              >
+                {{ t('trackDetail.sourceFollowup.reject') }}
+              </button>
+            </div>
+          </div>
+          <button
+            v-if="canCancelSourceFollowup"
+            type="button"
+            class="btn-secondary w-full h-9 text-sm"
+            :disabled="sourceFollowupDeciding"
+            @click="cancelSourceFollowup"
+          >
+            {{ t('trackDetail.sourceFollowup.cancel') }}
+          </button>
+        </div>
+
+        <div v-if="canRequestSourceFollowup && track.status !== 'completed'" class="card space-y-3 border-primary/40">
+          <div class="space-y-1">
+            <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('trackDetail.sourceFollowup.title') }}</h3>
+            <p class="text-xs text-muted-foreground">{{ t('trackDetail.sourceFollowup.desc') }}</p>
+          </div>
+          <input
+            type="file"
+            accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"
+            class="input-field w-full"
+            :disabled="sourceFollowupUploading"
+            @change="onSourceFollowupFileChange"
+          />
+          <p v-if="sourceFollowupFile" class="text-xs text-muted-foreground truncate">{{ sourceFollowupFile.name }}</p>
+          <textarea
+            v-model="sourceFollowupReason"
+            class="textarea-field w-full text-sm h-20"
+            :placeholder="t('trackDetail.sourceFollowup.reasonPlaceholder')"
+          />
+          <div v-if="sourceFollowupUploading" class="space-y-1">
+            <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
+              <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: sourceFollowupProgress + '%' }"></div>
+            </div>
+            <p class="text-xs text-muted-foreground text-right">{{ sourceFollowupProgress }}%</p>
+          </div>
+          <button
+            type="button"
+            class="btn-primary w-full h-10 text-sm inline-flex items-center justify-center gap-2"
+            :disabled="!sourceFollowupFile || !sourceFollowupReason.trim() || sourceFollowupUploading"
+            @click="submitSourceFollowupRequest"
+          >
+            <Upload class="w-4 h-4" :stroke-width="2" />
+            {{ sourceFollowupUploading ? t('trackDetail.sourceFollowup.uploading') : t('trackDetail.sourceFollowup.submit') }}
+          </button>
+        </div>
+
         <div v-if="canResubmitRejectedTrack" class="card space-y-3 border-primary/40">
           <div class="space-y-1">
             <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('trackDetail.resubmitTitle') }}</h3>
@@ -1076,8 +1311,13 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
         <div class="card space-y-2 text-sm">
           <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('trackDetail.trackSummary') }}</h3>
           <div class="flex justify-between">
-            <span class="text-muted-foreground">{{ t('trackDetail.submitter') }}</span>
-            <span class="text-foreground" :class="{ 'font-mono': !track.submitter && track.submitter_id }">{{ track.submitter?.display_name ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
+            <span class="text-muted-foreground">{{ isProxySubmission ? t('trackDetail.externalSubmitter') : t('trackDetail.submitter') }}</span>
+            <span v-if="isProxySubmission" class="text-foreground text-right">{{ track.external_submitter_name }}</span>
+            <span v-else class="text-foreground" :class="{ 'font-mono': !track.submitter && track.submitter_id }">{{ track.submitter?.display_name ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
+          </div>
+          <div v-if="isProxySubmission" class="flex justify-between gap-4">
+            <span class="text-muted-foreground">{{ t('trackDetail.proxyUploader') }}</span>
+            <span class="text-foreground text-right">{{ track.proxy_uploader?.display_name ?? track.submitter?.display_name ?? '--' }}</span>
           </div>
           <!-- Multi-reviewer progress -->
           <template v-if="hasMultipleReviewers">
@@ -1152,7 +1392,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
               </span>
             </div>
             <div class="flex items-center justify-between mt-1">
-              <span>{{ t('trackDetail.submitter') }}</span>
+              <span>{{ isProxySubmission ? t('trackDetail.externalSubmitterProxy') : t('trackDetail.submitter') }}</span>
               <span class="text-xs" :class="track.current_master_delivery.submitter_approved_at ? 'text-success' : 'text-muted-foreground'">
                 {{ track.current_master_delivery.submitter_approved_at ? t('common.approved') : t('common.pending') }}
               </span>
@@ -1236,16 +1476,70 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
           </div>
         </div>
 
-        <!-- Reopen (completed tracks) -->
-        <div v-if="canDirectReopen || canRequestReopen" class="pt-2">
+        <!-- Reopen / source follow-up (completed tracks) -->
+        <div v-if="canDirectReopen || canRequestReopen || (track.status === 'completed' && canRequestSourceFollowup)" class="pt-2">
           <button
             v-if="!showReopenModal"
             @click="showReopenModal = true"
             class="w-full flex items-center justify-center gap-2 rounded-full border border-primary/40 text-primary hover:bg-primary/10 transition-colors h-10 text-sm font-mono"
           >
-            {{ canDirectReopen ? t('trackDetail.reopen') : t('trackDetail.requestReopen') }}
+            {{ completedProcessButtonLabel }}
           </button>
           <div v-else class="card space-y-3">
+            <div v-if="track.status === 'completed' && canRequestSourceFollowup" class="flex gap-2">
+              <button
+                type="button"
+                class="btn-secondary flex-1 h-9 text-xs"
+                :class="completedProcessMode === 'reopen' ? 'border-primary text-primary' : ''"
+                @click="completedProcessMode = 'reopen'"
+              >
+                {{ t('trackDetail.sourceFollowup.reopenOnly') }}
+              </button>
+              <button
+                type="button"
+                class="btn-secondary flex-1 h-9 text-xs"
+                :class="completedProcessMode === 'source_followup' ? 'border-primary text-primary' : ''"
+                @click="completedProcessMode = 'source_followup'"
+              >
+                {{ t('trackDetail.sourceFollowup.withSource') }}
+              </button>
+            </div>
+            <template v-if="completedProcessMode === 'source_followup'">
+              <p class="text-sm text-muted-foreground">{{ t('trackDetail.sourceFollowup.completedDesc') }}</p>
+              <input
+                type="file"
+                accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"
+                class="input-field w-full"
+                :disabled="sourceFollowupUploading"
+                @change="onSourceFollowupFileChange"
+              />
+              <p v-if="sourceFollowupFile" class="text-xs text-muted-foreground truncate">{{ sourceFollowupFile.name }}</p>
+              <textarea
+                v-model="sourceFollowupReason"
+                class="textarea-field w-full text-sm h-20"
+                :placeholder="t('trackDetail.sourceFollowup.reasonPlaceholder')"
+              />
+              <div v-if="sourceFollowupUploading" class="space-y-1">
+                <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
+                  <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: sourceFollowupProgress + '%' }"></div>
+                </div>
+                <p class="text-xs text-muted-foreground text-right">{{ sourceFollowupProgress }}%</p>
+              </div>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  class="flex-1 btn-primary h-9 text-sm disabled:opacity-50"
+                  :disabled="!sourceFollowupFile || !sourceFollowupReason.trim() || sourceFollowupUploading"
+                  @click="submitSourceFollowupRequest"
+                >
+                  {{ sourceFollowupUploading ? t('trackDetail.sourceFollowup.uploading') : t('trackDetail.sourceFollowup.submit') }}
+                </button>
+                <button @click="showReopenModal = false" class="flex-1 btn-secondary h-9 text-sm">
+                  {{ t('common.cancel') }}
+                </button>
+              </div>
+            </template>
+            <template v-else>
             <p class="text-sm text-muted-foreground">
               {{ canDirectReopen ? t('trackDetail.reopenDesc') : t('trackDetail.requestReopenDesc') }}
             </p>
@@ -1288,6 +1582,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
                 {{ t('common.cancel') }}
               </button>
             </div>
+            </template>
           </div>
         </div>
 
@@ -1405,6 +1700,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
       :track-id="trackId"
       :track-completed="track.status === 'completed'"
       :issues="issues"
+      :mention-users="mentionCandidates.mastering"
       @open-issue="openIssueReference"
     />
   </div>

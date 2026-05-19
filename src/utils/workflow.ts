@@ -19,6 +19,7 @@ const DEFAULT_STEP_IDS = new Set([
   'mastering_revision',
   'final_review',
   'final_revision',
+  'source_followup_pending',
 ])
 
 interface StepLike {
@@ -50,7 +51,7 @@ function buildTrackWorkspaceQuery(options: TrackWorkspaceRouteOptions): Record<s
 
 function resolveTrackWorkspaceStepId(track: TrackWorkspaceLike): string | null {
   if (track.workflow_step?.id) return track.workflow_step.id
-  if (track.status === 'completed' || track.status === 'rejected') return null
+  if (track.status === 'completed' || track.status === 'rejected' || track.status === 'source_followup_pending') return null
   return track.status
 }
 
@@ -138,6 +139,7 @@ export function workflowEventDotColor(eventType: string): string {
   if (eventType.includes('completed') || eventType.includes('approved')) return 'bg-success'
   if (eventType.includes('issue')) return 'bg-warning'
   if (eventType.includes('revision') || eventType.includes('returned')) return 'bg-warning'
+  if (eventType.includes('source_followup')) return 'bg-warning'
   if (eventType.includes('upload') || eventType.includes('deliver')) return 'bg-info'
   return 'bg-muted-foreground'
 }

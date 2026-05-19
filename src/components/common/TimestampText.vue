@@ -2,9 +2,9 @@
 import { computed, onBeforeUnmount, ref, useAttrs } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { Issue } from '@/types'
+import type { Issue, User } from '@/types'
 import { formatTimestampShort } from '@/utils/time'
-import type { IssueReference, MarkerIndexReference, TimeReference, TimestampTarget } from '@/utils/timestamps'
+import type { IssueReference, MarkerIndexReference, TimeReference, TimestampTarget, UserMentionReference } from '@/utils/timestamps'
 import { resolveTimeReferenceTarget, splitTextWithInlineReferences } from '@/utils/timestamps'
 
 defineOptions({
@@ -16,10 +16,12 @@ const props = withDefaults(defineProps<{
   defaultTarget?: TimestampTarget
   interactive?: boolean
   issues?: Issue[] | null
+  mentionUsers?: User[] | null
 }>(), {
   defaultTarget: 'track',
   interactive: true,
   issues: () => [],
+  mentionUsers: () => [],
 })
 
 const emit = defineEmits<{
@@ -34,12 +36,19 @@ const segments = computed(() => splitTextWithInlineReferences(props.text))
 const issuesByLocalNumber = computed(
   () => new Map((props.issues ?? []).map(issue => [issue.local_number, issue])),
 )
+const usersById = computed(
+  () => new Map((props.mentionUsers ?? []).map(user => [user.id, user])),
+)
 const hoveredIssue = ref<Issue | null>(null)
 const issuePreviewStyle = ref<Record<string, string>>({})
 let hidePreviewTimer: ReturnType<typeof setTimeout> | null = null
 
 function resolveIssue(reference: IssueReference): Issue | null {
   return issuesByLocalNumber.value.get(reference.localNumber) ?? null
+}
+
+function resolveMentionUser(reference: UserMentionReference): User | null {
+  return usersById.value.get(reference.userId) ?? null
 }
 
 function activate(reference: TimeReference) {
@@ -55,6 +64,11 @@ function activateMarker(reference: MarkerIndexReference) {
 function activateIssue(issue: Issue) {
   if (!props.interactive) return
   emit('issueActivate', issue)
+}
+
+function userMentionLabel(reference: UserMentionReference): string {
+  const user = resolveMentionUser(reference)
+  return user ? `@${user.display_name}` : reference.raw
 }
 
 function clearHidePreviewTimer() {
@@ -168,6 +182,21 @@ onBeforeUnmount(() => {
         <span
           v-else
           class="mx-0.5 inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 align-baseline font-mono text-[0.95em] font-medium text-primary"
+        >
+          {{ segment.value.raw }}
+        </span>
+      </template>
+      <template v-else-if="segment.type === 'user'">
+        <span
+          v-if="resolveMentionUser(segment.value)"
+          class="mx-0.5 inline-flex items-center rounded-full border border-info/25 bg-info-bg px-2 py-0.5 align-baseline font-mono text-[0.95em] font-medium text-info"
+        >
+          {{ userMentionLabel(segment.value) }}
+        </span>
+        <span
+          v-else
+          class="mx-0.5 inline-flex items-center rounded-full border border-border bg-border/40 px-2 py-0.5 align-baseline font-mono text-[0.95em] font-medium text-muted-foreground line-through"
+          :title="t('timestamp.userUnavailable')"
         >
           {{ segment.value.raw }}
         </span>

@@ -3,19 +3,20 @@ import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Discussion, Issue } from '@/types'
+import type { Discussion, Issue, User } from '@/types'
 import { formatLocaleDate, formatDuration } from '@/utils/time'
 import { useDiscussions } from '@/composables/useDiscussions'
 import CommentInput from '@/components/common/CommentInput.vue'
 import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import TimestampText from '@/components/common/TimestampText.vue'
-import { MessageSquare, X, Pencil, Trash2, Music } from 'lucide-vue-next'
+import { Maximize2, MessageSquare, Minimize2, X, Pencil, Trash2, Music } from 'lucide-vue-next'
 
 const props = defineProps<{
   trackId: number
   trackCompleted?: boolean
   issues?: Issue[] | null
+  mentionUsers?: User[] | null
 }>()
 
 const emit = defineEmits<{
@@ -30,6 +31,7 @@ const trackIdRef = computed(() => props.trackId)
 const mastering = useDiscussions(trackIdRef, 'mastering')
 
 const open = ref(false)
+const fullscreen = ref(false)
 const unreadCount = ref(0)
 const messageListRef = ref<HTMLElement | null>(null)
 const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
@@ -50,6 +52,12 @@ function openPanel() {
 
 function closePanel() {
   open.value = false
+  fullscreen.value = false
+}
+
+function toggleFullscreen() {
+  fullscreen.value = !fullscreen.value
+  nextTick(scrollToBottom)
 }
 
 async function loadDiscussions() {
@@ -136,7 +144,11 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
   <Transition name="chat-slide">
     <div
       v-if="open"
-      class="fixed right-0 top-0 bottom-0 z-40 w-[360px] max-w-full flex flex-col bg-card border-l border-border shadow-lg"
+      data-testid="mastering-chat-panel"
+      class="fixed flex flex-col bg-card border-border shadow-lg transition-[width,transform] duration-200"
+      :class="fullscreen
+        ? 'inset-0 z-50 w-full max-w-none border-l-0'
+        : 'right-0 top-0 bottom-0 z-40 w-[360px] max-w-full border-l'"
     >
       <!-- Header -->
       <div class="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
@@ -144,9 +156,27 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
           <MessageSquare class="w-4 h-4 text-primary" :stroke-width="2" />
           {{ t('chat.title') }}
         </h3>
-        <button @click="closePanel" class="p-1 text-muted-foreground hover:text-foreground transition-colors">
-          <X class="w-4 h-4" :stroke-width="2" />
-        </button>
+        <div class="flex items-center gap-1">
+          <button
+            type="button"
+            @click="toggleFullscreen"
+            class="rounded-full p-1.5 text-muted-foreground hover:bg-background hover:text-foreground transition-colors"
+            :title="fullscreen ? t('chat.exitFullscreen') : t('chat.enterFullscreen')"
+            :aria-label="fullscreen ? t('chat.exitFullscreen') : t('chat.enterFullscreen')"
+          >
+            <Minimize2 v-if="fullscreen" class="w-4 h-4" :stroke-width="2" />
+            <Maximize2 v-else class="w-4 h-4" :stroke-width="2" />
+          </button>
+          <button
+            type="button"
+            @click="closePanel"
+            class="rounded-full p-1.5 text-muted-foreground hover:bg-background hover:text-foreground transition-colors"
+            :title="t('chat.closeChat')"
+            :aria-label="t('chat.closeChat')"
+          >
+            <X class="w-4 h-4" :stroke-width="2" />
+          </button>
+        </div>
       </div>
 
       <!-- Messages -->
@@ -227,6 +257,7 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
                   <TimestampText
                     :text="d.content"
                     :issues="issues"
+                    :mention-users="mentionUsers"
                     class="text-sm text-foreground"
                     @issueActivate="(target) => emit('openIssue', target.id)"
                   />
@@ -301,6 +332,8 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
           enable-timestamp-popover
           :rows="2"
           :issues="issues"
+          :mention-users="mentionUsers"
+          timestamp-popover-placement="top"
           @submit="handleSubmit"
         />
       </div>

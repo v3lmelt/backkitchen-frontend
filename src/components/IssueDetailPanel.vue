@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 
 import { useI18n } from 'vue-i18n'
 import { issueApi, commentApi, r2Api, uploadToR2, resolveAssetUrl } from '@/api'
 import { useToast } from '@/composables/useToast'
 import { useAppStore } from '@/stores/app'
-import type { Comment, Issue, IssueStatus, StageAssignment } from '@/types'
+import type { Comment, Issue, IssueStatus, MentionCandidates, StageAssignment, User } from '@/types'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import TimestampText from '@/components/common/TimestampText.vue'
 import CommentInput from '@/components/common/CommentInput.vue'
+import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import IssuePlaybackPreview from '@/components/issue/IssuePlaybackPreview.vue'
 import type { PreviewAction } from '@/composables/useIssuePreviewPlayback'
@@ -23,6 +24,7 @@ const props = defineProps<{
   track?: import('@/types').Track | null
   assignments?: StageAssignment[]
   issues?: Issue[] | null
+  mentionCandidates?: MentionCandidates | null
   preview?: {
     duration: number
     currentTime: number
@@ -142,7 +144,50 @@ function statusActionClass(status: IssueStatus): string {
   return 'bg-card border border-border text-foreground hover:bg-border'
 }
 const statusNote = ref('')
+const statusNoteCursorPos = ref(0)
+const statusNoteRef = ref<HTMLTextAreaElement | null>(null)
 const commentAudioRefs = new Map<number, HTMLAudioElement[]>()
+
+const publicMentionUsers = computed(() => props.mentionCandidates?.issue_public ?? [])
+const internalMentionUsers = computed(() => props.mentionCandidates?.issue_internal ?? [])
+
+function isInternalIssueStatus(status: IssueStatus | string | null | undefined): boolean {
+  return status === 'pending_discussion' || status === 'internal_resolved'
+}
+
+function mentionUsersForVisibility(visibility: string | null | undefined): User[] {
+  return visibility === 'internal' ? internalMentionUsers.value : publicMentionUsers.value
+}
+
+const activeIssueMentionUsers = computed(() => (
+  isInternalIssueStatus(fullIssue.value?.status) ? internalMentionUsers.value : publicMentionUsers.value
+))
+
+const statusNoteMentionUsers = computed(() => (
+  isInternalIssueStatus(fullIssue.value?.status) || isInternalIssueStatus(pendingStatus.value)
+    ? internalMentionUsers.value
+    : publicMentionUsers.value
+))
+
+async function handleStatusNoteIssueMentionSelect(issue: Issue, mention: { start: number; end: number }) {
+  const insertion = `@issue:${issue.local_number} `
+  statusNote.value = `${statusNote.value.slice(0, mention.start)}${insertion}${statusNote.value.slice(mention.end)}`
+  const nextCursor = mention.start + insertion.length
+  statusNoteCursorPos.value = nextCursor
+  await nextTick()
+  statusNoteRef.value?.focus()
+  statusNoteRef.value?.setSelectionRange(nextCursor, nextCursor)
+}
+
+async function handleStatusNoteUserMentionSelect(user: User, mention: { start: number; end: number }) {
+  const insertion = `@user:${user.id} `
+  statusNote.value = `${statusNote.value.slice(0, mention.start)}${insertion}${statusNote.value.slice(mention.end)}`
+  const nextCursor = mention.start + insertion.length
+  statusNoteCursorPos.value = nextCursor
+  await nextTick()
+  statusNoteRef.value?.focus()
+  statusNoteRef.value?.setSelectionRange(nextCursor, nextCursor)
+}
 
 watch(() => props.issue, async (issue) => {
   pendingStatus.value = null
@@ -429,6 +474,7 @@ async function confirmDeleteComment() {
             v-if="fullIssue.description"
             :text="fullIssue.description"
             :issues="issues"
+            :mention-users="activeIssueMentionUsers"
             class="text-sm text-foreground"
             :default-target="fullIssue.audios?.length ? 'attachment' : 'track'"
             @activate="(reference, target) => handleIssueDescriptionReference(reference, target)"
@@ -483,12 +529,27 @@ async function confirmDeleteComment() {
               >{{ statusActionLabel(status) }}</button>
             </div>
             <div v-if="pendingStatus" class="space-y-2">
-              <textarea
-                v-model="statusNote"
-                :placeholder="t('issue.statusNotePlaceholder')"
-                class="textarea-field w-full text-sm"
-                rows="2"
-              />
+              <div class="relative">
+                <textarea
+                  ref="statusNoteRef"
+                  v-model="statusNote"
+                  :placeholder="t('issue.statusNotePlaceholder')"
+                  class="textarea-field w-full text-sm"
+                  rows="2"
+                  @input="(e) => statusNoteCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
+                  @click="(e) => statusNoteCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
+                  @keyup="(e) => statusNoteCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
+                />
+                <TimestampSyntaxPopover
+                  :text="statusNote"
+                  :cursor-pos="statusNoteCursorPos"
+                  default-target="track"
+                  :issues="issues"
+                  :mention-users="statusNoteMentionUsers"
+                  @select="handleStatusNoteIssueMentionSelect"
+                  @select-user="handleStatusNoteUserMentionSelect"
+                />
+              </div>
               <div class="flex gap-2">
                 <button @click="confirmStatusChange" class="btn-primary text-xs">{{ t('common.confirm') }}</button>
                 <button @click="pendingStatus = null" class="btn-secondary text-xs">{{ t('common.cancel') }}</button>
@@ -531,6 +592,7 @@ async function confirmDeleteComment() {
                 <TimestampText
                   :text="comment.content"
                   :issues="issues"
+                  :mention-users="mentionUsersForVisibility(comment.visibility)"
                   class="text-sm text-foreground"
                   :default-target="comment.audios?.length ? 'attachment' : 'track'"
                   @activate="(reference, target) => handleCommentReference(comment, reference, target)"
@@ -615,6 +677,7 @@ async function confirmDeleteComment() {
                   v-else
                   :text="comment.content"
                   :issues="issues"
+                  :mention-users="mentionUsersForVisibility(comment.visibility)"
                   class="text-sm text-foreground"
                   :default-target="comment.audios?.length ? 'attachment' : 'track'"
                   @activate="(reference, target) => handleCommentReference(comment, reference, target)"
@@ -667,6 +730,7 @@ async function confirmDeleteComment() {
               enable-timestamp-popover
               timestamp-default-target="attachment"
               :issues="issues"
+              :mention-users="activeIssueMentionUsers"
               @submit="handleCommentSubmit"
             />
           </div>

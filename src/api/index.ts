@@ -296,6 +296,7 @@ export const albumApi = {
     workflow_config?: WorkflowConfig | null
     workflow_template_id?: number | null
     checklist_enabled?: boolean | null
+    quick_followup_enabled?: boolean
   }) =>
     request<Album>('/albums', { method: 'POST', body: JSON.stringify(data) }),
   updateTeam: (id: number, data: { mastering_engineer_id: number | null; member_ids: number[] }) =>
@@ -335,6 +336,7 @@ export const albumApi = {
     circle_name?: string | null
     genres?: string[] | null
     checklist_enabled?: boolean | null
+    quick_followup_enabled?: boolean | null
   }) =>
     request<Album>(`/albums/${id}/metadata`, { method: 'PATCH', body: JSON.stringify(data) }),
   uploadCover: (id: number, file: File) => {
@@ -478,6 +480,24 @@ export const trackApi = {
     if (options?.resolutionNote) form.append('resolution_note', options.resolutionNote)
     return uploadWithProgress<Track>(`/tracks/${id}/source-versions`, form, onProgress)
   },
+  createSourceFollowup: (
+    id: number,
+    file: File,
+    reason: string,
+    onProgress?: (percent: number) => void,
+  ) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('reason', reason)
+    return uploadWithProgress<Track>(`/tracks/${id}/source-followups`, form, onProgress)
+  },
+  decideSourceFollowup: (requestId: number, data: { decision: 'approve' | 'reject'; target_stage_id?: string | null }) =>
+    request<Track>(`/tracks/source-followups/${requestId}/decide`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  cancelSourceFollowup: (requestId: number) =>
+    request<Track>(`/tracks/source-followups/${requestId}/cancel`, { method: 'POST' }),
   uploadMasterDelivery: (id: number, file: File, onProgress?: (percent: number) => void) => {
     const form = new FormData()
     form.append('file', file)
@@ -965,17 +985,17 @@ export const adminApi = {
     const qs = sp.toString()
     return request<AdminAuditLogEntry[]>(`/admin/audit-log${qs ? `?${qs}` : ''}`)
   },
-  forceStatus: (trackId: number, data: { new_status: string; reason: string }) =>
+  forceStatus: (trackId: number, data: { new_status: string; reason?: string }) =>
     request<Track>(`/admin/tracks/${trackId}/force-status`, { method: 'POST', body: JSON.stringify(data) }),
-  reassign: (trackId: number, data: { user_ids: number[]; reason: string }) =>
+  reassign: (trackId: number, data: { user_ids: number[]; reason?: string }) =>
     request<Track>(`/admin/tracks/${trackId}/reassign`, { method: 'POST', body: JSON.stringify(data) }),
-  reopenTrack: (trackId: number, data: { target_stage_id: string; reason: string }) =>
+  reopenTrack: (trackId: number, data: { target_stage_id: string; reason?: string }) =>
     request<Track>(`/admin/tracks/${trackId}/reopen`, { method: 'POST', body: JSON.stringify(data) }),
   decideReopenRequest: (requestId: number, data: { decision: 'approve' | 'reject'; reason: string }) =>
     request<AdminReopenRequestEntry>(`/admin/reopen-requests/${requestId}/decide`, { method: 'POST', body: JSON.stringify(data) }),
-  archiveTrack: (trackId: number, reason: string) =>
+  archiveTrack: (trackId: number, reason?: string) =>
     request<Track>(`/admin/tracks/${trackId}/archive`, { method: 'POST', body: JSON.stringify({ reason }) }),
-  restoreTrack: (trackId: number, reason: string) =>
+  restoreTrack: (trackId: number, reason?: string) =>
     request<Track>(`/admin/tracks/${trackId}/restore`, { method: 'POST', body: JSON.stringify({ reason }) }),
   deleteTrack: (trackId: number, reason?: string) => {
     const sp = new URLSearchParams()
@@ -1043,6 +1063,8 @@ export const r2Api = {
     original_title?: string | null
     original_artist?: string | null
     author_notes?: string | null
+    proxy_submission?: boolean
+    external_submitter_name?: string | null
   }) => request<PresignedUploadResponse>('/tracks/request-upload', { method: 'POST', body: JSON.stringify(params) }),
 
   confirmTrackUpload: (params: {
@@ -1056,6 +1078,8 @@ export const r2Api = {
     original_title?: string | null
     original_artist?: string | null
     author_notes?: string | null
+    proxy_submission?: boolean
+    external_submitter_name?: string | null
   }) => request<Track>('/tracks/confirm-upload', { method: 'POST', body: JSON.stringify(params) }),
 
   // Source version
@@ -1073,6 +1097,19 @@ export const r2Api = {
     resolved_issue_ids?: number[]
     resolution_note?: string | null
   }) => request<Track>(`/tracks/${trackId}/source-versions/confirm-upload`, { method: 'POST', body: JSON.stringify(params) }),
+
+  requestSourceFollowupUpload: (trackId: number, params: {
+    filename: string
+    content_type: string
+    file_size: number
+  }) => request<PresignedUploadResponse>(`/tracks/${trackId}/source-followups/request-upload`, { method: 'POST', body: JSON.stringify(params) }),
+
+  confirmSourceFollowupUpload: (trackId: number, params: {
+    upload_id: string
+    object_key: string
+    duration?: number | null
+    reason: string
+  }) => request<Track>(`/tracks/${trackId}/source-followups/confirm-upload`, { method: 'POST', body: JSON.stringify(params) }),
 
   // Master delivery
   requestMasterDeliveryUpload: (trackId: number, params: {

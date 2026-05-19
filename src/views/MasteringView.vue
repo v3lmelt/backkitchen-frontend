@@ -31,6 +31,7 @@ import { useDiscussions } from '@/composables/useDiscussions'
 import { useIssuePreviewPlayback, type PreviewAction } from '@/composables/useIssuePreviewPlayback'
 import { useToast } from '@/composables/useToast'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
+import { emptyMentionCandidates } from '@/utils/mentionCandidates'
 import { ChevronLeft, ChevronDown, Upload, Check } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -48,6 +49,7 @@ const track = ref<Track | null>(null)
 const masterDeliveries = ref<MasterDelivery[]>([])
 const workflowConfig = ref<WorkflowConfig | null>(null)
 const issues = ref<Issue[]>([])
+const mentionCandidates = ref(emptyMentionCandidates())
 const sourceVersions = ref<TrackSourceVersion[]>([])
 const reviewAssignments = ref<StageAssignment[]>([])
 const loading = ref(true)
@@ -129,6 +131,7 @@ const selectedCompareMasterDeliveryId = ref<number | null>(null)
 // Computed
 const isSubmitter = computed(() => track.value?.submitter_id === appStore.currentUser?.id)
 const isMasteringEngineer = computed(() => track.value?.mastering_engineer_id === appStore.currentUser?.id)
+const isProxySubmission = computed(() => Boolean(track.value?.is_proxy_submission && track.value.external_submitter_name))
 const canSeeMasteringDiscussion = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId || !track.value) return false
@@ -447,6 +450,7 @@ async function loadData() {
     issues.value = (detail.issues ?? []).filter(
       (issue: Issue) => issue.workflow_cycle === detail.track.workflow_cycle,
     )
+    mentionCandidates.value = detail.mention_candidates ?? emptyMentionCandidates()
     syncIssueDrawerFromRoute()
     try {
       const assignments = await trackApi.listAssignments(requestedTrackId)
@@ -470,6 +474,7 @@ async function loadData() {
 watch(trackId, () => {
   track.value = null
   issues.value = []
+  mentionCandidates.value = emptyMentionCandidates()
   sourceVersions.value = []
   masterDeliveries.value = []
   workflowConfig.value = null
@@ -997,6 +1002,9 @@ watch(olderMasterDeliveries, (deliveries) => {
         </div>
         <h1 class="text-xl sm:text-2xl font-mono font-bold text-foreground">{{ t('masteringPage.heading') }}</h1>
         <p class="text-sm text-muted-foreground">{{ track.title }} · {{ track.artist ?? '--' }}</p>
+        <p v-if="isProxySubmission" class="mt-1 text-xs text-muted-foreground">
+          {{ t('trackDetail.externalSubmitter') }}: {{ track.external_submitter_name }} · {{ t('trackDetail.proxyUploader') }}: {{ track.proxy_uploader?.display_name ?? track.submitter?.display_name ?? '--' }}
+        </p>
       </div>
       <button @click="goBack" class="btn-secondary text-sm flex-shrink-0 self-start flex items-center gap-1.5">
         <ChevronLeft class="w-4 h-4" :stroke-width="2" />
@@ -1067,6 +1075,7 @@ watch(olderMasterDeliveries, (deliveries) => {
           v-if="canSeeMasteringDiscussion"
           :discussions="masteringDiscussion.discussions.value"
           :issues="issues"
+          :mention-users="mentionCandidates.mastering"
           :heading="t('masteringPage.discussionsHeading', { count: masteringDiscussion.discussions.value.length })"
           :empty-text="t('masteringPage.noDiscussions')"
           :placeholder="t('masteringPage.discussionPlaceholder')"
@@ -1222,6 +1231,9 @@ watch(olderMasterDeliveries, (deliveries) => {
           phase="mastering"
           :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
           :issues="issues"
+          :mention-users="mentionCandidates.issue_public"
+          :public-mention-users="mentionCandidates.issue_public"
+          :internal-mention-users="mentionCandidates.issue_internal"
           @created="onIssueCreated"
           @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
         >
@@ -1235,6 +1247,8 @@ watch(olderMasterDeliveries, (deliveries) => {
           :statuses="stageBatchActions"
           :note="stageBatchNote"
           :loading="batchUpdatingIssues"
+          :issues="issues"
+          :mention-users="mentionCandidates.issue_internal"
           @update:note="stageBatchNote = $event"
           @clear="selectedStageIssueIds = []; stageBatchNote = ''"
           @apply="applyBatchIssueStatusChange($event)"
@@ -1317,7 +1331,7 @@ watch(olderMasterDeliveries, (deliveries) => {
           </span>
         </div>
         <div class="flex items-center justify-between text-sm">
-          <span class="text-muted-foreground">{{ t('trackDetail.submitter') }}</span>
+          <span class="text-muted-foreground">{{ isProxySubmission ? t('trackDetail.externalSubmitterProxy') : t('trackDetail.submitter') }}</span>
           <span class="text-xs" :class="track.current_master_delivery?.submitter_approved_at ? 'text-success' : 'text-muted-foreground'">
             {{ track.current_master_delivery?.submitter_approved_at ? t('common.approved') : t('common.pending') }}
           </span>
@@ -1385,6 +1399,7 @@ watch(olderMasterDeliveries, (deliveries) => {
     :track="track"
     :assignments="reviewAssignments"
     :issues="issues"
+    :mention-candidates="mentionCandidates"
     :preview="selectedIssuePreview"
     @close="closeIssueDrawer"
     @updated="onIssueUpdated"
@@ -1399,6 +1414,7 @@ watch(olderMasterDeliveries, (deliveries) => {
     :track-id="trackId"
     :track-completed="track.status === 'completed'"
     :issues="issues"
+    :mention-users="mentionCandidates.mastering"
     @open-issue="openLinkedIssue"
   />
 </template>

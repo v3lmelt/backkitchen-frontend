@@ -161,4 +161,21 @@ describe('reviewAssignments', () => {
 
     expect(canUserChangeIssueStatus(41, track, issue, assignments)).toBe(true)
   })
+
+  it('allows any assigned peer reviewer to publish hidden peer-review issues', () => {
+    const track = makeTrack({ status: 'peer_review', peer_reviewer_id: null })
+    const issue = makeIssue({
+      phase: 'peer',
+      author_id: 40,
+      status: 'internal_resolved',
+      source_version_id: 5,
+      master_delivery_id: null,
+    })
+    const assignments: StageAssignment[] = [
+      makeAssignment({ user_id: 40, status: 'pending' }),
+      makeAssignment({ user_id: 41, status: 'pending' }),
+    ]
+
+    expect(canUserChangeIssueStatus(41, track, issue, assignments)).toBe(true)
+  })
 })

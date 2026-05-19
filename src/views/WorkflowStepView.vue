@@ -45,6 +45,7 @@ import { translateStepLabel } from '@/utils/workflow'
 import { hashId } from '@/utils/hash'
 import { extractAudioDuration } from '@/utils/audio'
 import { activeAssignmentsForStep, canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
+import { emptyMentionCandidates } from '@/utils/mentionCandidates'
 
 const route = useRoute()
 const router = useRouter()
@@ -78,7 +79,9 @@ watch(wsConnected, (connected) => {
 })
 
 const track = ref<Track | null>(null)
+const isProxySubmission = computed(() => Boolean(track.value?.is_proxy_submission && track.value.external_submitter_name))
 const issues = ref<Issue[]>([])
+const mentionCandidates = ref(emptyMentionCandidates())
 const sourceVersions = ref<TrackSourceVersion[]>([])
 const masterDeliveries = ref<MasterDelivery[]>([])
 const workflowConfig = ref<WorkflowConfig | null>(null)
@@ -648,6 +651,7 @@ async function loadPage() {
     issues.value = detail.issues.filter(
       issue => issue.workflow_cycle === detail.track.workflow_cycle,
     )
+    mentionCandidates.value = detail.mention_candidates ?? emptyMentionCandidates()
     syncIssueDrawerFromRoute()
     checklistItems.value = detail.checklist_items
     try {
@@ -701,6 +705,7 @@ async function loadPage() {
 watch(trackId, () => {
   track.value = null
   issues.value = []
+  mentionCandidates.value = emptyMentionCandidates()
   sourceVersions.value = []
   masterDeliveries.value = []
   workflowConfig.value = null
@@ -1529,7 +1534,14 @@ function handleIssueLeave() {
   </div>
 
   <div v-else-if="loadError || !track || !currentStep" class="max-w-4xl mx-auto space-y-6">
-    <div class="card space-y-3">
+    <div v-if="track?.status === 'source_followup_pending'" class="card space-y-3 border-warning/30">
+      <h1 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.sourceFollowupPendingTitle') }}</h1>
+      <p class="text-sm text-muted-foreground">{{ t('workflowStep.sourceFollowupPendingDesc') }}</p>
+      <div>
+        <button @click="pushToTrackDetail" class="btn-secondary text-sm">{{ t('common.backToTrack') }}</button>
+      </div>
+    </div>
+    <div v-else class="card space-y-3">
       <p class="text-sm text-error">{{ loadError || t('common.loadFailed') }}</p>
       <div>
         <button @click="loadPage" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
@@ -1764,6 +1776,9 @@ function handleIssueLeave() {
             phase="peer"
             :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
             :issues="issues"
+            :mention-users="mentionCandidates.issue_public"
+            :public-mention-users="mentionCandidates.issue_public"
+            :internal-mention-users="mentionCandidates.issue_internal"
             @created="onIssueCreated"
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
@@ -1777,6 +1792,8 @@ function handleIssueLeave() {
             :statuses="stageBatchActions"
             :note="stageBatchNote"
             :loading="batchUpdatingIssues"
+            :issues="issues"
+            :mention-users="mentionCandidates.issue_internal"
             @update:note="stageBatchNote = $event"
             @clear="selectedStageIssueIds = []; stageBatchNote = ''"
             @apply="applyStageBatchStatus($event)"
@@ -1983,6 +2000,7 @@ function handleIssueLeave() {
         :track-id="trackId"
         phase="producer"
         :issues="issues"
+        :mention-users="mentionCandidates.issue_public"
         @created="onIssueCreated"
         @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
       >
@@ -2127,6 +2145,8 @@ function handleIssueLeave() {
           :statuses="producerBatchActions"
           :note="producerBatchNote"
           :loading="batchUpdatingIssues"
+          :issues="issues"
+          :mention-users="mentionCandidates.issue_internal"
           @update:note="producerBatchNote = $event"
           @clear="selectedProducerIssueIds = []; producerBatchNote = ''"
           @apply="applyProducerBatchStatus($event)"
@@ -2242,6 +2262,9 @@ function handleIssueLeave() {
             phase="mastering"
             :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
             :issues="issues"
+            :mention-users="mentionCandidates.issue_public"
+            :public-mention-users="mentionCandidates.issue_public"
+            :internal-mention-users="mentionCandidates.issue_internal"
             @created="onIssueCreated"
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
@@ -2255,6 +2278,8 @@ function handleIssueLeave() {
             :statuses="stageBatchActions"
             :note="stageBatchNote"
             :loading="batchUpdatingIssues"
+            :issues="issues"
+            :mention-users="mentionCandidates.issue_internal"
             @update:note="stageBatchNote = $event"
             @clear="selectedStageIssueIds = []; stageBatchNote = ''"
             @apply="applyStageBatchStatus($event)"
@@ -2397,6 +2422,7 @@ function handleIssueLeave() {
       <DiscussionPanel
         :discussions="masteringDiscussion.discussions.value"
         :issues="issues"
+        :mention-users="mentionCandidates.mastering"
         :heading="t('mastering.discussionHeading', { count: masteringDiscussion.discussions.value.length })"
         :empty-text="t('mastering.noDiscussions')"
         :placeholder="t('mastering.discussionPlaceholder')"
@@ -2513,6 +2539,7 @@ function handleIssueLeave() {
             phase="final_review"
             :master-delivery-id="masterDelivery?.id ?? null"
             :issues="issues"
+            :mention-users="mentionCandidates.issue_public"
             @created="onIssueCreated"
             @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
           >
@@ -2526,6 +2553,8 @@ function handleIssueLeave() {
             :statuses="stageBatchActions"
             :note="stageBatchNote"
             :loading="batchUpdatingIssues"
+            :issues="issues"
+            :mention-users="mentionCandidates.issue_internal"
             @update:note="stageBatchNote = $event"
             @clear="selectedStageIssueIds = []; stageBatchNote = ''"
             @apply="applyStageBatchStatus($event)"
@@ -2564,7 +2593,7 @@ function handleIssueLeave() {
             </span>
           </div>
           <div class="flex items-center justify-between gap-3 text-sm">
-            <span>{{ t('finalReview.submitter') }}</span>
+            <span>{{ isProxySubmission ? t('finalReview.externalSubmitterProxy') : t('finalReview.submitter') }}</span>
             <span
               :class="masterDelivery?.submitter_approved_at ? 'text-success' : 'text-muted-foreground'"
               class="text-right"
@@ -2630,6 +2659,9 @@ function handleIssueLeave() {
         <h1 class="text-2xl font-mono font-bold truncate">{{ track.title }}</h1>
         <p class="text-sm text-muted-foreground mt-0.5">
           {{ translateStepLabel(currentStep, t) }} · <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
+        </p>
+        <p v-if="isProxySubmission" class="mt-1 text-xs text-muted-foreground">
+          {{ t('trackDetail.externalSubmitter') }}: {{ track.external_submitter_name }} · {{ t('trackDetail.proxyUploader') }}: {{ track.proxy_uploader?.display_name ?? track.submitter?.display_name ?? '--' }}
         </p>
       </div>
       <StatusBadge :status="track.status" type="track" :label="currentStep?.label ?? null" />
@@ -2697,6 +2729,8 @@ function handleIssueLeave() {
           :statuses="stageBatchActions"
           :note="stageBatchNote"
           :loading="batchUpdatingIssues"
+          :issues="issues"
+          :mention-users="mentionCandidates.issue_internal"
           @update:note="stageBatchNote = $event"
           @clear="selectedStageIssueIds = []; stageBatchNote = ''"
           @apply="applyStageBatchStatus($event)"
@@ -2722,6 +2756,9 @@ function handleIssueLeave() {
           :phase="currentStep.id"
           :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
           :issues="issues"
+          :mention-users="mentionCandidates.issue_public"
+          :public-mention-users="mentionCandidates.issue_public"
+          :internal-mention-users="mentionCandidates.issue_internal"
           @created="onIssueCreated"
         />
       </div>
@@ -2783,6 +2820,8 @@ function handleIssueLeave() {
           :statuses="stageBatchActions"
           :note="stageBatchNote"
           :loading="batchUpdatingIssues"
+          :issues="issues"
+          :mention-users="mentionCandidates.issue_internal"
           @update:note="stageBatchNote = $event"
           @clear="selectedStageIssueIds = []; stageBatchNote = ''"
           @apply="applyStageBatchStatus($event)"
@@ -2808,6 +2847,9 @@ function handleIssueLeave() {
           :phase="currentStep.id"
           :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
           :issues="issues"
+          :mention-users="mentionCandidates.issue_public"
+          :public-mention-users="mentionCandidates.issue_public"
+          :internal-mention-users="mentionCandidates.issue_internal"
           @created="onIssueCreated"
         />
       </div>
@@ -2872,6 +2914,8 @@ function handleIssueLeave() {
           :statuses="revisionBatchActions"
           :note="revisionBatchNote"
           :loading="batchUpdatingIssues"
+          :issues="issues"
+          :mention-users="mentionCandidates.issue_internal"
           @update:note="revisionBatchNote = $event"
           @clear="selectedRevisionIssueIds = []; revisionBatchNote = ''"
           @apply="applyRevisionBatchStatus($event)"
@@ -3125,6 +3169,7 @@ function handleIssueLeave() {
     :track="track"
     :assignments="reviewAssignments"
     :issues="issues"
+    :mention-candidates="mentionCandidates"
     :preview="selectedIssuePreview"
     @close="closeIssueDrawer"
     @updated="onIssueUpdated"
@@ -3139,6 +3184,7 @@ function handleIssueLeave() {
     :track-id="trackId"
     :track-completed="track.status === 'completed'"
     :issues="issues"
+    :mention-users="mentionCandidates.mastering"
     @open-issue="openLinkedIssue"
   />
 </template>

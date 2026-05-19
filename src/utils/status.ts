@@ -12,6 +12,7 @@ const KNOWN_COLORS: Record<string, string> = {
   mastering: 'rgb(var(--color-chart-mastering))',
   mastering_revision: 'rgb(var(--color-chart-revision))',
   final_review: 'rgb(var(--color-chart-gate))',
+  source_followup_pending: 'rgb(var(--color-chart-revision))',
   completed: 'rgb(var(--color-chart-completed))',
   rejected: 'rgb(var(--color-chart-rejected))',
 }

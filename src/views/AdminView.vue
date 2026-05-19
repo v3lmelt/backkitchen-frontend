@@ -523,29 +523,30 @@ async function toggleAlbumArchive(album: Album) {
 async function runWorkflowAction() {
   if (!workflowTrack.value) return
 
+  const reason = workflowReason.value
   workflowSubmitting.value = true
   try {
     if (workflowAction.value === 'force') {
       await adminApi.forceStatus(workflowTrack.value.id, {
         new_status: workflowNewStatus.value,
-        reason: workflowReason.value || t('admin.reasons.forcedFromAdminConsole'),
+        reason,
       })
     } else if (workflowAction.value === 'reassign') {
       await adminApi.reassign(workflowTrack.value.id, {
         user_ids: workflowTargetUserIds.value,
-        reason: workflowReason.value || t('admin.reasons.reassignedFromAdminConsole'),
+        reason,
       })
     } else if (workflowAction.value === 'reopen') {
       await adminApi.reopenTrack(workflowTrack.value.id, {
         target_stage_id: workflowReopenStageId.value,
-        reason: workflowReason.value || t('admin.reasons.reopenedFromAdminConsole'),
+        reason,
       })
     } else if (workflowAction.value === 'archive') {
-      await adminApi.archiveTrack(workflowTrack.value.id, workflowReason.value || t('admin.reasons.archivedFromAdminConsole'))
+      await adminApi.archiveTrack(workflowTrack.value.id, reason)
     } else if (workflowAction.value === 'restore') {
-      await adminApi.restoreTrack(workflowTrack.value.id, workflowReason.value || t('admin.reasons.restoredTrackFromAdminConsole'))
+      await adminApi.restoreTrack(workflowTrack.value.id, reason)
     } else if (workflowAction.value === 'delete') {
-      await adminApi.deleteTrack(workflowTrack.value.id, workflowReason.value || t('admin.reasons.deletedFromAdminConsole'))
+      await adminApi.deleteTrack(workflowTrack.value.id, reason)
     }
 
     workflowReason.value = ''
@@ -1050,7 +1051,7 @@ onMounted(() => {
             </div>
 
             <div class="space-y-2">
-              <label class="text-xs text-muted-foreground">{{ t('admin.reason') }}</label>
+              <label class="text-xs text-muted-foreground">{{ t('admin.reasonOptional') }}</label>
               <textarea v-model="workflowReason" class="textarea-field w-full" rows="3" :placeholder="t('admin.reasonPlaceholder')" />
             </div>
 

@@ -143,6 +143,30 @@ describe('AppHeader', () => {
     expect(wrapper.text()).not.toContain('BACK KITCHEN')
   })
 
+  it('links issue breadcrumbs back to the loaded track', async () => {
+    setRoute({
+      name: 'issue-detail',
+      path: '/issues/8',
+      fullPath: '/issues/8',
+      params: { id: '8' },
+      query: {},
+    })
+
+    const wrapper = mountWithPlugins(AppHeader)
+    const trackStore = useTrackStore()
+
+    trackStore.setCurrentTrack({
+      id: 9,
+      title: 'test_audio',
+    } as any)
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Home')
+    expect(wrapper.text()).toContain('test_audio')
+    expect(wrapper.text()).toContain('Issue #8')
+    expect(wrapper.text()).not.toContain('Track #8')
+  })
+
   it('opens track notifications in the active workspace instead of the track detail page', async () => {
     const wrapper = mountWithPlugins(AppHeader)
     const appStore = useAppStore()

@@ -76,6 +76,11 @@ const currentTrack = computed(() => {
   return trackStore.currentTrack
 })
 
+const currentIssueTrack = computed(() => {
+  if (route.name !== 'issue-detail') return null
+  return trackStore.currentTrack
+})
+
 const currentTrackLabel = computed(() => {
   const title = currentTrack.value?.title?.trim()
   if (title) return title
@@ -143,6 +148,12 @@ const breadcrumbs = computed(() => {
     crumbs.push({ label: currentTrackLabel.value, path: `/tracks/${route.params.id}` })
     crumbs.push({ label: currentWorkflowStepLabel.value || pageTitle.value, path: route.path })
   } else if (route.name === 'issue-detail') {
+    if (currentIssueTrack.value) {
+      crumbs.push({
+        label: currentIssueTrack.value.title || `Track #${currentIssueTrack.value.id}`,
+        path: `/tracks/${currentIssueTrack.value.id}`,
+      })
+    }
     crumbs.push({ label: `Issue #${route.params.id}`, path: route.path })
   } else {
     crumbs.push({ label: pageTitle.value, path: route.path })

@@ -1,13 +1,17 @@
 <script setup lang="ts">
+import { nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { IssueStatus } from '@/types'
+import type { Issue, IssueStatus, User } from '@/types'
+import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
 
 const props = defineProps<{
   selectedCount: number
   statuses: IssueStatus[]
   note: string
   loading?: boolean
+  issues?: Issue[] | null
+  mentionUsers?: User[] | null
 }>()
 
 const emit = defineEmits<{
@@ -17,6 +21,8 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const noteCursorPos = ref(0)
+const noteRef = ref<HTMLTextAreaElement | null>(null)
 
 function actionLabel(status: IssueStatus): string {
   switch (status) {
@@ -47,6 +53,28 @@ function actionClass(status: IssueStatus): string {
       return 'bg-warning-bg text-warning hover:border-warning/40'
   }
 }
+
+function updateNote(value: string) {
+  emit('update:note', value)
+}
+
+async function insertTextAtMention(insertion: string, mention: { start: number; end: number }) {
+  const next = `${props.note.slice(0, mention.start)}${insertion}${props.note.slice(mention.end)}`
+  updateNote(next)
+  const nextCursor = mention.start + insertion.length
+  noteCursorPos.value = nextCursor
+  await nextTick()
+  noteRef.value?.focus()
+  noteRef.value?.setSelectionRange(nextCursor, nextCursor)
+}
+
+function handleIssueMentionSelect(issue: Issue, mention: { start: number; end: number }) {
+  void insertTextAtMention(`@issue:${issue.local_number} `, mention)
+}
+
+function handleUserMentionSelect(user: User, mention: { start: number; end: number }) {
+  void insertTextAtMention(`@user:${user.id} `, mention)
+}
 </script>
 
 <template>
@@ -59,13 +87,27 @@ function actionClass(status: IssueStatus): string {
         {{ t('compare.clear') }}
       </button>
     </div>
-    <textarea
-      :value="note"
-      rows="3"
-      class="textarea-field w-full text-sm"
-      :placeholder="t('issue.batchStatusNote')"
-      @input="emit('update:note', ($event.target as HTMLTextAreaElement).value)"
-    />
+    <div class="relative">
+      <textarea
+        ref="noteRef"
+        :value="note"
+        rows="3"
+        class="textarea-field w-full text-sm"
+        :placeholder="t('issue.batchStatusNote')"
+        @input="(e) => { noteCursorPos = (e.target as HTMLTextAreaElement).selectionStart; updateNote((e.target as HTMLTextAreaElement).value) }"
+        @click="(e) => noteCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
+        @keyup="(e) => noteCursorPos = (e.target as HTMLTextAreaElement).selectionStart"
+      />
+      <TimestampSyntaxPopover
+        :text="note"
+        :cursor-pos="noteCursorPos"
+        default-target="track"
+        :issues="issues"
+        :mention-users="mentionUsers"
+        @select="handleIssueMentionSelect"
+        @select-user="handleUserMentionSelect"
+      />
+    </div>
     <div class="flex flex-wrap gap-2">
       <button
         v-for="status in statuses"

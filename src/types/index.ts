@@ -7,6 +7,7 @@ export type LegacyTrackStatus =
   | 'mastering'
   | 'mastering_revision'
   | 'final_review'
+  | 'source_followup_pending'
   | 'completed'
   | 'rejected'
 
@@ -84,6 +85,13 @@ export interface User {
   created_at: string
 }
 
+export interface MentionCandidates {
+  general: User[]
+  mastering: User[]
+  issue_public: User[]
+  issue_internal: User[]
+}
+
 export interface AuthResponse {
   access_token: string
   token_type: string
@@ -121,6 +129,7 @@ export interface Album {
   genres?: string[] | null
   cover_image?: string | null
   checklist_enabled?: boolean | null
+  quick_followup_enabled?: boolean
   producer_id: number | null
   mastering_engineer_id: number | null
   deadline?: string | null
@@ -224,6 +233,24 @@ export interface ReopenRequest {
   reason: string
   status: 'pending' | 'approved' | 'rejected'
   decided_by_id: number | null
+  created_at: string
+  decided_at: string | null
+  requested_by?: User | null
+  decided_by?: User | null
+}
+
+export interface SourceFollowupRequest {
+  id: number
+  track_id: number
+  requested_by_id: number
+  decided_by_id: number | null
+  applied_source_version_id: number | null
+  previous_status: string
+  target_stage_id: string | null
+  reason: string
+  status: 'pending' | 'applied' | 'rejected' | 'cancelled'
+  staged_storage_backend: string
+  staged_duration: number | null
   created_at: string
   decided_at: string | null
   requested_by?: User | null
@@ -365,9 +392,12 @@ export interface Track {
   version: number
   workflow_cycle: number
   submitter_id: number | null
+  proxy_uploader_id?: number | null
   peer_reviewer_id: number | null
   producer_id: number | null
   mastering_engineer_id: number | null
+  external_submitter_name?: string | null
+  is_proxy_submission?: boolean
   author_notes: string | null
   mastering_notes: string | null
   created_at: string
@@ -376,9 +406,11 @@ export interface Track {
   issue_count?: number
   open_issue_count?: number
   submitter?: User | null
+  proxy_uploader?: User | null
   peer_reviewer?: User | null
   current_source_version?: TrackSourceVersion | null
   current_master_delivery?: MasterDelivery | null
+  pending_source_followup_request?: SourceFollowupRequest | null
   allowed_actions: string[]
   workflow_step?: WorkflowStepDef | null
   workflow_transitions?: WorkflowTransitionOption[] | null
@@ -396,6 +428,7 @@ export interface TrackDetailResponse {
   master_deliveries?: MasterDelivery[]
   discussions?: Discussion[]
   workflow_config?: WorkflowConfig | null
+  mention_candidates?: MentionCandidates
 }
 
 export interface Notification {

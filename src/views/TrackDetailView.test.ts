@@ -16,6 +16,12 @@ const mocks = vi.hoisted(() => ({
   trackGetMock: vi.fn(),
   listAssignmentsMock: vi.fn(),
   uploadSourceVersionMock: vi.fn(),
+  createSourceFollowupMock: vi.fn(),
+  decideSourceFollowupMock: vi.fn(),
+  cancelSourceFollowupMock: vi.fn(),
+  requestSourceFollowupUploadMock: vi.fn(),
+  confirmSourceFollowupUploadMock: vi.fn(),
+  uploadToR2Mock: vi.fn(),
   trackReopenMock: vi.fn(),
   trackRequestReopenMock: vi.fn(),
   discussionCreateMock: vi.fn(),
@@ -34,9 +40,17 @@ vi.mock('@/api', () => ({
     get: mocks.trackGetMock,
     listAssignments: mocks.listAssignmentsMock,
     uploadSourceVersion: mocks.uploadSourceVersionMock,
+    createSourceFollowup: mocks.createSourceFollowupMock,
+    decideSourceFollowup: mocks.decideSourceFollowupMock,
+    cancelSourceFollowup: mocks.cancelSourceFollowupMock,
     reopen: mocks.trackReopenMock,
     requestReopen: mocks.trackRequestReopenMock,
   },
+  r2Api: {
+    requestSourceFollowupUpload: mocks.requestSourceFollowupUploadMock,
+    confirmSourceFollowupUpload: mocks.confirmSourceFollowupUploadMock,
+  },
+  uploadToR2: mocks.uploadToR2Mock,
   discussionApi: { create: mocks.discussionCreateMock },
 }))
 
@@ -143,6 +157,12 @@ describe('TrackDetailView', () => {
     mocks.trackGetMock.mockReset()
     mocks.listAssignmentsMock.mockReset()
     mocks.uploadSourceVersionMock.mockReset()
+    mocks.createSourceFollowupMock.mockReset()
+    mocks.decideSourceFollowupMock.mockReset()
+    mocks.cancelSourceFollowupMock.mockReset()
+    mocks.requestSourceFollowupUploadMock.mockReset()
+    mocks.confirmSourceFollowupUploadMock.mockReset()
+    mocks.uploadToR2Mock.mockReset()
     mocks.trackReopenMock.mockReset()
     mocks.trackRequestReopenMock.mockReset()
     mocks.currentUser = { id: 2 }
@@ -150,6 +170,12 @@ describe('TrackDetailView', () => {
     mocks.trackReopenMock.mockResolvedValue({})
     mocks.trackRequestReopenMock.mockResolvedValue({})
     mocks.uploadSourceVersionMock.mockResolvedValue({})
+    mocks.createSourceFollowupMock.mockResolvedValue({})
+    mocks.decideSourceFollowupMock.mockResolvedValue({})
+    mocks.cancelSourceFollowupMock.mockResolvedValue({})
+    mocks.requestSourceFollowupUploadMock.mockResolvedValue({ upload_url: 'https://upload.example', object_key: 'draft.wav' })
+    mocks.confirmSourceFollowupUploadMock.mockResolvedValue({})
+    mocks.uploadToR2Mock.mockResolvedValue(undefined)
     mocks.listAssignmentsMock.mockResolvedValue([])
     mocks.trackGetMock.mockResolvedValue({
       track: {
@@ -208,6 +234,45 @@ describe('TrackDetailView', () => {
       expect.any(Function),
     )
     expect(wrapper.text()).toContain('Fresh discussion')
+  })
+
+  it('shows proxy submission identity on the track summary', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 7,
+        album_id: 5,
+        status: 'peer_review',
+        title: 'Track 7',
+        artist: 'Offline Composer',
+        version: 1,
+        workflow_cycle: 1,
+        file_path: '/audio.wav',
+        submitter_id: 8,
+        proxy_uploader_id: 8,
+        producer_id: 8,
+        allowed_actions: [],
+        open_issue_count: 0,
+        submitter: { id: 8, display_name: 'Kira' },
+        proxy_uploader: { id: 8, display_name: 'Kira' },
+        peer_reviewer: null,
+        current_source_version: { id: 301 },
+        current_master_delivery: null,
+        is_proxy_submission: true,
+        external_submitter_name: 'Offline Composer',
+      },
+      issues: [],
+      discussions: [],
+      events: [],
+      source_versions: [{ id: 301, version_number: 1, created_at: '2024-01-03T00:00:00Z' }],
+    })
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('External Composer')
+    expect(wrapper.text()).toContain('Offline Composer')
+    expect(wrapper.text()).toContain('Uploaded by Producer')
+    expect(wrapper.text()).toContain('Kira')
   })
 
   it('opens compare mode from the route query', async () => {

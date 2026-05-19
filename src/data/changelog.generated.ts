@@ -5,6 +5,244 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.19",
+    "date": "2026-05-19",
+    "headline": {
+      "zh-CN": "新增源音频补交申请",
+      "en": "Adds source follow-up requests"
+    },
+    "summary": {
+      "zh-CN": "专辑现在可以选择开启 quick follow-up。开启后，曲师可在非修订阶段上传新的源音频作为待审批申请，主催或相关母带师审批后再替换当前源文件并返回指定流程阶段。",
+      "en": "Albums can now opt in to quick follow-up. When enabled, composers can upload a pending source file outside revision stages, and the producer or relevant mastering engineer can approve it before it replaces the current source and returns the track to a selected workflow stage."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "曲目流程",
+          "en": "Track Workflow"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "曲师可提交待审批源音频",
+              "en": "Composers can submit pending source audio"
+            },
+            "description": {
+              "zh-CN": "专辑设置新增源音频补交开关。开启后，曲师可在曲目详情页上传新的源文件并填写原因；审批前曲目会进入待处理状态，常规流程操作暂时暂停。",
+              "en": "Album settings now include a source follow-up switch. Once enabled, composers can upload a new source file and reason from track detail; while it is pending, the track enters a paused follow-up state."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "审批时选择返回阶段",
+              "en": "Approvers choose the return stage"
+            },
+            "description": {
+              "zh-CN": "主催可批准并选择返回到首个母带交付前的阶段；母带师只能批准到母带相关阶段。批准后新源文件立即成为当前版本，旧母带不再作为当前交付物。",
+              "en": "Producers can approve and choose a stage at or before the first delivery step, while mastering engineers can approve only mastering-related targets. Approval immediately makes the uploaded source current, and older masters stop counting as the current delivery."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "阶段转换不再自动结案待讨论问题",
+              "en": "Pending-discussion issues stay pending across stage changes"
+            },
+            "description": {
+              "zh-CN": "流程进入下一阶段或修订阶段时，待讨论问题会继续保持待讨论状态，不再自动转为内部结案，便于评审组后续发布、处理或继续讨论。",
+              "en": "When a workflow advances or enters revision, pending-discussion issues now remain pending instead of being automatically marked internally resolved, so reviewers can publish, resolve, or continue discussing them later."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.18",
+    "date": "2026-05-19",
+    "headline": {
+      "zh-CN": "优化问题公开、曲目提交与母带沟通",
+      "en": "Improves issue publishing, track submission, and mastering communication"
+    },
+    "summary": {
+      "zh-CN": "新建问题现在默认公开，同行评审组可以共同公开待讨论或内部结案的问题；代传曲目入口仅对对应专辑主催开放，母带沟通侧边栏也新增全屏查看模式。",
+      "en": "New issues now default to public visibility, peer-review groups can publish pending or internally resolved issues together, proxy track submission is limited to the album producer, and the mastering communication sidebar can expand to full screen."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "曲目提交",
+          "en": "Track Submission"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "代传入口仅对专辑主催开放",
+              "en": "Proxy upload is producer-only"
+            },
+            "description": {
+              "zh-CN": "上传曲目时，只有当前所选专辑的主催可以看到并操作“为未使用系统的曲师代传”；切换到非本人主催的专辑会自动清除代传状态。",
+              "en": "On the upload page, only the producer of the selected album can see and use the proxy submission option. Switching to an album produced by someone else clears any proxy state."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "问题协作",
+          "en": "Issue Collaboration"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "新建问题默认公开",
+              "en": "New issues default to public"
+            },
+            "description": {
+              "zh-CN": "在同行评审和母带问题创建面板中，问题默认会公开给曲师；评审人仍可手动切换为仅内部讨论。",
+              "en": "Issue creation panels in peer review and mastering now default to public visibility for the submitter, while reviewers can still switch an issue to internal discussion when needed."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "评审组可共同公开内部问题",
+              "en": "Reviewers can publish internal issues together"
+            },
+            "description": {
+              "zh-CN": "待讨论和内部结案的问题不再只能由原作者公开；同一评审阶段的任一评审人都可以将其发布为公开问题。",
+              "en": "Pending-discussion and internally resolved issues no longer require the original author to publish them. Any reviewer assigned to the same review stage can make them public."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "母带沟通",
+          "en": "Mastering Communication"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "侧边栏新增全屏模式",
+              "en": "Sidebar adds a full-screen mode"
+            },
+            "description": {
+              "zh-CN": "母带沟通抽屉顶部新增全屏/退出全屏按钮，便于查看较长的沟通线程和附件。",
+              "en": "The mastering communication drawer now has an expand/collapse button in the header, making longer threads and attachments easier to review."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "@ 候选列表会向上展开",
+              "en": "@ mention suggestions open upward"
+            },
+            "description": {
+              "zh-CN": "在母带沟通底部输入 @ 人员时，候选列表会显示在输入框上方，不再被下方空间挤出视线。",
+              "en": "When typing @ people in the bottom-docked mastering chat input, the suggestion list opens above the text area instead of below it."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "Issue 面包屑可返回曲目",
+              "en": "Issue breadcrumbs link back to the track"
+            },
+            "description": {
+              "zh-CN": "从单个 Issue 详情页查看问题时，顶部面包屑会显示所属曲目，并可直接返回该曲目详情。",
+              "en": "Standalone issue detail pages now show the parent track in the breadcrumb trail so users can return directly to the track detail page."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.17",
+    "date": "2026-05-19",
+    "headline": {
+      "zh-CN": "协作与曲目提交流程增强",
+      "en": "Collaboration and track submission improvements"
+    },
+    "summary": {
+      "zh-CN": "本次更新加入主催代传外部曲师曲目的流程，支持在评论入口 @ 人协作，并优化问题状态与管理后台的曲目救援操作，减少不必要的必填原因。",
+      "en": "This update adds producer proxy uploads for external composers, supports @ mentions in comment entry points, and streamlines issue status changes plus admin track rescue operations by removing unnecessary required reasons."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "曲目提交",
+          "en": "Track Submission"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "新增主催代传模式",
+              "en": "New producer proxy submission mode"
+            },
+            "description": {
+              "zh-CN": "在主催自己的专辑上传曲目时，可以开启「为未使用系统的曲师代传」，填写外部曲师名后提交。曲目详情、审核工作台和母带页面会显示外部曲师与代传主催。",
+              "en": "When uploading to their own album, producers can enable external-composer proxy submission and enter the external composer's name. Track detail, workflow, and mastering pages now show the external composer and proxy producer."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "管理后台",
+          "en": "Admin Console"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "曲目工作流操作的原因改为选填",
+              "en": "Track workflow action reasons are now optional"
+            },
+            "description": {
+              "zh-CN": "曲目救援区的原因输入框已标记为选填；留空时系统不再自动写入默认文案，审计记录会保留为空原因。",
+              "en": "The reason field in the track rescue area is now marked optional. Leaving it blank no longer inserts default copy, and audit entries keep the reason empty."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "协作",
+          "en": "Collaboration"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "所有评论入口支持 @ 人",
+              "en": "All comment entry points support @ people"
+            },
+            "description": {
+              "zh-CN": "在讨论、母带沟通、问题回复、问题状态备注和问题创建描述中输入 @、@姓名、@user、@user: 或 @user:数字会弹出当前上下文可见参与者列表；@user:数字会按用户 ID 前缀过滤。支持方向键、Enter/Tab、Esc 和鼠标选择。内部 issue 不会向曲师暴露候选人，也不会因为 @ 通知曲师。",
+              "en": "Typing @, @name, @user, @user:, or @user:digits in discussions, mastering communication, issue replies, issue status notes, and issue descriptions opens the participant picker for that context; @user:digits filters by user ID prefix. Arrow-key, Enter/Tab, Escape, and mouse selection are supported. Internal issues do not expose submitters as candidates and do not notify submitters through mentions."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "提及显示为人员 chip",
+              "en": "Mentions render as person chips"
+            },
+            "description": {
+              "zh-CN": "系统会把选中的用户保存为 @user:ID，普通用户无需手动输入 ID；阅读时会显示为 @显示名 chip。无权访问或已不可用的用户引用会以不可用样式显示，避免误以为通知仍然有效。",
+              "en": "Selected users are stored as @user:ID so regular users do not need to know IDs manually; when reading, they appear as @display-name chips. References to unavailable or unauthorized users render with an unavailable style so stale mentions are not mistaken for active notifications."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "问题状态变更说明改为选填",
+              "en": "Issue status-change notes are now optional"
+            },
+            "description": {
+              "zh-CN": "主催和曲师在将问题标记为已解决、有异议、待讨论、重新打开或内部结案时，可以直接提交状态变更；说明和附件仍可补充，但不再是必填项。",
+              "en": "Producers and composers can now submit issue status changes such as resolved, disagreed, pending discussion, reopened, or internally resolved without a required note. Notes and attachments remain available when extra context is needed."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.16",
     "date": "2026-05-12",
     "headline": {

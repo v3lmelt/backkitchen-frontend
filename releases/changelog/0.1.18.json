@@ -1,0 +1,98 @@
+{
+  "version": "0.1.18",
+  "date": "2026-05-19",
+  "headline": {
+    "zh-CN": "优化问题公开、曲目提交与母带沟通",
+    "en": "Improves issue publishing, track submission, and mastering communication"
+  },
+  "summary": {
+    "zh-CN": "新建问题现在默认公开，同行评审组可以共同公开待讨论或内部结案的问题；代传曲目入口仅对对应专辑主催开放，母带沟通侧边栏也新增全屏查看模式。",
+    "en": "New issues now default to public visibility, peer-review groups can publish pending or internally resolved issues together, proxy track submission is limited to the album producer, and the mastering communication sidebar can expand to full screen."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "曲目提交",
+        "en": "Track Submission"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "代传入口仅对专辑主催开放",
+            "en": "Proxy upload is producer-only"
+          },
+          "description": {
+            "zh-CN": "上传曲目时，只有当前所选专辑的主催可以看到并操作“为未使用系统的曲师代传”；切换到非本人主催的专辑会自动清除代传状态。",
+            "en": "On the upload page, only the producer of the selected album can see and use the proxy submission option. Switching to an album produced by someone else clears any proxy state."
+          }
+        }
+      ]
+    },
+    {
+      "heading": {
+        "zh-CN": "问题协作",
+        "en": "Issue Collaboration"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "新建问题默认公开",
+            "en": "New issues default to public"
+          },
+          "description": {
+            "zh-CN": "在同行评审和母带问题创建面板中，问题默认会公开给曲师；评审人仍可手动切换为仅内部讨论。",
+            "en": "Issue creation panels in peer review and mastering now default to public visibility for the submitter, while reviewers can still switch an issue to internal discussion when needed."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "评审组可共同公开内部问题",
+            "en": "Reviewers can publish internal issues together"
+          },
+          "description": {
+            "zh-CN": "待讨论和内部结案的问题不再只能由原作者公开；同一评审阶段的任一评审人都可以将其发布为公开问题。",
+            "en": "Pending-discussion and internally resolved issues no longer require the original author to publish them. Any reviewer assigned to the same review stage can make them public."
+          }
+        }
+      ]
+    },
+    {
+      "heading": {
+        "zh-CN": "母带沟通",
+        "en": "Mastering Communication"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "侧边栏新增全屏模式",
+            "en": "Sidebar adds a full-screen mode"
+          },
+          "description": {
+            "zh-CN": "母带沟通抽屉顶部新增全屏/退出全屏按钮，便于查看较长的沟通线程和附件。",
+            "en": "The mastering communication drawer now has an expand/collapse button in the header, making longer threads and attachments easier to review."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "@ 候选列表会向上展开",
+            "en": "@ mention suggestions open upward"
+          },
+          "description": {
+            "zh-CN": "在母带沟通底部输入 @ 人员时，候选列表会显示在输入框上方，不再被下方空间挤出视线。",
+            "en": "When typing @ people in the bottom-docked mastering chat input, the suggestion list opens above the text area instead of below it."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "Issue 面包屑可返回曲目",
+            "en": "Issue breadcrumbs link back to the track"
+          },
+          "description": {
+            "zh-CN": "从单个 Issue 详情页查看问题时，顶部面包屑会显示所属曲目，并可直接返回该曲目详情。",
+            "en": "Standalone issue detail pages now show the parent track in the breadcrumb trail so users can return directly to the track detail page."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -3,7 +3,7 @@ import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Eraser, EyeOff, Eye, ImageIcon, Info, Music, RotateCcw, X } from 'lucide-vue-next'
 import { issueApi } from '@/api'
-import type { Issue } from '@/types'
+import type { Issue, User } from '@/types'
 import { useToast } from '@/composables/useToast'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
@@ -17,6 +17,9 @@ const props = defineProps<{
   masterDeliveryId?: number | null
   allowInternalVisibility?: boolean
   issues?: Issue[] | null
+  mentionUsers?: User[] | null
+  publicMentionUsers?: User[] | null
+  internalMentionUsers?: User[] | null
 }>()
 
 const emit = defineEmits<{
@@ -31,7 +34,7 @@ const showForm = ref(false)
 const issueMode = ref<'timed' | 'general'>('timed')
 
 function defaultIssueVisibility(): 'public' | 'internal' {
-  return props.allowInternalVisibility === true ? 'internal' : 'public'
+  return 'public'
 }
 
 const issueVisibility = ref<'public' | 'internal'>(defaultIssueVisibility())
@@ -43,6 +46,21 @@ const descriptionRef = ref<HTMLTextAreaElement | null>(null)
 
 async function handleDescriptionMentionSelect(issue: Issue, mention: { start: number; end: number }) {
   const insertion = `@issue:${issue.local_number} `
+  const before = description.value.slice(0, mention.start)
+  const after = description.value.slice(mention.end)
+  description.value = `${before}${insertion}${after}`
+  const nextCursor = mention.start + insertion.length
+  descriptionCursorPos.value = nextCursor
+  await nextTick()
+  const el = descriptionRef.value
+  if (el) {
+    el.focus()
+    el.setSelectionRange(nextCursor, nextCursor)
+  }
+}
+
+async function handleDescriptionUserMentionSelect(user: User, mention: { start: number; end: number }) {
+  const insertion = `@user:${user.id} `
   const before = description.value.slice(0, mention.start)
   const after = description.value.slice(mention.end)
   description.value = `${before}${insertion}${after}`
@@ -77,6 +95,13 @@ const IMAGE_ACCEPT = 'image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,
 const draftStorageKey = computed(() => {
   const delivery = props.masterDeliveryId == null ? 'none' : String(props.masterDeliveryId)
   return `${ISSUE_DRAFT_STORAGE_PREFIX}:${props.trackId}:${props.phase}:${delivery}`
+})
+
+const activeMentionUsers = computed(() => {
+  if (issueVisibility.value === 'internal') {
+    return props.internalMentionUsers ?? props.mentionUsers
+  }
+  return props.publicMentionUsers ?? props.mentionUsers
 })
 
 let markerHintTimer: ReturnType<typeof setTimeout> | null = null
@@ -732,7 +757,9 @@ defineExpose({
           :cursor-pos="descriptionCursorPos"
           default-target="track"
           :issues="props.issues"
+          :mention-users="activeMentionUsers"
           @select="handleDescriptionMentionSelect"
+          @select-user="handleDescriptionUserMentionSelect"
         />
       </div>
       <CustomSelect v-model="severity" :options="severityOptions" />

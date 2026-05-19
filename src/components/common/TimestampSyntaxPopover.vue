@@ -2,14 +2,15 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Info } from 'lucide-vue-next'
-import type { Issue } from '@/types'
+import type { Issue, User } from '@/types'
 import {
   extractIssueReferences,
   extractMarkerIndexReferences,
   extractTimeReferences,
+  extractUserMentionReferences,
   getActiveMentionContext,
+  type MentionContext,
   resolveTimeReferenceTarget,
-  type IssueMentionContext,
   type TimeReference,
   type TimestampTarget,
 } from '@/utils/timestamps'
@@ -20,15 +21,20 @@ const props = withDefaults(defineProps<{
   defaultTarget?: TimestampTarget
   visible?: boolean
   issues?: Issue[] | null
+  mentionUsers?: User[] | null
+  placement?: 'bottom' | 'top'
 }>(), {
   defaultTarget: 'track',
   cursorPos: 0,
   visible: false,
   issues: null,
+  mentionUsers: null,
+  placement: 'bottom',
 })
 
 const emit = defineEmits<{
   select: [issue: Issue, mention: { start: number; end: number }]
+  selectUser: [user: User, mention: { start: number; end: number }]
 }>()
 
 const { t } = useI18n()
@@ -37,18 +43,37 @@ const manualOpen = ref(false)
 const userClosed = ref(false)
 const activeIndex = ref(0)
 
-const mentionContext = computed<IssueMentionContext | null>(() => {
+const mentionContext = computed<MentionContext | null>(() => {
   return getActiveMentionContext(props.text, props.cursorPos ?? props.text.length)
 })
 
-const pickerEnabled = computed(() => mentionContext.value !== null && Array.isArray(props.issues))
+const pickerEnabled = computed(() => {
+  if (mentionContext.value?.kind === 'issue') return Array.isArray(props.issues)
+  if (mentionContext.value?.kind === 'user') return Array.isArray(props.mentionUsers)
+  return false
+})
 
 const filteredIssues = computed<Issue[]>(() => {
-  if (!pickerEnabled.value) return []
+  if (!pickerEnabled.value || mentionContext.value?.kind !== 'issue') return []
   const list = props.issues ?? []
   const query = mentionContext.value?.query ?? ''
   if (!query) return list
   return list.filter(issue => issue.local_number.toString().startsWith(query))
+})
+
+const filteredUsers = computed<User[]>(() => {
+  if (!pickerEnabled.value || mentionContext.value?.kind !== 'user') return []
+  const list = props.mentionUsers ?? []
+  const query = (mentionContext.value?.query ?? '').trim().toLocaleLowerCase()
+  if (!query) return list
+  if (mentionContext.value.queryType === 'id') {
+    return list.filter(user => user.id.toString().startsWith(query))
+  }
+  return list.filter(user => {
+    const displayName = user.display_name.toLocaleLowerCase()
+    const username = user.username.toLocaleLowerCase()
+    return displayName.includes(query) || username.includes(query)
+  })
 })
 
 const typingReference = computed(() => {
@@ -66,19 +91,39 @@ const typingReference = computed(() => {
     if (cursor >= start && cursor <= end) return true
   }
 
+  for (const ref of extractUserMentionReferences(props.text)) {
+    const start = ref.index
+    const end = ref.index + ref.length
+    if (cursor >= start && cursor <= end) return true
+  }
+
   const snippet = props.text.slice(Math.max(0, cursor - 24), cursor)
   return /(?:^|[^\w])(?:(?:t|a\d*):)?\d{1,2}:\d{0,2}$/.test(snippet)
     || /(?:^|[^\w])@issue:\d*$/.test(snippet)
+    || /(?:^|[^\w])@user:\d{0,9}$/i.test(snippet)
+    || /(?:^|[^\w])@[^\s@:#]{0,40}$/.test(snippet)
 })
 
 const matches = computed(() => extractTimeReferences(props.text))
 const markerMatches = computed(() => extractMarkerIndexReferences(props.text))
 const issueMatches = computed(() => extractIssueReferences(props.text))
+const userMentionMatches = computed(() => extractUserMentionReferences(props.text))
 const isPickerVisible = computed(() => pickerEnabled.value && !userClosed.value)
 const isSyntaxVisible = computed(
   () => !isPickerVisible.value && (props.visible || manualOpen.value || (typingReference.value && !userClosed.value)),
 )
 const isVisible = computed(() => isPickerVisible.value || isSyntaxVisible.value)
+const popoverPositionClass = computed(() => (
+  props.placement === 'top'
+    ? 'absolute left-0 right-0 bottom-full z-20 mb-1.5 rounded-2xl border border-border bg-card shadow-[var(--shadow-popover)]'
+    : 'absolute left-0 right-0 top-full z-20 mt-1.5 rounded-2xl border border-border bg-card shadow-[var(--shadow-popover)]'
+))
+const transitionFromClass = computed(() => (
+  props.placement === 'top' ? 'opacity-0 translate-y-1' : 'opacity-0 -translate-y-1'
+))
+const transitionToClass = computed(() => (
+  props.placement === 'top' ? 'opacity-0 translate-y-1' : 'opacity-0 -translate-y-1'
+))
 
 watch(typingReference, (value) => {
   if (!value) userClosed.value = false
@@ -91,19 +136,30 @@ watch(mentionContext, (value) => {
   }
 })
 
-watch(filteredIssues, (list) => {
-  if (activeIndex.value >= list.length) activeIndex.value = 0
+const activeItemsLength = computed(() => (
+  mentionContext.value?.kind === 'user' ? filteredUsers.value.length : filteredIssues.value.length
+))
+
+watch(activeItemsLength, (length) => {
+  if (activeIndex.value >= length) activeIndex.value = 0
 })
 
 function commitSelection(issue: Issue) {
   const ctx = mentionContext.value
-  if (!ctx) return
+  if (!ctx || ctx.kind !== 'issue') return
   emit('select', issue, { start: ctx.start, end: ctx.end })
+}
+
+function commitUserSelection(user: User) {
+  const ctx = mentionContext.value
+  if (!ctx || ctx.kind !== 'user') return
+  emit('selectUser', user, { start: ctx.start, end: ctx.end })
 }
 
 function onKeydown(event: KeyboardEvent) {
   if (!isPickerVisible.value) return
-  const list = filteredIssues.value
+  const isUserPicker = mentionContext.value?.kind === 'user'
+  const length = isUserPicker ? filteredUsers.value.length : filteredIssues.value.length
 
   if (event.key === 'Escape') {
     event.preventDefault()
@@ -112,27 +168,32 @@ function onKeydown(event: KeyboardEvent) {
     return
   }
 
-  if (!list.length) return
+  if (!length) return
 
   if (event.key === 'ArrowDown') {
     event.preventDefault()
     event.stopPropagation()
-    activeIndex.value = (activeIndex.value + 1) % list.length
+    activeIndex.value = (activeIndex.value + 1) % length
     return
   }
 
   if (event.key === 'ArrowUp') {
     event.preventDefault()
     event.stopPropagation()
-    activeIndex.value = (activeIndex.value - 1 + list.length) % list.length
+    activeIndex.value = (activeIndex.value - 1 + length) % length
     return
   }
 
   if (event.key === 'Enter' || event.key === 'Tab') {
     event.preventDefault()
     event.stopPropagation()
-    const target = list[activeIndex.value]
-    if (target) commitSelection(target)
+    if (isUserPicker) {
+      const target = filteredUsers.value[activeIndex.value]
+      if (target) commitUserSelection(target)
+    } else {
+      const target = filteredIssues.value[activeIndex.value]
+      if (target) commitSelection(target)
+    }
   }
 }
 
@@ -170,6 +231,7 @@ const examples = computed(() => ([
   { code: '03:15-04:12', description: t('timestamp.examples.range') },
   { code: '#1', description: t('timestamp.examples.marker') },
   { code: '@issue:12', description: t('timestamp.examples.issue') },
+  { code: '@', description: t('timestamp.examples.user') },
   { code: 't:03:15', description: t('timestamp.examples.track') },
   { code: 'a1:03:15', description: t('timestamp.examples.attachment') },
 ]))
@@ -190,28 +252,29 @@ const examples = computed(() => ([
 
   <Transition
     enter-active-class="transition-all duration-150 ease-out"
-    enter-from-class="opacity-0 -translate-y-1"
+    :enter-from-class="transitionFromClass"
     enter-to-class="opacity-100 translate-y-0"
     leave-active-class="transition-all duration-100 ease-in"
     leave-from-class="opacity-100 translate-y-0"
-    leave-to-class="opacity-0 -translate-y-1"
+    :leave-to-class="transitionToClass"
   >
     <div
       v-if="isPickerVisible"
-      class="absolute left-0 right-0 top-full z-20 mt-1.5 rounded-2xl border border-border bg-card px-2 py-2 shadow-[var(--shadow-popover)]"
+      data-timestamp-popover
+      :class="[popoverPositionClass, 'px-2 py-2']"
     >
-      <p class="px-1.5 pb-1.5 text-[11px] font-mono font-semibold text-muted-foreground">
+      <p v-if="mentionContext?.kind === 'issue'" class="px-1.5 pb-1.5 text-[11px] font-mono font-semibold text-muted-foreground">
         {{ t('timestamp.issuePickerHint') }}
       </p>
       <div
-        v-if="!filteredIssues.length"
+        v-if="mentionContext?.kind === 'issue' && !filteredIssues.length"
         data-issue-mention-empty
         class="px-2 py-2 text-xs text-muted-foreground"
       >
         {{ t('timestamp.issuePickerEmpty') }}
       </div>
       <ul
-        v-else
+        v-else-if="mentionContext?.kind === 'issue'"
         data-issue-mention-list
         role="listbox"
         class="max-h-56 overflow-y-auto"
@@ -234,11 +297,58 @@ const examples = computed(() => ([
           <span class="text-sm text-foreground truncate">{{ issue.title || `#${issue.local_number}` }}</span>
         </li>
       </ul>
+
+      <p v-if="mentionContext?.kind === 'user'" class="px-1.5 pb-1.5 text-[11px] font-mono font-semibold text-muted-foreground">
+        {{ t('timestamp.userPickerHint') }}
+      </p>
+      <div
+        v-if="mentionContext?.kind === 'user' && !filteredUsers.length"
+        data-user-mention-empty
+        class="px-2 py-2 text-xs text-muted-foreground"
+      >
+        {{ t('timestamp.userPickerEmpty') }}
+      </div>
+      <ul
+        v-else-if="mentionContext?.kind === 'user'"
+        data-user-mention-list
+        role="listbox"
+        class="max-h-56 overflow-y-auto"
+      >
+        <li
+          v-for="(user, index) in filteredUsers"
+          :key="user.id"
+          data-user-mention-item
+          role="option"
+          :data-user-id="user.id"
+          :aria-selected="index === activeIndex ? 'true' : 'false'"
+          class="flex items-center gap-2 rounded-full px-2.5 py-1.5 cursor-pointer transition-colors"
+          :class="index === activeIndex
+            ? 'bg-primary/10 text-foreground'
+            : 'text-muted-foreground hover:bg-border/40'"
+          @mouseenter="activeIndex = index"
+          @mousedown.prevent="commitUserSelection(user)"
+        >
+          <span
+            class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+            :style="{ backgroundColor: user.avatar_color }"
+          >
+            {{ user.display_name.charAt(0) || '?' }}
+          </span>
+          <span class="min-w-0 flex-1">
+            <span class="block truncate text-sm text-foreground">@{{ user.display_name }}</span>
+            <span class="block truncate text-[11px] text-muted-foreground">{{ user.username }}</span>
+          </span>
+          <span class="shrink-0 rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
+            {{ t('timestamp.userPickerId', { id: user.id }) }}
+          </span>
+        </li>
+      </ul>
     </div>
 
     <div
       v-else-if="isSyntaxVisible"
-      class="absolute left-0 right-0 top-full z-20 mt-1.5 rounded-2xl border border-border bg-card px-3 py-2.5 shadow-[var(--shadow-popover)]"
+      data-timestamp-popover
+      :class="[popoverPositionClass, 'px-3 py-2.5']"
     >
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <span class="text-[11px] font-mono font-semibold text-muted-foreground shrink-0">{{ t('timestamp.syntaxTitle') }}</span>
@@ -288,6 +398,18 @@ const examples = computed(() => ([
           {{ match.raw }}
           <span class="text-primary/50">·</span>
           <span class="text-muted-foreground">{{ t('timestamp.issueReference') }}</span>
+        </span>
+      </div>
+
+      <div v-if="userMentionMatches.length" class="mt-2 flex flex-wrap gap-1.5 border-t border-border pt-2">
+        <span
+          v-for="(match, index) in userMentionMatches"
+          :key="`user-${match.index}-${index}`"
+          class="inline-flex items-center gap-1 rounded-full border border-info/25 bg-info-bg px-2 py-0.5 text-[11px] font-mono text-info"
+        >
+          {{ match.raw }}
+          <span class="text-info/50">·</span>
+          <span class="text-muted-foreground">{{ t('timestamp.userReference') }}</span>
         </span>
       </div>
     </div>

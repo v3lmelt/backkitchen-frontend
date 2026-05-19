@@ -32,6 +32,7 @@ const config = computed(() => {
     mastering: 'bg-warning-bg text-warning',
     mastering_revision: 'bg-error-bg text-error',
     final_review: 'bg-info-bg text-info',
+    source_followup_pending: 'bg-warning-bg text-warning',
     completed: 'bg-success-bg text-success',
     rejected: 'bg-error-bg text-error',
     open: 'bg-error-bg text-error',
