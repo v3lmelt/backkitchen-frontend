@@ -6,8 +6,8 @@
     "en": "Collaboration and track submission improvements"
   },
   "summary": {
-    "zh-CN": "本次更新加入主催代传外部曲师曲目的流程，支持在评论入口 @ 人协作，并优化管理后台的曲目救援操作，减少不必要的必填原因。",
-    "en": "This update adds producer proxy uploads for external composers, supports @ mentions in comment entry points, and streamlines admin track rescue operations by removing unnecessary required reasons."
+    "zh-CN": "本次更新加入主催代传外部曲师曲目的流程，支持在评论入口 @ 人协作，并优化问题状态与管理后台的曲目救援操作，减少不必要的必填原因。",
+    "en": "This update adds producer proxy uploads for external composers, supports @ mentions in comment entry points, and streamlines issue status changes plus admin track rescue operations by removing unnecessary required reasons."
   },
   "sections": [
     {
@@ -70,6 +70,16 @@
           "description": {
             "zh-CN": "系统会把选中的用户保存为 @user:ID，普通用户无需手动输入 ID；阅读时会显示为 @显示名 chip。无权访问或已不可用的用户引用会以不可用样式显示，避免误以为通知仍然有效。",
             "en": "Selected users are stored as @user:ID so regular users do not need to know IDs manually; when reading, they appear as @display-name chips. References to unavailable or unauthorized users render with an unavailable style so stale mentions are not mistaken for active notifications."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "问题状态变更说明改为选填",
+            "en": "Issue status-change notes are now optional"
+          },
+          "description": {
+            "zh-CN": "主催和曲师在将问题标记为已解决、有异议、待讨论、重新打开或内部结案时，可以直接提交状态变更；说明和附件仍可补充，但不再是必填项。",
+            "en": "Producers and composers can now submit issue status changes such as resolved, disagreed, pending discussion, reopened, or internally resolved without a required note. Notes and attachments remain available when extra context is needed."
           }
         }
       ]
