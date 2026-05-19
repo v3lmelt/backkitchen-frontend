@@ -16,6 +16,12 @@ const mocks = vi.hoisted(() => ({
   trackGetMock: vi.fn(),
   listAssignmentsMock: vi.fn(),
   uploadSourceVersionMock: vi.fn(),
+  createSourceFollowupMock: vi.fn(),
+  decideSourceFollowupMock: vi.fn(),
+  cancelSourceFollowupMock: vi.fn(),
+  requestSourceFollowupUploadMock: vi.fn(),
+  confirmSourceFollowupUploadMock: vi.fn(),
+  uploadToR2Mock: vi.fn(),
   trackReopenMock: vi.fn(),
   trackRequestReopenMock: vi.fn(),
   discussionCreateMock: vi.fn(),
@@ -34,9 +40,17 @@ vi.mock('@/api', () => ({
     get: mocks.trackGetMock,
     listAssignments: mocks.listAssignmentsMock,
     uploadSourceVersion: mocks.uploadSourceVersionMock,
+    createSourceFollowup: mocks.createSourceFollowupMock,
+    decideSourceFollowup: mocks.decideSourceFollowupMock,
+    cancelSourceFollowup: mocks.cancelSourceFollowupMock,
     reopen: mocks.trackReopenMock,
     requestReopen: mocks.trackRequestReopenMock,
   },
+  r2Api: {
+    requestSourceFollowupUpload: mocks.requestSourceFollowupUploadMock,
+    confirmSourceFollowupUpload: mocks.confirmSourceFollowupUploadMock,
+  },
+  uploadToR2: mocks.uploadToR2Mock,
   discussionApi: { create: mocks.discussionCreateMock },
 }))
 
@@ -143,6 +157,12 @@ describe('TrackDetailView', () => {
     mocks.trackGetMock.mockReset()
     mocks.listAssignmentsMock.mockReset()
     mocks.uploadSourceVersionMock.mockReset()
+    mocks.createSourceFollowupMock.mockReset()
+    mocks.decideSourceFollowupMock.mockReset()
+    mocks.cancelSourceFollowupMock.mockReset()
+    mocks.requestSourceFollowupUploadMock.mockReset()
+    mocks.confirmSourceFollowupUploadMock.mockReset()
+    mocks.uploadToR2Mock.mockReset()
     mocks.trackReopenMock.mockReset()
     mocks.trackRequestReopenMock.mockReset()
     mocks.currentUser = { id: 2 }
@@ -150,6 +170,12 @@ describe('TrackDetailView', () => {
     mocks.trackReopenMock.mockResolvedValue({})
     mocks.trackRequestReopenMock.mockResolvedValue({})
     mocks.uploadSourceVersionMock.mockResolvedValue({})
+    mocks.createSourceFollowupMock.mockResolvedValue({})
+    mocks.decideSourceFollowupMock.mockResolvedValue({})
+    mocks.cancelSourceFollowupMock.mockResolvedValue({})
+    mocks.requestSourceFollowupUploadMock.mockResolvedValue({ upload_url: 'https://upload.example', object_key: 'draft.wav' })
+    mocks.confirmSourceFollowupUploadMock.mockResolvedValue({})
+    mocks.uploadToR2Mock.mockResolvedValue(undefined)
     mocks.listAssignmentsMock.mockResolvedValue([])
     mocks.trackGetMock.mockResolvedValue({
       track: {

@@ -68,6 +68,7 @@ const circleChecklistDefaults = new Map<number, boolean | null>()
 type AlbumChecklistMode = 'circle_default' | 'enabled' | 'disabled'
 const albumChecklistMode = ref<AlbumChecklistMode>('disabled')
 const albumChecklistModeTouched = ref(false)
+const quickFollowupEnabled = ref(false)
 
 // Template state
 const templates = ref<WorkflowTemplate[]>([])
@@ -333,6 +334,7 @@ async function create() {
     } else {
       payload.checklist_enabled = albumChecklistMode.value !== 'disabled'
     }
+    payload.quick_followup_enabled = quickFollowupEnabled.value
 
     if (workflowConfig.value) {
       payload.workflow_config = workflowConfig.value
@@ -430,6 +432,13 @@ async function create() {
             :placeholder="t('albumNew.descriptionPlaceholder')"
           />
         </div>
+        <label class="flex items-start gap-3 border border-border bg-background p-3 cursor-pointer">
+          <input v-model="quickFollowupEnabled" type="checkbox" class="checkbox mt-0.5" />
+          <span class="space-y-1">
+            <span class="block text-sm font-mono font-semibold text-foreground">{{ t('albumNew.quickFollowupTitle') }}</span>
+            <span class="block text-xs text-muted-foreground">{{ t('albumNew.quickFollowupDesc') }}</span>
+          </span>
+        </label>
       </div>
 
       <!-- 社团 -->

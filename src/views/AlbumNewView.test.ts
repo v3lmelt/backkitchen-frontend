@@ -195,6 +195,7 @@ describe('AlbumNewView', () => {
       deadline: null,
       phase_deadlines: null,
       checklist_enabled: false,
+      quick_followup_enabled: false,
     })
     expect(wrapper.text()).toContain('Create failed')
     expect(mocks.toastErrorMock).toHaveBeenCalledWith('Create failed')
@@ -272,6 +273,7 @@ describe('AlbumNewView', () => {
       deadline: null,
       phase_deadlines: null,
       checklist_enabled: null,
+      quick_followup_enabled: false,
     })
     expect(mocks.updateTeamMock).not.toHaveBeenCalled()
     expect(mocks.updateDeadlinesMock).not.toHaveBeenCalled()
@@ -306,6 +308,7 @@ describe('AlbumNewView', () => {
         peer_review: '2025-01-05T00:00:00.000Z',
       },
       checklist_enabled: false,
+      quick_followup_enabled: false,
     })
     expect(mocks.updateDeadlinesMock).not.toHaveBeenCalled()
   })

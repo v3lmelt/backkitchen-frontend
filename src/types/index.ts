@@ -7,6 +7,7 @@ export type LegacyTrackStatus =
   | 'mastering'
   | 'mastering_revision'
   | 'final_review'
+  | 'source_followup_pending'
   | 'completed'
   | 'rejected'
 
@@ -128,6 +129,7 @@ export interface Album {
   genres?: string[] | null
   cover_image?: string | null
   checklist_enabled?: boolean | null
+  quick_followup_enabled?: boolean
   producer_id: number | null
   mastering_engineer_id: number | null
   deadline?: string | null
@@ -231,6 +233,24 @@ export interface ReopenRequest {
   reason: string
   status: 'pending' | 'approved' | 'rejected'
   decided_by_id: number | null
+  created_at: string
+  decided_at: string | null
+  requested_by?: User | null
+  decided_by?: User | null
+}
+
+export interface SourceFollowupRequest {
+  id: number
+  track_id: number
+  requested_by_id: number
+  decided_by_id: number | null
+  applied_source_version_id: number | null
+  previous_status: string
+  target_stage_id: string | null
+  reason: string
+  status: 'pending' | 'applied' | 'rejected' | 'cancelled'
+  staged_storage_backend: string
+  staged_duration: number | null
   created_at: string
   decided_at: string | null
   requested_by?: User | null
@@ -390,6 +410,7 @@ export interface Track {
   peer_reviewer?: User | null
   current_source_version?: TrackSourceVersion | null
   current_master_delivery?: MasterDelivery | null
+  pending_source_followup_request?: SourceFollowupRequest | null
   allowed_actions: string[]
   workflow_step?: WorkflowStepDef | null
   workflow_transitions?: WorkflowTransitionOption[] | null

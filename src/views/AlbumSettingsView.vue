@@ -68,6 +68,7 @@ const metadataState = reactive<{
   circle_name: string
   genres: string[]
   genre_input: string
+  quick_followup_enabled: boolean
 }>({
   title: '',
   description: '',
@@ -76,6 +77,7 @@ const metadataState = reactive<{
   circle_name: '',
   genres: [],
   genre_input: '',
+  quick_followup_enabled: false,
 })
 const savingMetadata = ref(false)
 const metadataError = ref('')
@@ -365,6 +367,7 @@ function syncMetadataState() {
   metadataState.circle_name = album.value.circle_name || ''
   metadataState.genres = album.value.genres ? [...album.value.genres] : []
   metadataState.genre_input = ''
+  metadataState.quick_followup_enabled = album.value.quick_followup_enabled ?? false
   checklistMode.value = resolveChecklistMode(album.value)
 }
 
@@ -707,6 +710,7 @@ async function saveMetadata() {
       catalog_number: metadataState.catalog_number.trim() || null,
       circle_name: metadataState.circle_name.trim() || null,
       genres: metadataState.genres.length ? [...metadataState.genres] : null,
+      quick_followup_enabled: metadataState.quick_followup_enabled,
     })
     album.value = updated
     syncMetadataState()
@@ -1229,6 +1233,13 @@ async function refreshDeliveries() {
                   </span>
                 </div>
               </div>
+              <label class="flex items-start gap-3 border border-border bg-background p-3 cursor-pointer">
+                <input v-model="metadataState.quick_followup_enabled" type="checkbox" class="checkbox mt-0.5" />
+                <span class="space-y-1">
+                  <span class="block text-sm font-mono font-semibold text-foreground">{{ t('albumSettings.info.quickFollowupTitle') }}</span>
+                  <span class="block text-xs text-muted-foreground">{{ t('albumSettings.info.quickFollowupDesc') }}</span>
+                </span>
+              </label>
               <p v-if="metadataError" class="text-xs text-error">{{ metadataError }}</p>
               <button
                 @click="saveMetadata"

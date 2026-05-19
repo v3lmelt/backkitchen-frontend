@@ -5,6 +5,58 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.19",
+    "date": "2026-05-19",
+    "headline": {
+      "zh-CN": "新增源音频补交申请",
+      "en": "Adds source follow-up requests"
+    },
+    "summary": {
+      "zh-CN": "专辑现在可以选择开启 quick follow-up。开启后，曲师可在非修订阶段上传新的源音频作为待审批申请，主催或相关母带师审批后再替换当前源文件并返回指定流程阶段。",
+      "en": "Albums can now opt in to quick follow-up. When enabled, composers can upload a pending source file outside revision stages, and the producer or relevant mastering engineer can approve it before it replaces the current source and returns the track to a selected workflow stage."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "曲目流程",
+          "en": "Track Workflow"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "曲师可提交待审批源音频",
+              "en": "Composers can submit pending source audio"
+            },
+            "description": {
+              "zh-CN": "专辑设置新增源音频补交开关。开启后，曲师可在曲目详情页上传新的源文件并填写原因；审批前曲目会进入待处理状态，常规流程操作暂时暂停。",
+              "en": "Album settings now include a source follow-up switch. Once enabled, composers can upload a new source file and reason from track detail; while it is pending, the track enters a paused follow-up state."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "审批时选择返回阶段",
+              "en": "Approvers choose the return stage"
+            },
+            "description": {
+              "zh-CN": "主催可批准并选择返回到首个母带交付前的阶段；母带师只能批准到母带相关阶段。批准后新源文件立即成为当前版本，旧母带不再作为当前交付物。",
+              "en": "Producers can approve and choose a stage at or before the first delivery step, while mastering engineers can approve only mastering-related targets. Approval immediately makes the uploaded source current, and older masters stop counting as the current delivery."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "阶段转换不再自动结案待讨论问题",
+              "en": "Pending-discussion issues stay pending across stage changes"
+            },
+            "description": {
+              "zh-CN": "流程进入下一阶段或修订阶段时，待讨论问题会继续保持待讨论状态，不再自动转为内部结案，便于评审组后续发布、处理或继续讨论。",
+              "en": "When a workflow advances or enters revision, pending-discussion issues now remain pending instead of being automatically marked internally resolved, so reviewers can publish, resolve, or continue discussing them later."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.18",
     "date": "2026-05-19",
     "headline": {

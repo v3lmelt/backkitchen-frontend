@@ -1534,7 +1534,14 @@ function handleIssueLeave() {
   </div>
 
   <div v-else-if="loadError || !track || !currentStep" class="max-w-4xl mx-auto space-y-6">
-    <div class="card space-y-3">
+    <div v-if="track?.status === 'source_followup_pending'" class="card space-y-3 border-warning/30">
+      <h1 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.sourceFollowupPendingTitle') }}</h1>
+      <p class="text-sm text-muted-foreground">{{ t('workflowStep.sourceFollowupPendingDesc') }}</p>
+      <div>
+        <button @click="pushToTrackDetail" class="btn-secondary text-sm">{{ t('common.backToTrack') }}</button>
+      </div>
+    </div>
+    <div v-else class="card space-y-3">
       <p class="text-sm text-error">{{ loadError || t('common.loadFailed') }}</p>
       <div>
         <button @click="loadPage" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
