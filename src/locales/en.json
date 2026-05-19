@@ -1573,6 +1573,7 @@
     "from": "From",
     "to": "To",
     "reason": "Reason",
+    "reasonOptional": "Reason (optional)",
     "approve": "Approve",
     "reject": "Reject",
     "delete": "Delete",

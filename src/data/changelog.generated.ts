@@ -5,6 +5,38 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.17",
+    "date": "2026-05-19",
+    "headline": {
+      "zh-CN": "后台曲目救援操作不再强制填写原因",
+      "en": "Admin track rescue actions no longer require a reason"
+    },
+    "summary": {
+      "zh-CN": "管理后台的曲目救援操作现在可以直接执行，无需为强制状态、重分配、重开、归档、恢复或删除额外填写原因。账号治理类操作仍会保留必填原因。",
+      "en": "Admin track rescue actions can now run without an extra reason for force status, reassignment, reopen, archive, restore, or delete operations. Account governance actions still keep their required reason field."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "管理后台",
+          "en": "Admin console"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "曲目工作流操作的原因改为选填",
+              "en": "Track workflow action reasons are now optional"
+            },
+            "description": {
+              "zh-CN": "曲目救援区的原因输入框已标记为选填；留空时系统不再自动写入默认文案，审计记录会保留为空原因。",
+              "en": "The reason field in the track rescue area is now marked optional. Leaving it blank no longer inserts default copy, and audit entries keep the reason empty."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.16",
     "date": "2026-05-12",
     "headline": {
