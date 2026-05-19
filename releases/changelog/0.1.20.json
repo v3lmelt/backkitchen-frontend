@@ -1,0 +1,32 @@
+{
+  "version": "0.1.20",
+  "date": "2026-05-19",
+  "headline": {
+    "zh-CN": "修复专辑设置保存时清空资料的问题",
+    "en": "Fixes album metadata being cleared from settings saves"
+  },
+  "summary": {
+    "zh-CN": "修复了在专辑设置中只保存部分选项时，简介、发行日期、目录编号、社团名和曲风标签可能被清空的问题。",
+    "en": "Fixes an issue where saving a partial album setting could clear description, release date, catalog number, circle name, and genre tags."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "专辑设置",
+        "en": "Album Settings"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "部分保存不再覆盖专辑资料",
+            "en": "Partial saves no longer overwrite album metadata"
+          },
+          "description": {
+            "zh-CN": "保存检查清单模式或源音频补交开关时，系统现在只更新当前提交的设置，不会把未修改的专辑资料写空。",
+            "en": "When saving checklist mode or the source follow-up switch, the system now updates only the submitted setting and preserves unchanged album metadata."
+          }
+        }
+      ]
+    }
+  ]
+}
