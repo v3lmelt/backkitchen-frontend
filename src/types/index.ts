@@ -365,9 +365,12 @@ export interface Track {
   version: number
   workflow_cycle: number
   submitter_id: number | null
+  proxy_uploader_id?: number | null
   peer_reviewer_id: number | null
   producer_id: number | null
   mastering_engineer_id: number | null
+  external_submitter_name?: string | null
+  is_proxy_submission?: boolean
   author_notes: string | null
   mastering_notes: string | null
   created_at: string
@@ -376,6 +379,7 @@ export interface Track {
   issue_count?: number
   open_issue_count?: number
   submitter?: User | null
+  proxy_uploader?: User | null
   peer_reviewer?: User | null
   current_source_version?: TrackSourceVersion | null
   current_master_delivery?: MasterDelivery | null

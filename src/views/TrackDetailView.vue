@@ -698,6 +698,7 @@ watch(() => primaryActions.value.length, async () => {
 // Reopen logic
 const isMasteringEngineer = computed(() => track.value?.mastering_engineer_id === appStore.currentUser?.id)
 const isSubmitter = computed(() => track.value?.submitter_id === appStore.currentUser?.id)
+const isProxySubmission = computed(() => Boolean(track.value?.is_proxy_submission && track.value.external_submitter_name))
 const canDirectReopen = computed(() => track.value?.status === 'completed' && (isProducer.value || isMasteringEngineer.value))
 const canRequestReopen = computed(() => track.value?.status === 'completed' && isSubmitter.value && !isProducer.value && !isMasteringEngineer.value)
 const showReopenModal = ref(false)
@@ -1076,8 +1077,13 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
         <div class="card space-y-2 text-sm">
           <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('trackDetail.trackSummary') }}</h3>
           <div class="flex justify-between">
-            <span class="text-muted-foreground">{{ t('trackDetail.submitter') }}</span>
-            <span class="text-foreground" :class="{ 'font-mono': !track.submitter && track.submitter_id }">{{ track.submitter?.display_name ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
+            <span class="text-muted-foreground">{{ isProxySubmission ? t('trackDetail.externalSubmitter') : t('trackDetail.submitter') }}</span>
+            <span v-if="isProxySubmission" class="text-foreground text-right">{{ track.external_submitter_name }}</span>
+            <span v-else class="text-foreground" :class="{ 'font-mono': !track.submitter && track.submitter_id }">{{ track.submitter?.display_name ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
+          </div>
+          <div v-if="isProxySubmission" class="flex justify-between gap-4">
+            <span class="text-muted-foreground">{{ t('trackDetail.proxyUploader') }}</span>
+            <span class="text-foreground text-right">{{ track.proxy_uploader?.display_name ?? track.submitter?.display_name ?? '--' }}</span>
           </div>
           <!-- Multi-reviewer progress -->
           <template v-if="hasMultipleReviewers">
@@ -1152,7 +1158,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
               </span>
             </div>
             <div class="flex items-center justify-between mt-1">
-              <span>{{ t('trackDetail.submitter') }}</span>
+              <span>{{ isProxySubmission ? t('trackDetail.externalSubmitterProxy') : t('trackDetail.submitter') }}</span>
               <span class="text-xs" :class="track.current_master_delivery.submitter_approved_at ? 'text-success' : 'text-muted-foreground'">
                 {{ track.current_master_delivery.submitter_approved_at ? t('common.approved') : t('common.pending') }}
               </span>

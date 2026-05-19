@@ -33,11 +33,14 @@ const form = ref({
   original_title: '',
   original_artist: '',
   author_notes: '',
+  proxy_submission: false,
+  external_submitter_name: '',
 })
 const selectedFile = ref<File | null>(null)
 const audioDuration = ref<number | null>(null)
 const titleError = ref('')
 const artistError = ref('')
+const proxyNameError = ref('')
 const draftRestored = ref(false)
 const needsFileReselect = ref(false)
 const savedFileName = ref('')
@@ -48,6 +51,22 @@ function validateTitle() {
 }
 function validateArtist() {
   artistError.value = form.value.artist.trim() ? '' : t('upload.artistRequired')
+}
+function validateProxySubmitterName() {
+  proxyNameError.value = form.value.proxy_submission && !form.value.external_submitter_name.trim()
+    ? t('upload.proxyNameRequired')
+    : ''
+}
+function toggleProxySubmission() {
+  if (!form.value.proxy_submission) {
+    form.value.external_submitter_name = ''
+    proxyNameError.value = ''
+    return
+  }
+  if (form.value.external_submitter_name.trim() && !form.value.artist.trim()) {
+    form.value.artist = form.value.external_submitter_name.trim()
+  }
+  validateProxySubmitterName()
 }
 
 function formatDurationFull(seconds: number): string {
@@ -71,6 +90,14 @@ const albumOptions = computed<SelectOption[]>(() =>
   albums.value.map((a) => ({ value: a.id, label: a.title }))
 )
 
+const selectedAlbum = computed(() =>
+  albums.value.find(album => album.id === form.value.album_id) ?? null
+)
+
+const canProxySubmission = computed(() =>
+  Boolean(selectedAlbum.value?.producer_id && selectedAlbum.value.producer_id === appStore.currentUser?.id)
+)
+
 const hasDraft = computed(() => {
   return Boolean(
     selectedFile.value
@@ -80,7 +107,9 @@ const hasDraft = computed(() => {
     || form.value.bpm.trim()
     || form.value.original_title.trim()
     || form.value.original_artist.trim()
-    || form.value.author_notes.trim(),
+    || form.value.author_notes.trim()
+    || form.value.proxy_submission
+    || form.value.external_submitter_name.trim(),
   )
 })
 
@@ -122,6 +151,12 @@ function restoreDraft() {
       original_title: typeof draft.original_title === 'string' ? draft.original_title : '',
       original_artist: typeof draft.original_artist === 'string' ? draft.original_artist : '',
       author_notes: typeof draft.author_notes === 'string' ? draft.author_notes : '',
+      proxy_submission: typeof draft.proxy_submission === 'boolean' ? draft.proxy_submission : false,
+      external_submitter_name: typeof draft.external_submitter_name === 'string' ? draft.external_submitter_name : '',
+    }
+    if (form.value.proxy_submission && !canProxySubmission.value) {
+      form.value.proxy_submission = false
+      form.value.external_submitter_name = ''
     }
     savedFileName.value = typeof draft.saved_file_name === 'string' ? draft.saved_file_name : ''
     needsFileReselect.value = Boolean(savedFileName.value)
@@ -158,6 +193,21 @@ onBeforeRouteLeave(() => {
 watch(form, () => {
   persistDraft()
 }, { deep: true })
+
+watch(canProxySubmission, (allowed) => {
+  if (!allowed && form.value.proxy_submission) {
+    form.value.proxy_submission = false
+    form.value.external_submitter_name = ''
+    proxyNameError.value = ''
+  }
+})
+
+watch(() => form.value.external_submitter_name, (name) => {
+  if (form.value.proxy_submission && !form.value.artist.trim()) {
+    form.value.artist = name.trim()
+  }
+  if (proxyNameError.value) validateProxySubmitterName()
+})
 
 function validateFileSize(file: File): boolean {
   if (file.size > MAX_AUDIO_SIZE) {
@@ -198,9 +248,13 @@ function onDrop(e: DragEvent) {
 }
 
 async function upload() {
+  if (form.value.proxy_submission && !form.value.artist.trim() && form.value.external_submitter_name.trim()) {
+    form.value.artist = form.value.external_submitter_name.trim()
+  }
   validateTitle()
   validateArtist()
-  if (titleError.value || artistError.value) return
+  validateProxySubmitterName()
+  if (titleError.value || artistError.value || proxyNameError.value) return
   if (!selectedFile.value) return
   if (!form.value.album_id) {
     toastError(t('upload.albumRequired'))
@@ -210,6 +264,8 @@ async function upload() {
   uploadProgress.value = 0
   try {
     let track: Track
+    const proxySubmission = form.value.proxy_submission && canProxySubmission.value
+    const externalSubmitterName = proxySubmission ? form.value.external_submitter_name.trim() : null
     if (appStore.r2Enabled) {
       // R2 presigned upload flow
       const file = selectedFile.value
@@ -225,6 +281,8 @@ async function upload() {
           original_title: form.value.original_title || null,
           original_artist: form.value.original_artist || null,
           author_notes: form.value.author_notes || null,
+          proxy_submission: proxySubmission,
+          external_submitter_name: externalSubmitterName,
         }),
         extractAudioDuration(file).catch(() => null),
       ])
@@ -242,6 +300,8 @@ async function upload() {
         original_title: form.value.original_title || null,
         original_artist: form.value.original_artist || null,
         author_notes: form.value.author_notes || null,
+        proxy_submission: proxySubmission,
+        external_submitter_name: externalSubmitterName,
       })
     } else {
       // Legacy FormData upload
@@ -254,6 +314,10 @@ async function upload() {
       if (form.value.original_title) formData.append('original_title', form.value.original_title)
       if (form.value.original_artist) formData.append('original_artist', form.value.original_artist)
       if (form.value.author_notes) formData.append('author_notes', form.value.author_notes)
+      if (proxySubmission && externalSubmitterName) {
+        formData.append('proxy_submission', 'true')
+        formData.append('external_submitter_name', externalSubmitterName)
+      }
       track = await uploadWithProgress<Track>(
         '/tracks', formData, (p) => { uploadProgress.value = p }
       )
@@ -337,6 +401,31 @@ function formatFileSize(bytes: number): string {
           <input v-model="form.bpm" type="text" class="input-field w-full" :placeholder="t('upload.bpmPlaceholder')" />
         </div>
       </div>
+      <div v-if="canProxySubmission" class="border border-border bg-background p-4 space-y-3">
+        <label class="flex items-start gap-3 text-sm text-foreground">
+          <input
+            v-model="form.proxy_submission"
+            type="checkbox"
+            class="checkbox mt-0.5"
+            @change="toggleProxySubmission"
+          />
+          <span class="space-y-1">
+            <span class="block font-mono text-sm font-semibold">{{ t('upload.proxySubmission') }}</span>
+            <span class="block text-xs text-muted-foreground">{{ t('upload.proxySubmissionHint') }}</span>
+          </span>
+        </label>
+        <div v-if="form.proxy_submission">
+          <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.externalSubmitterName') }}</label>
+          <input
+            v-model="form.external_submitter_name"
+            class="input-field w-full"
+            :class="{ 'border-error': proxyNameError }"
+            :placeholder="t('upload.externalSubmitterPlaceholder')"
+            @blur="validateProxySubmitterName"
+          />
+          <p v-if="proxyNameError" class="text-xs text-error mt-1">{{ proxyNameError }}</p>
+        </div>
+      </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.originalTitle') }}</label>
@@ -359,10 +448,10 @@ function formatFileSize(bytes: number): string {
         </button>
         <button
           @click="upload"
-          :disabled="uploading || !selectedFile || !form.title || !form.artist"
+          :disabled="uploading || !selectedFile || !form.title || !form.artist || (form.proxy_submission && !form.external_submitter_name.trim())"
           :class="[
             'flex-1 text-sm font-medium px-4 py-3 rounded-full transition-colors',
-            uploading || !selectedFile || !form.title || !form.artist
+            uploading || !selectedFile || !form.title || !form.artist || (form.proxy_submission && !form.external_submitter_name.trim())
               ? 'bg-border text-muted-foreground cursor-not-allowed'
               : 'btn-primary'
           ]"

@@ -5,6 +5,38 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.17",
+    "date": "2026-05-19",
+    "headline": {
+      "zh-CN": "支持主催为外部曲师代传",
+      "en": "Adds producer proxy uploads for external composers"
+    },
+    "summary": {
+      "zh-CN": "主催现在可以在提交曲目时标记为代传，填写未使用系统的外部曲师名称，并在后续修订和确认环节继续代办。",
+      "en": "Producers can now mark a track submission as a proxy upload, enter the name of an external composer who does not use the system, and continue handling later revisions and confirmations on their behalf."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "曲目提交",
+          "en": "Track Submission"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "新增主催代传模式",
+              "en": "New producer proxy submission mode"
+            },
+            "description": {
+              "zh-CN": "在主催自己的专辑上传曲目时，可以开启「为未使用系统的曲师代传」，填写外部曲师名后提交。曲目详情、审核工作台和母带页面会显示外部曲师与代传主催。",
+              "en": "When uploading to their own album, producers can enable external-composer proxy submission and enter the external composer's name. Track detail, workflow, and mastering pages now show the external composer and proxy producer."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.16",
     "date": "2026-05-12",
     "headline": {

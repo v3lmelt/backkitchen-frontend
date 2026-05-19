@@ -78,6 +78,7 @@ watch(wsConnected, (connected) => {
 })
 
 const track = ref<Track | null>(null)
+const isProxySubmission = computed(() => Boolean(track.value?.is_proxy_submission && track.value.external_submitter_name))
 const issues = ref<Issue[]>([])
 const sourceVersions = ref<TrackSourceVersion[]>([])
 const masterDeliveries = ref<MasterDelivery[]>([])
@@ -2564,7 +2565,7 @@ function handleIssueLeave() {
             </span>
           </div>
           <div class="flex items-center justify-between gap-3 text-sm">
-            <span>{{ t('finalReview.submitter') }}</span>
+            <span>{{ isProxySubmission ? t('finalReview.externalSubmitterProxy') : t('finalReview.submitter') }}</span>
             <span
               :class="masterDelivery?.submitter_approved_at ? 'text-success' : 'text-muted-foreground'"
               class="text-right"
@@ -2630,6 +2631,9 @@ function handleIssueLeave() {
         <h1 class="text-2xl font-mono font-bold truncate">{{ track.title }}</h1>
         <p class="text-sm text-muted-foreground mt-0.5">
           {{ translateStepLabel(currentStep, t) }} · <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
+        </p>
+        <p v-if="isProxySubmission" class="mt-1 text-xs text-muted-foreground">
+          {{ t('trackDetail.externalSubmitter') }}: {{ track.external_submitter_name }} · {{ t('trackDetail.proxyUploader') }}: {{ track.proxy_uploader?.display_name ?? track.submitter?.display_name ?? '--' }}
         </p>
       </div>
       <StatusBadge :status="track.status" type="track" :label="currentStep?.label ?? null" />

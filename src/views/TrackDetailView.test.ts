@@ -210,6 +210,45 @@ describe('TrackDetailView', () => {
     expect(wrapper.text()).toContain('Fresh discussion')
   })
 
+  it('shows proxy submission identity on the track summary', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 7,
+        album_id: 5,
+        status: 'peer_review',
+        title: 'Track 7',
+        artist: 'Offline Composer',
+        version: 1,
+        workflow_cycle: 1,
+        file_path: '/audio.wav',
+        submitter_id: 8,
+        proxy_uploader_id: 8,
+        producer_id: 8,
+        allowed_actions: [],
+        open_issue_count: 0,
+        submitter: { id: 8, display_name: 'Kira' },
+        proxy_uploader: { id: 8, display_name: 'Kira' },
+        peer_reviewer: null,
+        current_source_version: { id: 301 },
+        current_master_delivery: null,
+        is_proxy_submission: true,
+        external_submitter_name: 'Offline Composer',
+      },
+      issues: [],
+      discussions: [],
+      events: [],
+      source_versions: [{ id: 301, version_number: 1, created_at: '2024-01-03T00:00:00Z' }],
+    })
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('External Composer')
+    expect(wrapper.text()).toContain('Offline Composer')
+    expect(wrapper.text()).toContain('Uploaded by Producer')
+    expect(wrapper.text()).toContain('Kira')
+  })
+
   it('opens compare mode from the route query', async () => {
     mocks.route = {
       name: 'track-detail',

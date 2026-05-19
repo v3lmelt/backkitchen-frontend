@@ -1043,6 +1043,8 @@ export const r2Api = {
     original_title?: string | null
     original_artist?: string | null
     author_notes?: string | null
+    proxy_submission?: boolean
+    external_submitter_name?: string | null
   }) => request<PresignedUploadResponse>('/tracks/request-upload', { method: 'POST', body: JSON.stringify(params) }),
 
   confirmTrackUpload: (params: {
@@ -1056,6 +1058,8 @@ export const r2Api = {
     original_title?: string | null
     original_artist?: string | null
     author_notes?: string | null
+    proxy_submission?: boolean
+    external_submitter_name?: string | null
   }) => request<Track>('/tracks/confirm-upload', { method: 'POST', body: JSON.stringify(params) }),
 
   // Source version

@@ -129,6 +129,7 @@ const selectedCompareMasterDeliveryId = ref<number | null>(null)
 // Computed
 const isSubmitter = computed(() => track.value?.submitter_id === appStore.currentUser?.id)
 const isMasteringEngineer = computed(() => track.value?.mastering_engineer_id === appStore.currentUser?.id)
+const isProxySubmission = computed(() => Boolean(track.value?.is_proxy_submission && track.value.external_submitter_name))
 const canSeeMasteringDiscussion = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId || !track.value) return false
@@ -997,6 +998,9 @@ watch(olderMasterDeliveries, (deliveries) => {
         </div>
         <h1 class="text-xl sm:text-2xl font-mono font-bold text-foreground">{{ t('masteringPage.heading') }}</h1>
         <p class="text-sm text-muted-foreground">{{ track.title }} · {{ track.artist ?? '--' }}</p>
+        <p v-if="isProxySubmission" class="mt-1 text-xs text-muted-foreground">
+          {{ t('trackDetail.externalSubmitter') }}: {{ track.external_submitter_name }} · {{ t('trackDetail.proxyUploader') }}: {{ track.proxy_uploader?.display_name ?? track.submitter?.display_name ?? '--' }}
+        </p>
       </div>
       <button @click="goBack" class="btn-secondary text-sm flex-shrink-0 self-start flex items-center gap-1.5">
         <ChevronLeft class="w-4 h-4" :stroke-width="2" />
@@ -1317,7 +1321,7 @@ watch(olderMasterDeliveries, (deliveries) => {
           </span>
         </div>
         <div class="flex items-center justify-between text-sm">
-          <span class="text-muted-foreground">{{ t('trackDetail.submitter') }}</span>
+          <span class="text-muted-foreground">{{ isProxySubmission ? t('trackDetail.externalSubmitterProxy') : t('trackDetail.submitter') }}</span>
           <span class="text-xs" :class="track.current_master_delivery?.submitter_approved_at ? 'text-success' : 'text-muted-foreground'">
             {{ track.current_master_delivery?.submitter_approved_at ? t('common.approved') : t('common.pending') }}
           </span>
