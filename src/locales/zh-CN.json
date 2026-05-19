@@ -1584,6 +1584,7 @@
     "from": "原状态",
     "to": "新状态",
     "reason": "原因",
+    "reasonOptional": "原因（选填）",
     "approve": "批准",
     "reject": "拒绝",
     "delete": "删除",

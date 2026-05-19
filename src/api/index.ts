@@ -965,17 +965,17 @@ export const adminApi = {
     const qs = sp.toString()
     return request<AdminAuditLogEntry[]>(`/admin/audit-log${qs ? `?${qs}` : ''}`)
   },
-  forceStatus: (trackId: number, data: { new_status: string; reason: string }) =>
+  forceStatus: (trackId: number, data: { new_status: string; reason?: string }) =>
     request<Track>(`/admin/tracks/${trackId}/force-status`, { method: 'POST', body: JSON.stringify(data) }),
-  reassign: (trackId: number, data: { user_ids: number[]; reason: string }) =>
+  reassign: (trackId: number, data: { user_ids: number[]; reason?: string }) =>
     request<Track>(`/admin/tracks/${trackId}/reassign`, { method: 'POST', body: JSON.stringify(data) }),
-  reopenTrack: (trackId: number, data: { target_stage_id: string; reason: string }) =>
+  reopenTrack: (trackId: number, data: { target_stage_id: string; reason?: string }) =>
     request<Track>(`/admin/tracks/${trackId}/reopen`, { method: 'POST', body: JSON.stringify(data) }),
   decideReopenRequest: (requestId: number, data: { decision: 'approve' | 'reject'; reason: string }) =>
     request<AdminReopenRequestEntry>(`/admin/reopen-requests/${requestId}/decide`, { method: 'POST', body: JSON.stringify(data) }),
-  archiveTrack: (trackId: number, reason: string) =>
+  archiveTrack: (trackId: number, reason?: string) =>
     request<Track>(`/admin/tracks/${trackId}/archive`, { method: 'POST', body: JSON.stringify({ reason }) }),
-  restoreTrack: (trackId: number, reason: string) =>
+  restoreTrack: (trackId: number, reason?: string) =>
     request<Track>(`/admin/tracks/${trackId}/restore`, { method: 'POST', body: JSON.stringify({ reason }) }),
   deleteTrack: (trackId: number, reason?: string) => {
     const sp = new URLSearchParams()

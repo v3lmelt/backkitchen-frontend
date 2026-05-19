@@ -20,6 +20,13 @@ const mocks = vi.hoisted(() => ({
   activityLogMock: vi.fn(),
   auditLogMock: vi.fn(),
   listReopenRequestsMock: vi.fn(),
+  forceStatusMock: vi.fn(),
+  reassignMock: vi.fn(),
+  reopenTrackMock: vi.fn(),
+  decideReopenRequestMock: vi.fn(),
+  archiveTrackMock: vi.fn(),
+  restoreTrackMock: vi.fn(),
+  deleteTrackMock: vi.fn(),
   toastSuccessMock: vi.fn(),
   toastErrorMock: vi.fn(),
   currentUser: { id: 1, is_admin: true, admin_role: 'superadmin' },
@@ -49,6 +56,13 @@ vi.mock('@/api', () => ({
     activityLog: mocks.activityLogMock,
     auditLog: mocks.auditLogMock,
     listReopenRequests: mocks.listReopenRequestsMock,
+    forceStatus: mocks.forceStatusMock,
+    reassign: mocks.reassignMock,
+    reopenTrack: mocks.reopenTrackMock,
+    decideReopenRequest: mocks.decideReopenRequestMock,
+    archiveTrack: mocks.archiveTrackMock,
+    restoreTrack: mocks.restoreTrackMock,
+    deleteTrack: mocks.deleteTrackMock,
   },
   albumApi: {
     archive: vi.fn(),
@@ -95,6 +109,13 @@ describe('AdminView', () => {
     mocks.activityLogMock.mockReset()
     mocks.auditLogMock.mockReset()
     mocks.listReopenRequestsMock.mockReset()
+    mocks.forceStatusMock.mockReset()
+    mocks.reassignMock.mockReset()
+    mocks.reopenTrackMock.mockReset()
+    mocks.decideReopenRequestMock.mockReset()
+    mocks.archiveTrackMock.mockReset()
+    mocks.restoreTrackMock.mockReset()
+    mocks.deleteTrackMock.mockReset()
     mocks.toastSuccessMock.mockReset()
     mocks.toastErrorMock.mockReset()
     mocks.currentUser = { id: 1, is_admin: true, admin_role: 'superadmin' }
@@ -190,6 +211,13 @@ describe('AdminView', () => {
     mocks.activityLogMock.mockResolvedValue([])
     mocks.auditLogMock.mockResolvedValue([])
     mocks.listReopenRequestsMock.mockResolvedValue([])
+    mocks.forceStatusMock.mockResolvedValue({})
+    mocks.reassignMock.mockResolvedValue({})
+    mocks.reopenTrackMock.mockResolvedValue({})
+    mocks.decideReopenRequestMock.mockResolvedValue({})
+    mocks.archiveTrackMock.mockResolvedValue({})
+    mocks.restoreTrackMock.mockResolvedValue({})
+    mocks.deleteTrackMock.mockResolvedValue(undefined)
   })
 
   it('redirects non-admin users away from the page', async () => {
@@ -244,5 +272,77 @@ describe('AdminView', () => {
     await flushPromises()
 
     expect(mocks.deleteUserMock).toHaveBeenCalledWith(2, 'Soft deleted from admin console')
+  })
+
+  it('submits blank track workflow reasons without fallback text', async () => {
+    mocks.listAlbumsMock.mockResolvedValue([
+      {
+        id: 10,
+        title: 'Album',
+        cover_color: '#111111',
+        producer_id: 1,
+        members: [
+          {
+            id: 1,
+            user_id: 2,
+            created_at: '2026-01-01T00:00:00Z',
+            user: {
+              id: 2,
+              username: 'reviewer',
+              display_name: 'Reviewer',
+              role: 'member',
+              is_admin: false,
+              admin_role: 'none',
+              email_verified: true,
+              avatar_color: '#222222',
+              created_at: '2026-01-01T00:00:00Z',
+            },
+          },
+        ],
+        workflow_config: {
+          version: 2,
+          steps: [
+            { id: 'intake', label: 'Intake', type: 'approval', assignee_role: 'producer', order: 0, transitions: {} },
+            { id: 'peer_review', label: 'Peer Review', type: 'review', assignee_role: 'peer_reviewer', order: 1, transitions: {} },
+          ],
+        },
+      },
+    ])
+    mocks.listAlbumTracksMock.mockResolvedValue([
+      {
+        id: 99,
+        title: 'Track',
+        artist: 'Artist',
+        status: 'intake',
+        workflow_variant: 'standard',
+        archived_at: null,
+      },
+    ])
+
+    const wrapper = mountWithPlugins(AdminView)
+    await flushPromises()
+    await openTab(wrapper, 'Track Rescue')
+
+    const albumSelect = wrapper.findAll('select').find(select => select.text().includes('Album'))
+    await albumSelect!.setValue('10')
+    await flushPromises()
+
+    const trackButton = wrapper.findAll('button').find(button => button.text().includes('Track') && button.text().includes('Artist'))
+    await trackButton!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Reason (optional)')
+
+    const statusSelect = wrapper.findAll('select').find(select => select.text().includes('Select a status'))
+    await statusSelect!.setValue('peer_review')
+
+    const runButton = wrapper.findAll('button').find(button => button.text() === 'Run Action')
+    await runButton!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.forceStatusMock).toHaveBeenCalledWith(99, {
+      new_status: 'peer_review',
+      reason: '',
+    })
   })
 })

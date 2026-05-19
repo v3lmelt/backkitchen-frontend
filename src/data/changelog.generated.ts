@@ -8,12 +8,12 @@ export const CHANGELOG: ChangelogEntry[] = [
     "version": "0.1.17",
     "date": "2026-05-19",
     "headline": {
-      "zh-CN": "支持主催为外部曲师代传",
-      "en": "Adds producer proxy uploads for external composers"
+      "zh-CN": "协作与曲目提交流程增强",
+      "en": "Collaboration and track submission improvements"
     },
     "summary": {
-      "zh-CN": "主催现在可以在提交曲目时标记为代传，填写未使用系统的外部曲师名称，并在后续修订和确认环节继续代办。",
-      "en": "Producers can now mark a track submission as a proxy upload, enter the name of an external composer who does not use the system, and continue handling later revisions and confirmations on their behalf."
+      "zh-CN": "本次更新加入主催代传外部曲师曲目的流程，并优化管理后台的曲目救援操作，减少不必要的必填原因。",
+      "en": "This update adds producer proxy uploads for external composers and streamlines admin track rescue operations by removing unnecessary required reasons."
     },
     "sections": [
       {
@@ -30,6 +30,24 @@ export const CHANGELOG: ChangelogEntry[] = [
             "description": {
               "zh-CN": "在主催自己的专辑上传曲目时，可以开启「为未使用系统的曲师代传」，填写外部曲师名后提交。曲目详情、审核工作台和母带页面会显示外部曲师与代传主催。",
               "en": "When uploading to their own album, producers can enable external-composer proxy submission and enter the external composer's name. Track detail, workflow, and mastering pages now show the external composer and proxy producer."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "管理后台",
+          "en": "Admin Console"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "曲目工作流操作的原因改为选填",
+              "en": "Track workflow action reasons are now optional"
+            },
+            "description": {
+              "zh-CN": "曲目救援区的原因输入框已标记为选填；留空时系统不再自动写入默认文案，审计记录会保留为空原因。",
+              "en": "The reason field in the track rescue area is now marked optional. Leaving it blank no longer inserts default copy, and audit entries keep the reason empty."
             }
           }
         ]
