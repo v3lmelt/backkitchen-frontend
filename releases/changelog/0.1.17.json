@@ -1,0 +1,42 @@
+{
+  "version": "0.1.17",
+  "date": "2026-05-19",
+  "headline": {
+    "zh-CN": "评论区新增 @ 人提及",
+    "en": "User mentions land in comment areas"
+  },
+  "summary": {
+    "zh-CN": "曲目讨论、母带沟通、问题评论、状态备注和新建问题描述现在都支持输入 @、@姓名、@user: 或 @user:ID 前缀选择可见参与者。选中后会保存为稳定的 @user:ID 引用，显示时渲染为人员 chip，并为被提及者发送独立站内通知。",
+    "en": "Track discussions, mastering conversations, issue comments, status notes, and new issue descriptions now support typing @, @name, @user:, or an @user:ID prefix to pick a visible participant. Selections are saved as stable @user:ID references, rendered as person chips, and send a separate in-app mention notification."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "协作",
+        "en": "Collaboration"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "所有评论入口支持 @ 人",
+            "en": "All comment entry points support @ people"
+          },
+          "description": {
+            "zh-CN": "在讨论、母带沟通、问题回复、问题状态备注和问题创建描述中输入 @、@姓名、@user、@user: 或 @user:数字会弹出当前上下文可见参与者列表；@user:数字会按用户 ID 前缀过滤。支持方向键、Enter/Tab、Esc 和鼠标选择。内部 issue 不会向曲师暴露候选人，也不会因为 @ 通知曲师。",
+            "en": "Typing @, @name, @user, @user:, or @user:digits in discussions, mastering communication, issue replies, issue status notes, and issue descriptions opens the participant picker for that context; @user:digits filters by user ID prefix. Arrow-key, Enter/Tab, Escape, and mouse selection are supported. Internal issues do not expose submitters as candidates and do not notify submitters through mentions."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "提及显示为人员 chip",
+            "en": "Mentions render as person chips"
+          },
+          "description": {
+            "zh-CN": "系统会把选中的用户保存为 @user:ID，普通用户无需手动输入 ID；阅读时会显示为 @显示名 chip。无权访问或已不可用的用户引用会以不可用样式显示，避免误以为通知仍然有效。",
+            "en": "Selected users are stored as @user:ID so regular users do not need to know IDs manually; when reading, they appear as @display-name chips. References to unavailable or unauthorized users render with an unavailable style so stale mentions are not mistaken for active notifications."
+          }
+        }
+      ]
+    }
+  ]
+}
