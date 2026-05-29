@@ -56,6 +56,7 @@
       "resend": "重新发送验证邮件",
       "resending": "发送中…",
       "resent": "验证邮件已重新发送。",
+      "resendFailed": "验证邮件重新发送失败。",
       "backToSignIn": "返回登录"
     },
     "forgotPassword": {
@@ -424,6 +425,7 @@
     "save": "保存",
     "saving": "保存中…",
     "saved": "模板已保存",
+    "saveFailed": "工作流模板保存失败",
     "deleted": "模板已删除",
     "albumCount": "{count} 个专辑使用",
     "albumCountZero": "暂无专辑使用",
@@ -455,6 +457,7 @@
     "deliveryUploaded": "母带交付物已上传",
     "revisionUploaded": "修订版已上传",
     "finalApproved": "最终审核已通过",
+    "actionSubmitted": "操作已提交。正在等待其余必需审核步骤完成。",
     "currentAudio": "当前音频",
     "issuesToAddress": "待解决问题 ({count})",
     "sourceAudio": "源音频",
@@ -647,6 +650,9 @@
     "trackNumberLabel": "曲序 #{number}",
     "noAudioFile": "该曲目暂无源音频文件。",
     "issuesHeading": "问题 ({count})",
+    "issueDetailModeHint": "选择点击问题列表或波形标记时在本页打开，还是沿用独立详情页。",
+    "issueDetailModeInline": "新版抽屉",
+    "issueDetailModeLegacy": "旧版详情页",
     "editMetadata": "编辑信息",
     "editMetadataTitle": "编辑曲目信息",
     "metadataSaved": "曲目信息已保存",
@@ -668,6 +674,7 @@
     "reassigning": "分配中…",
     "reassignDone": "已重新分配审稿人",
     "reassignNoPool": "自动分配失败：当前阶段无可用审核人",
+    "reassignRefreshFailed": "已重新分配审核人，但未能刷新最新分配列表。",
     "openIssues": "未解决问题",
     "currentMaster": "当前母带",
     "finalApprovals": "终审批准",
@@ -1101,6 +1108,8 @@
     "itemDescription": "描述（可选）",
     "saveTemplate": "保存模板",
     "resetToDefault": "恢复默认",
+    "resetTemplateTitle": "重置检查清单模板？",
+    "resetTemplateConfirm": "这会用默认项替换当前检查清单模板，未保存的模板改动会丢失。",
     "templateSaved": "模板已保存",
     "unsavedChanges": "有未保存的修改",
     "templateReset": "已恢复默认模板",
@@ -1131,6 +1140,8 @@
     "webhookSave": "保存 Webhook",
     "webhookTest": "测试",
     "webhookSaved": "Webhook 配置已保存",
+    "webhookTestSucceeded": "Webhook 测试已发送",
+    "webhookTestFailed": "Webhook 测试失败",
     "webhookDeliveries": "发送历史",
     "webhookNoDeliveries": "暂无发送记录",
     "composerEmailEnabled": "邮件通知曲师",
@@ -1212,6 +1223,8 @@
   "notifications": {
     "title": "通知",
     "markAllRead": "全部已读",
+    "markReadFailed": "标记通知已读失败。",
+    "markAllReadFailed": "标记全部通知已读失败。",
     "empty": "暂无通知",
     "loadMore": "加载更多",
     "viewAll": "查看全部",
@@ -1504,7 +1517,8 @@
     "website": "官网",
     "websitePlaceholder": "https://…",
     "create": "创建社团",
-    "nameRequired": "请输入社团名称"
+    "nameRequired": "请输入社团名称",
+    "logoUploadPartialFailure": "社团已创建，但 Logo 上传失败：{message}。请稍后在社团页面重新上传。"
   },
   "circleDetail": {
     "tabs": {
@@ -1542,6 +1556,8 @@
     "inviteCodeCreated": "邀请码已生成",
     "inviteCodeRevoked": "邀请码已撤销",
     "codeCopied": "邀请码已复制",
+    "revokeInviteTitle": "撤销邀请码？",
+    "revokeInviteConfirm": "撤销邀请码 {code}？尚未使用该码的人将无法再通过它加入。",
     "danger": {
       "title": "危险区域",
       "deleteTitle": "删除社团",
@@ -1850,7 +1866,8 @@
     "historyTitle": "编辑历史",
     "version": "版本 {n}",
     "editedBy": "{name} 编辑",
-    "noHistory": "暂无编辑记录"
+    "noHistory": "暂无编辑记录",
+    "loadFailed": "编辑历史加载失败。"
   },
   "export": {
     "title": "导出专辑",

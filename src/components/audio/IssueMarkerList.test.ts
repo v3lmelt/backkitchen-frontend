@@ -141,4 +141,28 @@ describe('IssueMarkerList', () => {
     expect(wrapper.emitted('update:selectedIds')).toBeTruthy()
     expect(wrapper.emitted('update:selectedIds')![0]).toEqual([[5]])
   })
+
+  it('emits quick status actions without selecting the issue', async () => {
+    localStorage.setItem('backkitchen_user', JSON.stringify({ id: 2, display_name: 'Nova', role: 'member' }))
+    const issue = makeIssue({ author_id: 10, status: 'open' })
+    const wrapper = mountWithPlugins(IssueMarkerList, {
+      props: {
+        issues: [issue],
+        track: {
+          id: 1,
+          submitter_id: 2,
+          producer_id: 8,
+          peer_reviewer_id: 9,
+        },
+        enableQuickActions: true,
+      },
+    })
+
+    const resolvedButton = wrapper.findAll('button').find(button => button.text() === 'Resolved')
+    expect(resolvedButton).toBeTruthy()
+    await resolvedButton!.trigger('click')
+
+    expect(wrapper.emitted('status-change')).toEqual([[{ issue, status: 'resolved' }]])
+    expect(wrapper.emitted('select')).toBeUndefined()
+  })
 })

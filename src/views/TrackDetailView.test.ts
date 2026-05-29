@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
     query: {} as Record<string, string>,
   },
   pushMock: vi.fn(),
+  replaceMock: vi.fn(),
   openMock: vi.fn(),
   trackGetMock: vi.fn(),
   listAssignmentsMock: vi.fn(),
@@ -25,12 +26,13 @@ const mocks = vi.hoisted(() => ({
   trackReopenMock: vi.fn(),
   trackRequestReopenMock: vi.fn(),
   discussionCreateMock: vi.fn(),
+  issueUpdateMock: vi.fn(),
   currentUser: { id: 2 },
 }))
 
 vi.mock('vue-router', () => ({
   useRoute: () => mocks.route,
-  useRouter: () => ({ push: mocks.pushMock }),
+  useRouter: () => ({ push: mocks.pushMock, replace: mocks.replaceMock }),
   RouterLink: { template: '<a><slot /></a>' },
 }))
 
@@ -45,6 +47,9 @@ vi.mock('@/api', () => ({
     cancelSourceFollowup: mocks.cancelSourceFollowupMock,
     reopen: mocks.trackReopenMock,
     requestReopen: mocks.trackRequestReopenMock,
+  },
+  issueApi: {
+    update: mocks.issueUpdateMock,
   },
   r2Api: {
     requestSourceFollowupUpload: mocks.requestSourceFollowupUploadMock,
@@ -67,8 +72,35 @@ vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
 
 vi.mock('@/components/audio/IssueMarkerList.vue', () => ({
   default: {
-    props: ['issues'],
-    template: '<div class="issue-list">{{ issues.length }}</div>',
+    props: ['issues', 'track', 'assignments', 'showActivity', 'enableQuickActions', 'currentSourceVersionNumber'],
+    emits: ['select', 'status-change'],
+    template: `
+      <div
+        class="issue-list"
+        :data-show-activity="showActivity ? 'true' : 'false'"
+        :data-quick-actions="enableQuickActions ? 'true' : 'false'"
+      >
+        <span class="issue-count">{{ issues.length }}</span>
+        <button
+          v-for="issue in issues"
+          :key="'select-' + issue.id"
+          type="button"
+          class="issue-select"
+          @click="$emit('select', issue)"
+        >
+          {{ issue.title }}:{{ issue.status }}
+        </button>
+        <button
+          v-for="issue in issues"
+          :key="'quick-' + issue.id"
+          type="button"
+          class="quick-status"
+          @click.stop="$emit('status-change', { issue, status: 'resolved' })"
+        >
+          quick {{ issue.id }}
+        </button>
+      </div>
+    `,
   },
 }))
 
@@ -120,6 +152,29 @@ vi.mock('@/components/common/CommentInput.vue', () => ({
   },
 }))
 
+
+vi.mock('@/components/IssueDetailPanel.vue', () => ({
+  default: {
+    props: ['issue', 'track', 'assignments', 'issues', 'mentionCandidates'],
+    emits: ['close', 'updated', 'open-issue'],
+    template: `
+      <div class="issue-detail-panel" :data-open="issue ? 'true' : 'false'">
+        <span class="drawer-title">{{ issue?.title ?? '' }}</span>
+        <span class="drawer-status">{{ issue?.status ?? '' }}</span>
+        <button type="button" class="drawer-close" @click="$emit('close')">close</button>
+        <button
+          v-if="issue"
+          type="button"
+          class="drawer-update"
+          @click="$emit('updated', Object.assign({}, issue, { title: issue.title + ' updated', status: 'resolved' }))"
+        >
+          update
+        </button>
+        <button type="button" class="drawer-open-linked" @click="$emit('open-issue', 2)">linked</button>
+      </div>
+    `,
+  },
+}))
 vi.mock('@/components/chat/MasteringChatSidebar.vue', () => ({
   default: {
     methods: {
@@ -130,6 +185,27 @@ vi.mock('@/components/chat/MasteringChatSidebar.vue', () => ({
   },
 }))
 
+
+const makeIssue = (overrides: Record<string, unknown> = {}) => ({
+  id: 1,
+  track_id: 7,
+  local_number: 1,
+  author_id: 4,
+  phase: 'peer',
+  workflow_cycle: 2,
+  source_version_id: null,
+  source_version_number: 3,
+  master_delivery_id: null,
+  title: 'Current version',
+  description: 'desc',
+  severity: 'major',
+  status: 'open',
+  markers: [],
+  created_at: '2024-01-03T00:00:00Z',
+  updated_at: '2024-01-03T00:00:00Z',
+  comment_count: 0,
+  ...overrides,
+})
 import TrackDetailView from './TrackDetailView.vue'
 
 function mountTrackDetailView() {
@@ -152,6 +228,7 @@ describe('TrackDetailView', () => {
       query: {},
     }
     mocks.pushMock.mockReset()
+    mocks.replaceMock.mockReset()
     mocks.openMock.mockReset()
     mocks.discussionCreateMock.mockReset()
     mocks.trackGetMock.mockReset()
@@ -165,7 +242,9 @@ describe('TrackDetailView', () => {
     mocks.uploadToR2Mock.mockReset()
     mocks.trackReopenMock.mockReset()
     mocks.trackRequestReopenMock.mockReset()
+    mocks.issueUpdateMock.mockReset()
     mocks.currentUser = { id: 2 }
+    localStorage.clear()
     vi.stubGlobal('open', mocks.openMock)
     mocks.trackReopenMock.mockResolvedValue({})
     mocks.trackRequestReopenMock.mockResolvedValue({})
@@ -177,6 +256,12 @@ describe('TrackDetailView', () => {
     mocks.confirmSourceFollowupUploadMock.mockResolvedValue({})
     mocks.uploadToR2Mock.mockResolvedValue(undefined)
     mocks.listAssignmentsMock.mockResolvedValue([])
+    mocks.issueUpdateMock.mockImplementation((id: number, data: { status?: string }) => Promise.resolve(makeIssue({
+      id,
+      local_number: id,
+      title: id === 1 ? 'Current version' : 'Older version',
+      status: data.status ?? 'open',
+    })))
     mocks.trackGetMock.mockResolvedValue({
       track: {
         id: 7,
@@ -197,9 +282,9 @@ describe('TrackDetailView', () => {
         current_master_delivery: null,
       },
       issues: [
-        { id: 1, phase: 'peer', workflow_cycle: 2, source_version_number: 3, title: 'Current version' },
-        { id: 2, phase: 'peer', workflow_cycle: 2, source_version_number: 2, title: 'Older version' },
-        { id: 3, phase: 'peer', workflow_cycle: 1, source_version_number: 3, title: 'Older cycle' },
+        makeIssue({ id: 1, local_number: 1, title: 'Current version', status: 'open', source_version_number: 3 }),
+        makeIssue({ id: 2, local_number: 2, title: 'Older version', status: 'open', source_version_number: 2 }),
+        makeIssue({ id: 3, local_number: 3, workflow_cycle: 1, title: 'Older cycle', status: 'open', source_version_number: 3 }),
       ],
       discussions: [],
       events: [],
@@ -221,7 +306,7 @@ describe('TrackDetailView', () => {
     const wrapper = mountTrackDetailView()
     await flushPromises()
 
-    expect(wrapper.find('.issue-list').text()).toBe('2')
+    expect(wrapper.find('.issue-count').text()).toBe('2')
     expect(wrapper.find('.waveform').text()).toContain('compare:none')
 
     await wrapper.find('textarea').setValue(' Fresh discussion ')
@@ -234,6 +319,124 @@ describe('TrackDetailView', () => {
       expect.any(Function),
     )
     expect(wrapper.text()).toContain('Fresh discussion')
+  })
+
+  it('opens issue details in the same-page drawer by default', async () => {
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    expect(wrapper.find('.issue-list').attributes('data-quick-actions')).toBe('true')
+    await wrapper.findAll('.issue-select')[0].trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.drawer-title').text()).toBe('Current version')
+    expect(mocks.replaceMock).toHaveBeenCalledWith({ path: '/tracks/7', query: { issue: '1' } })
+    expect(mocks.pushMock).not.toHaveBeenCalled()
+  })
+
+  it('persists legacy detail-page mode and keeps the old issue navigation', async () => {
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    const legacyButton = wrapper.findAll('button').find(button => button.text() === 'Legacy page')
+    expect(legacyButton).toBeTruthy()
+    await legacyButton!.trigger('click')
+
+    expect(localStorage.getItem('backkitchen_issue_detail_mode_2')).toBe('legacy')
+    await wrapper.findAll('.issue-select')[0].trigger('click')
+
+    expect(mocks.pushMock).toHaveBeenCalledWith({ path: '/issues/1', query: undefined })
+    expect(wrapper.find('.drawer-title').text()).toBe('')
+  })
+
+  it('opens the issue drawer from the issue route query after track data loads', async () => {
+    mocks.route = {
+      name: 'track-detail',
+      path: '/tracks/7',
+      fullPath: '/tracks/7?issue=1',
+      params: { id: '7' },
+      query: { issue: '1' },
+    }
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    expect(wrapper.find('.drawer-title').text()).toBe('Current version')
+    expect(mocks.pushMock).not.toHaveBeenCalled()
+  })
+
+  it('routes issue query deep links to the legacy detail page when legacy mode is selected', async () => {
+    localStorage.setItem('backkitchen_issue_detail_mode_2', 'legacy')
+    mocks.route = {
+      name: 'track-detail',
+      path: '/tracks/7',
+      fullPath: '/tracks/7?issue=1',
+      params: { id: '7' },
+      query: { issue: '1' },
+    }
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    expect(mocks.pushMock).toHaveBeenCalledWith({ path: '/issues/1', query: undefined })
+    expect(wrapper.find('.drawer-title').text()).toBe('')
+  })
+
+  it('opens local linked issues in the same drawer and applies panel updates', async () => {
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    await wrapper.findAll('.issue-select')[0].trigger('click')
+    await flushPromises()
+    await wrapper.find('.drawer-update').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('.issue-select')[0].text()).toContain('Current version updated:resolved')
+
+    mocks.replaceMock.mockClear()
+    await wrapper.find('.drawer-open-linked').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.drawer-title').text()).toBe('Older version')
+    expect(mocks.replaceMock).toHaveBeenCalledWith({ path: '/tracks/7', query: { issue: '2' } })
+    expect(mocks.pushMock).not.toHaveBeenCalled()
+  })
+
+  it('updates quick issue status optimistically and applies the API result', async () => {
+    let resolveUpdate!: (issue: unknown) => void
+    mocks.issueUpdateMock.mockReturnValueOnce(new Promise(resolve => {
+      resolveUpdate = resolve
+    }))
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    await wrapper.findAll('.quick-status')[0].trigger('click')
+
+    expect(mocks.issueUpdateMock).toHaveBeenCalledWith(1, { status: 'resolved' })
+    expect(wrapper.findAll('.issue-select')[0].text()).toContain('Current version:resolved')
+
+    resolveUpdate(makeIssue({ id: 1, local_number: 1, title: 'Server resolved', status: 'resolved' }))
+    await flushPromises()
+
+    expect(wrapper.findAll('.issue-select')[0].text()).toContain('Server resolved:resolved')
+    expect(wrapper.find('.drawer-title').text()).toBe('')
+  })
+
+  it('reverts quick issue status when the API update fails', async () => {
+    let rejectUpdate!: (error: Error) => void
+    mocks.issueUpdateMock.mockReturnValueOnce(new Promise((_resolve, reject) => {
+      rejectUpdate = reject
+    }))
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    await wrapper.findAll('.quick-status')[0].trigger('click')
+    expect(wrapper.findAll('.issue-select')[0].text()).toContain('Current version:resolved')
+
+    rejectUpdate(new Error('No permission'))
+    await flushPromises()
+
+    expect(wrapper.findAll('.issue-select')[0].text()).toContain('Current version:open')
   })
 
   it('shows proxy submission identity on the track summary', async () => {

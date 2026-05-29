@@ -195,7 +195,10 @@ export function useDiscussions(
     showHistoryForId.value = discussionId
     try {
       historyItems.value = await discussionApi.history(discussionId)
-    } catch { historyItems.value = [] }
+    } catch (error: any) {
+      historyItems.value = []
+      toastError(error?.message || t('editHistory.loadFailed'))
+    }
   }
 
   function cancelEdit() {

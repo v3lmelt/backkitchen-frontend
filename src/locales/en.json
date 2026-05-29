@@ -56,6 +56,7 @@
       "resend": "Resend verification email",
       "resending": "Sending…",
       "resent": "Verification email resent.",
+      "resendFailed": "Failed to resend the verification email.",
       "backToSignIn": "Back to sign in"
     },
     "forgotPassword": {
@@ -414,6 +415,7 @@
     "save": "Save",
     "saving": "Saving...",
     "saved": "Template saved",
+    "saveFailed": "Failed to save template",
     "deleted": "Template deleted",
     "albumCount": "{count} albums using",
     "albumCountZero": "No albums using",
@@ -445,6 +447,7 @@
     "deliveryUploaded": "Delivery uploaded",
     "revisionUploaded": "Revision uploaded",
     "finalApproved": "Final review approved",
+    "actionSubmitted": "Action submitted. Waiting for the remaining required review steps.",
     "currentAudio": "Current Audio",
     "issuesToAddress": "Issues to Address ({count})",
     "sourceAudio": "Source Audio",
@@ -643,6 +646,9 @@
     "currentSourceAudio": "Current Source Audio",
     "noAudioFile": "No source audio file uploaded for this track yet.",
     "issuesHeading": "Issues ({count})",
+    "issueDetailModeHint": "Choose whether problem rows and waveform markers open in-place or keep using the standalone detail page.",
+    "issueDetailModeInline": "Inline drawer",
+    "issueDetailModeLegacy": "Legacy page",
     "editMetadata": "Edit Info",
     "editMetadataTitle": "Edit Track Info",
     "metadataSaved": "Track info saved",
@@ -665,6 +671,7 @@
     "reassigning": "Assigning…",
     "reassignDone": "Reviewer reassigned successfully",
     "reassignNoPool": "Auto-assignment failed: no eligible reviewers for this stage",
+    "reassignRefreshFailed": "Reviewer was reassigned, but the latest assignment list could not be refreshed.",
     "openIssues": "Open Issues",
     "currentMaster": "Current Master",
     "finalApprovals": "Final approvals",
@@ -1099,6 +1106,8 @@
     "itemDescription": "Description (optional)",
     "saveTemplate": "Save Template",
     "resetToDefault": "Reset to Default",
+    "resetTemplateTitle": "Reset checklist template?",
+    "resetTemplateConfirm": "This will replace the current checklist template with the default items. Unsaved template changes will be lost.",
     "templateSaved": "Template saved",
     "unsavedChanges": "Unsaved changes",
     "templateReset": "Template reset to default",
@@ -1129,6 +1138,8 @@
     "webhookSave": "Save Webhook",
     "webhookTest": "Test",
     "webhookSaved": "Webhook config saved",
+    "webhookTestSucceeded": "Webhook test sent successfully",
+    "webhookTestFailed": "Webhook test failed",
     "webhookDeliveries": "Delivery History",
     "webhookNoDeliveries": "No deliveries yet",
     "composerEmailEnabled": "Email composers",
@@ -1162,6 +1173,8 @@
   "notifications": {
     "title": "Notifications",
     "markAllRead": "Mark all read",
+    "markReadFailed": "Failed to mark notification as read.",
+    "markAllReadFailed": "Failed to mark notifications as read.",
     "empty": "No notifications",
     "loadMore": "Load more",
     "viewAll": "View all",
@@ -1454,7 +1467,8 @@
     "website": "Website",
     "websitePlaceholder": "https://...",
     "create": "Create Circle",
-    "nameRequired": "Please enter a circle name"
+    "nameRequired": "Please enter a circle name",
+    "logoUploadPartialFailure": "The circle was created, but the logo upload failed: {message}. Please re-upload it from the circle page."
   },
   "circleDetail": {
     "tabs": {
@@ -1492,6 +1506,8 @@
     "inviteCodeCreated": "Invite code created",
     "inviteCodeRevoked": "Invite code revoked",
     "codeCopied": "Code copied",
+    "revokeInviteTitle": "Revoke invite code?",
+    "revokeInviteConfirm": "Revoke invite code {code}? People who have not used it yet will no longer be able to join with this code.",
     "danger": {
       "title": "Danger Zone",
       "deleteTitle": "Delete Circle",
@@ -1839,7 +1855,8 @@
     "historyTitle": "Edit History",
     "version": "Version {n}",
     "editedBy": "Edited by {name}",
-    "noHistory": "No edit history"
+    "noHistory": "No edit history",
+    "loadFailed": "Failed to load edit history."
   },
   "export": {
     "title": "Export Album",

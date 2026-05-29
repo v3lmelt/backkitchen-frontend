@@ -1,0 +1,60 @@
+{
+  "version": "0.1.21",
+  "date": "2026-05-20",
+  "headline": {
+    "zh-CN": "补上更多失败提示与确认提示",
+    "en": "Adds clearer feedback for failed and pending actions"
+  },
+  "summary": {
+    "zh-CN": "通知、投稿、模板、评论、工作流与设置等页面现在会把失败、等待和高风险操作明确提示给用户，减少静默失败。",
+    "en": "Notifications, submissions, templates, comments, workflow actions, and settings now surface failures, waiting states, and high-risk actions more clearly."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "用户提示",
+        "en": "User Feedback"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "失败操作不再静默",
+            "en": "Failed actions are no longer silent"
+          },
+          "description": {
+            "zh-CN": "通知加载、标记已读、注册邮件重发、投稿专辑加载、工作流模板加载或保存、评论编辑历史、评论提交和状态更新失败时，会显示行内错误或 toast。",
+            "en": "Notification loading and read actions, verification email resend, album loading for submissions, workflow template loading or saving, comment history, comment submission, and issue status updates now show inline errors or toast feedback."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "多人审核等待状态会给出反馈",
+            "en": "Multi-review waiting states now acknowledge the action"
+          },
+          "description": {
+            "zh-CN": "当工作流操作已提交但还需要等待其他必要审核人完成时，页面会显示成功提示，避免误以为按钮没有生效。",
+            "en": "When a workflow action is accepted but the stage still waits for other required reviewers, the page now shows a success message instead of appearing unchanged."
+          }
+        }
+      ]
+    },
+    {
+      "heading": {
+        "zh-CN": "操作确认",
+        "en": "Action Confirmation"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "危险操作增加确认或结果反馈",
+            "en": "Risky actions now ask for confirmation or show results"
+          },
+          "description": {
+            "zh-CN": "重置专辑检查清单模板、撤销社团邀请码、测试 Webhook、创建社团后上传 Logo 失败、重新分配审核人后刷新失败等流程现在都有明确提示。",
+            "en": "Resetting album checklist templates, revoking circle invite codes, testing webhooks, failed logo upload after circle creation, and failed assignment refresh after reviewer reassignment now provide explicit feedback."
+          }
+        }
+      ]
+    }
+  ]
+}

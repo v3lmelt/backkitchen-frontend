@@ -21,6 +21,21 @@ const TRACK_PAGE_SIZE = 100
 const TRACK_DISPLAY_INITIAL = 50
 const TRACK_DISPLAY_STEP = 50
 
+
+type DashboardFilterKey = '' | 'submitted' | 'peer_flow' | 'mastering_flow' | 'completed' | 'rejected'
+
+const DASHBOARD_FILTERS: Record<Exclude<DashboardFilterKey, '' | 'rejected'>, {
+  labelKey: string
+  statuses: readonly TrackStatus[]
+}> = {
+  submitted: { labelKey: 'dashboard.submitted', statuses: ['submitted'] },
+  peer_flow: { labelKey: 'dashboard.peerFlow', statuses: ['peer_review', 'peer_revision'] },
+  mastering_flow: { labelKey: 'dashboard.masteringFlow', statuses: ['mastering', 'mastering_revision', 'final_review'] },
+  completed: { labelKey: 'dashboard.completed', statuses: ['completed'] },
+}
+
+const REJECTED_FILTER_LABEL_KEY = 'dashboard.rejected'
+
 const router = useRouter()
 const route = useRoute()
 const { t, te, locale } = useI18n()
@@ -31,7 +46,7 @@ const rejectedTracks = ref<Track[]>([])
 const albums = ref<Album[]>([])
 const loading = ref(true)
 const loadError = ref(false)
-const filterStatus = ref<TrackStatus | ''>('')
+const filterStatus = ref<DashboardFilterKey>('')
 const searchQuery = ref('')
 const exportingAlbum = ref<number | null>(null)
 const exportProgress = ref<{
@@ -85,8 +100,10 @@ const albumStatsMap = computed<Record<number, AlbumStats>>(() =>
 
 const searchAlbumResults = ref<Album[]>([])
 let searchTimer: ReturnType<typeof setTimeout> | null = null
+let dashboardLoadSerial = 0
 
 async function loadDashboard() {
+  const serial = ++dashboardLoadSerial
   loading.value = true
   loadError.value = false
   try {
@@ -96,24 +113,29 @@ async function loadDashboard() {
       loadAllTracks({ status: 'rejected', search: query }),
       albumApi.list({ search: query }),
     ])
+    if (serial !== dashboardLoadSerial) return
+
     tracks.value = loadedTracks
     rejectedTracks.value = loadedRejectedTracks
     albums.value = loadedAlbums
     searchAlbumResults.value = query ? loadedAlbums : []
-    if (!query) await appStore.loadPendingInvitations()
+    if (!query) {
+      await appStore.loadPendingInvitations()
+      if (serial !== dashboardLoadSerial) return
+    }
   } catch {
-    loadError.value = true
+    if (serial === dashboardLoadSerial) loadError.value = true
   } finally {
-    loading.value = false
+    if (serial === dashboardLoadSerial) loading.value = false
   }
 }
 
 onMounted(loadDashboard)
 
 watch(searchQuery, () => {
+  visibleTrackLimit.value = TRACK_DISPLAY_INITIAL
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
-    visibleTrackLimit.value = TRACK_DISPLAY_INITIAL
     loadDashboard()
   }, 300)
 })
@@ -127,18 +149,19 @@ function loadMoreTracks() {
 }
 
 onBeforeUnmount(() => {
+  dashboardLoadSerial++
   if (searchTimer) clearTimeout(searchTimer)
 })
 
 const filteredTracks = computed(() => {
-  if (filterStatus.value === 'rejected') {
+  const activeFilter = filterStatus.value
+  if (activeFilter === 'rejected') {
     return rejectedTracks.value
   }
-  let result = tracks.value
-  if (filterStatus.value) {
-    result = result.filter(track => track.status === filterStatus.value)
-  }
-  return result
+  if (!activeFilter) return tracks.value
+
+  const statuses = DASHBOARD_FILTERS[activeFilter].statuses
+  return tracks.value.filter(track => statuses.includes(track.status))
 })
 
 const visibleTracks = computed(() => filteredTracks.value.slice(0, visibleTrackLimit.value))
@@ -171,6 +194,26 @@ const trackStats = computed(() => {
   rejected = rejectedTracks.value.length
   return { total: tracks.value.length, submitted, peer_review, mastering, completed, rejected }
 })
+
+const activeFilterLabel = computed(() => {
+  const activeFilter = filterStatus.value
+  if (!activeFilter) return ''
+  if (activeFilter === 'rejected') return t(REJECTED_FILTER_LABEL_KEY)
+  return t(DASHBOARD_FILTERS[activeFilter].labelKey)
+})
+
+const dashboardStatCards = computed(() => [
+  { key: '' as const, count: trackStats.value.total, label: t('dashboard.total'), valueClass: 'text-foreground' },
+  { key: 'submitted' as const, count: trackStats.value.submitted, label: t('dashboard.submitted'), valueClass: 'text-info' },
+  { key: 'peer_flow' as const, count: trackStats.value.peer_review, label: t('dashboard.peerFlow'), valueClass: 'text-warning' },
+  { key: 'mastering_flow' as const, count: trackStats.value.mastering, label: t('dashboard.masteringFlow'), valueClass: 'text-warning' },
+  { key: 'completed' as const, count: trackStats.value.completed, label: t('dashboard.completed'), valueClass: 'text-success' },
+  { key: 'rejected' as const, count: trackStats.value.rejected, label: t('dashboard.rejected'), valueClass: 'text-error' },
+])
+
+function setDashboardFilter(filterKey: DashboardFilterKey) {
+  filterStatus.value = filterKey
+}
 
 // Group tracks by album, preserving order of first appearance
 const albumMap = computed(() => new Map(albums.value.map(a => [a.id, a])))
@@ -407,30 +450,18 @@ function openTrack(track: Track) {
     </div>
 
     <div class="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-4">
-      <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = ''">
-        <div class="text-2xl font-bold text-foreground">{{ trackStats.total }}</div>
-        <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.total') }}</div>
-      </div>
-      <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'submitted'">
-        <div class="text-2xl font-bold text-info">{{ trackStats.submitted }}</div>
-        <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.submitted') }}</div>
-      </div>
-      <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'peer_review'">
-        <div class="text-2xl font-bold text-warning">{{ trackStats.peer_review }}</div>
-        <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.peerFlow') }}</div>
-      </div>
-      <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'mastering'">
-        <div class="text-2xl font-bold text-warning">{{ trackStats.mastering }}</div>
-        <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.masteringFlow') }}</div>
-      </div>
-      <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'completed'">
-        <div class="text-2xl font-bold text-success">{{ trackStats.completed }}</div>
-        <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.completed') }}</div>
-      </div>
-      <div class="card cursor-pointer hover:border-primary/50" @click="filterStatus = 'rejected'">
-        <div class="text-2xl font-bold text-error">{{ trackStats.rejected }}</div>
-        <div class="text-xs text-muted-foreground mt-1">{{ t('dashboard.rejected') }}</div>
-      </div>
+      <button
+        v-for="card in dashboardStatCards"
+        :key="card.key || 'all'"
+        type="button"
+        class="card w-full text-left cursor-pointer transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        :class="filterStatus === card.key ? 'border-primary bg-primary/5 shadow-[inset_0_0_0_1px_rgb(var(--color-primary))]' : ''"
+        :aria-pressed="filterStatus === card.key"
+        @click="setDashboardFilter(card.key)"
+      >
+        <div class="text-2xl font-bold" :class="card.valueClass">{{ card.count }}</div>
+        <div class="text-xs text-muted-foreground mt-1">{{ card.label }}</div>
+      </button>
     </div>
 
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -667,8 +698,8 @@ function openTrack(track: Track) {
         <h2 class="text-base sm:text-lg font-mono font-semibold text-foreground">
           {{ t('dashboard.tracksHeading') }}
           <span v-if="filterStatus" class="text-sm font-normal text-muted-foreground ml-2">
-            ({{ t('dashboard.filtered', { status: filterStatus }) }})
-            <button @click="filterStatus = ''" class="text-primary hover:underline ml-1">{{ t('dashboard.clearFilter') }}</button>
+            ({{ t('dashboard.filtered', { status: activeFilterLabel }) }})
+            <button @click="setDashboardFilter('')" class="text-primary hover:underline ml-1">{{ t('dashboard.clearFilter') }}</button>
           </span>
         </h2>
         <div class="flex items-center gap-2 self-start sm:self-auto">
@@ -738,7 +769,7 @@ function openTrack(track: Track) {
               <tr
                 v-for="track in group.tracks"
                 :key="track.id"
-                @click="router.push({ path: `/tracks/${track.id}`, query: { returnTo: route.path } })"
+                @click="openTrack(track)"
                 class="border-b border-border last:border-0 hover:bg-border/50 cursor-pointer transition-colors"
               >
                 <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ track.track_number || '—' }}</td>
@@ -789,7 +820,7 @@ function openTrack(track: Track) {
             <div
               v-for="track in group.tracks"
               :key="track.id"
-               @click="router.push({ path: `/tracks/${track.id}`, query: { returnTo: route.path } })"
+               @click="openTrack(track)"
               class="bg-card border border-border p-3 cursor-pointer active:bg-border/50 transition-colors"
             >
               <div class="flex items-center justify-between gap-2 mb-1.5">

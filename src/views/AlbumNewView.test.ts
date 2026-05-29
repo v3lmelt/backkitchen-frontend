@@ -17,8 +17,11 @@ const mocks = vi.hoisted(() => ({
   uploadCoverMock: vi.fn(),
   updateTeamMock: vi.fn(),
   updateDeadlinesMock: vi.fn(),
+  listWorkflowTemplatesMock: vi.fn(),
+  createWorkflowTemplateMock: vi.fn(),
   toastErrorMock: vi.fn(),
   toastWarningMock: vi.fn(),
+  toastSuccessMock: vi.fn(),
   currentUser: { id: 1, role: 'producer', display_name: 'Producer' },
 }))
 
@@ -41,8 +44,8 @@ vi.mock('@/api', () => ({
   circleApi: {
     list: mocks.circleListMock,
     get: mocks.circleGetMock,
-    listWorkflowTemplates: vi.fn(),
-    createWorkflowTemplate: vi.fn(),
+    listWorkflowTemplates: mocks.listWorkflowTemplatesMock,
+    createWorkflowTemplate: mocks.createWorkflowTemplateMock,
   },
   userApi: {
     list: mocks.userListMock,
@@ -59,6 +62,7 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({
     error: mocks.toastErrorMock,
     warning: mocks.toastWarningMock,
+    success: mocks.toastSuccessMock,
   }),
 }))
 
@@ -136,8 +140,11 @@ describe('AlbumNewView', () => {
     mocks.uploadCoverMock.mockReset()
     mocks.updateTeamMock.mockReset()
     mocks.updateDeadlinesMock.mockReset()
+    mocks.listWorkflowTemplatesMock.mockReset()
+    mocks.createWorkflowTemplateMock.mockReset()
     mocks.toastErrorMock.mockReset()
     mocks.toastWarningMock.mockReset()
+    mocks.toastSuccessMock.mockReset()
 
     mocks.userListMock.mockResolvedValue([
       { id: 1, display_name: 'Producer' },
@@ -146,6 +153,8 @@ describe('AlbumNewView', () => {
       { id: 4, display_name: 'Outsider' },
     ])
     mocks.circleListMock.mockResolvedValue([])
+    mocks.listWorkflowTemplatesMock.mockResolvedValue([])
+    mocks.createWorkflowTemplateMock.mockResolvedValue({})
     mocks.circleGetMock.mockResolvedValue({
       id: 9,
       default_checklist_enabled: true,
@@ -277,6 +286,28 @@ describe('AlbumNewView', () => {
     })
     expect(mocks.updateTeamMock).not.toHaveBeenCalled()
     expect(mocks.updateDeadlinesMock).not.toHaveBeenCalled()
+  })
+
+  it('shows a retryable workflow template load error', async () => {
+    mocks.circleListMock.mockResolvedValue([
+      { id: 9, name: 'Back Kitchen', description: null, logo_url: null, created_by: 1, member_count: 2 },
+    ])
+    mocks.listWorkflowTemplatesMock.mockRejectedValueOnce(new Error('Template service unavailable'))
+
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    await wrapper.findAll('button.custom-select-option').find(button => button.text() === 'Back Kitchen')!.trigger('click')
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text().includes('Workflow'))!.trigger('click')
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text().includes('Load from Template'))!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.listWorkflowTemplatesMock).toHaveBeenCalledWith(9)
+    expect(wrapper.text()).toContain('Template service unavailable')
+    expect(wrapper.text()).toContain('Retry')
+    expect(mocks.toastErrorMock).toHaveBeenCalledWith('Template service unavailable')
   })
 
   it('submits deadline fields with album creation instead of a follow-up request', async () => {

@@ -68,6 +68,18 @@ describe('UploadTrackView', () => {
     expect(mocks.albumListMock).toHaveBeenCalledTimes(1)
   })
 
+  it('shows a retryable error and blocks submit when albums fail to load', async () => {
+    mocks.albumListMock.mockRejectedValueOnce(new Error('Albums unavailable'))
+
+    const wrapper = mountWithPlugins(UploadTrackView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Albums unavailable')
+    expect(wrapper.text()).toContain('Retry')
+    const submitBtn = wrapper.findAll('button').find(button => button.text().includes('Submit Track'))!
+    expect(submitBtn.attributes('disabled')).toBeDefined()
+  })
+
   it('disables submit when required fields are empty', async () => {
     const wrapper = mountWithPlugins(UploadTrackView)
     await flushPromises()

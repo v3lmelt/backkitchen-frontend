@@ -138,6 +138,7 @@ const savingTemplate = ref(false)
 const savingChecklistMode = ref(false)
 const templateLoadError = ref('')
 const templateError = ref('')
+const showResetTemplateConfirm = ref(false)
 const savedTemplateSnapshot = ref('')
 const templateDirty = computed(() => JSON.stringify(templateItems.value) !== savedTemplateSnapshot.value)
 const circleDefaultChecklistEnabled = ref<boolean | null>(null)
@@ -1072,8 +1073,14 @@ async function testWebhook() {
   try {
     const result = await albumApi.testWebhook(album.value.id)
     webhookTestResult.value = result.success
+    if (result.success) {
+      toastSuccess(t('settings.webhookTestSucceeded'))
+    } else {
+      toastError(t('settings.webhookTestFailed'))
+    }
   } catch {
     webhookTestResult.value = false
+    toastError(t('settings.webhookTestFailed'))
   } finally {
     testingWebhook.value = false
     // Refresh delivery history after test
@@ -1713,7 +1720,7 @@ async function refreshDeliveries() {
             </button>
             <span v-if="templateDirty" class="text-xs text-warning font-mono">{{ t('settings.unsavedChanges') }}</span>
             <button
-              @click="resetTemplate"
+              @click="showResetTemplateConfirm = true"
               :disabled="savingTemplate || templateIsDefault"
               class="btn-secondary text-xs px-3 py-1.5"
               :class="{ 'opacity-40 cursor-not-allowed': templateIsDefault }"
@@ -2091,5 +2098,15 @@ async function refreshDeliveries() {
     :destructive="true"
     @confirm="removeMemberFromAlbum"
     @cancel="pendingMemberRemoval = null"
+  />
+
+  <ConfirmModal
+    v-if="showResetTemplateConfirm"
+    :title="t('settings.resetTemplateTitle')"
+    :message="t('settings.resetTemplateConfirm')"
+    :confirm-text="t('settings.resetToDefault')"
+    :destructive="true"
+    @confirm="showResetTemplateConfirm = false; resetTemplate()"
+    @cancel="showResetTemplateConfirm = false"
   />
 </template>

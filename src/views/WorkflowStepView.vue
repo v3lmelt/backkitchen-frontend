@@ -1057,6 +1057,7 @@ async function executeTransition(decision: string) {
     const updatedTrack = await trackApi.workflowTransition(trackId.value, decision)
     if (updatedTrack.status === previousStatus) {
       await loadPage()
+      toastSuccess(t('workflowStep.actionSubmitted'))
       return
     }
     pushToTrackDetail()
@@ -1182,6 +1183,7 @@ async function approveFinal() {
       return
     }
     await loadPage()
+    toastSuccess(t('workflowStep.actionSubmitted'))
   } catch (err: any) {
     error.value = err.message || t('workflowStep.transitionFailed')
   } finally {

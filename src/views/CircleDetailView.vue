@@ -188,7 +188,7 @@
             <span class="text-xs text-muted-foreground flex-1">
               {{ t(`circleDetail.roles.${code.role}`) }} · {{ t('circleDetail.expires') }} {{ formatDate(code.expires_at) }}
             </span>
-            <button v-if="code.is_active" class="text-error text-xs hover:underline" @click="revokeCode(code.id)">
+            <button v-if="code.is_active" class="text-error text-xs hover:underline" @click="pendingInviteCodeRevoke = code">
               {{ t('circleDetail.revoke') }}
             </button>
           </div>
@@ -367,6 +367,16 @@
       @confirm="confirmTemplateAction"
       @cancel="pendingTemplateAction = null"
     />
+
+    <ConfirmModal
+      v-if="pendingInviteCodeRevoke"
+      :title="t('circleDetail.revokeInviteTitle')"
+      :message="t('circleDetail.revokeInviteConfirm', { code: pendingInviteCodeRevoke.code })"
+      :confirm-text="t('circleDetail.revoke')"
+      :destructive="true"
+      @confirm="revokeCode(pendingInviteCodeRevoke.id)"
+      @cancel="pendingInviteCodeRevoke = null"
+    />
   </div>
 </template>
 
@@ -450,6 +460,7 @@ const showLeaveConfirm = ref(false)
 const deletingCircle = ref(false)
 const leavingCircle = ref(false)
 const pendingMemberRemoval = ref<{ userId: number; displayName: string } | null>(null)
+const pendingInviteCodeRevoke = ref<InviteCode | null>(null)
 
 async function deleteCircle() {
   if (!circle.value) return
@@ -594,6 +605,8 @@ async function revokeCode(codeId: number) {
     toast.success(t('circleDetail.inviteCodeRevoked'))
   } catch (e: any) {
     toast.error(e.message)
+  } finally {
+    pendingInviteCodeRevoke.value = null
   }
 }
 

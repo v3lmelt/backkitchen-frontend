@@ -24,6 +24,8 @@ vi.mock('lucide-vue-next', () => ({
   CheckCircle2: { template: '<svg />' },
   Check: { template: '<svg />' },
   Circle: { template: '<svg />' },
+  Sun: { template: '<svg />' },
+  Moon: { template: '<svg />' },
 }))
 
 import RegisterView from './RegisterView.vue'
@@ -89,6 +91,29 @@ describe('RegisterView', () => {
       email: 'ada@test.com',
       password: 'password123',
     }))
+  })
+
+  it('shows resend verification failures in the check-email state', async () => {
+    let resolveRegister!: (value: { email: string }) => void
+    mocks.registerMock.mockReturnValue(new Promise(resolve => { resolveRegister = resolve }))
+    mocks.resendVerificationMock.mockRejectedValue(new Error('SMTP unavailable'))
+
+    const wrapper = mountWithPlugins(RegisterView)
+    await fillForm(wrapper)
+    await wrapper.find('form').trigger('submit')
+    const registerPromise = mocks.registerMock.mock.results[0]?.value
+    resolveRegister({ email: 'ada@test.com' })
+    await registerPromise
+    await flushPromises()
+    await flushPromises()
+    await new Promise(resolve => setTimeout(resolve, 250))
+
+    expect(wrapper.text()).toContain('Check your inbox')
+    await wrapper.findAll('button').find(button => button.text().includes('Resend'))!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.resendVerificationMock).toHaveBeenCalledWith('ada@test.com')
+    expect(wrapper.text()).toContain('SMTP unavailable')
   })
 
   it('shows duplicate account error', async () => {

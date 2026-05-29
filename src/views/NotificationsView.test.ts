@@ -8,11 +8,17 @@ const mocks = vi.hoisted(() => ({
   loadNotificationsMock: vi.fn(),
   loadMoreNotificationsMock: vi.fn(),
   markNotificationReadMock: vi.fn(),
+  trackGetMock: vi.fn(),
   markAllReadMock: vi.fn(),
+  trackStore: {
+    currentTrack: null as any,
+    setCurrentTrack: vi.fn(),
+  },
   store: {
     notifications: [] as any[],
     notificationsHasMore: false,
     notificationsLoadingMore: false,
+    notificationsError: '',
     notificationChannelConnected: true,
     unreadCount: 0,
     loadNotifications: vi.fn(),
@@ -23,12 +29,23 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ path: '/notifications' }),
+  useRoute: () => ({ path: '/notifications', fullPath: '/notifications' }),
   useRouter: () => ({ push: mocks.pushMock }),
+}))
+
+
+vi.mock('@/api', () => ({
+  trackApi: {
+    get: mocks.trackGetMock,
+  },
 }))
 
 vi.mock('@/stores/app', () => ({
   useAppStore: () => mocks.store,
+}))
+
+vi.mock('@/stores/tracks', () => ({
+  useTrackStore: () => mocks.trackStore,
 }))
 
 vi.mock('@/components/common/EmptyState.vue', () => ({
@@ -41,6 +58,23 @@ vi.mock('@/components/common/SkeletonLoader.vue', () => ({
 
 import NotificationsView from './NotificationsView.vue'
 
+function trackFixture(id: number, status = 'peer_review') {
+  return {
+    id,
+    status,
+    workflow_step: { id: status, label: status },
+  }
+}
+
+function openButtonFor(wrapper: ReturnType<typeof mountWithPlugins>, title: string) {
+  const card = wrapper.findAll('.card').find(node => {
+    const heading = node.find('h2')
+    return heading.exists() && heading.text() === title
+  })
+  return card!.findAll('button').find(button => button.text().includes('Open'))!
+}
+
+
 describe('NotificationsView', () => {
   beforeEach(() => {
     mocks.pushMock.mockReset()
@@ -49,6 +83,9 @@ describe('NotificationsView', () => {
     mocks.store.markNotificationRead = mocks.markNotificationReadMock
     mocks.store.markAllRead = mocks.markAllReadMock
     mocks.loadNotificationsMock.mockReset()
+    mocks.trackGetMock.mockReset()
+    mocks.trackStore.setCurrentTrack.mockReset()
+    mocks.trackStore.currentTrack = null
     mocks.loadMoreNotificationsMock.mockReset()
     mocks.markNotificationReadMock.mockReset()
     mocks.markAllReadMock.mockReset()
@@ -61,6 +98,7 @@ describe('NotificationsView', () => {
         is_read: false,
         created_at: '2024-01-01T00:00:00Z',
         related_track_id: 10,
+        related_issue_id: 20,
       },
       {
         id: 2,
@@ -75,7 +113,9 @@ describe('NotificationsView', () => {
     mocks.store.unreadCount = 1
     mocks.store.notificationsHasMore = true
     mocks.store.notificationsLoadingMore = false
+    mocks.store.notificationsError = ''
     mocks.loadNotificationsMock.mockResolvedValue(undefined)
+    mocks.trackGetMock.mockResolvedValue({ track: trackFixture(10) })
     mocks.loadMoreNotificationsMock.mockResolvedValue(undefined)
     mocks.markNotificationReadMock.mockResolvedValue(undefined)
     mocks.markAllReadMock.mockResolvedValue(undefined)
@@ -95,15 +135,74 @@ describe('NotificationsView', () => {
     expect(cards.some(text => text.includes('New commentA new comment was added'))).toBe(false)
   })
 
-  it('opens notification targets and supports loading more', async () => {
+  it('opens track notifications in the workflow workspace and supports loading more', async () => {
     const wrapper = mountWithPlugins(NotificationsView)
     await flushPromises()
 
-    await wrapper.findAll('button').find(button => button.text() === 'Open')!.trigger('click')
+    await openButtonFor(wrapper, 'Issue created').trigger('click')
+    await flushPromises()
+
     expect(mocks.markNotificationReadMock).toHaveBeenCalledWith(1)
-    expect(mocks.pushMock).toHaveBeenCalledWith({ path: '/tracks/10', query: { returnTo: '/notifications' } })
+    expect(mocks.trackGetMock).toHaveBeenCalledWith(10)
+    expect(mocks.trackStore.setCurrentTrack).toHaveBeenCalledWith(trackFixture(10))
+    expect(mocks.pushMock).toHaveBeenCalledWith({
+      path: '/tracks/10/step/peer_review',
+      query: { returnTo: '/notifications', issue: '20' },
+    })
 
     await wrapper.findAll('button').find(button => button.text() === 'Load more')!.trigger('click')
     expect(mocks.loadMoreNotificationsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses the cached current track when opening a track notification', async () => {
+    mocks.trackStore.currentTrack = trackFixture(10, 'final_review')
+    const wrapper = mountWithPlugins(NotificationsView)
+    await flushPromises()
+
+    await openButtonFor(wrapper, 'Issue created').trigger('click')
+    await flushPromises()
+
+    expect(mocks.trackGetMock).not.toHaveBeenCalled()
+    expect(mocks.pushMock).toHaveBeenCalledWith({
+      path: '/tracks/10/step/final_review',
+      query: { returnTo: '/notifications', issue: '20' },
+    })
+  })
+
+  it('falls back to a track detail route when workflow lookup fails', async () => {
+    mocks.trackGetMock.mockRejectedValueOnce(new Error('not found'))
+    const wrapper = mountWithPlugins(NotificationsView)
+    await flushPromises()
+
+    await openButtonFor(wrapper, 'Issue created').trigger('click')
+    await flushPromises()
+
+    expect(mocks.pushMock).toHaveBeenCalledWith({
+      path: '/tracks/10',
+      query: { returnTo: '/notifications', issue: '20' },
+    })
+  })
+
+  it('opens issue-only notifications on the issue detail page', async () => {
+    const wrapper = mountWithPlugins(NotificationsView)
+    await flushPromises()
+
+    await openButtonFor(wrapper, 'New comment').trigger('click')
+
+    expect(mocks.pushMock).toHaveBeenCalledWith({
+      path: '/issues/20',
+      query: { returnTo: '/notifications' },
+    })
+  })
+
+  it('shows a retryable error when notifications fail to load', async () => {
+    mocks.store.notifications = []
+    mocks.store.notificationsError = 'Notifications unavailable'
+
+    const wrapper = mountWithPlugins(NotificationsView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Notifications unavailable')
+    expect(wrapper.text()).toContain('Retry')
   })
 })

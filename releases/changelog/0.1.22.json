@@ -1,0 +1,88 @@
+{
+  "version": "0.1.22",
+  "date": "2026-05-27",
+  "headline": {
+    "zh-CN": "让仪表盘、通知跳转和曲目问题处理更顺手",
+    "en": "Makes dashboard, notification routing, and track issue handling smoother"
+  },
+  "summary": {
+    "zh-CN": "这次 QoL 更新统一了仪表盘状态卡口径、曲目点击落点和通知中心打开路径，并让曲目详情页可以直接处理问题状态与详情。",
+    "en": "This QoL update aligns dashboard status-card counts with their filters, unifies track click destinations and notification-center routing, and lets track details handle issue status and detail work in place."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "仪表盘体验",
+        "en": "Dashboard Experience"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "状态卡筛选现在和数字一致",
+            "en": "Status-card filters now match their counts"
+          },
+          "description": {
+            "zh-CN": "同行评审卡会同时显示同行评审和同行修订曲目，母带制作卡会同时显示母带、母带修订和终审曲目；当前筛选也会显示可读标签。",
+            "en": "The Peer Flow card now includes both peer review and peer revision tracks, while Mastering Flow includes mastering, mastering revision, and final review tracks. Active filters now show readable labels."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "曲目列表点击会直达该处理的工作区",
+            "en": "Track-list clicks now open the right workspace"
+          },
+          "description": {
+            "zh-CN": "如果曲目当前有可执行动作，从仪表盘表格或移动卡片打开时会直接进入对应工作流工作区，而不是先落到普通详情页。",
+            "en": "When a track has available actions, opening it from the dashboard table or mobile cards now goes straight to the matching workflow workspace instead of the generic detail page."
+          }
+        }
+      ]
+    },
+    {
+      "heading": {
+        "zh-CN": "曲目处理",
+        "en": "Track Handling"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "曲目详情页可以直接处理问题",
+            "en": "Track details now handle issues in place"
+          },
+          "description": {
+            "zh-CN": "问题列表新增快速状态操作；点击问题卡片或波形标记默认在本页抽屉查看详情、回复和改状态，同时保留可切换回旧版独立问题页的本机偏好。",
+            "en": "The issue list now offers quick status actions. Clicking issue cards or waveform markers opens the in-page drawer by default for details, replies, and status changes, while a local preference keeps the legacy standalone issue page available."
+          }
+        }
+      ]
+    },
+    {
+      "heading": {
+        "zh-CN": "搜索与通知",
+        "en": "Search and Notifications"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "快速搜索不再被旧结果覆盖",
+            "en": "Rapid searches no longer get overwritten by stale results"
+          },
+          "description": {
+            "zh-CN": "仪表盘和专辑列表现在会忽略过期响应；专辑搜索也加入短暂防抖，减少连续输入时的请求和闪烁。",
+            "en": "Dashboard and album lists now ignore stale responses, and album search uses a short debounce to reduce request noise and visual flicker while typing."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "通知中心与顶部铃铛跳转一致",
+            "en": "Notification Center routing now matches the header bell"
+          },
+          "description": {
+            "zh-CN": "带曲目上下文的通知会优先打开对应工作流位置，并携带相关问题定位；只有纯问题通知才会进入独立问题页。",
+            "en": "Notifications with track context now open the corresponding workflow location and carry the related issue target. Issue-only notifications still open the standalone issue page."
+          }
+        }
+      ]
+    }
+  ]
+}

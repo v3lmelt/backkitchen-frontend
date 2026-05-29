@@ -102,12 +102,14 @@ import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { circleApi } from '@/api'
+import { useToast } from '@/composables/useToast'
 import { ChevronLeft, Smile, Upload } from 'lucide-vue-next'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 
 const { t } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
+const { warning: toastWarning } = useToast()
 
 const loading = ref(false)
 const logoInputRef = ref<HTMLInputElement | null>(null)
@@ -151,6 +153,7 @@ async function submit() {
   if (nameError.value) return
   submitting.value = true
   error.value = ''
+  let createdCircleId: number | null = null
   try {
     const circle = await circleApi.create({
       name: form.name.trim(),
@@ -158,11 +161,17 @@ async function submit() {
       website: form.website.trim() || null,
       default_checklist_enabled: form.default_checklist_enabled,
     })
+    createdCircleId = circle.id
     if (logoFile.value) {
       await circleApi.uploadLogo(circle.id, logoFile.value)
     }
     router.push(`/circles/${circle.id}`)
   } catch (e: any) {
+    if (createdCircleId !== null) {
+      toastWarning(t('circleNew.logoUploadPartialFailure', { message: e?.message || t('common.requestFailed') }))
+      router.push(`/circles/${createdCircleId}`)
+      return
+    }
     error.value = e.message
   } finally {
     submitting.value = false
