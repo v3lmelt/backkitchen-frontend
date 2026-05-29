@@ -104,7 +104,7 @@ function main() {
     throw new Error('Generated changelog file is missing. Run `npm run changelog:build`.')
   }
 
-  const currentOutput = readFileSync(outputFile, 'utf8')
+  const currentOutput = readFileSync(outputFile, 'utf8').replace(/\r\n?/g, '\n')
   if (currentOutput !== nextOutput) {
     throw new Error('Generated changelog is stale. Run `npm run changelog:build`.')
   }
