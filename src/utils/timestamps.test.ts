@@ -302,8 +302,14 @@ describe('getActiveMentionContext', () => {
     expect(getActiveMentionContext('hello @issue:12 world', 20)).toBeNull()
   })
 
-  it('returns null for a bare @ without an "i" character', () => {
-    expect(getActiveMentionContext('hello @', 7)).toBeNull()
+  it('treats a bare @ as an empty user-name mention query', () => {
+    expect(getActiveMentionContext('hello @', 7)).toEqual({
+      kind: 'user',
+      start: 6,
+      end: 7,
+      query: '',
+      queryType: 'name',
+    })
   })
 
   it('returns null when @ is preceded by a word char (e.g. inside an email)', () => {
@@ -320,8 +326,14 @@ describe('getActiveMentionContext', () => {
     })
   })
 
-  it('returns null once a non-mention letter breaks the prefix', () => {
-    expect(getActiveMentionContext('@issuex', 7)).toBeNull()
+  it('falls back to a user-name query once a non-issue letter breaks the issue prefix', () => {
+    expect(getActiveMentionContext('@issuex', 7)).toEqual({
+      kind: 'user',
+      start: 0,
+      end: 7,
+      query: 'issuex',
+      queryType: 'name',
+    })
   })
 
   it('returns null once a non-digit appears after the colon', () => {
