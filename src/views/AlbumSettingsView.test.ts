@@ -425,6 +425,14 @@ describe('AlbumSettingsView', () => {
     await findButtonByText(wrapper, 'Reset to Default')!.trigger('click')
     await flushPromises()
 
+    expect(document.body.textContent).toContain('Reset checklist template?')
+    expect(mocks.checklistResetTemplateMock).not.toHaveBeenCalled()
+
+    const resetButtons = Array.from(document.body.querySelectorAll('button'))
+      .filter(button => button.textContent?.trim() === 'Reset to Default')
+    resetButtons[resetButtons.length - 1].click()
+    await flushPromises()
+
     expect(mocks.checklistResetTemplateMock).toHaveBeenCalledWith(5)
     const resetInput = wrapper.findAll('input').find(input => (input.element as HTMLInputElement).value === 'Default Gate')
     expect(resetInput).toBeTruthy()
@@ -537,6 +545,32 @@ describe('AlbumSettingsView', () => {
         email_events: ['new_issue', 'new_comment', 'revision_requested'],
       }),
     )
+  })
+
+  it('shows a toast when webhook testing fails', async () => {
+    mocks.albumGetWebhookMock.mockResolvedValueOnce({
+      url: 'https://webhook.example',
+      enabled: true,
+      events: [],
+      type: 'generic',
+      secret: '',
+      filter_user_ids: [],
+      email_enabled: false,
+      email_events: [],
+    })
+    mocks.albumTestWebhookMock.mockResolvedValueOnce({ success: false })
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'Webhook')!.trigger('click')
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'Test')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.albumTestWebhookMock).toHaveBeenCalledWith(5)
+    expect(mocks.toastErrorMock).toHaveBeenCalledWith('Webhook test failed')
   })
 
   it('saves existing composer email event selections', async () => {

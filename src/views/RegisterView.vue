@@ -27,6 +27,7 @@ const loading = ref(false)
 const registeredEmail = ref('')
 const resendLoading = ref(false)
 const resendDone = ref(false)
+const resendError = ref('')
 
 // Touched state for inline validation
 const usernameTouched = ref(false)
@@ -86,9 +87,12 @@ async function handleSubmit() {
 async function handleResend() {
   resendLoading.value = true
   resendDone.value = false
+  resendError.value = ''
   try {
     await authApi.resendVerification(registeredEmail.value)
     resendDone.value = true
+  } catch (e: any) {
+    resendError.value = e?.message || t('auth.checkEmail.resendFailed')
   } finally {
     resendLoading.value = false
   }
@@ -132,6 +136,12 @@ async function handleResend() {
             <div v-if="resendDone" class="mb-4 px-4 py-2.5 bg-success-bg border border-border text-success text-sm font-sans rounded-none flex items-center justify-center gap-2">
               <CheckCircle2 class="w-4 h-4" :stroke-width="2" />
               {{ t('auth.checkEmail.resent') }}
+            </div>
+          </Transition>
+          <Transition name="slide-fade">
+            <div v-if="resendError" class="mb-4 px-4 py-2.5 bg-error-bg border border-error/20 text-error text-sm font-sans rounded-none flex items-start gap-2 text-left">
+              <AlertCircle class="w-4 h-4 mt-0.5 shrink-0" :stroke-width="2" />
+              <span>{{ resendError }}</span>
             </div>
           </Transition>
           <button

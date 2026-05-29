@@ -132,7 +132,18 @@ vi.mock('@/components/IssueDetailPanel.vue', () => ({
 vi.mock('@/components/workflow/WorkflowActionBar.vue', () => ({
   default: {
     props: ['actions'],
-    template: '<div class="workflow-action-bar">{{ actions.map(action => action.label).join("|") }}</div>',
+    template: `
+      <div class="workflow-action-bar">
+        <button
+          v-for="action in actions"
+          :key="action.label"
+          :disabled="action.disabled"
+          @click="action.handler"
+        >
+          {{ action.label }}
+        </button>
+      </div>
+    `,
   },
 }))
 

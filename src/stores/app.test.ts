@@ -102,6 +102,17 @@ describe('app store', () => {
     expect(store.users).toEqual([{ id: 2 }])
   })
 
+  it('records notification load errors for the UI to display', async () => {
+    const store = useAppStore()
+    store.setAuth({ id: 1, username: 'nova', display_name: 'Nova', role: 'member', avatar_color: '#123456', created_at: '2024-01-01' } as any, 'token-1')
+    mocks.notificationListMock.mockRejectedValue(new Error('Notification API failed'))
+
+    await store.loadNotifications()
+
+    expect(store.notificationsError).toBe('Notification API failed')
+    expect(store.notificationsHasMore).toBe(false)
+  })
+
   it('logout clears auth and routes to login', () => {
     const store = useAppStore()
     store.setAuth({ id: 1, username: 'nova', display_name: 'Nova', role: 'member', avatar_color: '#123456', created_at: '2024-01-01' } as any, 'token-1')

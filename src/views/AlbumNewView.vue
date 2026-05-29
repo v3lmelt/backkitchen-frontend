@@ -28,7 +28,7 @@ import {
 const { t } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
-const { error: toastError, warning: toastWarning } = useToast()
+const { error: toastError, warning: toastWarning, success: toastSuccess } = useToast()
 
 const loading = ref(true)
 const creating = ref(false)
@@ -74,6 +74,9 @@ const quickFollowupEnabled = ref(false)
 const templates = ref<WorkflowTemplate[]>([])
 const showTemplateList = ref(false)
 const showSaveTemplate = ref(false)
+const loadingTemplates = ref(false)
+const templateLoadError = ref('')
+const templateSaveError = ref('')
 const saveTemplateName = ref('')
 const saveTemplateDesc = ref('')
 const savingTemplate = ref(false)
@@ -245,7 +248,17 @@ watch(selectedCircleId, async (circleId, previousCircleId) => {
 
 async function loadTemplates() {
   if (!selectedCircleId.value) return
-  templates.value = await circleApi.listWorkflowTemplates(selectedCircleId.value)
+  loadingTemplates.value = true
+  templateLoadError.value = ''
+  try {
+    templates.value = await circleApi.listWorkflowTemplates(selectedCircleId.value)
+  } catch (error: any) {
+    templates.value = []
+    templateLoadError.value = error?.message || t('common.loadFailed')
+    toastError(templateLoadError.value)
+  } finally {
+    loadingTemplates.value = false
+  }
 }
 
 async function loadFromTemplate(template: WorkflowTemplate) {
@@ -255,13 +268,14 @@ async function loadFromTemplate(template: WorkflowTemplate) {
 }
 
 async function openTemplateList() {
-  await loadTemplates()
   showTemplateList.value = true
+  await loadTemplates()
 }
 
 async function saveAsTemplate() {
   if (!selectedCircleId.value || !workflowConfig.value || !saveTemplateName.value.trim()) return
   savingTemplate.value = true
+  templateSaveError.value = ''
   try {
     await circleApi.createWorkflowTemplate(selectedCircleId.value, {
       name: saveTemplateName.value.trim(),
@@ -271,6 +285,10 @@ async function saveAsTemplate() {
     showSaveTemplate.value = false
     saveTemplateName.value = ''
     saveTemplateDesc.value = ''
+    toastSuccess(t('workflowTemplate.saved'))
+  } catch (error: any) {
+    templateSaveError.value = error?.message || t('workflowTemplate.saveFailed')
+    toastError(templateSaveError.value)
   } finally {
     savingTemplate.value = false
   }
@@ -685,7 +703,14 @@ async function create() {
           <div v-if="showTemplateList" class="fixed inset-0 bg-overlay/50 flex items-center justify-center z-50" @click.self="showTemplateList = false">
             <div class="bg-card border border-border rounded-none p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto space-y-4">
               <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowTemplate.selectTemplate') }}</h3>
-              <div v-if="templates.length === 0" class="text-sm text-muted-foreground py-4 text-center">
+              <div v-if="loadingTemplates" class="text-sm text-muted-foreground py-4 text-center">
+                {{ t('common.loading') }}
+              </div>
+              <div v-else-if="templateLoadError" class="border border-error/30 bg-error-bg/30 p-3 space-y-3">
+                <p class="text-sm text-error">{{ templateLoadError }}</p>
+                <button class="btn-secondary text-xs" @click="loadTemplates">{{ t('common.retry') }}</button>
+              </div>
+              <div v-else-if="templates.length === 0" class="text-sm text-muted-foreground py-4 text-center">
                 {{ t('workflowTemplate.noTemplates') }}
               </div>
               <div v-for="tpl in templates" :key="tpl.id" class="border border-border p-3 space-y-1 hover:bg-background/50 cursor-pointer transition-colors" @click="loadFromTemplate(tpl)">
@@ -714,6 +739,7 @@ async function create() {
                 <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowTemplate.templateDescription') }}</label>
                 <textarea v-model="saveTemplateDesc" class="textarea-field w-full h-16" :placeholder="t('workflowTemplate.templateDescriptionPlaceholder')" />
               </div>
+              <p v-if="templateSaveError" class="text-xs text-error">{{ templateSaveError }}</p>
               <div class="flex gap-2">
                 <button @click="saveAsTemplate" :disabled="savingTemplate || !saveTemplateName.trim()" class="btn-primary text-xs flex-1">
                   {{ savingTemplate ? t('workflowTemplate.saving') : t('workflowTemplate.save') }}

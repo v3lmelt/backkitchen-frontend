@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { albumApi, API_ORIGIN } from '@/api'
@@ -20,27 +20,49 @@ const activeTab = ref<'active' | 'archived'>('active')
 const searchQuery = ref('')
 const sortMode = ref<'attention' | 'recent' | 'title'>('attention')
 
+let albumLoadSerial = 0
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
 async function load() {
+  const serial = ++albumLoadSerial
   loading.value = true
   loadError.value = ''
   try {
+    const search = searchQuery.value.trim() || undefined
     const loadedAlbums = await albumApi.list(
       activeTab.value === 'archived'
-        ? { archived_only: true, search: searchQuery.value.trim() || undefined }
-        : { search: searchQuery.value.trim() || undefined },
+        ? { archived_only: true, search }
+        : { search },
     )
+    if (serial !== albumLoadSerial) return
     albums.value = loadedAlbums
   } catch (error: any) {
+    if (serial !== albumLoadSerial) return
     albums.value = []
     loadError.value = error?.message || t('common.loadFailed')
   } finally {
-    loading.value = false
+    if (serial === albumLoadSerial) loading.value = false
   }
 }
 
 onMounted(load)
-watch(activeTab, load)
-watch(searchQuery, load)
+
+watch(activeTab, () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  load()
+})
+
+watch(searchQuery, () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    load()
+  }, 300)
+})
+
+onBeforeUnmount(() => {
+  albumLoadSerial++
+  if (searchTimer) clearTimeout(searchTimer)
+})
 
 const myAlbums = computed(() => {
   const userId = appStore.currentUser?.id

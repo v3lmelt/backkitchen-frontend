@@ -348,7 +348,7 @@ const deliveryActions = computed<WorkflowAction[]>(() => {
   }))
   if (canConfirmDelivery.value) {
     actions.unshift({
-      label: t('trackDetail.actions.confirm_delivery', 'Confirm Delivery'),
+      label: t('masteringPage.confirmDelivery'),
       type: 'advance' as const,
       disabled: acting.value,
       handler: handleConfirmDelivery,
@@ -640,6 +640,7 @@ async function executeTransition(decision: string) {
     const updatedTrack = await trackApi.workflowTransition(trackId.value, decision)
     if (updatedTrack.status === previousStatus) {
       await loadData()
+      toastSuccess(t('workflowStep.actionSubmitted'))
       return
     }
     pushToTrackDetail()

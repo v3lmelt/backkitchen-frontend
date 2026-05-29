@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, albumApi, r2Api, uploadToR2, API_ORIGIN } from '@/api'
+import { trackApi, albumApi, r2Api, uploadToR2, API_ORIGIN, issueApi } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Track, Issue, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember, StageAssignment } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
@@ -10,6 +10,7 @@ import { hashId } from '@/utils/hash'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
+import IssueDetailPanel from '@/components/IssueDetailPanel.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
@@ -35,6 +36,50 @@ const { t, te, locale } = useI18n()
 const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
 const { success: toastSuccess, error: toastError } = useToast()
 
+
+type IssueDetailMode = 'inline' | 'legacy'
+
+const ISSUE_DETAIL_MODE_STORAGE_PREFIX = 'backkitchen_issue_detail_mode'
+
+function normalizeIssueDetailMode(value: string | null): IssueDetailMode {
+  return value === 'legacy' ? 'legacy' : 'inline'
+}
+
+function readIssueDetailMode(key: string): IssueDetailMode {
+  if (typeof localStorage === 'undefined') return 'inline'
+  try {
+    return normalizeIssueDetailMode(localStorage.getItem(key))
+  } catch {
+    return 'inline'
+  }
+}
+
+function writeIssueDetailMode(key: string, mode: IssueDetailMode) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(key, mode)
+  } catch {
+    // Local storage can be unavailable in private browsing or hardened clients.
+  }
+}
+
+const issueDetailModeStorageKey = computed(() => {
+  const userId = appStore.currentUser?.id
+  return userId ? `${ISSUE_DETAIL_MODE_STORAGE_PREFIX}_${userId}` : ISSUE_DETAIL_MODE_STORAGE_PREFIX
+})
+const issueDetailMode = ref<IssueDetailMode>(readIssueDetailMode(issueDetailModeStorageKey.value))
+
+function setIssueDetailMode(mode: IssueDetailMode) {
+  if (issueDetailMode.value === mode) return
+  issueDetailMode.value = mode
+  writeIssueDetailMode(issueDetailModeStorageKey.value, mode)
+  syncIssueDrawerFromRoute()
+}
+
+watch(issueDetailModeStorageKey, (key) => {
+  issueDetailMode.value = readIssueDetailMode(key)
+  syncIssueDrawerFromRoute()
+})
 /** Map event_type to a dot color class for visual categorisation */
 function timelineDotColor(event: WorkflowEvent): string {
   const type = event.event_type
@@ -173,6 +218,7 @@ const trackId = computed(() => Number(route.params.id))
 
 const track = ref<Track | null>(null)
 const issues = ref<Issue[]>([])
+const selectedIssue = ref<Issue | null>(null)
 const mentionCandidates = ref(emptyMentionCandidates())
 const events = ref<WorkflowEvent[]>([])
 const sourceVersions = ref<TrackSourceVersion[]>([])
@@ -274,6 +320,7 @@ async function loadTrack() {
     if (serial !== trackLoadSerial || requestedTrackId !== trackId.value) return
     applyTrack(detail.track)
     issues.value = detail.issues
+    syncIssueDrawerFromRoute()
     mentionCandidates.value = detail.mention_candidates ?? emptyMentionCandidates()
     events.value = detail.events
     sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
@@ -301,11 +348,19 @@ watch(trackId, () => {
   track.value = null
   issues.value = []
   mentionCandidates.value = emptyMentionCandidates()
+  selectedIssue.value = null
+  if (parseIssueQuery(route.query.issue) != null) {
+    replaceIssueDrawerQuery(null)
+  }
   events.value = []
   sourceVersions.value = []
   reviewAssignments.value = []
   workflowConfig.value = null
   void loadTrack()
+})
+
+watch(() => route.query.issue, () => {
+  syncIssueDrawerFromRoute()
 })
 
 const audioUrl = computed(() => {
@@ -369,24 +424,108 @@ const customWorkflowActionLabel = computed(() => {
   return t('trackDetail.openWorkflowStep', { step: translateStepLabel(step, t) })
 })
 
-function onIssueSelect(issue: Issue) {
-  router.push({
-    path: `/issues/${issue.id}`,
-    query: route.query.returnTo ? { returnTo: String(route.query.returnTo) } : undefined,
+function parseIssueQuery(value: unknown): number | null {
+  const raw = Array.isArray(value) ? value[0] : value
+  const issueId = Number(raw)
+  return Number.isInteger(issueId) && issueId > 0 ? issueId : null
+}
+
+function buildRouteQueryWithoutIssue(): Record<string, string> {
+  const query: Record<string, string> = {}
+  for (const [key, value] of Object.entries(route.query)) {
+    if (key === 'issue') continue
+    if (typeof value === 'string' && value.length > 0) query[key] = value
+    else if (Array.isArray(value) && typeof value[0] === 'string' && value[0].length > 0) query[key] = value[0]
+  }
+  return query
+}
+
+function replaceIssueDrawerQuery(issueId: number | null) {
+  const query = buildRouteQueryWithoutIssue()
+  if (issueId != null) query.issue = String(issueId)
+  void router.replace({
+    path: route.path,
+    query: Object.keys(query).length > 0 ? query : undefined,
   })
+}
+
+function legacyIssueQuery(): Record<string, string> | undefined {
+  const returnTo = Array.isArray(route.query.returnTo) ? route.query.returnTo[0] : route.query.returnTo
+  return typeof returnTo === 'string' && returnTo.length > 0 ? { returnTo } : undefined
+}
+
+function openLegacyIssuePage(issueId: number) {
+  void router.push({
+    path: `/issues/${issueId}`,
+    query: legacyIssueQuery(),
+  })
+}
+
+function syncIssueDrawerFromRoute() {
+  const issueId = parseIssueQuery(route.query.issue)
+  if (issueId == null) {
+    selectedIssue.value = null
+    return
+  }
+
+  if (issueDetailMode.value === 'legacy') {
+    selectedIssue.value = null
+    openLegacyIssuePage(issueId)
+    return
+  }
+
+  selectedIssue.value = issues.value.find(issue => issue.id === issueId) ?? null
+}
+
+function openIssueDrawer(issue: Issue) {
+  selectedIssue.value = issue
+  if (parseIssueQuery(route.query.issue) !== issue.id) {
+    replaceIssueDrawerQuery(issue.id)
+  }
+}
+
+function closeIssueDrawer() {
+  selectedIssue.value = null
+  if (parseIssueQuery(route.query.issue) != null) {
+    replaceIssueDrawerQuery(null)
+  }
+}
+
+function onIssueSelect(issue: Issue) {
+  if (issueDetailMode.value === 'legacy') {
+    openLegacyIssuePage(issue.id)
+    return
+  }
+  openIssueDrawer(issue)
 }
 
 function openIssueReference(issueId: number) {
   const localIssue = issues.value.find(issue => issue.id === issueId)
-  if (localIssue) {
-    onIssueSelect(localIssue)
+  if (localIssue && issueDetailMode.value === 'inline') {
+    openIssueDrawer(localIssue)
     return
   }
 
-  router.push({
-    path: `/issues/${issueId}`,
-    query: route.query.returnTo ? { returnTo: String(route.query.returnTo) } : undefined,
-  })
+  openLegacyIssuePage(issueId)
+}
+
+function onIssueUpdated(updatedIssue: Issue) {
+  issues.value = issues.value.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue)
+  if (selectedIssue.value?.id === updatedIssue.id) {
+    selectedIssue.value = updatedIssue
+  }
+}
+
+async function onQuickIssueStatusChange({ issue, status }: { issue: Issue; status: Issue['status'] }) {
+  const previousIssue = { ...issue }
+  onIssueUpdated({ ...issue, status })
+  try {
+    const updatedIssue = await issueApi.update(issue.id, { status })
+    onIssueUpdated(updatedIssue)
+  } catch (err: any) {
+    onIssueUpdated(previousIssue)
+    toastError(err?.message || t('workflowStep.transitionFailed'))
+  }
 }
 
 function openPrimaryAction(_action: string) {
@@ -597,8 +736,16 @@ async function openReassignModal() {
         .slice(0, reassignReviewerLimit.value)
     : []
   if (!reassignMembers.value.length && track.value) {
-    const album = await albumApi.get(track.value.album_id)
-    reassignMembers.value = album.members.filter(m => m.user_id !== track.value!.submitter_id)
+    reassigning.value = true
+    try {
+      const album = await albumApi.get(track.value.album_id)
+      reassignMembers.value = album.members.filter(m => m.user_id !== track.value!.submitter_id)
+    } catch (e: any) {
+      toastError(e?.message || t('common.requestFailed'))
+      return
+    } finally {
+      reassigning.value = false
+    }
   }
   showReassignModal.value = true
 }
@@ -641,7 +788,11 @@ async function doReassign(userIds?: number[]) {
       .then((assignments) => {
         if (assignmentsToken === reviewAssignmentsLoadCount) reviewAssignments.value = assignments
       })
-      .catch(() => undefined)
+      .catch(() => {
+        toastError(t('trackDetail.reassignRefreshFailed'))
+      })
+  } catch (e: any) {
+    toastError(e?.message || t('common.requestFailed'))
   } finally {
     reassigning.value = false
   }
@@ -1137,10 +1288,46 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
           </div>
 
           <div id="issues">
-            <h3 class="text-sm font-sans font-semibold text-foreground mb-3">
-              {{ t('trackDetail.issuesHeading', { count: currentIssueList.length }) }}
-            </h3>
-            <IssueMarkerList :issues="currentIssueList" :current-source-version-number="track.version" @select="onIssueSelect" />
+            <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div class="space-y-1">
+                <h3 class="text-sm font-sans font-semibold text-foreground">
+                  {{ t('trackDetail.issuesHeading', { count: currentIssueList.length }) }}
+                </h3>
+                <p class="text-xs text-muted-foreground">
+                  {{ t('trackDetail.issueDetailModeHint') }}
+                </p>
+              </div>
+              <div class="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-background p-1">
+                <button
+                  type="button"
+                  class="rounded-full px-3 py-1.5 text-xs font-mono transition-colors"
+                  :class="issueDetailMode === 'inline' ? 'bg-button-primary text-button-primary-foreground' : 'bg-border text-muted-foreground hover:text-foreground'"
+                  :aria-pressed="issueDetailMode === 'inline'"
+                  @click="setIssueDetailMode('inline')"
+                >
+                  {{ t('trackDetail.issueDetailModeInline') }}
+                </button>
+                <button
+                  type="button"
+                  class="rounded-full px-3 py-1.5 text-xs font-mono transition-colors"
+                  :class="issueDetailMode === 'legacy' ? 'bg-button-primary text-button-primary-foreground' : 'bg-border text-muted-foreground hover:text-foreground'"
+                  :aria-pressed="issueDetailMode === 'legacy'"
+                  @click="setIssueDetailMode('legacy')"
+                >
+                  {{ t('trackDetail.issueDetailModeLegacy') }}
+                </button>
+              </div>
+            </div>
+            <IssueMarkerList
+              :issues="currentIssueList"
+              :current-source-version-number="track.version"
+              :track="track"
+              :assignments="reviewAssignments"
+              :show-activity="true"
+              :enable-quick-actions="true"
+              @select="onIssueSelect"
+              @status-change="onQuickIssueStatusChange"
+            />
           </div>
 
           <!-- General Discussions -->
@@ -1694,6 +1881,17 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
       </div>
     </div>
 
+
+    <IssueDetailPanel
+      :issue="selectedIssue"
+      :track="track"
+      :assignments="reviewAssignments"
+      :issues="issues"
+      :mention-candidates="mentionCandidates"
+      @close="closeIssueDrawer"
+      @updated="onIssueUpdated"
+      @open-issue="openIssueReference"
+    />
     <MasteringChatSidebar
       v-if="canSeeMastering && track"
       ref="chatSidebarRef"

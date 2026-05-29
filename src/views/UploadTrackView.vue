@@ -21,6 +21,8 @@ const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
 const appStore = useAppStore()
 const { error: toastError, success: toastSuccess } = useToast()
 const albums = ref<Album[]>([])
+const loadingAlbums = ref(false)
+const albumLoadError = ref('')
 const uploading = ref(false)
 const uploadProgress = ref(0)
 const dragOver = ref(false)
@@ -189,9 +191,22 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
   event.returnValue = ''
 }
 
+async function loadAlbums() {
+  loadingAlbums.value = true
+  albumLoadError.value = ''
+  try {
+    albums.value = await albumApi.list()
+    restoreDraft()
+  } catch (e: any) {
+    albums.value = []
+    albumLoadError.value = e?.message || t('common.loadFailed')
+  } finally {
+    loadingAlbums.value = false
+  }
+}
+
 onMounted(async () => {
-  albums.value = await albumApi.list()
-  restoreDraft()
+  await loadAlbums()
   window.addEventListener('beforeunload', handleBeforeUnload)
 })
 
@@ -273,6 +288,10 @@ async function upload() {
   validateProxySubmitterName()
   if (titleError.value || artistError.value || proxyNameError.value) return
   if (!selectedFile.value) return
+  if (albumLoadError.value) {
+    toastError(albumLoadError.value)
+    return
+  }
   if (!form.value.album_id) {
     toastError(t('upload.albumRequired'))
     return
@@ -361,6 +380,13 @@ function formatFileSize(bytes: number): string {
   <div class="max-w-2xl mx-auto space-y-6">
     <h1 class="text-2xl font-mono font-bold text-foreground">{{ t('upload.heading') }}</h1>
 
+    <div v-if="albumLoadError" class="card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p class="text-sm text-error">{{ albumLoadError }}</p>
+      <button class="btn-secondary text-sm" :disabled="loadingAlbums" @click="loadAlbums">
+        {{ loadingAlbums ? t('common.loading') : t('common.retry') }}
+      </button>
+    </div>
+
     <div v-if="draftRestored || needsFileReselect" class="card border-primary/30 bg-primary/5 space-y-2">
       <p class="text-sm text-foreground">{{ t('upload.draftRestored') }}</p>
       <p v-if="needsFileReselect && savedFileName" class="text-xs text-muted-foreground">
@@ -411,7 +437,7 @@ function formatFileSize(bytes: number): string {
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.album') }}</label>
-          <CustomSelect v-model="form.album_id" :options="albumOptions" :placeholder="t('upload.noAlbum')" />
+          <CustomSelect v-model="form.album_id" :options="albumOptions" :placeholder="loadingAlbums ? t('common.loading') : t('upload.noAlbum')" />
         </div>
         <div>
           <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.bpm') }}</label>
@@ -465,10 +491,10 @@ function formatFileSize(bytes: number): string {
         </button>
         <button
           @click="upload"
-          :disabled="uploading || !selectedFile || !form.title || !form.artist || proxySubmitterNameMissing"
+          :disabled="uploading || loadingAlbums || !!albumLoadError || !selectedFile || !form.title || !form.artist || proxySubmitterNameMissing"
           :class="[
             'flex-1 text-sm font-medium px-4 py-3 rounded-full transition-colors',
-            uploading || !selectedFile || !form.title || !form.artist || proxySubmitterNameMissing
+            uploading || loadingAlbums || !!albumLoadError || !selectedFile || !form.title || !form.artist || proxySubmitterNameMissing
               ? 'bg-border text-muted-foreground cursor-not-allowed'
               : 'btn-primary'
           ]"

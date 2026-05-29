@@ -23,6 +23,7 @@ export const useAppStore = defineStore('app', () => {
   const notifications = ref<Notification[]>([])
   const notificationsHasMore = ref(false)
   const notificationsLoadingMore = ref(false)
+  const notificationsError = ref('')
   const notificationChannelConnected = ref(false)
   let _notificationTimer: ReturnType<typeof setInterval> | null = null
   let _notificationSocket: WebSocket | null = null
@@ -131,6 +132,7 @@ export const useAppStore = defineStore('app', () => {
     notifications.value = []
     notificationsHasMore.value = false
     notificationsLoadingMore.value = false
+    notificationsError.value = ''
     pendingInvitations.value = []
     localStorage.removeItem(USER_KEY)
     localStorage.removeItem(TOKEN_KEY)
@@ -168,6 +170,7 @@ export const useAppStore = defineStore('app', () => {
     if (!isAuthenticated.value) {
       notifications.value = []
       notificationsHasMore.value = false
+      notificationsError.value = ''
       return
     }
 
@@ -176,6 +179,7 @@ export const useAppStore = defineStore('app', () => {
     const append = params?.append ?? false
 
     try {
+      notificationsError.value = ''
       const fresh = await notificationApi.list({ limit, offset })
       if (!Array.isArray(fresh)) throw new Error('Invalid notifications response')
       if (append) {
@@ -185,8 +189,9 @@ export const useAppStore = defineStore('app', () => {
         notifications.value = fresh
       }
       notificationsHasMore.value = fresh.length === limit
-    } catch {
+    } catch (error: any) {
       if (!append) notificationsHasMore.value = false
+      notificationsError.value = error?.message || 'Failed to load notifications'
     }
   }
 
@@ -304,6 +309,7 @@ export const useAppStore = defineStore('app', () => {
     notifications,
     notificationsHasMore,
     notificationsLoadingMore,
+    notificationsError,
     notificationChannelConnected,
     unreadCount,
     setAuth,

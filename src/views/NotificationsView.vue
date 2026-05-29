@@ -7,8 +7,12 @@ import { Bell, ChevronRight, RefreshCw } from 'lucide-vue-next'
 import EmptyState from '@/components/common/EmptyState.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import { useAppStore } from '@/stores/app'
+import { trackApi } from '@/api'
+import { useToast } from '@/composables/useToast'
+import { useTrackStore } from '@/stores/tracks'
 import type { Notification } from '@/types'
 import { formatRelativeTime } from '@/utils/time'
+import { buildTrackWorkspaceRoute, buildTrackWorkspaceRouteById } from '@/utils/workflow'
 
 const PAGE_SIZE = 50
 
@@ -16,6 +20,8 @@ const router = useRouter()
 const route = useRoute()
 const appStore = useAppStore()
 const { t, te, locale } = useI18n()
+const toast = useToast()
+const trackStore = useTrackStore()
 
 const loading = ref(true)
 const statusFilter = ref<'all' | 'unread' | 'read'>('all')
@@ -60,10 +66,13 @@ function notificationTypeClass(type: string): string {
   return 'bg-info-bg text-info'
 }
 
-async function reloadNotifications() {
+async function reloadNotifications(showToast = false) {
   loading.value = true
   try {
     await appStore.loadNotifications({ limit: Math.max(PAGE_SIZE, appStore.notifications.length || PAGE_SIZE) })
+    if (showToast && appStore.notificationsError) {
+      toast.error(appStore.notificationsError || t('common.loadFailed'))
+    }
   } finally {
     loading.value = false
   }
@@ -71,19 +80,65 @@ async function reloadNotifications() {
 
 async function handleOpen(notification: Notification) {
   if (!notification.is_read) {
-    await appStore.markNotificationRead(notification.id)
+    try {
+      await appStore.markNotificationRead(notification.id)
+    } catch (e: any) {
+      toast.error(e?.message || t('notifications.markReadFailed'))
+    }
+  }
+
+  const returnTo = route.fullPath || route.path
+  if (notification.related_track_id) {
+    const issueId = notification.related_issue_id ?? null
+    const currentTrack = trackStore.currentTrack?.id === notification.related_track_id
+      ? trackStore.currentTrack
+      : null
+
+    if (currentTrack) {
+      router.push(buildTrackWorkspaceRoute(currentTrack, { returnTo, issueId }))
+      return
+    }
+
+    try {
+      const detail = await trackApi.get(notification.related_track_id)
+      trackStore.setCurrentTrack(detail.track)
+      router.push(buildTrackWorkspaceRoute(detail.track, { returnTo, issueId }))
+      return
+    } catch {
+      router.push(buildTrackWorkspaceRouteById(notification.related_track_id, null, { returnTo, issueId }))
+      return
+    }
   }
 
   if (notification.related_issue_id) {
-    router.push({ path: `/issues/${notification.related_issue_id}`, query: { returnTo: route.path } })
-    return
-  }
-  if (notification.related_track_id) {
-    router.push({ path: `/tracks/${notification.related_track_id}`, query: { returnTo: route.path } })
+    router.push({ path: `/issues/${notification.related_issue_id}`, query: { returnTo } })
     return
   }
   if (notification.related_album_id) {
     router.push(`/albums/${notification.related_album_id}/settings`)
+  }
+}
+
+async function handleMarkRead(notificationId: number) {
+  try {
+    await appStore.markNotificationRead(notificationId)
+  } catch (e: any) {
+    toast.error(e?.message || t('notifications.markReadFailed'))
+  }
+}
+
+async function handleMarkAllRead() {
+  try {
+    await appStore.markAllRead()
+  } catch (e: any) {
+    toast.error(e?.message || t('notifications.markAllReadFailed'))
+  }
+}
+
+async function handleLoadMore() {
+  await appStore.loadMoreNotifications()
+  if (appStore.notificationsError) {
+    toast.error(appStore.notificationsError || t('common.loadFailed'))
   }
 }
 
@@ -112,7 +167,7 @@ onMounted(async () => {
         <button
           class="btn-secondary text-sm"
           :disabled="loading"
-          @click="reloadNotifications"
+          @click="reloadNotifications(true)"
         >
           <span class="inline-flex items-center gap-2">
             <RefreshCw class="w-4 h-4" :stroke-width="2" />
@@ -122,7 +177,7 @@ onMounted(async () => {
         <button
           v-if="appStore.unreadCount > 0"
           class="btn-primary text-sm"
-          @click="appStore.markAllRead()"
+          @click="handleMarkAllRead"
         >
           {{ t('notifications.markAllRead') }}
         </button>
@@ -190,6 +245,10 @@ onMounted(async () => {
     <div v-if="loading">
       <SkeletonLoader :rows="6" :card="true" />
     </div>
+    <div v-else-if="appStore.notificationsError" class="card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p class="text-sm text-error">{{ appStore.notificationsError || t('common.loadFailed') }}</p>
+      <button class="btn-secondary text-sm" @click="reloadNotifications(true)">{{ t('common.retry') }}</button>
+    </div>
     <div v-else-if="filteredNotifications.length === 0">
       <EmptyState :icon="Bell" :title="t(appStore.notifications.length === 0 ? 'notifications.empty' : 'notifications.emptyFiltered')" />
     </div>
@@ -226,7 +285,7 @@ onMounted(async () => {
           <button
             v-if="!notification.is_read"
             class="btn-secondary text-xs"
-            @click="appStore.markNotificationRead(notification.id)"
+            @click="handleMarkRead(notification.id)"
           >
             {{ t('notifications.markRead') }}
           </button>
@@ -246,7 +305,7 @@ onMounted(async () => {
         <button
           class="btn-secondary text-sm"
           :disabled="appStore.notificationsLoadingMore"
-          @click="appStore.loadMoreNotifications()"
+          @click="handleLoadMore"
         >
           {{ appStore.notificationsLoadingMore ? t('common.loading') : t('notifications.loadMore') }}
         </button>

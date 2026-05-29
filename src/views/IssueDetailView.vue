@@ -24,7 +24,7 @@ const router = useRouter()
 const { t, locale } = useI18n()
 const appStore = useAppStore()
 const trackStore = useTrackStore()
-const { success: toastSuccess } = useToast()
+const { success: toastSuccess, error: toastError } = useToast()
 const issueId = computed(() => Number(route.params.id))
 
 const issue = ref<Issue | null>(null)
@@ -370,6 +370,8 @@ async function handleCommentSubmit(payload: { content: string; images: File[]; a
     if (!issue.value.comments) issue.value.comments = []
     issue.value.comments.push(comment)
     commentInputRef.value?.reset()
+  } catch (e: any) {
+    toastError(e?.message || t('common.requestFailed'))
   } finally {
     submittingComment.value = false
   }
@@ -394,7 +396,9 @@ async function saveEditComment(comment: Comment) {
     if (idx !== -1) issue.value.comments[idx] = updated
     editingCommentId.value = null
     toastSuccess(t('issueDetail.commentUpdated'))
-  } catch { /* handled by request wrapper */ }
+  } catch (e: any) {
+    toastError(e?.message || t('common.requestFailed'))
+  }
 }
 
 function promptDeleteComment(comment: Comment) {
@@ -408,7 +412,9 @@ async function deleteComment() {
     await commentApi.delete(comment.id)
     issue.value.comments = issue.value.comments.filter(c => c.id !== comment.id)
     toastSuccess(t('issueDetail.commentDeleted'))
-  } catch { /* handled by request wrapper */ }
+  } catch (e: any) {
+    toastError(e?.message || t('common.requestFailed'))
+  }
   finally {
     pendingDeleteComment.value = null
   }
@@ -422,7 +428,10 @@ async function showCommentHistory(commentId: number) {
   showHistoryForCommentId.value = commentId
   try {
     historyItems.value = await commentApi.history(commentId)
-  } catch { historyItems.value = [] }
+  } catch (e: any) {
+    historyItems.value = []
+    toastError(e?.message || t('editHistory.loadFailed'))
+  }
 }
 
 function closeHistory() {
@@ -501,6 +510,9 @@ async function handleStatusNoteSubmit(payload: { content: string; images: File[]
     if (idx !== -1 && issue.value) allTrackIssues.value[idx] = issue.value
     pendingStatus.value = null
     statusNoteInputRef.value?.reset()
+    toastSuccess(t('issueDetail.statusUpdated'))
+  } catch (e: any) {
+    toastError(e?.message || t('issueDetail.statusUpdateFailed'))
   } finally {
     submittingStatusNote.value = false
   }

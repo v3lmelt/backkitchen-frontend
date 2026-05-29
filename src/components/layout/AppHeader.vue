@@ -10,12 +10,14 @@ import type { Notification } from '@/types'
 import { formatRelativeTime } from '@/utils/time'
 import { buildTrackWorkspaceRoute, buildTrackWorkspaceRouteById, translateStepLabel } from '@/utils/workflow'
 import { Menu, Bell } from 'lucide-vue-next'
+import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const trackStore = useTrackStore()
 const { t, locale } = useI18n()
+const toast = useToast()
 
 const LOCALE_KEY = 'backkitchen_locale'
 const showNotifications = ref(false)
@@ -39,7 +41,11 @@ onMounted(() => document.addEventListener('click', handleOutsideClick))
 onBeforeUnmount(() => document.removeEventListener('click', handleOutsideClick))
 
 async function handleNotificationClick(notif: Notification) {
-  await appStore.markNotificationRead(notif.id)
+  try {
+    await appStore.markNotificationRead(notif.id)
+  } catch (e: any) {
+    toast.error(e?.message || t('notifications.markReadFailed'))
+  }
   showNotifications.value = false
   if (notif.related_track_id) {
     const issueId = notif.related_issue_id ?? null
@@ -66,6 +72,21 @@ async function handleNotificationClick(notif: Notification) {
     router.push(`/issues/${notif.related_issue_id}`)
   } else if (notif.related_album_id) {
     router.push(`/albums/${notif.related_album_id}/settings`)
+  }
+}
+
+async function handleMarkAllRead() {
+  try {
+    await appStore.markAllRead()
+  } catch (e: any) {
+    toast.error(e?.message || t('notifications.markAllReadFailed'))
+  }
+}
+
+async function handleLoadMoreNotifications() {
+  await appStore.loadMoreNotifications()
+  if (appStore.notificationsError) {
+    toast.error(appStore.notificationsError || t('common.loadFailed'))
   }
 }
 
@@ -266,7 +287,7 @@ function handleMenuToggle() {
           <div class="flex items-center justify-between px-4 py-3 border-b border-border">
             <span class="font-mono font-semibold text-sm text-foreground">{{ t('notifications.title') }}</span>
             <button v-if="appStore.unreadCount > 0"
-              @click="appStore.markAllRead()"
+              @click="handleMarkAllRead"
               class="text-xs text-primary hover:text-primary-hover transition-colors">
               {{ t('notifications.markAllRead') }}
             </button>
@@ -292,7 +313,7 @@ function handleMenuToggle() {
             </button>
             <div v-if="appStore.notificationsHasMore" class="border-t border-border p-2">
               <button
-                @click="appStore.loadMoreNotifications()"
+                @click="handleLoadMoreNotifications"
                 :disabled="appStore.notificationsLoadingMore"
                 class="w-full btn-secondary text-xs"
               >
