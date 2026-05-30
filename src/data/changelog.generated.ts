@@ -5,6 +5,58 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.23",
+    "date": "2026-05-30",
+    "headline": {
+      "zh-CN": "让曲目问题详情可以边看边听",
+      "en": "Keeps track issue details playable in context"
+    },
+    "summary": {
+      "zh-CN": "这次更新强化了曲目详情页的问题抽屉：定位到带时间点的问题时，可以直接在详情里预览并控制对应波形；窄屏设备会改用当前页底部展开的面板。",
+      "en": "This update improves the track-detail issue drawer: timed issues can preview and control the matching waveform directly inside the detail panel, and narrow screens now use an in-page bottom sheet."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "曲目问题处理",
+          "en": "Track Issue Handling"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "问题详情里新增紧凑播放预览",
+              "en": "Issue details now include a compact playback preview"
+            },
+            "description": {
+              "zh-CN": "点击带时间点的问题或波形标记后，右侧详情抽屉会显示小型波形预览，可播放整个问题、单个标记或拖动定位，终审问题会自动使用当前母带波形。",
+              "en": "After opening a timed issue or waveform marker, the right-side detail drawer shows a mini waveform preview for playing the whole issue, playing one marker, or seeking; final-review issues automatically use the current master waveform."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "移动端问题详情留在当前页展开",
+              "en": "Mobile issue details now expand in place"
+            },
+            "description": {
+              "zh-CN": "窄屏设备点击问题默认从页面底部打开详情面板，不再跳转离开曲目详情；仍可通过兼容开关切回旧版独立问题页。",
+              "en": "On narrow screens, clicking an issue now opens a bottom sheet on the track detail page instead of navigating away; the compatibility toggle can still switch back to the legacy standalone issue page."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "源音频补交后保留历史未解决问题",
+              "en": "Historical unresolved issues stay visible after source-audio follow-ups"
+            },
+            "description": {
+              "zh-CN": "修复源音频补交并进入新流程轮次后，旧版本或旧母带上的未解决问题在列表中消失的问题；这些问题会继续显示在问题列表中，但不会作为标记叠加到当前音频波形上。",
+              "en": "Fixed an issue where unresolved issues from an earlier source version or master delivery disappeared from the issue list after a source-audio follow-up moved the track into a new workflow cycle. These issues remain visible in the list, while their markers stay off the current audio waveform."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.22",
     "date": "2026-05-27",
     "headline": {

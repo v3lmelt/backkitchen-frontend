@@ -426,7 +426,7 @@ async function confirmDeleteComment() {
     <Transition name="idp-slide">
       <div
         v-if="issue"
-        class="fixed right-0 top-0 h-full w-full sm:w-[460px] z-50 bg-card border-l border-border flex flex-col"
+        class="fixed inset-x-0 bottom-0 z-50 flex h-[88dvh] max-h-[88dvh] w-full flex-col border-t border-border bg-card sm:inset-y-0 sm:left-auto sm:right-0 sm:h-full sm:max-h-none sm:w-[460px] sm:border-l sm:border-t-0"
       >
         <!-- Header -->
         <div class="px-5 py-4 border-b border-border flex items-start gap-3 flex-shrink-0">
@@ -755,5 +755,9 @@ async function confirmDeleteComment() {
 .idp-fade-enter-from, .idp-fade-leave-to { opacity: 0; }
 
 .idp-slide-enter-active, .idp-slide-leave-active { transition: transform 0.25s ease; }
-.idp-slide-enter-from, .idp-slide-leave-to { transform: translateX(100%); }
+.idp-slide-enter-from, .idp-slide-leave-to { transform: translateY(100%); }
+
+@media (min-width: 640px) {
+  .idp-slide-enter-from, .idp-slide-leave-to { transform: translateX(100%); }
+}
 </style>
