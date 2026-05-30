@@ -28,6 +28,10 @@ const mocks = vi.hoisted(() => ({
   discussionCreateMock: vi.fn(),
   issueUpdateMock: vi.fn(),
   currentUser: { id: 2 },
+  waveformPlayFromMock: vi.fn(),
+  waveformSeekToMock: vi.fn(),
+  waveformTogglePlayMock: vi.fn(),
+  waveformExportPeaksMock: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -63,9 +67,47 @@ vi.mock('@/stores/app', () => ({
   useAppStore: () => ({ currentUser: mocks.currentUser }),
 }))
 
+type WaveformMockThis = {
+  playbackScope?: string
+  $emit: (event: string, ...args: unknown[]) => void
+}
+
 vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
   default: {
     props: ['audioUrl', 'compareVersionId', 'compareAudioUrl', 'issues', 'playbackScope'],
+    emits: ['ready', 'timeupdate', 'playbackStateChange', 'regionClick'],
+    mounted(this: WaveformMockThis) {
+      const scope = this.playbackScope ?? 'source'
+      this.$emit('ready', scope === 'master' ? 240 : 180)
+      this.$emit('timeupdate', scope === 'master' ? 24 : 18)
+      this.$emit('playbackStateChange', false)
+    },
+    methods: {
+      async playFrom(this: WaveformMockThis, time: number) {
+        const scope = this.playbackScope ?? 'source'
+        mocks.waveformPlayFromMock(scope, time)
+        this.$emit('timeupdate', time)
+        this.$emit('playbackStateChange', true)
+      },
+      seekTo(this: WaveformMockThis, time: number) {
+        const scope = this.playbackScope ?? 'source'
+        mocks.waveformSeekToMock(scope, time)
+        this.$emit('timeupdate', time)
+      },
+      async togglePlay(this: WaveformMockThis) {
+        const scope = this.playbackScope ?? 'source'
+        mocks.waveformTogglePlayMock(scope)
+        this.$emit('playbackStateChange', false)
+      },
+      getCurrentTime(this: WaveformMockThis) {
+        return this.playbackScope === 'master' ? 24 : 18
+      },
+      exportPeaks(this: WaveformMockThis, maxLength: number) {
+        const scope = this.playbackScope ?? 'source'
+        mocks.waveformExportPeaksMock(scope, maxLength)
+        return scope === 'master' ? [0.1, 0.3, 0.9] : [0.25, 0.5, 0.75]
+      },
+    },
     template: '<div class="waveform">scope:{{ playbackScope ?? "source" }} audio:{{ audioUrl ?? "none" }} compare:{{ compareVersionId ?? "none" }} compareAudio:{{ compareAudioUrl ?? "none" }} issues:{{ issues?.length ?? 0 }}</div>',
   },
 }))
@@ -155,12 +197,20 @@ vi.mock('@/components/common/CommentInput.vue', () => ({
 
 vi.mock('@/components/IssueDetailPanel.vue', () => ({
   default: {
-    props: ['issue', 'track', 'assignments', 'issues', 'mentionCandidates'],
-    emits: ['close', 'updated', 'open-issue'],
+    props: ['issue', 'track', 'assignments', 'issues', 'mentionCandidates', 'preview'],
+    emits: ['close', 'updated', 'open-issue', 'preview-play-at', 'preview-action'],
     template: `
       <div class="issue-detail-panel" :data-open="issue ? 'true' : 'false'">
         <span class="drawer-title">{{ issue?.title ?? '' }}</span>
         <span class="drawer-status">{{ issue?.status ?? '' }}</span>
+        <span
+          class="drawer-preview"
+          :data-duration="preview?.duration ?? ''"
+          :data-current-time="preview?.currentTime ?? ''"
+          :data-playing="preview?.isPreviewPlaying ? 'true' : 'false'"
+          :data-active-marker="preview?.activeMarkerIndex ?? ''"
+          :data-peaks="preview?.peaks?.join(',') ?? ''"
+        />
         <button type="button" class="drawer-close" @click="$emit('close')">close</button>
         <button
           v-if="issue"
@@ -171,6 +221,10 @@ vi.mock('@/components/IssueDetailPanel.vue', () => ({
           update
         </button>
         <button type="button" class="drawer-open-linked" @click="$emit('open-issue', 2)">linked</button>
+        <button v-if="issue" type="button" class="preview-play-at" @click="$emit('preview-play-at', issue.markers?.[0]?.time_start ?? 0)">play at</button>
+        <button v-if="issue" type="button" class="preview-play-sequence" @click="$emit('preview-action', issue, { type: 'playSequence' })">play issue</button>
+        <button v-if="issue" type="button" class="preview-play-marker" @click="$emit('preview-action', issue, { type: 'playMarker', index: 0 })">play marker</button>
+        <button v-if="issue" type="button" class="preview-seek" @click="$emit('preview-action', issue, { type: 'seek', time: 15 })">seek</button>
       </div>
     `,
   },
@@ -206,6 +260,48 @@ const makeIssue = (overrides: Record<string, unknown> = {}) => ({
   comment_count: 0,
   ...overrides,
 })
+
+function makeTrackDetailResponse(overrides: {
+  track?: Record<string, unknown>
+  issues?: Array<Record<string, unknown>>
+  source_versions?: Array<Record<string, unknown>>
+  master_deliveries?: Array<Record<string, unknown>>
+} = {}) {
+  const track = {
+    id: 7,
+    album_id: 5,
+    status: 'peer_review',
+    title: 'Track 7',
+    artist: 'Nova',
+    version: 3,
+    workflow_cycle: 2,
+    file_path: '/audio.wav',
+    submitter_id: 2,
+    producer_id: 8,
+    allowed_actions: ['peer_review'],
+    open_issue_count: 1,
+    submitter: { display_name: 'Nova' },
+    peer_reviewer: { id: 4, display_name: 'Echo' },
+    current_source_version: { id: 301 },
+    current_master_delivery: null,
+    ...overrides.track,
+  }
+  return {
+    track,
+    issues: overrides.issues ?? [
+      makeIssue({ id: 1, local_number: 1, title: 'Current version', status: 'open', source_version_number: 3 }),
+      makeIssue({ id: 2, local_number: 2, title: 'Older version', status: 'open', source_version_number: 2 }),
+      makeIssue({ id: 3, local_number: 3, workflow_cycle: 1, title: 'Older cycle', status: 'open', source_version_number: 3 }),
+    ],
+    discussions: [],
+    events: [],
+    source_versions: overrides.source_versions ?? [
+      { id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' },
+      { id: 201, version_number: 2, created_at: '2024-01-02T00:00:00Z' },
+    ],
+    ...(overrides.master_deliveries ? { master_deliveries: overrides.master_deliveries } : {}),
+  }
+}
 import TrackDetailView from './TrackDetailView.vue'
 
 function mountTrackDetailView() {
@@ -243,6 +339,10 @@ describe('TrackDetailView', () => {
     mocks.trackReopenMock.mockReset()
     mocks.trackRequestReopenMock.mockReset()
     mocks.issueUpdateMock.mockReset()
+    mocks.waveformPlayFromMock.mockReset()
+    mocks.waveformSeekToMock.mockReset()
+    mocks.waveformTogglePlayMock.mockReset()
+    mocks.waveformExportPeaksMock.mockReset()
     mocks.currentUser = { id: 2 }
     localStorage.clear()
     vi.stubGlobal('open', mocks.openMock)
@@ -302,11 +402,13 @@ describe('TrackDetailView', () => {
     })
   })
 
-  it('filters issue lists and posts a discussion', async () => {
+  it('shows all visible issues while filtering source waveform markers to the current audio', async () => {
     const wrapper = mountTrackDetailView()
     await flushPromises()
 
-    expect(wrapper.find('.issue-count').text()).toBe('2')
+    expect(wrapper.find('.issue-count').text()).toBe('3')
+    expect(wrapper.text()).toContain('Older cycle')
+    expect(wrapper.find('.waveform').text()).toContain('issues:1')
     expect(wrapper.find('.waveform').text()).toContain('compare:none')
 
     await wrapper.find('textarea').setValue(' Fresh discussion ')
@@ -332,6 +434,139 @@ describe('TrackDetailView', () => {
     expect(wrapper.find('.drawer-title').text()).toBe('Current version')
     expect(mocks.replaceMock).toHaveBeenCalledWith({ path: '/tracks/7', query: { issue: '1' } })
     expect(mocks.pushMock).not.toHaveBeenCalled()
+  })
+
+  it('passes source waveform playback preview to the inline issue panel', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce(makeTrackDetailResponse({
+      issues: [
+        makeIssue({
+          id: 1,
+          local_number: 1,
+          title: 'Timed source issue',
+          source_version_number: 3,
+          markers: [{ time_start: 12, time_end: 14 }],
+        }),
+        makeIssue({ id: 2, local_number: 2, title: 'Older version', source_version_number: 2 }),
+      ],
+    }))
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    await wrapper.findAll('.issue-select')[0].trigger('click')
+    await flushPromises()
+
+    const preview = wrapper.find('.drawer-preview')
+    expect(preview.attributes('data-duration')).toBe('180')
+    expect(preview.attributes('data-current-time')).toBe('18')
+    expect(preview.attributes('data-peaks')).toBe('0.25,0.5,0.75')
+    expect(mocks.waveformExportPeaksMock).toHaveBeenCalledWith('source', 400)
+
+    await wrapper.find('.preview-play-at').trigger('click')
+    await flushPromises()
+    expect(mocks.waveformPlayFromMock).toHaveBeenCalledWith('source', 12)
+
+    mocks.waveformPlayFromMock.mockClear()
+    await wrapper.find('.preview-play-sequence').trigger('click')
+    await flushPromises()
+    expect(mocks.waveformPlayFromMock).toHaveBeenCalledWith('source', 12)
+
+    await wrapper.find('.preview-seek').trigger('click')
+    await flushPromises()
+    expect(mocks.waveformSeekToMock).toHaveBeenCalledWith('source', 15)
+  })
+
+  it('uses the master waveform for final-review issue preview controls', async () => {
+    const currentMasterDelivery = {
+      id: 21,
+      delivery_number: 4,
+      workflow_cycle: 2,
+      file_path: 'master-v4.wav',
+      created_at: '2024-01-04T00:00:00Z',
+      producer_approved_at: null,
+      submitter_approved_at: null,
+    }
+    mocks.trackGetMock.mockResolvedValueOnce(makeTrackDetailResponse({
+      track: {
+        status: 'final_review',
+        allowed_actions: [],
+        current_master_delivery: currentMasterDelivery,
+      },
+      issues: [
+        makeIssue({
+          id: 11,
+          local_number: 1,
+          phase: 'final_review',
+          title: 'Final delivery issue',
+          source_version_number: null,
+          master_delivery_id: 21,
+          markers: [{ time_start: 45, time_end: 48 }],
+        }),
+      ],
+      master_deliveries: [currentMasterDelivery],
+    }))
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    expect(wrapper.findAll('.waveform')).toHaveLength(2)
+    await wrapper.findAll('.issue-select')[0].trigger('click')
+    await flushPromises()
+
+    const preview = wrapper.find('.drawer-preview')
+    expect(preview.attributes('data-duration')).toBe('240')
+    expect(preview.attributes('data-current-time')).toBe('24')
+    expect(preview.attributes('data-peaks')).toBe('0.1,0.3,0.9')
+    expect(mocks.waveformExportPeaksMock).toHaveBeenCalledWith('master', 400)
+
+    await wrapper.find('.preview-play-sequence').trigger('click')
+    await flushPromises()
+    expect(mocks.waveformPlayFromMock).toHaveBeenCalledWith('master', 45)
+
+    await wrapper.find('.preview-seek').trigger('click')
+    await flushPromises()
+    expect(mocks.waveformSeekToMock).toHaveBeenCalledWith('master', 15)
+  })
+
+  it('keeps old master-delivery issues visible when no current master exists', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce(makeTrackDetailResponse({
+      track: {
+        status: 'peer_review',
+        version: 4,
+        workflow_cycle: 3,
+        current_source_version: { id: 401 },
+        current_master_delivery: null,
+        open_issue_count: 1,
+      },
+      issues: [
+        makeIssue({
+          id: 31,
+          local_number: 1,
+          phase: 'final_review',
+          workflow_cycle: 2,
+          title: 'Old master issue',
+          source_version_number: null,
+          master_delivery_id: 20,
+          markers: [{ time_start: 30, time_end: 34 }],
+        }),
+      ],
+      source_versions: [
+        { id: 401, version_number: 4, created_at: '2024-01-04T00:00:00Z' },
+        { id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' },
+      ],
+    }))
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    expect(wrapper.find('.issue-count').text()).toBe('1')
+    expect(wrapper.find('.issue-select').text()).toContain('Old master issue:open')
+
+    const waveforms = wrapper.findAll('.waveform')
+    expect(waveforms).toHaveLength(1)
+    expect(waveforms[0].text()).toContain('scope:source')
+    expect(waveforms[0].text()).toContain('issues:0')
+    expect(wrapper.text()).not.toContain('scope:master')
   })
 
   it('persists legacy detail-page mode and keeps the old issue navigation', async () => {
@@ -701,6 +936,8 @@ describe('TrackDetailView', () => {
     expect(waveforms[1].text()).toContain('audio:/api/tracks/7/master-audio?v=4&c=2')
     expect(waveforms[1].text()).toContain('issues:1')
     expect(waveforms[1].text()).toContain('compare:none')
+    expect(wrapper.find('.issue-count').text()).toBe('3')
+    expect(wrapper.text()).toContain('Older delivery issue')
     expect(wrapper.findAll('button').some(button => button.text() === 'Open Mastering Page')).toBe(true)
   })
 
