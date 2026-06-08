@@ -432,6 +432,9 @@
   "workflowStep": {
     "uploadRevisedSource": "Upload Revised Source",
     "uploadRevisedSourceDesc": "Upload a new version of the source audio file.",
+    "revisionSubmitMethod": "Choose submission method",
+    "revisionSubmitMethodUploadFile": "Upload audio file",
+    "revisionSubmitMethodExternalLink": "Submit cloud link (stems/multitracks)",
     "externalStemLinkTitle": "Submit stems / multitrack cloud link",
     "externalStemLinkDesc": "Use only when mastering engineer requests stems or multitracks. Submitting returns the track to mastering.",
     "externalStemLinkLabel": "Cloud link, access code, and notes",

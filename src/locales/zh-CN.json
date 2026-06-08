@@ -442,6 +442,9 @@
   "workflowStep": {
     "uploadRevisedSource": "上传修订版源文件",
     "uploadRevisedSourceDesc": "上传新版本的源音频文件。",
+    "revisionSubmitMethod": "选择提交方式",
+    "revisionSubmitMethodUploadFile": "上传音频文件",
+    "revisionSubmitMethodExternalLink": "提交网盘链接（分轨/多轨工程）",
     "externalStemLinkTitle": "提交分轨 / 多轨网盘链接",
     "externalStemLinkDesc": "仅在母带师要求补充分轨或多轨工程时使用，提交后流程返回母带阶段。",
     "externalStemLinkLabel": "网盘链接、提取码和说明",

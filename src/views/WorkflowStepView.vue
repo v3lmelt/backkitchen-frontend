@@ -111,6 +111,7 @@ const deliveryMessage = ref('')
 const localDeliveryPreviewUrl = ref('')
 const revisionNotes = ref('')
 const externalStemLinkNotes = ref('')
+const revisionUploadMode = ref<'file' | 'link'>('file') // 'file' for upload, 'link' for external link
 const uploading = ref(false)
 const error = ref('')
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
@@ -3081,44 +3082,67 @@ function handleIssueLeave() {
       <div v-if="isRevisionAssignee" class="card space-y-4">
         <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.uploadRevisedSource') }}</h3>
         <p class="text-sm text-muted-foreground">{{ t('workflowStep.uploadRevisedSourceDesc') }}</p>
-        <input
-          type="file"
-          accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"
-          @change="onFileChange"
-          :disabled="uploading"
-          class="input-field"
-        />
-        <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
-          <div class="space-y-1">
-            <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.revisedPreviewHeading') }}</h4>
-            <p class="text-sm text-muted-foreground">{{ t('workflowStep.revisedPreviewNotice') }}</p>
-          </div>
-          <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" />
-          <div>
-            <label class="block text-sm text-muted-foreground mb-1">{{ t('workflowStep.revisionNotes') }}</label>
-            <textarea v-model="revisionNotes" class="textarea-field w-full" rows="3" :placeholder="t('workflowStep.revisionNotesPlaceholder')"></textarea>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <button
-              @click="handleUpload('revision')"
-              :disabled="uploading"
-              class="btn-primary text-sm h-10 inline-flex items-center justify-center"
-            >
-              <Upload class="w-4 h-4 mr-2" />
-              {{ uploading ? t('workflowStep.uploading') : t('workflowStep.uploadRevision') }}
-            </button>
-            <button
-              @click="uploadFile = null; revisionNotes = ''; resetDeliveryPreview()"
-              :disabled="uploading"
-              class="btn-secondary text-sm"
-            >
-              {{ t('workflowStep.clearRevision') }}
-            </button>
+
+        <!-- Submission method selection (only show for mastering revision) -->
+        <div v-if="isMasteringRevisionStep" class="space-y-3">
+          <label class="block text-sm text-muted-foreground">{{ t('workflowStep.revisionSubmitMethod') }}</label>
+          <div class="space-y-2">
+            <label class="flex items-center gap-3 p-3 border rounded-none cursor-pointer transition-colors"
+                   :class="revisionUploadMode === 'file' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'">
+              <input type="radio" value="file" v-model="revisionUploadMode" class="w-4 h-4 text-primary" />
+              <span class="text-sm text-foreground">{{ t('workflowStep.revisionSubmitMethodUploadFile') }}</span>
+            </label>
+            <label class="flex items-center gap-3 p-3 border rounded-none cursor-pointer transition-colors"
+                   :class="revisionUploadMode === 'link' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'">
+              <input type="radio" value="link" v-model="revisionUploadMode" class="w-4 h-4 text-primary" />
+              <span class="text-sm text-foreground">{{ t('workflowStep.revisionSubmitMethodExternalLink') }}</span>
+            </label>
           </div>
         </div>
-        <div v-if="isMasteringRevisionStep" class="space-y-4 border border-primary/20 bg-primary/5 rounded-none p-4">
+
+        <!-- File upload form (shown when 'file' is selected OR when not in mastering revision) -->
+        <template v-if="!isMasteringRevisionStep || revisionUploadMode === 'file'">
+          <input
+            type="file"
+            accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"
+            @change="onFileChange"
+            :disabled="uploading"
+            class="input-field"
+          />
+          <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
+            <div class="space-y-1">
+              <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.revisedPreviewHeading') }}</h4>
+              <p class="text-sm text-muted-foreground">{{ t('workflowStep.revisedPreviewNotice') }}</p>
+            </div>
+            <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" />
+            <div>
+              <label class="block text-sm text-muted-foreground mb-1">{{ t('workflowStep.revisionNotes') }}</label>
+              <textarea v-model="revisionNotes" class="textarea-field w-full" rows="3" :placeholder="t('workflowStep.revisionNotesPlaceholder')"></textarea>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                @click="handleUpload('revision')"
+                :disabled="uploading"
+                class="btn-primary text-sm h-10 inline-flex items-center justify-center"
+              >
+                <Upload class="w-4 h-4 mr-2" />
+                {{ uploading ? t('workflowStep.uploading') : t('workflowStep.uploadRevision') }}
+              </button>
+              <button
+                @click="uploadFile = null; revisionNotes = ''; resetDeliveryPreview()"
+                :disabled="uploading"
+                class="btn-secondary text-sm"
+              >
+                {{ t('workflowStep.clearRevision') }}
+              </button>
+            </div>
+          </div>
+        </template>
+
+        <!-- External link form (shown when 'link' is selected in mastering revision) -->
+        <div v-if="isMasteringRevisionStep && revisionUploadMode === 'link'" class="space-y-4 border border-primary/20 bg-primary/5 rounded-none p-4">
           <div class="flex items-start gap-3">
-            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
               <Link class="w-4 h-4 text-primary" :stroke-width="2" />
             </div>
             <div class="flex-1 space-y-1">
@@ -3141,7 +3165,7 @@ function handleIssueLeave() {
             <label class="block text-xs text-muted-foreground">{{ t('workflowStep.externalStemLinkLabel') }}</label>
             <textarea
               v-model="externalStemLinkNotes"
-              class="textarea-field min-h-[140px]"
+              class="textarea-field w-full min-h-[140px]"
               :placeholder="t('workflowStep.externalStemLinkPlaceholder')"
               :disabled="uploading"
             ></textarea>
@@ -3170,6 +3194,7 @@ function handleIssueLeave() {
             </button>
           </div>
         </div>
+
         <div v-if="uploading" class="space-y-1">
           <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
             <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
