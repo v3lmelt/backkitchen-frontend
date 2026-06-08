@@ -31,6 +31,7 @@ import BatchIssueActions from '@/components/workflow/BatchIssueActions.vue'
 import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
+import BaseModal from '@/components/common/BaseModal.vue'
 import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
 import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
 import { ChevronLeft, Upload, AlertCircle, CheckCircle2, UserRoundCog, Link, Info } from 'lucide-vue-next'
@@ -112,6 +113,9 @@ const localDeliveryPreviewUrl = ref('')
 const revisionNotes = ref('')
 const externalStemLinkNotes = ref('')
 const revisionUploadMode = ref<'file' | 'link'>('file') // 'file' for upload, 'link' for external link
+const revisionTypeModalOpen = ref(false)
+const pendingRevisionDecision = ref<string | null>(null)
+const selectedRevisionType = ref<'source_audio' | 'stem_files'>('source_audio')
 const uploading = ref(false)
 const error = ref('')
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
@@ -1093,6 +1097,18 @@ function pushToTrackDetail() {
 async function executeTransition(decision: string) {
   if (!track.value) return
   const previousStatus = track.value.status
+
+  // Check if this decision leads to a mastering revision step
+  const isMasteringRevisionRequest = _willTransitionToMasteringRevision(decision)
+
+  if (isMasteringRevisionRequest) {
+    // Show revision type selection modal (required for mastering revisions)
+    pendingRevisionDecision.value = decision
+    selectedRevisionType.value = 'source_audio' // default
+    revisionTypeModalOpen.value = true
+    return
+  }
+
   if (decision === 'reject_final') {
     const confirmed = window.confirm(t('producer.rejectFinalConfirm'))
     if (!confirmed) return
@@ -1108,6 +1124,52 @@ async function executeTransition(decision: string) {
       await persistChecklist(false)
     }
     const updatedTrack = await trackApi.workflowTransition(trackId.value, decision)
+    if (updatedTrack.status === previousStatus) {
+      await loadPage()
+      toastSuccess(t('workflowStep.actionSubmitted'))
+      return
+    }
+    pushToTrackDetail()
+  } catch (err: any) {
+    error.value = err.message || t('workflowStep.transitionFailed')
+  } finally {
+    acting.value = false
+  }
+}
+
+function _willTransitionToMasteringRevision(decision: string): boolean {
+  if (!track.value?.workflow_step || !workflowConfig.value) return false
+
+  const currentStep = track.value.workflow_step
+
+  // Only review steps with mastering ui_variant can request mastering revision
+  if (currentStep.type !== 'review') return false
+  if (currentStep.ui_variant !== 'mastering') return false
+
+  // Check if this decision leads to a revision step
+  const targetStepId = currentStep.transitions?.[decision]
+  if (!targetStepId) return false
+
+  const targetStep = workflowConfig.value.steps.find(s => s.id === targetStepId)
+  return targetStep?.type === 'revision' && targetStep.return_to === currentStep.id
+}
+
+async function confirmRevisionType() {
+  if (!pendingRevisionDecision.value) return
+  const decision = pendingRevisionDecision.value
+  const revisionType = selectedRevisionType.value
+  revisionTypeModalOpen.value = false
+  pendingRevisionDecision.value = null
+
+  if (!track.value) return
+  const previousStatus = track.value.status
+  acting.value = true
+  error.value = ''
+  try {
+    if (inferClassicVariant(track.value.workflow_step ?? null) === 'peer_review' && checklistDirty.value) {
+      await persistChecklist(false)
+    }
+    const updatedTrack = await trackApi.workflowTransition(trackId.value, decision, revisionType)
     if (updatedTrack.status === previousStatus) {
       await loadPage()
       toastSuccess(t('workflowStep.actionSubmitted'))
@@ -1621,6 +1683,81 @@ function handleIssueLeave() {
 </script>
 
 <template>
+  <!-- Revision Type Selection Modal -->
+  <BaseModal
+    v-if="revisionTypeModalOpen"
+    @close="revisionTypeModalOpen = false"
+    max-width="max-w-lg"
+  >
+    <div class="space-y-6">
+      <div>
+        <h3 class="text-lg font-mono font-bold text-foreground">
+          {{ t('workflowStep.selectRevisionType') }}
+        </h3>
+        <p class="text-sm text-muted-foreground mt-2">
+          {{ t('workflowStep.selectRevisionTypeDesc') }}
+        </p>
+      </div>
+
+      <div class="space-y-3">
+        <!-- Source Audio Option -->
+        <label
+          class="flex items-start gap-3 p-4 border rounded-lg cursor-pointer transition-colors"
+          :class="selectedRevisionType === 'source_audio'
+            ? 'border-primary bg-primary/5'
+            : 'border-border hover:border-primary/30'"
+        >
+          <input
+            type="radio"
+            value="source_audio"
+            v-model="selectedRevisionType"
+            class="mt-1"
+          />
+          <div class="flex-1">
+            <div class="text-sm font-mono font-semibold text-foreground">
+              {{ t('workflowStep.revisionTypeSourceAudio') }}
+            </div>
+            <div class="text-xs text-muted-foreground mt-1">
+              {{ t('workflowStep.revisionTypeSourceAudioDesc') }}
+            </div>
+          </div>
+        </label>
+
+        <!-- Stem Files Option -->
+        <label
+          class="flex items-start gap-3 p-4 border rounded-lg cursor-pointer transition-colors"
+          :class="selectedRevisionType === 'stem_files'
+            ? 'border-primary bg-primary/5'
+            : 'border-border hover:border-primary/30'"
+        >
+          <input
+            type="radio"
+            value="stem_files"
+            v-model="selectedRevisionType"
+            class="mt-1"
+          />
+          <div class="flex-1">
+            <div class="text-sm font-mono font-semibold text-foreground">
+              {{ t('workflowStep.revisionTypeStemFiles') }}
+            </div>
+            <div class="text-xs text-muted-foreground mt-1">
+              {{ t('workflowStep.revisionTypeStemFilesDesc') }}
+            </div>
+          </div>
+        </label>
+      </div>
+
+      <div class="flex gap-2">
+        <button @click="confirmRevisionType" class="btn-primary flex-1">
+          {{ t('common.confirm') }}
+        </button>
+        <button @click="revisionTypeModalOpen = false" class="btn-secondary flex-1">
+          {{ t('common.cancel') }}
+        </button>
+      </div>
+    </div>
+  </BaseModal>
+
   <div v-if="loading" class="max-w-4xl mx-auto space-y-6">
     <div class="card animate-pulse h-24"></div>
   </div>

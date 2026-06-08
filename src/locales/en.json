@@ -277,7 +277,7 @@
       "basicsTitle": "Basics",
       "basicsDesc": "Stages in the flow canvas execute top-down. Click any card to edit its name, assignee, and behavior toggles in the Inspector panel on the right. Use the ↑ / ↓ icons at the top-right of each card to reorder, and the 🗑 icon to delete.",
       "stageTypesTitle": "Stage Types",
-        "stageIntake": "Intake Approval — The producer decides whether to accept the submission. Permanent rejection is optional, and the stage can also skip peer review and jump straight to producer review.",
+      "stageIntake": "Intake Approval — The producer decides whether to accept the submission. Permanent rejection is optional, and the stage can also skip peer review and jump straight to producer review.",
       "stagePeerReview": "Peer Review — Peer reviewers listen to the track and flag issues, then decide whether it passes or needs revision. Supports manual assignment or automatic assignment from a reviewer pool.",
       "stageProducerGate": "Producer Gate — The producer decides whether to send the track to mastering or bounce it back for revision. Supports permanent rejection and sending the track back to any earlier stage.",
       "stageMastering": "Mastering — The mastering engineer uploads the mastered output. Optionally requires confirmation after delivery.",
@@ -289,7 +289,7 @@
       "reviewSettingsTitle": "Review Settings (Peer Review)",
       "reviewSettingsDesc": "Peer review supports manual and automatic assignment. In automatic mode you can pick members to form a reviewer pool and specify the minimum number of reviews required before the track can advance.",
       "rejectTargetsTitle": "Reject Targets",
-        "rejectTargetsDesc": "Intake, Producer Gate, and Final Review support \"Allow permanent rejection\" (final reject, unrecoverable). Intake can also enable direct producer review to skip peer review. Producer Gate and Final Review can also add extra reject targets to send the track back to any earlier stage.",
+      "rejectTargetsDesc": "Intake, Producer Gate, and Final Review support \"Allow permanent rejection\" (final reject, unrecoverable). Intake can also enable direct producer review to skip peer review. Producer Gate and Final Review can also add extra reject targets to send the track back to any earlier stage.",
       "notesTitle": "Notes",
       "note1": "Stage order determines the advancement path. Once the last main stage completes, the track enters the completed state. Use the arrow icons on each card to reorder at any time.",
       "note2": "Producers can still edit the workflow in album settings after creation, but removing or changing stages may affect in-flight tracks.",
@@ -361,11 +361,21 @@
       "revision": "{stage} Revision"
     },
     "stageKinds": {
-      "intake": { "name": "Intake" },
-      "peer_review": { "name": "Peer Review" },
-      "producer_gate": { "name": "Producer Gate" },
-      "mastering": { "name": "Mastering" },
-      "final_review": { "name": "Final Review" }
+      "intake": {
+        "name": "Intake"
+      },
+      "peer_review": {
+        "name": "Peer Review"
+      },
+      "producer_gate": {
+        "name": "Producer Gate"
+      },
+      "mastering": {
+        "name": "Mastering"
+      },
+      "final_review": {
+        "name": "Final Review"
+      }
     },
     "summary": {
       "mainStages": "Main stages",
@@ -453,12 +463,12 @@
     "clearRevision": "Choose Another File",
     "uploading": "Uploading...",
     "uploadRevision": "Upload Revision",
-    "deliveryPreviewHeading": "Preview Before Submit",
-    "deliveryPreviewNotice": "Double-check your export settings, fades, and overall playback first. Preview the file before submitting the delivery.",
-    "confirmUploadDelivery": "Confirm Delivery Upload",
-    "clearSelectedDelivery": "Choose Another File",
+    "deliveryPreviewHeading": "Local Preview",
+    "deliveryPreviewNotice": "Please listen and verify the file before uploading.",
+    "confirmUploadDelivery": "Confirm Upload",
+    "clearSelectedDelivery": "Clear Selection",
     "currentDelivery": "Current Delivery",
-    "deliveryUploaded": "Delivery uploaded",
+    "deliveryUploaded": "Mastering delivery uploaded",
     "revisionUploaded": "Revision uploaded",
     "finalApproved": "Final review approved",
     "actionSubmitted": "Action submitted. Waiting for the remaining required review steps.",
@@ -510,16 +520,20 @@
     "reviewerAssignmentDone": "Reviewers assigned",
     "reviewerAssignmentNoPool": "Auto-assignment failed: no eligible reviewers for this stage",
     "reviewerAssignmentNoMembers": "No assignable members in this album.",
-    "deliveryPreviewHeading": "Local Preview",
-    "deliveryPreviewNotice": "Please listen and verify the file before uploading.",
-    "confirmUploadDelivery": "Confirm Upload",
-    "clearSelectedDelivery": "Clear Selection",
-    "deliveryUploaded": "Mastering delivery uploaded",
-    "currentDelivery": "Current Delivery",
     "deliveryPendingConfirmation": "Pending engineer confirmation",
     "deliveryConfirmed": "Confirmed by engineer",
     "masterVersionHistory": "Master Delivery History",
-    "leaveUploadConfirm": "A file is selected for upload. If you leave now, you'll need to choose it again. Leave this page?"
+    "leaveUploadConfirm": "A file is selected for upload. If you leave now, you'll need to choose it again. Leave this page?",
+    "selectRevisionType": "Select Revision Type",
+    "selectRevisionTypeDesc": "Choose what material you need the composer to provide. This will determine their upload method.",
+    "revisionTypeSourceAudio": "Request Source Audio Revision",
+    "revisionTypeSourceAudioDesc": "Composer needs to remix and upload a single audio file (WAV/FLAC).",
+    "revisionTypeStemFiles": "Request Stem Files",
+    "revisionTypeStemFilesDesc": "Composer should provide a cloud storage link to stem files (Google Drive, Dropbox, etc.).",
+    "revisionTypeRequestedSourceAudio": "Mastering engineer requested: Re-upload source audio file",
+    "revisionTypeRequestedStemFiles": "Mastering engineer requested: Provide stem files via cloud link",
+    "revisionTypeHintSourceAudio": "Please upload a single remixed audio file.",
+    "revisionTypeHintStemFiles": "Please provide a cloud storage link, access code, and handling notes in the text area below."
   },
   "workflowSteps": {
     "intake": "Intake",
@@ -988,7 +1002,7 @@
     "returnRequested": "Return request sent to producer"
   },
   "issueDetail": {
-    "deleteCommentTitle": "Delete Comment",
+    "deleteCommentTitle": "Delete comment?",
     "deleteCommentConfirm": "Delete this comment? This action cannot be undone.",
     "back": "Back",
     "created": "Created {date}",
@@ -1035,7 +1049,6 @@
     "statusUpdateFailed": "Failed to update issue status.",
     "commentUpdated": "Comment updated.",
     "commentDeleted": "Comment deleted.",
-    "deleteCommentTitle": "Delete comment?",
     "deleteCommentMessage": "This comment will be permanently removed."
   },
   "upload": {

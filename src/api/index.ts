@@ -534,10 +534,17 @@ export const trackApi = {
   delete: (id: number) => request<void>(`/tracks/${id}`, { method: 'DELETE' }),
   archive: (id: number) => request<Track>(`/tracks/${id}/archive`, { method: 'POST' }),
   restore: (id: number) => request<Track>(`/tracks/${id}/restore`, { method: 'POST' }),
-  workflowTransition: (id: number, decision: string) =>
+  workflowTransition: (
+    id: number,
+    decision: string,
+    revisionType?: 'source_audio' | 'stem_files',
+  ) =>
     request<Track>(`/tracks/${id}/workflow/transition`, {
       method: 'POST',
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({
+        decision,
+        revision_type: revisionType ?? null,
+      }),
     }),
   // Stage assignments
   assignReviewer: (trackId: number, userIds: number[]) =>

@@ -404,6 +404,7 @@ export interface Track {
   is_proxy_submission?: boolean
   author_notes: string | null
   mastering_notes: string | null
+  requested_revision_type?: 'source_audio' | 'stem_files' | null
   created_at: string
   updated_at: string
   archived_at: string | null
