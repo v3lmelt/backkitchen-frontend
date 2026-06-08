@@ -259,6 +259,7 @@ function makeTrackDetail(overrides: Record<string, unknown> = {}) {
         workflow_cycle: 1,
         version_number: 1,
         file_path: '/source.wav',
+        source_kind: 'file',
         duration: null,
         uploaded_by_id: 2,
         revision_notes: null,
@@ -269,6 +270,8 @@ function makeTrackDetail(overrides: Record<string, unknown> = {}) {
         workflow_cycle: 1,
         delivery_number: 1,
         file_path: '/master.wav',
+        delivery_kind: 'file',
+        delivery_message: null,
         uploaded_by_id: 2,
         confirmed_at: null,
         producer_approved_at: null,
@@ -284,6 +287,8 @@ function makeTrackDetail(overrides: Record<string, unknown> = {}) {
         workflow_cycle: 1,
         delivery_number: 1,
         file_path: '/master.wav',
+        delivery_kind: 'file',
+        delivery_message: null,
         uploaded_by_id: 2,
         confirmed_at: null,
         producer_approved_at: null,
@@ -298,6 +303,7 @@ function makeTrackDetail(overrides: Record<string, unknown> = {}) {
         workflow_cycle: 1,
         version_number: 1,
         file_path: '/source.wav',
+        source_kind: 'file',
         duration: null,
         uploaded_by_id: 2,
         revision_notes: null,
@@ -576,6 +582,87 @@ describe('MasteringView', () => {
 
     expect(wrapper.text()).toContain('Upload Master Delivery')
     expect(wrapper.text()).toContain('Confirm My Upload')
+  })
+
+  it('requires a master audio file before submitting delivery notes', async () => {
+    const wrapper = mountWithPlugins(MasteringView)
+    await flushPromises()
+    await openDeliveryTab(wrapper)
+
+    expect(wrapper.text()).toContain('Master delivery requires a playable mastered audio file')
+    await wrapper.find('textarea').setValue('https://cloud.example/stems\ncode: bk24')
+    const submitButton = wrapper.findAll('button').find(button => button.text() === 'Submit Delivery')!
+
+    expect(submitButton.attributes('disabled')).toBeDefined()
+    expect(mocks.uploadMasterDeliveryMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps file delivery upload working with an optional note', async () => {
+    const updatedTrack = makeTrackDetail().track
+    mocks.uploadMasterDeliveryMock.mockResolvedValue(updatedTrack)
+
+    const wrapper = mountWithPlugins(MasteringView)
+    await flushPromises()
+    await openDeliveryTab(wrapper)
+
+    const file = new File(['master'], 'master.wav', { type: 'audio/wav' })
+    const input = wrapper.find('input[type="file"]')
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true })
+    await input.trigger('change')
+    await wrapper.find('textarea').setValue('Final WAV attached.')
+    await wrapper.findAll('button').find(button => button.text() === 'Submit Delivery')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.uploadMasterDeliveryMock).toHaveBeenCalledWith(
+      9,
+      { file, deliveryMessage: 'Final WAV attached.' },
+      expect.any(Function),
+    )
+  })
+
+  it('renders text-only deliveries without master audio actions', async () => {
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
+      track: {
+        current_master_delivery: {
+          id: 31,
+          workflow_cycle: 1,
+          delivery_number: 2,
+          file_path: null,
+          delivery_kind: 'text',
+          delivery_message: 'https://cloud.example/stems\ncode: bk24',
+          uploaded_by_id: 2,
+          confirmed_at: null,
+          producer_approved_at: null,
+          submitter_approved_at: null,
+          created_at: '2024-01-03T00:00:00Z',
+        },
+      },
+      master_deliveries: [
+        {
+          id: 31,
+          workflow_cycle: 1,
+          delivery_number: 2,
+          file_path: null,
+          delivery_kind: 'text',
+          delivery_message: 'https://cloud.example/stems\ncode: bk24',
+          uploaded_by_id: 2,
+          confirmed_at: null,
+          producer_approved_at: null,
+          submitter_approved_at: null,
+          created_at: '2024-01-03T00:00:00Z',
+        },
+      ],
+    }))
+
+    const wrapper = mountWithPlugins(MasteringView)
+    await flushPromises()
+    await openDeliveryTab(wrapper)
+    await wrapper.findAll('button').find(button => button.text().includes('Master Delivery History'))!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('https://cloud.example/stems')
+    expect(wrapper.text()).toContain('Legacy text delivery')
+    expect(wrapper.text()).not.toContain('Download Audio')
   })
 
   it('returns to track detail when delivery confirmation hands off the next step to someone else', async () => {

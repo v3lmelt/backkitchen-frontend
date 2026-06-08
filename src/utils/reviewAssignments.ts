@@ -1,4 +1,5 @@
 import type { Issue, StageAssignment, Track } from '@/types'
+import { isTrackComposer } from '@/utils/trackComposers'
 
 const REVISION_REQUESTED_CANCEL_REASON = 'revision_requested'
 
@@ -123,5 +124,5 @@ export function canUserSubmitIssueStatus(
   issue: Issue,
 ): boolean {
   if (!userId || !track) return false
-  return issue.phase !== 'final_review' && userId === track.submitter_id
+  return issue.phase !== 'final_review' && isTrackComposer(track, userId)
 }

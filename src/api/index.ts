@@ -480,6 +480,21 @@ export const trackApi = {
     if (options?.resolutionNote) form.append('resolution_note', options.resolutionNote)
     return uploadWithProgress<Track>(`/tracks/${id}/source-versions`, form, onProgress)
   },
+  submitSourceExternalLink: (
+    id: number,
+    data: {
+      revisionNotes: string
+      resolvedIssueIds?: number[]
+      resolutionNote?: string | null
+    },
+  ) => request<Track>(`/tracks/${id}/source-versions/external-link`, {
+    method: 'POST',
+    body: JSON.stringify({
+      revision_notes: data.revisionNotes.trim(),
+      resolved_issue_ids: data.resolvedIssueIds ?? [],
+      resolution_note: data.resolutionNote?.trim() || null,
+    }),
+  }),
   createSourceFollowup: (
     id: number,
     file: File,
@@ -498,9 +513,11 @@ export const trackApi = {
     }),
   cancelSourceFollowup: (requestId: number) =>
     request<Track>(`/tracks/source-followups/${requestId}/cancel`, { method: 'POST' }),
-  uploadMasterDelivery: (id: number, file: File, onProgress?: (percent: number) => void) => {
+  uploadMasterDelivery: (id: number, data: { file: File; deliveryMessage?: string | null }, onProgress?: (percent: number) => void) => {
     const form = new FormData()
-    form.append('file', file)
+    form.append('file', data.file)
+    const deliveryMessage = data.deliveryMessage?.trim()
+    if (deliveryMessage) form.append('delivery_message', deliveryMessage)
     return uploadWithProgress<Track>(`/tracks/${id}/master-deliveries`, form, onProgress)
   },
   // Final-review approve is retained: the custom workflow engine delegates
@@ -509,6 +526,11 @@ export const trackApi = {
     request<Track>(`/tracks/${id}/final-review/approve`, { method: 'POST' }),
   requestReturnInFinalReview: (id: number) =>
     request<void>(`/tracks/${id}/final-review/request-return`, { method: 'POST' }),
+  updateComposers: (trackId: number, composerIds: number[]) =>
+    request<Track>(`/tracks/${trackId}/composers`, {
+      method: 'PATCH',
+      body: JSON.stringify({ composer_ids: composerIds }),
+    }),
   delete: (id: number) => request<void>(`/tracks/${id}`, { method: 'DELETE' }),
   archive: (id: number) => request<Track>(`/tracks/${id}/archive`, { method: 'POST' }),
   restore: (id: number) => request<Track>(`/tracks/${id}/restore`, { method: 'POST' }),
@@ -1065,6 +1087,7 @@ export const r2Api = {
     author_notes?: string | null
     proxy_submission?: boolean
     external_submitter_name?: string | null
+    composer_ids?: number[]
   }) => request<PresignedUploadResponse>('/tracks/request-upload', { method: 'POST', body: JSON.stringify(params) }),
 
   confirmTrackUpload: (params: {
@@ -1080,6 +1103,7 @@ export const r2Api = {
     author_notes?: string | null
     proxy_submission?: boolean
     external_submitter_name?: string | null
+    composer_ids?: number[]
   }) => request<Track>('/tracks/confirm-upload', { method: 'POST', body: JSON.stringify(params) }),
 
   // Source version
@@ -1122,6 +1146,7 @@ export const r2Api = {
     upload_id: string
     object_key: string
     duration?: number | null
+    delivery_message?: string | null
   }) => request<Track>(`/tracks/${trackId}/master-deliveries/confirm-upload`, { method: 'POST', body: JSON.stringify(params) }),
 
   // Comment audio

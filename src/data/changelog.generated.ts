@@ -5,6 +5,90 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.25",
+    "date": "2026-06-07",
+    "headline": {
+      "zh-CN": "曲目支持共同曲师",
+      "en": "Tracks now support co-composers"
+    },
+    "summary": {
+      "zh-CN": "提交曲目时可以选择专辑成员作为共同曲师。共同曲师会在曲目列表与详情中显示，并可参与源文件修订、问题状态处理、母带终审确认等曲师侧流程。",
+      "en": "Track submissions can now include album members as co-composers. Co-composers appear in track lists and details and can take the composer-side actions for source revisions, issue status updates, and final master approval."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "共同曲师",
+          "en": "Co-composers"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "提交时选择共同创作者",
+              "en": "Select collaborators during submission"
+            },
+            "description": {
+              "zh-CN": "曲目提交页新增共同曲师选择区，当前账号会自动加入，额外选择的专辑成员会一起获得曲师侧可见性和操作权限。",
+              "en": "The submit-track page now includes a co-composer selector. The current account is included automatically, and selected album members receive composer-side visibility and permissions."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "曲师侧流程同步扩展",
+              "en": "Composer-side workflow access expands"
+            },
+            "description": {
+              "zh-CN": "共同曲师现在可以查看私有曲目、处理公开问题状态、上传修订源文件、申请源音频补交，并参与母带终审确认；评审分配会自动避开所有曲师。",
+              "en": "Co-composers can now view private tracks, handle public issue status, upload revised source audio, request source follow-ups, and participate in final master approval. Reviewer assignment avoids every composer on the track."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.24",
+    "date": "2026-06-07",
+    "headline": {
+      "zh-CN": "母带修订支持提交分轨链接",
+      "en": "Mastering revisions now support stem links"
+    },
+    "summary": {
+      "zh-CN": "当母带阶段需要曲师补充分轨或多轨工程时，曲师可以在母带修订步骤提交网盘链接、提取码和说明；该记录会进入源版本历史，同时保留当前可播放的源音频。母带交付仍需上传母带音频文件。",
+      "en": "When mastering needs stems or multitracks from the composer, the composer can submit a cloud link, access code, and notes during the mastering revision step. The entry is kept in source-version history while the current playable source audio stays unchanged. Master delivery still requires an audio file."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "母带修订",
+          "en": "Mastering Revision"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "曲师可提交分轨 / 多轨网盘链接",
+              "en": "Composers can submit stem or multitrack links"
+            },
+            "description": {
+              "zh-CN": "母带师将曲目打回母带修订后，曲师除了上传新的源音频，也可以填写分轨包网盘链接、提取码和处理说明，并把流程送回母带阶段。",
+              "en": "After the mastering engineer sends a track to mastering revision, the composer can either upload a revised source file or submit a stem-package cloud link, access code, and handling notes before returning the track to mastering."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "当前源音频保持可播放",
+              "en": "The current source audio remains playable"
+            },
+            "description": {
+              "zh-CN": "分轨链接会作为新的源版本历史记录保存，但不会覆盖曲目的源音频文件、存储位置或时长；母带交付入口也恢复为必须上传可播放母带音频文件。",
+              "en": "A stem-link submission is saved as a new source-version history entry, but it does not overwrite the track's source audio file, storage backend, or duration. Master delivery is again limited to playable mastered audio uploads."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.23",
     "date": "2026-05-30",
     "headline": {

@@ -197,7 +197,8 @@ export interface TrackSourceVersion {
   id: number
   workflow_cycle: number
   version_number: number
-  file_path: string
+  file_path: string | null
+  source_kind: 'file' | 'external_link' | (string & {})
   duration: number | null
   uploaded_by_id: number | null
   revision_notes: string | null
@@ -261,7 +262,9 @@ export interface MasterDelivery {
   id: number
   workflow_cycle: number
   delivery_number: number
-  file_path: string
+  file_path: string | null
+  delivery_kind: 'file' | 'text' | (string & {})
+  delivery_message: string | null
   uploaded_by_id: number | null
   confirmed_at: string | null
   producer_approved_at: string | null
@@ -392,6 +395,7 @@ export interface Track {
   version: number
   workflow_cycle: number
   submitter_id: number | null
+  composer_ids?: number[]
   proxy_uploader_id?: number | null
   peer_reviewer_id: number | null
   producer_id: number | null
@@ -406,6 +410,7 @@ export interface Track {
   issue_count?: number
   open_issue_count?: number
   submitter?: User | null
+  composers?: User[]
   proxy_uploader?: User | null
   peer_reviewer?: User | null
   current_source_version?: TrackSourceVersion | null

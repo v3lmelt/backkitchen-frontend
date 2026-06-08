@@ -528,6 +528,37 @@ describe('TrackDetailView', () => {
     expect(mocks.waveformSeekToMock).toHaveBeenCalledWith('master', 15)
   })
 
+  it('renders text-only master deliveries without creating a master waveform', async () => {
+    const currentMasterDelivery = {
+      id: 31,
+      delivery_number: 2,
+      workflow_cycle: 2,
+      file_path: null,
+      delivery_kind: 'text',
+      delivery_message: 'https://cloud.example/stems\ncode: bk24',
+      created_at: '2024-01-04T00:00:00Z',
+      producer_approved_at: null,
+      submitter_approved_at: null,
+    }
+    mocks.trackGetMock.mockResolvedValueOnce(makeTrackDetailResponse({
+      track: {
+        status: 'final_review',
+        allowed_actions: [],
+        current_master_delivery: currentMasterDelivery,
+      },
+      issues: [],
+      master_deliveries: [currentMasterDelivery],
+    }))
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('https://cloud.example/stems')
+    expect(wrapper.text()).toContain('This historical delivery has no playable audio file')
+    expect(wrapper.text()).not.toContain('/api/tracks/7/master-audio')
+
+  })
+
   it('keeps old master-delivery issues visible when no current master exists', async () => {
     mocks.trackGetMock.mockResolvedValueOnce(makeTrackDetailResponse({
       track: {

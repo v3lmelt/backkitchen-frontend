@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   approveFinalReviewMock: vi.fn(),
   confirmDeliveryMock: vi.fn(),
   uploadSourceVersionMock: vi.fn(),
+  submitSourceExternalLinkMock: vi.fn(),
   uploadMasterDeliveryMock: vi.fn(),
   checklistGetDraftMock: vi.fn(),
   checklistGetTemplateMock: vi.fn(),
@@ -65,6 +66,7 @@ vi.mock('@/api', () => ({
     approveFinalReview: mocks.approveFinalReviewMock,
     confirmDelivery: mocks.confirmDeliveryMock,
     uploadSourceVersion: mocks.uploadSourceVersionMock,
+    submitSourceExternalLink: mocks.submitSourceExternalLinkMock,
     uploadMasterDelivery: mocks.uploadMasterDeliveryMock,
   },
   r2Api: {
@@ -219,6 +221,7 @@ describe('WorkflowStepView', () => {
     mocks.approveFinalReviewMock.mockReset()
     mocks.confirmDeliveryMock.mockReset()
     mocks.uploadSourceVersionMock.mockReset()
+    mocks.submitSourceExternalLinkMock.mockReset()
     mocks.uploadMasterDeliveryMock.mockReset()
     mocks.checklistGetDraftMock.mockReset()
     mocks.checklistGetTemplateMock.mockReset()
@@ -237,6 +240,7 @@ describe('WorkflowStepView', () => {
     mocks.approveFinalReviewMock.mockResolvedValue({})
     mocks.confirmDeliveryMock.mockResolvedValue({})
     mocks.uploadSourceVersionMock.mockResolvedValue({})
+    mocks.submitSourceExternalLinkMock.mockResolvedValue({})
     mocks.uploadMasterDeliveryMock.mockResolvedValue({})
     mocks.checklistGetDraftMock.mockRejectedValue(new Error('Checklist draft not found'))
     mocks.checklistSubmitMock.mockResolvedValue([])
@@ -439,6 +443,130 @@ describe('WorkflowStepView', () => {
       'Master Track_master_v2_history_202401020000',
       '/master-v2.wav',
     )
+  })
+
+  it('requires an uploaded audio file before submitting a delivery step', async () => {
+    mocks.route = {
+      params: { id: '9', stepId: 'custom_delivery' },
+      query: {},
+      path: '/tracks/9/step/custom_delivery',
+      fullPath: '/tracks/9/step/custom_delivery',
+    }
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Generic Delivery Track',
+        artist: 'Nova',
+        status: 'custom_delivery',
+        file_path: '/audio.wav',
+        version: 1,
+        workflow_cycle: 1,
+        workflow_step: {
+          id: 'custom_delivery',
+          label: 'Custom Delivery',
+          type: 'delivery',
+          ui_variant: 'generic',
+          assignee_role: 'mastering_engineer',
+          order: 0,
+          transitions: { deliver: 'done' },
+          require_confirmation: false,
+        },
+        workflow_transitions: [{ decision: 'deliver', label: 'Deliver' }],
+      },
+      issues: [],
+      checklist_items: [],
+      master_deliveries: [],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'custom_delivery', label: 'Custom Delivery', type: 'delivery', ui_variant: 'generic', assignee_role: 'mastering_engineer', order: 0, transitions: { deliver: 'done' }, require_confirmation: false },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Master delivery requires a playable mastered audio file')
+    await wrapper.find('textarea').setValue('https://cloud.example/stems\ncode: bk24')
+    const submitButton = wrapper.findAll('button').find(button => button.text() === 'Submit Delivery')!
+
+    expect(submitButton.attributes('disabled')).toBeDefined()
+    expect(mocks.uploadMasterDeliveryMock).not.toHaveBeenCalled()
+  })
+
+  it('shows generic text-only current deliveries without master audio actions', async () => {
+    mocks.route = {
+      params: { id: '9', stepId: 'custom_delivery' },
+      query: {},
+      path: '/tracks/9/step/custom_delivery',
+      fullPath: '/tracks/9/step/custom_delivery',
+    }
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Generic Delivery Track',
+        artist: 'Nova',
+        status: 'custom_delivery',
+        file_path: '/audio.wav',
+        version: 1,
+        workflow_cycle: 1,
+        current_master_delivery: {
+          id: 41,
+          workflow_cycle: 1,
+          delivery_number: 1,
+          file_path: null,
+          delivery_kind: 'text',
+          delivery_message: 'https://cloud.example/stems',
+          uploaded_by_id: 1,
+          confirmed_at: null,
+          producer_approved_at: null,
+          submitter_approved_at: null,
+          created_at: '2024-01-03T00:00:00Z',
+        },
+        workflow_step: {
+          id: 'custom_delivery',
+          label: 'Custom Delivery',
+          type: 'delivery',
+          ui_variant: 'generic',
+          assignee_role: 'mastering_engineer',
+          order: 0,
+          transitions: { deliver: 'done' },
+          require_confirmation: false,
+        },
+        workflow_transitions: [{ decision: 'deliver', label: 'Deliver' }],
+      },
+      issues: [],
+      checklist_items: [],
+      master_deliveries: [
+        {
+          id: 41,
+          workflow_cycle: 1,
+          delivery_number: 1,
+          file_path: null,
+          delivery_kind: 'text',
+          delivery_message: 'https://cloud.example/stems',
+          uploaded_by_id: 1,
+          confirmed_at: null,
+          producer_approved_at: null,
+          submitter_approved_at: null,
+          created_at: '2024-01-03T00:00:00Z',
+        },
+      ],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'custom_delivery', label: 'Custom Delivery', type: 'delivery', ui_variant: 'generic', assignee_role: 'mastering_engineer', order: 0, transitions: { deliver: 'done' }, require_confirmation: false },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('https://cloud.example/stems')
+    expect(wrapper.text()).toContain('This historical delivery has no playable audio file')
+    expect(wrapper.findAll('button').filter(button => button.text().includes('Download Audio'))).toHaveLength(1)
   })
 
   it('omits the confirm delivery action when the delivery step does not require confirmation', async () => {
@@ -1528,6 +1656,105 @@ describe('WorkflowStepView', () => {
     })
   })
 
+  it('submits external stem links only on mastering revision steps', async () => {
+    mocks.route = {
+      params: { id: '9', stepId: 'mastering_revision' },
+      query: {},
+      path: '/tracks/9/step/mastering_revision',
+      fullPath: '/tracks/9/step/mastering_revision',
+    }
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Stem Revision Track',
+        artist: 'Nova',
+        album_id: 3,
+        status: 'mastering_revision',
+        workflow_variant: 'standard',
+        version: 2,
+        workflow_cycle: 1,
+        file_path: '/audio.wav',
+        duration: null,
+        bpm: null,
+        original_title: null,
+        original_artist: null,
+        author_notes: null,
+        mastering_notes: null,
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-02T00:00:00Z',
+        archived_at: null,
+        submitter_id: 1,
+        peer_reviewer_id: 4,
+        producer_id: 8,
+        mastering_engineer_id: 12,
+        allowed_actions: ['upload_revision'],
+        is_public: false,
+        workflow_step: {
+          id: 'mastering_revision',
+          label: 'Mastering Revision',
+          type: 'revision',
+          assignee_role: 'submitter',
+          order: 6,
+          transitions: {},
+          return_to: 'mastering',
+        },
+        workflow_transitions: [],
+        current_source_version: {
+          id: 22,
+          workflow_cycle: 1,
+          version_number: 2,
+          file_path: '/audio.wav',
+          source_kind: 'file',
+          duration: null,
+          uploaded_by_id: 1,
+          revision_notes: null,
+          created_at: '2024-01-02T00:00:00Z',
+        },
+      },
+      issues: [],
+      checklist_items: [],
+      source_versions: [],
+      master_deliveries: [],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'mastering', label: 'Mastering', type: 'delivery', ui_variant: 'mastering', assignee_role: 'mastering_engineer', order: 5, transitions: {} },
+          { id: 'mastering_revision', label: 'Mastering Revision', type: 'revision', assignee_role: 'submitter', order: 6, transitions: {}, return_to: 'mastering' },
+        ],
+      },
+    })
+    mocks.submitSourceExternalLinkMock.mockResolvedValue({
+      id: 9,
+      status: 'mastering',
+      workflow_step: {
+        id: 'mastering',
+        label: 'Mastering',
+        type: 'delivery',
+        assignee_role: 'mastering_engineer',
+        order: 5,
+        transitions: {},
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Submit stems / multitrack cloud link')
+    await wrapper.find('textarea').setValue('https://cloud.example/stems\ncode: bk24')
+    await wrapper.findAll('button').find(button => button.text().includes('Submit Stem Link'))!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.submitSourceExternalLinkMock).toHaveBeenCalledWith(9, {
+      revisionNotes: 'https://cloud.example/stems\ncode: bk24',
+      resolvedIssueIds: [],
+      resolutionNote: null,
+    })
+    expect(mocks.pushMock).toHaveBeenCalledWith({
+      path: '/tracks/9',
+      query: { returnTo: '/tracks/9/step/mastering_revision' },
+    })
+  })
+
   it('returns to track detail after a delivery upload advances beyond the current workspace', async () => {
     mocks.route = {
       params: { id: '9', stepId: 'delivery_custom' },
@@ -1616,10 +1843,10 @@ describe('WorkflowStepView', () => {
     await fileInput.trigger('change')
     await flushPromises()
 
-    await wrapper.findAll('button').find(button => button.text().includes('Confirm Upload'))!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text().includes('Submit Delivery'))!.trigger('click')
     await flushPromises()
 
-    expect(mocks.uploadMasterDeliveryMock).toHaveBeenCalledWith(9, file, expect.any(Function))
+    expect(mocks.uploadMasterDeliveryMock).toHaveBeenCalledWith(9, { file, deliveryMessage: null }, expect.any(Function))
     expect(mocks.pushMock).toHaveBeenCalledWith({
       path: '/tracks/9',
       query: { returnTo: '/tracks/9/step/delivery_custom' },
