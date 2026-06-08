@@ -3087,14 +3087,14 @@ function handleIssueLeave() {
         <div v-if="isMasteringRevisionStep" class="space-y-3">
           <label class="block text-sm text-muted-foreground">{{ t('workflowStep.revisionSubmitMethod') }}</label>
           <div class="space-y-2">
-            <label class="flex items-center gap-3 p-3 border rounded-none cursor-pointer transition-colors"
+            <label class="flex items-center gap-3 p-3 border rounded-none cursor-pointer"
                    :class="revisionUploadMode === 'file' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'">
-              <input type="radio" value="file" v-model="revisionUploadMode" class="w-4 h-4 text-primary" />
+              <input type="radio" value="file" v-model="revisionUploadMode" />
               <span class="text-sm text-foreground">{{ t('workflowStep.revisionSubmitMethodUploadFile') }}</span>
             </label>
-            <label class="flex items-center gap-3 p-3 border rounded-none cursor-pointer transition-colors"
+            <label class="flex items-center gap-3 p-3 border rounded-none cursor-pointer"
                    :class="revisionUploadMode === 'link' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'">
-              <input type="radio" value="link" v-model="revisionUploadMode" class="w-4 h-4 text-primary" />
+              <input type="radio" value="link" v-model="revisionUploadMode" />
               <span class="text-sm text-foreground">{{ t('workflowStep.revisionSubmitMethodExternalLink') }}</span>
             </label>
           </div>

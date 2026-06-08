@@ -309,3 +309,66 @@
 .msg-move {
   transition: transform 0.22s ease-out;
 }
+
+/* Custom form controls - flat design */
+input[type="radio"] {
+  appearance: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 2px solid rgb(var(--color-border));
+  border-radius: 50%;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+
+input[type="radio"]:hover {
+  border-color: rgb(var(--color-primary));
+}
+
+input[type="radio"]:checked {
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary));
+}
+
+input[type="radio"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input[type="checkbox"] {
+  appearance: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 2px solid rgb(var(--color-border));
+  border-radius: 0.25rem;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+
+input[type="checkbox"]:hover {
+  border-color: rgb(var(--color-primary));
+}
+
+input[type="checkbox"]:checked {
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary));
+}
+
+input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 0.25rem;
+  top: 0.05rem;
+  width: 0.375rem;
+  height: 0.625rem;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
