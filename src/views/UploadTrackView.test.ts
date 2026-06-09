@@ -133,7 +133,7 @@ describe('UploadTrackView', () => {
     await flushPromises()
 
     expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('Upload for an external composer')
+    expect(wrapper.text()).not.toContain('External composers only')
   })
 
   it('clears proxy submission state when switching away from an owned album', async () => {
@@ -146,7 +146,7 @@ describe('UploadTrackView', () => {
     await flushPromises()
 
     await wrapper.find('input[type="checkbox"]').setValue(true)
-    await wrapper.find('input[placeholder="Name shown to the producer and mastering engineer"]').setValue('Offline Composer')
+    await wrapper.find('input[placeholder="External composer name"]').setValue('Offline Composer')
 
     await wrapper.find('.custom-select-trigger').trigger('click')
     await flushPromises()
@@ -163,7 +163,6 @@ describe('UploadTrackView', () => {
     const checkbox = wrapper.find('input[type="checkbox"]')
     expect(checkbox.exists()).toBe(true)
     expect((checkbox.element as HTMLInputElement).checked).toBe(false)
-    expect(wrapper.find('input[placeholder="Name shown to the producer and mastering engineer"]').exists()).toBe(false)
   })
 
   it('uploads a proxy submission with an external composer name', async () => {
@@ -181,7 +180,7 @@ describe('UploadTrackView', () => {
     await wrapper.find('input[type="checkbox"]').setValue(true)
     const textInputs = wrapper.findAll('input[type="text"]')
     await textInputs[0].setValue('Proxy Track')
-    await wrapper.find('input[placeholder="Name shown to the producer and mastering engineer"]').setValue('Offline Composer')
+    await wrapper.find('input[placeholder="External composer name"]').setValue('Offline Composer')
 
     await wrapper.findAll('button').find(button => button.text().includes('Submit Track'))!.trigger('click')
     await flushPromises()
@@ -189,6 +188,8 @@ describe('UploadTrackView', () => {
     const formData = mocks.uploadWithProgressMock.mock.calls[0][1] as FormData
     expect(formData.get('proxy_submission')).toBe('true')
     expect(formData.get('external_submitter_name')).toBe('Offline Composer')
+    expect(formData.getAll('external_composer_names')).toEqual(['Offline Composer'])
+    expect(formData.getAll('composer_ids')).toEqual([])
     expect(formData.get('artist')).toBe('Offline Composer')
   })
 
@@ -214,7 +215,7 @@ describe('UploadTrackView', () => {
     await wrapper.find('input[type="checkbox"]').setValue(true)
     const textInputs = wrapper.findAll('input[type="text"]')
     await textInputs[0].setValue('Proxy Track')
-    await wrapper.find('input[placeholder="Name shown to the producer and mastering engineer"]').setValue('Offline Composer')
+    await wrapper.find('input[placeholder="External composer name"]').setValue('Offline Composer')
 
     await wrapper.findAll('button').find(button => button.text().includes('Submit Track'))!.trigger('click')
     await flushPromises()
@@ -222,11 +223,15 @@ describe('UploadTrackView', () => {
     expect(mocks.requestTrackUploadMock).toHaveBeenCalledWith(expect.objectContaining({
       proxy_submission: true,
       external_submitter_name: 'Offline Composer',
+      external_composer_names: ['Offline Composer'],
+      composer_ids: [],
       artist: 'Offline Composer',
     }))
     expect(mocks.confirmTrackUploadMock).toHaveBeenCalledWith(expect.objectContaining({
       proxy_submission: true,
       external_submitter_name: 'Offline Composer',
+      external_composer_names: ['Offline Composer'],
+      composer_ids: [],
       artist: 'Offline Composer',
     }))
     expect(mocks.pushMock).toHaveBeenCalledWith({ path: '/tracks/84', query: { returnTo: '/upload' } })

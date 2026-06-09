@@ -7,7 +7,13 @@ import { useAppStore } from '@/stores/app'
 import type { Track, Issue, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember, StageAssignment } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
 import { hashId } from '@/utils/hash'
-import { isTrackComposer, trackComposerDisplayText, trackComposerIds } from '@/utils/trackComposers'
+import {
+  externalComposerDisplayText,
+  isComposerActor,
+  platformComposerDisplayText,
+  trackComposerDisplayText,
+  trackComposerIds,
+} from '@/utils/trackComposers'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
@@ -128,7 +134,7 @@ function inferTrackWorkflowVariant(trackData: Track | null): 'generic' | 'master
 // Anonymize peer reviewer only for the submitter during active peer review phases
 const shouldAnonymizePeer = computed(() => {
   if (!track.value || !appStore.currentUser) return false
-  const isComposer = isTrackComposer(track.value, appStore.currentUser.id)
+  const isComposer = isComposerActor(track.value, appStore.currentUser.id)
   const peerPhases = ['peer_review', 'peer_revision']
   return isComposer && peerPhases.includes(track.value.status)
 })
@@ -706,7 +712,7 @@ const isProducer = computed(() => track.value?.producer_id === appStore.currentU
 const canSeeMastering = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId || !track.value) return false
-  return isTrackComposer(track.value, userId)
+  return isComposerActor(track.value, userId)
     || userId === track.value.producer_id
     || userId === track.value.mastering_engineer_id
 })
@@ -732,7 +738,7 @@ const togglingVisibility = ref(false)
 // ── Edit metadata ─────────────────────────────────────────────────────────
 const canEditMetadata = computed(() => {
   if (!track.value || !appStore.currentUser) return false
-  return isTrackComposer(track.value, appStore.currentUser.id) || isProducer.value
+  return isComposerActor(track.value, appStore.currentUser.id) || isProducer.value
 })
 const editingMetadata = ref(false)
 const metadataForm = ref({ title: '', artist: '', bpm: '', original_title: '', original_artist: '' })
@@ -1125,22 +1131,29 @@ watch(() => primaryActions.value.length, async () => {
 
 // Reopen logic
 const isMasteringEngineer = computed(() => track.value?.mastering_engineer_id === appStore.currentUser?.id)
-const isSubmitter = computed(() => isTrackComposer(track.value, appStore.currentUser?.id))
+const isSubmitter = computed(() => isComposerActor(track.value, appStore.currentUser?.id))
 const composerSummary = computed(() => trackComposerDisplayText(track.value))
-const hasMultipleComposers = computed(() => trackComposerIds(track.value).length > 1)
+const platformComposerSummary = computed(() => platformComposerDisplayText(track.value))
+const externalComposerSummary = computed(() => externalComposerDisplayText(track.value))
+const hasPlatformComposers = computed(() => trackComposerIds(track.value).length > 0)
+const hasExternalComposers = computed(() => externalComposerSummary.value !== '--')
 const trackArtistDisplay = computed(() => {
   if (!track.value) return '--'
   if (track.value.artist) return track.value.artist
-  if (track.value.composers?.length) return trackComposerDisplayText(track.value)
+  if (composerSummary.value !== '--') return composerSummary.value
   return track.value.submitter_id ? `#${hashId(track.value.submitter_id)}` : '--'
 })
 const trackArtistUsesHash = computed(() => Boolean(
-  track.value && !track.value.artist && !track.value.composers?.length && track.value.submitter_id,
+  track.value && !track.value.artist && composerSummary.value === '--' && track.value.submitter_id,
 ))
 const isProxySubmission = computed(() => Boolean(track.value?.is_proxy_submission && track.value.external_submitter_name))
 const composerApprovalLabel = computed(() =>
   isProxySubmission.value ? t('trackDetail.externalSubmitterProxy') : t('trackDetail.composers')
 )
+const composerProxyActorDisplay = computed(() => {
+  if (!track.value || hasPlatformComposers.value || !hasExternalComposers.value) return ''
+  return track.value.proxy_uploader?.display_name ?? track.value.submitter?.display_name ?? '--'
+})
 const canDirectReopen = computed(() => track.value?.status === 'completed' && (isProducer.value || isMasteringEngineer.value))
 const canRequestReopen = computed(() => track.value?.status === 'completed' && isSubmitter.value && !isProducer.value && !isMasteringEngineer.value)
 const completedProcessMode = ref<'reopen' | 'source_followup'>('reopen')
@@ -1671,18 +1684,21 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
 
         <div class="card space-y-2 text-sm">
           <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('trackDetail.trackSummary') }}</h3>
-          <div class="flex justify-between">
-            <span class="text-muted-foreground">{{ isProxySubmission ? t('trackDetail.externalSubmitter') : t('trackDetail.submitter') }}</span>
-            <span v-if="isProxySubmission" class="text-foreground text-right">{{ track.external_submitter_name }}</span>
-            <span v-else class="text-foreground" :class="{ 'font-mono': !track.submitter && track.submitter_id }">{{ track.submitter?.display_name ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
+          <div class="flex justify-between gap-4">
+            <span class="text-muted-foreground">{{ t('trackDetail.submitter') }}</span>
+            <span class="text-foreground text-right" :class="{ 'font-mono': !track.submitter && track.submitter_id }">{{ track.submitter?.display_name ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
           </div>
-          <div v-if="isProxySubmission" class="flex justify-between gap-4">
-            <span class="text-muted-foreground">{{ t('trackDetail.proxyUploader') }}</span>
-            <span class="text-foreground text-right">{{ track.proxy_uploader?.display_name ?? track.submitter?.display_name ?? '--' }}</span>
+          <div v-if="hasPlatformComposers" class="flex justify-between gap-4">
+            <span class="text-muted-foreground">{{ t('trackDetail.platformComposers') }}</span>
+            <span class="text-foreground text-right">{{ platformComposerSummary }}</span>
           </div>
-          <div v-if="hasMultipleComposers" class="flex justify-between gap-4">
-            <span class="text-muted-foreground">{{ t('trackDetail.composers') }}</span>
-            <span class="text-foreground text-right">{{ composerSummary }}</span>
+          <div v-if="hasExternalComposers" class="flex justify-between gap-4">
+            <span class="text-muted-foreground">{{ t('trackDetail.externalComposers') }}</span>
+            <span class="text-foreground text-right">{{ externalComposerSummary }}</span>
+          </div>
+          <div v-if="composerProxyActorDisplay" class="flex justify-between gap-4">
+            <span class="text-muted-foreground">{{ t('trackDetail.composerProxyActor') }}</span>
+            <span class="text-foreground text-right">{{ composerProxyActorDisplay }}</span>
           </div>
           <!-- Multi-reviewer progress -->
           <template v-if="hasMultipleReviewers">

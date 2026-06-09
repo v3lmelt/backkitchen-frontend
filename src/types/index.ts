@@ -376,6 +376,13 @@ export interface WorkflowEvent {
   actor?: User | null
 }
 
+export interface TrackExternalComposer {
+  id: number
+  name: string
+  sort_order: number
+  created_at: string
+}
+
 export interface Track {
   id: number
   title: string
@@ -396,6 +403,7 @@ export interface Track {
   workflow_cycle: number
   submitter_id: number | null
   composer_ids?: number[]
+  external_composer_names?: string[]
   proxy_uploader_id?: number | null
   peer_reviewer_id: number | null
   producer_id: number | null
@@ -412,6 +420,7 @@ export interface Track {
   open_issue_count?: number
   submitter?: User | null
   composers?: User[]
+  external_composers?: TrackExternalComposer[]
   proxy_uploader?: User | null
   peer_reviewer?: User | null
   current_source_version?: TrackSourceVersion | null

@@ -11,7 +11,7 @@ import type {
 } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
 import { extractAudioDuration } from '@/utils/audio'
-import { isTrackComposer, trackComposerDisplayText } from '@/utils/trackComposers'
+import { externalComposerDisplayText, isComposerActor, trackComposerDisplayText } from '@/utils/trackComposers'
 import { translateStepLabel } from '@/utils/workflow'
 import { activeAssignmentsForStep, canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
@@ -131,7 +131,7 @@ const showMasterCompare = ref(false)
 const selectedCompareMasterDeliveryId = ref<number | null>(null)
 
 // Computed
-const isSubmitter = computed(() => isTrackComposer(track.value, appStore.currentUser?.id))
+const isSubmitter = computed(() => isComposerActor(track.value, appStore.currentUser?.id))
 const isMasteringEngineer = computed(() => track.value?.mastering_engineer_id === appStore.currentUser?.id)
 const isProxySubmission = computed(() => Boolean(track.value?.is_proxy_submission && track.value.external_submitter_name))
 const composerApprovalLabel = computed(() =>
@@ -140,13 +140,14 @@ const composerApprovalLabel = computed(() =>
 const trackArtistDisplay = computed(() => {
   if (!track.value) return '--'
   if (track.value.artist) return track.value.artist
-  if (track.value.composers?.length) return trackComposerDisplayText(track.value)
+  const composerText = trackComposerDisplayText(track.value)
+  if (composerText !== '--') return composerText
   return '--'
 })
 const canSeeMasteringDiscussion = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId || !track.value) return false
-  return isTrackComposer(track.value, userId)
+  return isComposerActor(track.value, userId)
     || userId === track.value.producer_id
     || userId === track.value.mastering_engineer_id
 })
@@ -219,7 +220,7 @@ const isDeliveryAssignee = computed(() => {
   if (!userId || !track.value) return false
   const step = currentStep.value
   if (step?.type === 'delivery' && step.assignee_user_id == null && step.assignee_role === 'submitter') {
-    return isTrackComposer(track.value, userId)
+    return isComposerActor(track.value, userId)
   }
   const assigneeId = deliveryAssigneeUserId.value
   return assigneeId != null && assigneeId === userId
@@ -234,7 +235,7 @@ const canApproveFinal = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId) return false
   if (userId === track.value.producer_id) return !track.value.current_master_delivery.producer_approved_at
-  if (isTrackComposer(track.value, userId)) return !track.value.current_master_delivery.submitter_approved_at
+  if (isComposerActor(track.value, userId)) return !track.value.current_master_delivery.submitter_approved_at
   return false
 })
 
@@ -271,7 +272,7 @@ function canCurrentUserContinueInMasteringWorkspace(nextTrack: Track): boolean {
   const delivery = nextTrack.current_master_delivery
   if (!delivery?.confirmed_at) return false
   if (userId === nextTrack.producer_id) return !delivery.producer_approved_at
-  if (isTrackComposer(nextTrack, userId)) return !delivery.submitter_approved_at
+  if (isComposerActor(nextTrack, userId)) return !delivery.submitter_approved_at
   return false
 }
 
@@ -1044,7 +1045,7 @@ watch(olderMasterDeliveries, (deliveries) => {
         <h1 class="text-xl sm:text-2xl font-mono font-bold text-foreground">{{ t('masteringPage.heading') }}</h1>
         <p class="text-sm text-muted-foreground">{{ track.title }} · {{ trackArtistDisplay }}</p>
         <p v-if="isProxySubmission" class="mt-1 text-xs text-muted-foreground">
-          {{ t('trackDetail.externalSubmitter') }}: {{ track.external_submitter_name }} · {{ t('trackDetail.proxyUploader') }}: {{ track.proxy_uploader?.display_name ?? track.submitter?.display_name ?? '--' }}
+          {{ t('trackDetail.externalComposers') }}: {{ externalComposerDisplayText(track) }} · {{ t('trackDetail.composerProxyActor') }}: {{ track.proxy_uploader?.display_name ?? track.submitter?.display_name ?? '--' }}
         </p>
       </div>
       <button @click="goBack" class="btn-secondary text-sm flex-shrink-0 self-start flex items-center gap-1.5">

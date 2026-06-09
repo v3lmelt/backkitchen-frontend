@@ -738,9 +738,9 @@ describe('TrackDetailView', () => {
     const wrapper = mountTrackDetailView()
     await flushPromises()
 
-    expect(wrapper.text()).toContain('External Composer')
+    expect(wrapper.text()).toContain('External composers')
     expect(wrapper.text()).toContain('Offline Composer')
-    expect(wrapper.text()).toContain('Uploaded by Producer')
+    expect(wrapper.text()).toContain('Composer-side proxy')
     expect(wrapper.text()).toContain('Kira')
   })
 
