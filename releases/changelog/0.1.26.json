@@ -1,0 +1,42 @@
+{
+  "version": "0.1.26",
+  "date": "2026-06-08",
+  "headline": {
+    "zh-CN": "曲目支持多个外部曲师",
+    "en": "Tracks now support multiple external composers"
+  },
+  "summary": {
+    "zh-CN": "提交曲目时可以同时记录平台内曲师和不使用平台的外部曲师。没有平台内曲师的曲目由主催代办曲师侧流程，有平台内曲师时则由任一平台内曲师处理。",
+    "en": "Track submissions can now list both platform composers and external composers who do not use the platform. External-only tracks are handled by the producer, while tracks with platform composers let any platform composer handle composer-side work."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "外部曲师",
+        "en": "External composers"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "提交页可记录多个外部曲师",
+            "en": "Submit multiple external composers"
+          },
+          "description": {
+            "zh-CN": "上传曲目时可添加多个外部曲师姓名，并继续从专辑成员中选择平台内共同曲师；曲目详情、流程页和母带页会分别展示两类曲师。",
+            "en": "The upload page now accepts multiple external composer names alongside platform co-composers selected from album members. Track details, workflow pages, and mastering pages show both groups separately."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "外部-only 曲目由主催代办",
+            "en": "Producer proxy for external-only tracks"
+          },
+          "description": {
+            "zh-CN": "当曲目没有平台内曲师时，主催可以代办修订上传、源音频补交、公开问题状态处理和终审确认；外部曲师不会进入评审分配池或接收系统通知。",
+            "en": "When a track has no platform composers, the producer can handle revisions, source follow-ups, public issue actions, and final approval on their behalf. External composers are not added to reviewer pools or notification recipients."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -526,10 +526,10 @@ export const trackApi = {
     request<Track>(`/tracks/${id}/final-review/approve`, { method: 'POST' }),
   requestReturnInFinalReview: (id: number) =>
     request<void>(`/tracks/${id}/final-review/request-return`, { method: 'POST' }),
-  updateComposers: (trackId: number, composerIds: number[]) =>
+  updateComposers: (trackId: number, composerIds: number[], externalComposerNames: string[] = []) =>
     request<Track>(`/tracks/${trackId}/composers`, {
       method: 'PATCH',
-      body: JSON.stringify({ composer_ids: composerIds }),
+      body: JSON.stringify({ composer_ids: composerIds, external_composer_names: externalComposerNames }),
     }),
   delete: (id: number) => request<void>(`/tracks/${id}`, { method: 'DELETE' }),
   archive: (id: number) => request<Track>(`/tracks/${id}/archive`, { method: 'POST' }),
@@ -1095,6 +1095,7 @@ export const r2Api = {
     proxy_submission?: boolean
     external_submitter_name?: string | null
     composer_ids?: number[]
+    external_composer_names?: string[]
   }) => request<PresignedUploadResponse>('/tracks/request-upload', { method: 'POST', body: JSON.stringify(params) }),
 
   confirmTrackUpload: (params: {
@@ -1111,6 +1112,7 @@ export const r2Api = {
     proxy_submission?: boolean
     external_submitter_name?: string | null
     composer_ids?: number[]
+    external_composer_names?: string[]
   }) => request<Track>('/tracks/confirm-upload', { method: 'POST', body: JSON.stringify(params) }),
 
   // Source version

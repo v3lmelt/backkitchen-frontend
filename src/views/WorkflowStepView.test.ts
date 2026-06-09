@@ -489,7 +489,7 @@ describe('WorkflowStepView', () => {
 
     expect(wrapper.text()).toContain('Master delivery requires a playable mastered audio file')
     await wrapper.find('textarea').setValue('https://cloud.example/stems\ncode: bk24')
-    const submitButton = wrapper.findAll('button').find(button => button.text() === 'Submit Delivery')!
+    const submitButton = wrapper.findAll('button').find(button => button.text() === 'Confirm Upload')!
 
     expect(submitButton.attributes('disabled')).toBeDefined()
     expect(mocks.uploadMasterDeliveryMock).not.toHaveBeenCalled()
@@ -960,6 +960,7 @@ describe('WorkflowStepView', () => {
         workflow_cycle: 1,
         producer_id: 1,
         submitter_id: 3,
+        composer_ids: [3],
         peer_reviewer_id: null,
         workflow_step: {
           id: 'peer_review',
@@ -1739,6 +1740,10 @@ describe('WorkflowStepView', () => {
     const wrapper = mountWithPlugins(WorkflowStepView)
     await flushPromises()
 
+    expect(wrapper.text()).toContain('Submit cloud link (stems/multitracks)')
+    await wrapper.findAll('input[type="radio"]')[1].setValue(true)
+    await flushPromises()
+
     expect(wrapper.text()).toContain('Submit stems / multitrack cloud link')
     await wrapper.find('textarea').setValue('https://cloud.example/stems\ncode: bk24')
     await wrapper.findAll('button').find(button => button.text().includes('Submit Stem Link'))!.trigger('click')
@@ -1843,7 +1848,7 @@ describe('WorkflowStepView', () => {
     await fileInput.trigger('change')
     await flushPromises()
 
-    await wrapper.findAll('button').find(button => button.text().includes('Submit Delivery'))!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text().includes('Confirm Upload'))!.trigger('click')
     await flushPromises()
 
     expect(mocks.uploadMasterDeliveryMock).toHaveBeenCalledWith(9, { file, deliveryMessage: null }, expect.any(Function))

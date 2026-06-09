@@ -44,7 +44,7 @@ import { useTrackStore } from '@/stores/tracks'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { translateStepLabel } from '@/utils/workflow'
 import { hashId } from '@/utils/hash'
-import { isTrackComposer, trackComposerDisplayText, trackComposerIds } from '@/utils/trackComposers'
+import { externalComposerDisplayText, isComposerActor, trackComposerDisplayText, trackComposerIds } from '@/utils/trackComposers'
 import { extractAudioDuration } from '@/utils/audio'
 import { activeAssignmentsForStep, canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
 import { emptyMentionCandidates } from '@/utils/mentionCandidates'
@@ -87,11 +87,12 @@ const composerApprovalLabel = computed(() =>
 )
 function trackArtistDisplay(stepTrack: Track): string {
   if (stepTrack.artist) return stepTrack.artist
-  if (stepTrack.composers?.length) return trackComposerDisplayText(stepTrack)
+  const composerText = trackComposerDisplayText(stepTrack)
+  if (composerText !== '--') return composerText
   return stepTrack.submitter_id ? `#${hashId(stepTrack.submitter_id)}` : '--'
 }
 function trackArtistUsesHash(stepTrack: Track): boolean {
-  return Boolean(!stepTrack.artist && !stepTrack.composers?.length && stepTrack.submitter_id)
+  return Boolean(!stepTrack.artist && trackComposerDisplayText(stepTrack) === '--' && stepTrack.submitter_id)
 }
 const issues = ref<Issue[]>([])
 const mentionCandidates = ref(emptyMentionCandidates())
@@ -541,7 +542,7 @@ const canConfirmDelivery = computed(() => {
   if (currentStep.value?.assignee_user_id) return currentStep.value.assignee_user_id === userId
   switch (currentStep.value?.assignee_role) {
     case 'submitter':
-      return isTrackComposer(track.value, userId)
+      return isComposerActor(track.value, userId)
     case 'producer':
       return track.value.producer_id === userId
     case 'peer_reviewer':
@@ -557,19 +558,19 @@ const canApproveFinal = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId) return false
   if (userId === track.value.producer_id) return !masterDelivery.value.producer_approved_at
-  if (isTrackComposer(track.value, userId)) return !masterDelivery.value.submitter_approved_at
+  if (isComposerActor(track.value, userId)) return !masterDelivery.value.submitter_approved_at
   return false
 })
 const canRequestReturn = computed(() => {
   if (!track.value) return false
   const userId = appStore.currentUser?.id
   if (!userId) return false
-  return isTrackComposer(track.value, userId) && userId !== track.value.producer_id
+  return isComposerActor(track.value, userId) && userId !== track.value.producer_id
 })
 const canSeeMasteringSidebar = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId || !track.value) return false
-  const isParticipant = isTrackComposer(track.value, userId)
+  const isParticipant = isComposerActor(track.value, userId)
     || userId === track.value.producer_id
     || userId === track.value.mastering_engineer_id
   const supportsSidebar = activeVariant.value === 'mastering' || activeVariant.value === 'final_review'
@@ -602,7 +603,7 @@ const isRevisionAssignee = computed(() => {
   if (!userId || !track.value) return false
   const step = currentStep.value
   if (step?.type === 'revision' && step.assignee_user_id == null && step.assignee_role === 'submitter') {
-    return isTrackComposer(track.value, userId)
+    return isComposerActor(track.value, userId)
   }
   const assigneeId = revisionAssigneeUserId.value
   return assigneeId != null && assigneeId === userId
@@ -2935,7 +2936,7 @@ function handleIssueLeave() {
           {{ translateStepLabel(currentStep, t) }} · <span :class="{ 'font-mono': trackArtistUsesHash(track) }">{{ trackArtistDisplay(track) }}</span>
         </p>
         <p v-if="isProxySubmission" class="mt-1 text-xs text-muted-foreground">
-          {{ t('trackDetail.externalSubmitter') }}: {{ track.external_submitter_name }} · {{ t('trackDetail.proxyUploader') }}: {{ track.proxy_uploader?.display_name ?? track.submitter?.display_name ?? '--' }}
+          {{ t('trackDetail.externalComposers') }}: {{ externalComposerDisplayText(track) }} · {{ t('trackDetail.composerProxyActor') }}: {{ track.proxy_uploader?.display_name ?? track.submitter?.display_name ?? '--' }}
         </p>
       </div>
       <StatusBadge :status="track.status" type="track" :label="currentStep?.label ?? null" />

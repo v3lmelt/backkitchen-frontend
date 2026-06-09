@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import type { Track, User } from '@/types'
 
-import { isTrackComposer, trackComposerDisplayText, trackComposerIds } from './trackComposers'
+import {
+  externalComposerDisplayText,
+  isComposerActor,
+  isTrackComposer,
+  platformComposerDisplayText,
+  trackComposerDisplayText,
+  trackComposerIds,
+} from './trackComposers'
 
 function makeUser(id: number, displayName: string): User {
   return {
@@ -34,6 +41,7 @@ function makeTrack(overrides: Partial<Track> = {}): Track {
     workflow_cycle: 1,
     submitter_id: 10,
     composer_ids: [10],
+    external_composer_names: [],
     proxy_uploader_id: null,
     peer_reviewer_id: 20,
     producer_id: 30,
@@ -47,6 +55,7 @@ function makeTrack(overrides: Partial<Track> = {}): Track {
     archived_at: null,
     submitter: makeUser(10, 'Primary'),
     composers: [makeUser(10, 'Primary')],
+    external_composers: [],
     current_source_version: null,
     current_master_delivery: null,
     pending_source_followup_request: null,
@@ -60,10 +69,10 @@ function makeTrack(overrides: Partial<Track> = {}): Track {
 }
 
 describe('trackComposers', () => {
-  it('keeps the primary submitter first and dedupes collaborators', () => {
+  it('uses platform composer ids as the source of truth', () => {
     const track = makeTrack({ composer_ids: [11, 10, 11] })
 
-    expect(trackComposerIds(track)).toEqual([10, 11])
+    expect(trackComposerIds(track)).toEqual([11, 10])
     expect(isTrackComposer(track, 11)).toBe(true)
     expect(isTrackComposer(track, 12)).toBe(false)
   })
@@ -75,5 +84,43 @@ describe('trackComposers', () => {
     })
 
     expect(trackComposerDisplayText(track)).toBe('Primary / Co')
+    expect(platformComposerDisplayText(track)).toBe('Primary / Co')
+  })
+
+  it('combines platform and external composer names for summary display', () => {
+    const track = makeTrack({
+      composer_ids: [10],
+      external_composer_names: ['Guest A', 'Guest B'],
+    })
+
+    expect(trackComposerDisplayText(track)).toBe('Primary / Guest A / Guest B')
+    expect(externalComposerDisplayText(track)).toBe('Guest A / Guest B')
+  })
+
+  it('treats the producer as composer actor only for external-only tracks', () => {
+    const track = makeTrack({
+      composer_ids: [],
+      composers: [],
+      external_composer_names: ['Offline'],
+      producer_id: 30,
+    })
+
+    expect(isTrackComposer(track, 30)).toBe(false)
+    expect(isComposerActor(track, 30)).toBe(true)
+    expect(isComposerActor({ ...track, composer_ids: [10] }, 30)).toBe(false)
+  })
+
+  it('keeps the legacy submitter as composer actor when no composer records exist', () => {
+    const track = makeTrack({
+      composer_ids: [],
+      composers: [],
+      external_composer_names: [],
+      submitter_id: 10,
+    })
+
+    expect(trackComposerIds(track)).toEqual([])
+    expect(isTrackComposer(track, 10)).toBe(false)
+    expect(isComposerActor(track, 10)).toBe(true)
+    expect(isComposerActor(track, 30)).toBe(false)
   })
 })
