@@ -70,7 +70,7 @@
             "en": "Artist aliases can be bound to platform accounts"
           },
           "description": {
-            "zh-CN": "曲目提交页将艺术家名义和平台账号绑定合并到同一个列表：每个名义可手动选择对应账号，同一账号可使用多个名义；未绑定账号的名义作为外部曲师记录，若整首曲目都未绑定账号则由制作者代办后续曲师侧流程。",
+            "zh-CN": "曲目提交页将艺术家名义和平台账号绑定合并到同一个列表：每个名义可手动选择对应账号，同一账号可使用多个名义；未绑定账号的名义作为外部曲师记录，若整首曲目都未绑定账号则由主催代办后续曲师侧流程。",
             "en": "The upload page now keeps artist aliases and platform-account binding in one list: each alias can be manually linked to an account, one account can use multiple aliases, and unlinked aliases are recorded as external composers. If the whole track has no linked account, the producer handles later composer-side workflow."
           }
         }
