@@ -5,6 +5,48 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.32",
+    "date": "2026-07-05",
+    "headline": {
+      "zh-CN": "优化提交页曲师代办说明",
+      "en": "Clarifies upload-page composer proxy guidance"
+    },
+    "summary": {
+      "zh-CN": "曲目提交页补充艺术家 UID 绑定和主催代办说明，并将中文界面的相关称呼统一为主催。",
+      "en": "The upload page now explains artist UID binding and producer proxy submission more clearly, while the Chinese UI uses the producer title consistently."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "提交页说明",
+          "en": "Upload guidance"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "说明 UID 绑定和主催代办",
+              "en": "Explain UID binding and proxy submission"
+            },
+            "description": {
+              "zh-CN": "艺术家区域现在明确提示填写 UID 的平台曲师会拥有曲目并处理曲师侧流程，未填写 UID 的行仅作为外部姓名记录；当本人主催的专辑整首曲目都未绑定 UID 时，后续曲师侧流程由主催代办。",
+              "en": "The artist area now states that platform composers with a UID own the track and handle composer-side workflow, while rows without a UID are external name records. When an album produced by the current user has no UID on any artist row, the producer proxies the later composer-side workflow."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "统一主催称呼",
+              "en": "Align the Chinese producer title"
+            },
+            "description": {
+              "zh-CN": "中文可见文案和历史更新日志中的相关旧称已统一为主催。",
+              "en": "Relevant Chinese user-facing copy and changelog text now use the producer title consistently."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.31",
     "date": "2026-07-05",
     "headline": {
@@ -224,7 +266,7 @@ export const CHANGELOG: ChangelogEntry[] = [
               "en": "Artist aliases can be bound to platform accounts"
             },
             "description": {
-              "zh-CN": "曲目提交页将艺术家名义和平台账号绑定合并到同一个列表：每个名义可手动选择对应账号，同一账号可使用多个名义；未绑定账号的名义作为外部曲师记录，若整首曲目都未绑定账号则由制作者代办后续曲师侧流程。",
+              "zh-CN": "曲目提交页将艺术家名义和平台账号绑定合并到同一个列表：每个名义可手动选择对应账号，同一账号可使用多个名义；未绑定账号的名义作为外部曲师记录，若整首曲目都未绑定账号则由主催代办后续曲师侧流程。",
               "en": "The upload page now keeps artist aliases and platform-account binding in one list: each alias can be manually linked to an account, one account can use multiple aliases, and unlinked aliases are recorded as external composers. If the whole track has no linked account, the producer handles later composer-side workflow."
             }
           }
