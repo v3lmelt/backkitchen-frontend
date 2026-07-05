@@ -5,6 +5,38 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.30",
+    "date": "2026-07-05",
+    "headline": {
+      "zh-CN": "修复母带页漏翻译文案",
+      "en": "Fixes missing mastering-page translations"
+    },
+    "summary": {
+      "zh-CN": "母带交付和终审页面现在会显示正常的交付说明、交付类型和曲师标签，不再暴露翻译键名。",
+      "en": "Master delivery and final-review pages now show proper delivery notes, delivery type, and composer labels instead of raw translation keys."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "母带流程",
+          "en": "Mastering workflow"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "补齐母带交付文案",
+              "en": "Master delivery copy is complete"
+            },
+            "description": {
+              "zh-CN": "母带交付输入框、交付版本历史和终审审批状态现在都会显示对应的中英文文案。",
+              "en": "The delivery input, delivery version history, and final-review approval status now show localized copy in both languages."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.29",
     "date": "2026-06-10",
     "headline": {
