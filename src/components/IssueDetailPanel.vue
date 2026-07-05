@@ -18,6 +18,7 @@ import { hashId } from '@/utils/hash'
 import { resolveAttachmentReferenceIndex, type TimeReference, type TimestampTarget } from '@/utils/timestamps'
 import { ArrowDownUp, X, Music, Pencil, Trash2 } from 'lucide-vue-next'
 import { canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
+import { isTrackComposer } from '@/utils/trackComposers'
 
 const props = defineProps<{
   issue: Issue | null
@@ -110,7 +111,7 @@ function statusTransitionLabel(oldStatus: string | null | undefined, newStatus: 
 }
 
 const shouldHideInternalComments = computed(() =>
-  Boolean(props.track && appStore.currentUser?.id === props.track.submitter_id),
+  Boolean(props.track && isTrackComposer(props.track, appStore.currentUser?.id)),
 )
 
 const commentSortOrder = ref<'desc' | 'asc'>('desc')

@@ -277,7 +277,7 @@
       "basicsTitle": "Basics",
       "basicsDesc": "Stages in the flow canvas execute top-down. Click any card to edit its name, assignee, and behavior toggles in the Inspector panel on the right. Use the ↑ / ↓ icons at the top-right of each card to reorder, and the 🗑 icon to delete.",
       "stageTypesTitle": "Stage Types",
-        "stageIntake": "Intake Approval — The producer decides whether to accept the submission. Permanent rejection is optional, and the stage can also skip peer review and jump straight to producer review.",
+      "stageIntake": "Intake Approval — The producer decides whether to accept the submission. Permanent rejection is optional, and the stage can also skip peer review and jump straight to producer review.",
       "stagePeerReview": "Peer Review — Peer reviewers listen to the track and flag issues, then decide whether it passes or needs revision. Supports manual assignment or automatic assignment from a reviewer pool.",
       "stageProducerGate": "Producer Gate — The producer decides whether to send the track to mastering or bounce it back for revision. Supports permanent rejection and sending the track back to any earlier stage.",
       "stageMastering": "Mastering — The mastering engineer uploads the mastered output. Optionally requires confirmation after delivery.",
@@ -289,7 +289,7 @@
       "reviewSettingsTitle": "Review Settings (Peer Review)",
       "reviewSettingsDesc": "Peer review supports manual and automatic assignment. In automatic mode you can pick members to form a reviewer pool and specify the minimum number of reviews required before the track can advance.",
       "rejectTargetsTitle": "Reject Targets",
-        "rejectTargetsDesc": "Intake, Producer Gate, and Final Review support \"Allow permanent rejection\" (final reject, unrecoverable). Intake can also enable direct producer review to skip peer review. Producer Gate and Final Review can also add extra reject targets to send the track back to any earlier stage.",
+      "rejectTargetsDesc": "Intake, Producer Gate, and Final Review support \"Allow permanent rejection\" (final reject, unrecoverable). Intake can also enable direct producer review to skip peer review. Producer Gate and Final Review can also add extra reject targets to send the track back to any earlier stage.",
       "notesTitle": "Notes",
       "note1": "Stage order determines the advancement path. Once the last main stage completes, the track enters the completed state. Use the arrow icons on each card to reorder at any time.",
       "note2": "Producers can still edit the workflow in album settings after creation, but removing or changing stages may affect in-flight tracks.",
@@ -361,11 +361,21 @@
       "revision": "{stage} Revision"
     },
     "stageKinds": {
-      "intake": { "name": "Intake" },
-      "peer_review": { "name": "Peer Review" },
-      "producer_gate": { "name": "Producer Gate" },
-      "mastering": { "name": "Mastering" },
-      "final_review": { "name": "Final Review" }
+      "intake": {
+        "name": "Intake"
+      },
+      "peer_review": {
+        "name": "Peer Review"
+      },
+      "producer_gate": {
+        "name": "Producer Gate"
+      },
+      "mastering": {
+        "name": "Mastering"
+      },
+      "final_review": {
+        "name": "Final Review"
+      }
     },
     "summary": {
       "mainStages": "Main stages",
@@ -432,6 +442,20 @@
   "workflowStep": {
     "uploadRevisedSource": "Upload Revised Source",
     "uploadRevisedSourceDesc": "Upload a new version of the source audio file.",
+    "revisionSubmitMethod": "Choose submission method",
+    "revisionSubmitMethodUploadFile": "Upload audio file",
+    "revisionSubmitMethodExternalLink": "Submit cloud link (stems/multitracks)",
+    "externalStemLinkTitle": "Submit stems / multitrack cloud link",
+    "externalStemLinkDesc": "Use only when mastering engineer requests stems or multitracks. Submitting returns the track to mastering.",
+    "externalStemLinkLabel": "Cloud link, access code, and notes",
+    "externalStemLinkPlaceholder": "Paste the stems/multitrack cloud link, extraction code/password, file notes, and handling instructions…",
+    "externalStemLinkHint": "This is recorded as a new source-version history entry, but it does not replace the current playable source audio file.",
+    "externalStemLinkExampleHeading": "Format Example",
+    "externalStemLinkExample": "Link: https://drive.google.com/...\nCode: a1b2\nNotes: Logic Pro X project + full stem WAVs",
+    "submitExternalStemLink": "Submit Stem Link",
+    "clearExternalStemLink": "Clear Content",
+    "externalSourceLinkSubmitted": "Stem link submitted",
+    "externalSourceVersionLabel": "External stem link",
     "revisedPreviewHeading": "Preview Revised Audio",
     "revisedPreviewNotice": "Listen to your revised audio and confirm it's correct before uploading.",
     "revisionNotes": "Revision Notes",
@@ -439,12 +463,12 @@
     "clearRevision": "Choose Another File",
     "uploading": "Uploading...",
     "uploadRevision": "Upload Revision",
-    "deliveryPreviewHeading": "Preview Before Submit",
-    "deliveryPreviewNotice": "Double-check your export settings, fades, and overall playback first. Preview the file before submitting the delivery.",
-    "confirmUploadDelivery": "Confirm Delivery Upload",
-    "clearSelectedDelivery": "Choose Another File",
+    "deliveryPreviewHeading": "Local Preview",
+    "deliveryPreviewNotice": "Please listen and verify the file before uploading.",
+    "confirmUploadDelivery": "Confirm Upload",
+    "clearSelectedDelivery": "Clear Selection",
     "currentDelivery": "Current Delivery",
-    "deliveryUploaded": "Delivery uploaded",
+    "deliveryUploaded": "Mastering delivery uploaded",
     "revisionUploaded": "Revision uploaded",
     "finalApproved": "Final review approved",
     "actionSubmitted": "Action submitted. Waiting for the remaining required review steps.",
@@ -496,16 +520,27 @@
     "reviewerAssignmentDone": "Reviewers assigned",
     "reviewerAssignmentNoPool": "Auto-assignment failed: no eligible reviewers for this stage",
     "reviewerAssignmentNoMembers": "No assignable members in this album.",
-    "deliveryPreviewHeading": "Local Preview",
-    "deliveryPreviewNotice": "Please listen and verify the file before uploading.",
-    "confirmUploadDelivery": "Confirm Upload",
-    "clearSelectedDelivery": "Clear Selection",
-    "deliveryUploaded": "Mastering delivery uploaded",
-    "currentDelivery": "Current Delivery",
     "deliveryPendingConfirmation": "Pending engineer confirmation",
     "deliveryConfirmed": "Confirmed by engineer",
+    "deliveryFileLabel": "Master audio file",
+    "fileDeliveryLabel": "Audio delivery",
+    "textDeliveryLabel": "Text delivery",
+    "deliveryMessageLabel": "Delivery notes / external link",
+    "deliveryMessagePlaceholder": "Delivery notes, external link, or handoff details",
+    "deliveryMessageHint": "Master delivery requires a playable mastered audio file",
+    "textDeliveryNoAudio": "This historical delivery has no playable audio file",
     "masterVersionHistory": "Master Delivery History",
-    "leaveUploadConfirm": "A file is selected for upload. If you leave now, you'll need to choose it again. Leave this page?"
+    "leaveUploadConfirm": "A file is selected for upload. If you leave now, you'll need to choose it again. Leave this page?",
+    "selectRevisionType": "Select Revision Type",
+    "selectRevisionTypeDesc": "Choose what material you need the composer to provide. This will determine their upload method.",
+    "revisionTypeSourceAudio": "Request Source Audio Revision",
+    "revisionTypeSourceAudioDesc": "Composer needs to remix and upload a single audio file (WAV/FLAC).",
+    "revisionTypeStemFiles": "Request Stem Files",
+    "revisionTypeStemFilesDesc": "Composer should provide a cloud storage link to stem files (Google Drive, Dropbox, etc.).",
+    "revisionTypeRequestedSourceAudio": "Mastering engineer requested: Re-upload source audio file",
+    "revisionTypeRequestedStemFiles": "Mastering engineer requested: Provide stem files via cloud link",
+    "revisionTypeHintSourceAudio": "Please upload a single remixed audio file.",
+    "revisionTypeHintStemFiles": "Please provide a cloud storage link, access code, and handling notes in the text area below."
   },
   "workflowSteps": {
     "intake": "Intake",
@@ -657,6 +692,10 @@
     "trackSummary": "Track Summary",
     "submitter": "Submitter",
     "externalSubmitter": "External Composer",
+    "composers": "Composers",
+    "platformComposers": "Platform composers",
+    "externalComposers": "External composers",
+    "composerProxyActor": "Composer-side proxy",
     "proxyUploader": "Uploaded by Producer",
     "externalSubmitterProxy": "External composer (producer proxy)",
     "peerReviewer": "Peer Reviewer",
@@ -881,6 +920,11 @@
     "noDiscussions": "No mastering communication yet. Use this space to align requirements, listening feedback, and delivery details.",
     "discussionPlaceholder": "Write a mastering communication message…",
     "postDiscussion": "Send message",
+    "stemHandoffTitle": "Composer stem files",
+    "stemHandoffMeta": "External stem link · v{version} · {date}",
+    "openStemHandoff": "Open link",
+    "copyStemHandoff": "Copy content",
+    "stemHandoffCopied": "Stem link copied",
     "tabs": {
       "discussion": "Discussion",
       "listen": "Listen",
@@ -974,7 +1018,7 @@
     "returnRequested": "Return request sent to producer"
   },
   "issueDetail": {
-    "deleteCommentTitle": "Delete Comment",
+    "deleteCommentTitle": "Delete comment?",
     "deleteCommentConfirm": "Delete this comment? This action cannot be undone.",
     "back": "Back",
     "created": "Created {date}",
@@ -1021,7 +1065,6 @@
     "statusUpdateFailed": "Failed to update issue status.",
     "commentUpdated": "Comment updated.",
     "commentDeleted": "Comment deleted.",
-    "deleteCommentTitle": "Delete comment?",
     "deleteCommentMessage": "This comment will be permanently removed."
   },
   "upload": {
@@ -1035,8 +1078,15 @@
     "artist": "Artist *",
     "album": "Album",
     "bpm": "BPM",
-    "proxySubmission": "Upload for an external composer",
-    "proxySubmissionHint": "Use this when the composer will not use Back Kitchen. You will handle later revisions and confirmations for them.",
+    "artistHint": "Add one display alias per row. To bind a platform account, enter that user's UID; the same UID can use multiple aliases.",
+    "artistBindingHint": "Artists with a UID jointly own the track; rows without a UID are kept as name-only credits.",
+    "autoProxySubmissionHint": "These artists are not bound to platform accounts, so the producer will handle later composer-side workflow.",
+    "noLinkedAccount": "No linked account",
+    "currentAccount": "Current account",
+    "artistNamePlaceholder": "Artist alias",
+    "artistUidLabel": "Platform user UID",
+    "artistUidPlaceholder": "UID optional",
+    "addArtist": "Add artist",
     "externalSubmitterName": "External composer name",
     "externalSubmitterPlaceholder": "Name shown to the producer and mastering engineer",
     "proxyNameRequired": "Please enter the external composer name",
@@ -1057,6 +1107,11 @@
     "albumRequired": "Please select an album before submitting",
     "titleRequired": "Please enter a track title",
     "artistRequired": "Please enter an artist name",
+    "artistNameRequiredForAccount": "Artist rows with a UID need an alias",
+    "artistUidInvalid": "UID must be a positive whole number",
+    "artistAccountRequired": "Only the producer can submit artists without linked platform accounts; enter at least one UID",
+    "artistNameTooLong": "Each artist alias must be at most 100 characters",
+    "artistDisplayTooLong": "The combined artist display name must be at most 100 characters",
     "fileTooLarge": "File too large, maximum allowed is {max}",
     "unsupportedImageType": "Only JPEG, PNG, WebP, and GIF images are supported"
   },

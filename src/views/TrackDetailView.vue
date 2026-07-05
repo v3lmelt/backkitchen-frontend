@@ -7,6 +7,13 @@ import { useAppStore } from '@/stores/app'
 import type { Track, Issue, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember, StageAssignment } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
 import { hashId } from '@/utils/hash'
+import {
+  externalComposerDisplayText,
+  isComposerActor,
+  platformComposerDisplayText,
+  trackComposerDisplayText,
+  trackComposerIds,
+} from '@/utils/trackComposers'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
@@ -127,9 +134,9 @@ function inferTrackWorkflowVariant(trackData: Track | null): 'generic' | 'master
 // Anonymize peer reviewer only for the submitter during active peer review phases
 const shouldAnonymizePeer = computed(() => {
   if (!track.value || !appStore.currentUser) return false
-  const isSubmitter = appStore.currentUser.id === track.value.submitter_id
+  const isComposer = isComposerActor(track.value, appStore.currentUser.id)
   const peerPhases = ['peer_review', 'peer_revision']
-  return isSubmitter && peerPhases.includes(track.value.status)
+  return isComposer && peerPhases.includes(track.value.status)
 })
 
 // Single pass over issues — builds both number and peer-phase lookup
@@ -392,7 +399,7 @@ const handleDownload = () => downloadTrackAudio(audioUrl, track)
 
 const masterAudioUrl = computed(() => {
   const d = track.value?.current_master_delivery
-  if (!d) return ''
+  if (!d?.file_path) return ''
   return `${API_ORIGIN}/api/tracks/${trackId.value}/master-audio?v=${d.delivery_number}&c=${d.workflow_cycle ?? 1}`
 })
 const { downloading: masterDownloading, downloadProgress: masterDownloadProgress, downloadTrackAudio: downloadMasterAudio } = useAudioDownload()
@@ -662,10 +669,21 @@ const olderVersions = computed(() =>
     .sort((a, b) => b.version_number - a.version_number)
 )
 
+function sourceVersionOptionLabel(version: TrackSourceVersion): string {
+  const prefix = version.source_kind === 'external_link'
+    ? t('workflowStep.externalSourceVersionLabel')
+    : `V${version.version_number}`
+  return `${prefix} · ${fmtDate(version.created_at)}`
+}
+
+const olderPlayableVersions = computed(() =>
+  olderVersions.value.filter(version => version.source_kind !== 'external_link' && version.file_path !== null),
+)
+
 const versionOptions = computed<SelectOption[]>(() =>
-  olderVersions.value.map((v) => ({
+  olderPlayableVersions.value.map((v) => ({
     value: v.id,
-    label: `V${v.version_number} · ${fmtDate(v.created_at)}`,
+    label: sourceVersionOptionLabel(v),
   }))
 )
 
@@ -675,10 +693,18 @@ const currentVersionRevisionNotes = computed(() => {
   const sv = sourceVersions.value.find(v => v.id === cv.id)
   return sv?.revision_notes ?? cv.revision_notes ?? null
 })
+const currentVersionNotesLabel = computed(() => {
+  const currentSource = track.value?.current_source_version
+  const version = currentSource?.version_number ?? track.value?.version
+  return currentSource?.source_kind === 'external_link'
+    ? t('trackDetail.externalSourceLinkLabel', { version })
+    : t('trackDetail.revisionNotesLabel', { version })
+})
+
 
 const selectedCompareVersionNotes = computed(() => {
   if (!selectedCompareVersionId.value) return null
-  const sv = sourceVersions.value.find(v => v.id === selectedCompareVersionId.value)
+  const sv = olderPlayableVersions.value.find(v => v.id === selectedCompareVersionId.value)
   return sv?.revision_notes ?? null
 })
 
@@ -686,7 +712,7 @@ const isProducer = computed(() => track.value?.producer_id === appStore.currentU
 const canSeeMastering = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId || !track.value) return false
-  return userId === track.value.submitter_id
+  return isComposerActor(track.value, userId)
     || userId === track.value.producer_id
     || userId === track.value.mastering_engineer_id
 })
@@ -712,7 +738,7 @@ const togglingVisibility = ref(false)
 // ── Edit metadata ─────────────────────────────────────────────────────────
 const canEditMetadata = computed(() => {
   if (!track.value || !appStore.currentUser) return false
-  return appStore.currentUser.id === track.value.submitter_id || isProducer.value
+  return isComposerActor(track.value, appStore.currentUser.id) || isProducer.value
 })
 const editingMetadata = ref(false)
 const metadataForm = ref({ title: '', artist: '', bpm: '', original_title: '', original_artist: '' })
@@ -851,7 +877,8 @@ async function openReassignModal() {
     reassigning.value = true
     try {
       const album = await albumApi.get(track.value.album_id)
-      reassignMembers.value = album.members.filter(m => m.user_id !== track.value!.submitter_id)
+      const composerIds = new Set(trackComposerIds(track.value))
+      reassignMembers.value = album.members.filter(m => !composerIds.has(m.user_id))
     } catch (e: any) {
       toastError(e?.message || t('common.requestFailed'))
       return
@@ -1104,8 +1131,29 @@ watch(() => primaryActions.value.length, async () => {
 
 // Reopen logic
 const isMasteringEngineer = computed(() => track.value?.mastering_engineer_id === appStore.currentUser?.id)
-const isSubmitter = computed(() => track.value?.submitter_id === appStore.currentUser?.id)
+const isSubmitter = computed(() => isComposerActor(track.value, appStore.currentUser?.id))
+const composerSummary = computed(() => trackComposerDisplayText(track.value))
+const platformComposerSummary = computed(() => platformComposerDisplayText(track.value))
+const externalComposerSummary = computed(() => externalComposerDisplayText(track.value))
+const hasPlatformComposers = computed(() => trackComposerIds(track.value).length > 0)
+const hasExternalComposers = computed(() => externalComposerSummary.value !== '--')
+const trackArtistDisplay = computed(() => {
+  if (!track.value) return '--'
+  if (track.value.artist) return track.value.artist
+  if (composerSummary.value !== '--') return composerSummary.value
+  return track.value.submitter_id ? `#${hashId(track.value.submitter_id)}` : '--'
+})
+const trackArtistUsesHash = computed(() => Boolean(
+  track.value && !track.value.artist && composerSummary.value === '--' && track.value.submitter_id,
+))
 const isProxySubmission = computed(() => Boolean(track.value?.is_proxy_submission && track.value.external_submitter_name))
+const composerApprovalLabel = computed(() =>
+  isProxySubmission.value ? t('trackDetail.externalSubmitterProxy') : t('trackDetail.composers')
+)
+const composerProxyActorDisplay = computed(() => {
+  if (!track.value || hasPlatformComposers.value || !hasExternalComposers.value) return ''
+  return track.value.proxy_uploader?.display_name ?? track.value.submitter?.display_name ?? '--'
+})
 const canDirectReopen = computed(() => track.value?.status === 'completed' && (isProducer.value || isMasteringEngineer.value))
 const canRequestReopen = computed(() => track.value?.status === 'completed' && isSubmitter.value && !isProducer.value && !isMasteringEngineer.value)
 const completedProcessMode = ref<'reopen' | 'source_followup'>('reopen')
@@ -1207,7 +1255,7 @@ async function handleReopen() {
   }
 }
 
-watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, versions, compareVersion]) => {
+watch([track, olderPlayableVersions, () => route.query.compareVersion], ([currentTrack, versions, compareVersion]) => {
   if (!currentTrack) return
   const rawValue = Array.isArray(compareVersion) ? compareVersion[0] : compareVersion
   if (!rawValue) return
@@ -1323,7 +1371,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
                 </button>
               </div>
               <p class="text-sm sm:text-base text-muted-foreground">
-                <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span> · source v{{ track.version }}
+                <span :class="{ 'font-mono': trackArtistUsesHash }">{{ trackArtistDisplay }}</span> · source v{{ track.version }}
               </p>
               <div v-if="track.bpm || track.original_title || track.original_artist" class="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
                 <span v-if="track.bpm" class="font-mono">BPM {{ track.bpm }}</span>
@@ -1347,7 +1395,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
               <h3 class="text-sm font-medium text-muted-foreground">{{ t('trackDetail.currentSourceAudio') }}</h3>
               <div class="flex items-center gap-2">
                 <button
-                  v-if="sourceVersions.length > 1"
+                  v-if="olderPlayableVersions.length > 0"
                   @click="showVersionCompare = !showVersionCompare"
                   class="text-xs btn-secondary px-3 py-1">
                   {{ t('compare.title') }}
@@ -1358,7 +1406,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
               </div>
             </div>
             <!-- 版本选择器 -->
-            <div v-if="showVersionCompare && olderVersions.length > 0" class="flex items-center gap-2 mb-3">
+            <div v-if="showVersionCompare && olderPlayableVersions.length > 0" class="flex items-center gap-2 mb-3">
               <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
               <CustomSelect v-model="selectedCompareVersionId" :options="versionOptions" :placeholder="`-- ${t('compare.selectVersion')} --`" size="sm" />
               <button v-if="selectedCompareVersionId" @click="selectedCompareVersionId = null" class="text-xs text-muted-foreground hover:text-foreground">
@@ -1377,7 +1425,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
               @playbackStateChange="onSourceWaveformPlaybackStateChange"
             />
             <div v-if="currentVersionRevisionNotes" class="mt-2 px-3 py-2 border border-border rounded-none bg-card">
-              <p class="text-xs font-mono text-muted-foreground mb-0.5">{{ t('trackDetail.revisionNotesLabel', { version: track.version }) }}</p>
+              <p class="text-xs font-mono text-muted-foreground mb-0.5">{{ currentVersionNotesLabel }}</p>
               <p class="text-sm text-foreground whitespace-pre-wrap">{{ currentVersionRevisionNotes }}</p>
             </div>
             <div v-if="selectedCompareVersionNotes" class="mt-2 px-3 py-2 border border-border rounded-none bg-card">
@@ -1411,6 +1459,19 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
               @timeupdate="onMasterWaveformTimeUpdate"
               @playbackStateChange="onMasterWaveformPlaybackStateChange"
             />
+          </div>
+          <div v-else-if="track.current_master_delivery && canSeeMastering" class="card space-y-3">
+            <div class="flex items-center justify-between mb-1">
+              <h3 class="text-sm font-medium text-muted-foreground">
+                {{ t('trackDetail.masterAudio') }}
+                <span class="text-xs ml-1">v{{ track.current_master_delivery.delivery_number }}</span>
+              </h3>
+            </div>
+            <p class="text-sm text-muted-foreground">{{ t('workflowStep.textDeliveryNoAudio') }}</p>
+            <div v-if="track.current_master_delivery.delivery_message" class="border border-border bg-background rounded-none p-3">
+              <p class="text-xs text-muted-foreground mb-1">{{ t('workflowStep.deliveryMessageLabel') }}</p>
+              <p class="whitespace-pre-wrap break-words text-sm text-foreground">{{ track.current_master_delivery.delivery_message }}</p>
+            </div>
           </div>
 
           <div id="issues">
@@ -1623,14 +1684,21 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
 
         <div class="card space-y-2 text-sm">
           <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('trackDetail.trackSummary') }}</h3>
-          <div class="flex justify-between">
-            <span class="text-muted-foreground">{{ isProxySubmission ? t('trackDetail.externalSubmitter') : t('trackDetail.submitter') }}</span>
-            <span v-if="isProxySubmission" class="text-foreground text-right">{{ track.external_submitter_name }}</span>
-            <span v-else class="text-foreground" :class="{ 'font-mono': !track.submitter && track.submitter_id }">{{ track.submitter?.display_name ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
+          <div class="flex justify-between gap-4">
+            <span class="text-muted-foreground">{{ t('trackDetail.submitter') }}</span>
+            <span class="text-foreground text-right" :class="{ 'font-mono': !track.submitter && track.submitter_id }">{{ track.submitter?.display_name ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
           </div>
-          <div v-if="isProxySubmission" class="flex justify-between gap-4">
-            <span class="text-muted-foreground">{{ t('trackDetail.proxyUploader') }}</span>
-            <span class="text-foreground text-right">{{ track.proxy_uploader?.display_name ?? track.submitter?.display_name ?? '--' }}</span>
+          <div v-if="hasPlatformComposers" class="flex justify-between gap-4">
+            <span class="text-muted-foreground">{{ t('trackDetail.platformComposers') }}</span>
+            <span class="text-foreground text-right">{{ platformComposerSummary }}</span>
+          </div>
+          <div v-if="hasExternalComposers" class="flex justify-between gap-4">
+            <span class="text-muted-foreground">{{ t('trackDetail.externalComposers') }}</span>
+            <span class="text-foreground text-right">{{ externalComposerSummary }}</span>
+          </div>
+          <div v-if="composerProxyActorDisplay" class="flex justify-between gap-4">
+            <span class="text-muted-foreground">{{ t('trackDetail.composerProxyActor') }}</span>
+            <span class="text-foreground text-right">{{ composerProxyActorDisplay }}</span>
           </div>
           <!-- Multi-reviewer progress -->
           <template v-if="hasMultipleReviewers">
@@ -1705,7 +1773,7 @@ watch([track, olderVersions, () => route.query.compareVersion], ([currentTrack, 
               </span>
             </div>
             <div class="flex items-center justify-between mt-1">
-              <span>{{ isProxySubmission ? t('trackDetail.externalSubmitterProxy') : t('trackDetail.submitter') }}</span>
+              <span>{{ composerApprovalLabel }}</span>
               <span class="text-xs" :class="track.current_master_delivery.submitter_approved_at ? 'text-success' : 'text-muted-foreground'">
                 {{ track.current_master_delivery.submitter_approved_at ? t('common.approved') : t('common.pending') }}
               </span>

@@ -5,6 +5,318 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.30",
+    "date": "2026-07-05",
+    "headline": {
+      "zh-CN": "修复母带页漏翻译文案",
+      "en": "Fixes missing mastering-page translations"
+    },
+    "summary": {
+      "zh-CN": "母带交付和终审页面现在会显示正常的交付说明、交付类型和曲师标签，不再暴露翻译键名。",
+      "en": "Master delivery and final-review pages now show proper delivery notes, delivery type, and composer labels instead of raw translation keys."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "母带流程",
+          "en": "Mastering workflow"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "补齐母带交付文案",
+              "en": "Master delivery copy is complete"
+            },
+            "description": {
+              "zh-CN": "母带交付输入框、交付版本历史和终审审批状态现在都会显示对应的中英文文案。",
+              "en": "The delivery input, delivery version history, and final-review approval status now show localized copy in both languages."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.29",
+    "date": "2026-06-10",
+    "headline": {
+      "zh-CN": "修复 Checklist 设置重启恢复开启",
+      "en": "Fixes checklist settings after backend restarts"
+    },
+    "summary": {
+      "zh-CN": "后端启动时的历史数据填充会保留已关闭的专辑和社团 Checklist 设置，避免部署或重启后又恢复为开启。",
+      "en": "Backend startup backfill now preserves disabled album and circle checklist settings, preventing deploys or restarts from turning them back on."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "专辑设置",
+          "en": "Album settings"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "关闭的 Checklist 会保持关闭",
+              "en": "Disabled checklists stay disabled"
+            },
+            "description": {
+              "zh-CN": "启动兼容逻辑只会补齐缺失的旧数据空值，不再覆盖主催已经关闭的专辑 Checklist 和社团默认 Checklist。",
+              "en": "Startup compatibility logic now only fills missing legacy null values and no longer overwrites album checklist or circle default checklist settings that producers already disabled."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.28",
+    "date": "2026-06-10",
+    "headline": {
+      "zh-CN": "艺术家绑定改为手填 UID",
+      "en": "Artist binding now uses manual UID entry"
+    },
+    "summary": {
+      "zh-CN": "曲目提交页的艺术家账号绑定从账号下拉改为手动填写 UID，第一行默认填入当前登录用户 UID，并允许绑定任意活跃平台用户。",
+      "en": "The track upload page now binds artist aliases by manually entering a UID, prefills the first row with the current user's UID, and allows any active platform user to be bound."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "提交页",
+          "en": "Upload page"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "手动填写绑定账号 UID",
+              "en": "Manual UID entry for bound accounts"
+            },
+            "description": {
+              "zh-CN": "每个艺术家名义现在可以直接填写平台用户 UID；第一行会默认填入当前登录用户 UID，留空则继续作为未绑定账号的姓名记录。",
+              "en": "Each artist alias can now include a platform user UID directly. The first row is prefilled with the current user's UID, and leaving it blank keeps the row as a name-only credit."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "可绑定任意活跃平台用户",
+              "en": "Bind any active platform user"
+            },
+            "description": {
+              "zh-CN": "UID 只要求对应用户存在且未封禁、未删除。被绑定用户会拥有该曲目，但不会自动加入专辑成员列表。",
+              "en": "A UID only needs to belong to an existing user who is not suspended or deleted. Bound users own the track, but are not automatically added as album members."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.27",
+    "date": "2026-06-09",
+    "headline": {
+      "zh-CN": "母带打回可选择素材类型",
+      "en": "Mastering revision requests can choose the material type"
+    },
+    "summary": {
+      "zh-CN": "母带师在母带工作台打回曲目时，现在会先选择需要曲师重新提交源音频，还是提供分轨文件链接；曲师修订页也会锁定对应提交方式。",
+      "en": "When a mastering engineer requests a revision from the mastering workspace, they can choose whether the composer should re-upload source audio or provide stem files, and the composer revision page now locks to that method."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "母带流程",
+          "en": "Mastering workflow"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "补上母带工作台的打回选项",
+              "en": "Revision type selection in the mastering workspace"
+            },
+            "description": {
+              "zh-CN": "在母带工作台点击请求修订时，会弹出源音频修订与分轨文件两种选项，并把选择同步到后续曲师上传流程。",
+              "en": "Clicking Request Revision in the mastering workspace now opens the source-audio versus stem-file choice and carries that choice into the composer upload flow."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "曲师只能按请求类型提交",
+              "en": "Composer submissions follow the requested type"
+            },
+            "description": {
+              "zh-CN": "如果母带师请求源音频，曲师页只显示音频上传；如果请求分轨文件，曲师页只显示网盘链接提交，避免提交到错误类型。",
+              "en": "If source audio was requested, the composer only sees audio upload. If stem files were requested, they only see the cloud-link form, preventing the wrong submission type."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "母带沟通显示分轨交接",
+              "en": "Stem handoff is visible in mastering communication"
+            },
+            "description": {
+              "zh-CN": "曲师提交分轨网盘链接后，母带沟通页会在讨论上方显示当前分轨交接内容，并提供打开链接和复制内容操作。",
+              "en": "After the composer submits a stem cloud link, the mastering communication tab now shows the current stem handoff above the discussion thread with actions to open the link or copy the full content."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "提交页",
+          "en": "Upload page"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "修复平台内曲师文案",
+              "en": "Fixed platform composer labels"
+            },
+            "description": {
+              "zh-CN": "曲目提交页的平台内曲师标题和说明现在会正常显示，不再出现 i18n key。",
+              "en": "The platform composer title and hint on the track upload page now render as localized text instead of raw i18n keys."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "艺术家名义可绑定平台账号",
+              "en": "Artist aliases can be bound to platform accounts"
+            },
+            "description": {
+              "zh-CN": "曲目提交页将艺术家名义和平台账号绑定合并到同一个列表：每个名义可手动选择对应账号，同一账号可使用多个名义；未绑定账号的名义作为外部曲师记录，若整首曲目都未绑定账号则由制作者代办后续曲师侧流程。",
+              "en": "The upload page now keeps artist aliases and platform-account binding in one list: each alias can be manually linked to an account, one account can use multiple aliases, and unlinked aliases are recorded as external composers. If the whole track has no linked account, the producer handles later composer-side workflow."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.26",
+    "date": "2026-06-08",
+    "headline": {
+      "zh-CN": "曲目支持多个外部曲师",
+      "en": "Tracks now support multiple external composers"
+    },
+    "summary": {
+      "zh-CN": "提交曲目时可以同时记录平台内曲师和不使用平台的外部曲师。没有平台内曲师的曲目由主催代办曲师侧流程，有平台内曲师时则由任一平台内曲师处理。",
+      "en": "Track submissions can now list both platform composers and external composers who do not use the platform. External-only tracks are handled by the producer, while tracks with platform composers let any platform composer handle composer-side work."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "外部曲师",
+          "en": "External composers"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "提交页可记录多个外部曲师",
+              "en": "Submit multiple external composers"
+            },
+            "description": {
+              "zh-CN": "上传曲目时可添加多个外部曲师姓名，并继续从专辑成员中选择平台内共同曲师；曲目详情、流程页和母带页会分别展示两类曲师。",
+              "en": "The upload page now accepts multiple external composer names alongside platform co-composers selected from album members. Track details, workflow pages, and mastering pages show both groups separately."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "外部-only 曲目由主催代办",
+              "en": "Producer proxy for external-only tracks"
+            },
+            "description": {
+              "zh-CN": "当曲目没有平台内曲师时，主催可以代办修订上传、源音频补交、公开问题状态处理和终审确认；外部曲师不会进入评审分配池或接收系统通知。",
+              "en": "When a track has no platform composers, the producer can handle revisions, source follow-ups, public issue actions, and final approval on their behalf. External composers are not added to reviewer pools or notification recipients."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.25",
+    "date": "2026-06-07",
+    "headline": {
+      "zh-CN": "曲目支持共同曲师",
+      "en": "Tracks now support co-composers"
+    },
+    "summary": {
+      "zh-CN": "提交曲目时可以选择专辑成员作为共同曲师。共同曲师会在曲目列表与详情中显示，并可参与源文件修订、问题状态处理、母带终审确认等曲师侧流程。",
+      "en": "Track submissions can now include album members as co-composers. Co-composers appear in track lists and details and can take the composer-side actions for source revisions, issue status updates, and final master approval."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "共同曲师",
+          "en": "Co-composers"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "提交时选择共同创作者",
+              "en": "Select collaborators during submission"
+            },
+            "description": {
+              "zh-CN": "曲目提交页新增共同曲师选择区，当前账号会自动加入，额外选择的专辑成员会一起获得曲师侧可见性和操作权限。",
+              "en": "The submit-track page now includes a co-composer selector. The current account is included automatically, and selected album members receive composer-side visibility and permissions."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "曲师侧流程同步扩展",
+              "en": "Composer-side workflow access expands"
+            },
+            "description": {
+              "zh-CN": "共同曲师现在可以查看私有曲目、处理公开问题状态、上传修订源文件、申请源音频补交，并参与母带终审确认；评审分配会自动避开所有曲师。",
+              "en": "Co-composers can now view private tracks, handle public issue status, upload revised source audio, request source follow-ups, and participate in final master approval. Reviewer assignment avoids every composer on the track."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.24",
+    "date": "2026-06-07",
+    "headline": {
+      "zh-CN": "母带修订支持提交分轨链接",
+      "en": "Mastering revisions now support stem links"
+    },
+    "summary": {
+      "zh-CN": "当母带阶段需要曲师补充分轨或多轨工程时，曲师可以在母带修订步骤提交网盘链接、提取码和说明；该记录会进入源版本历史，同时保留当前可播放的源音频。母带交付仍需上传母带音频文件。",
+      "en": "When mastering needs stems or multitracks from the composer, the composer can submit a cloud link, access code, and notes during the mastering revision step. The entry is kept in source-version history while the current playable source audio stays unchanged. Master delivery still requires an audio file."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "母带修订",
+          "en": "Mastering Revision"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "曲师可提交分轨 / 多轨网盘链接",
+              "en": "Composers can submit stem or multitrack links"
+            },
+            "description": {
+              "zh-CN": "母带师将曲目打回母带修订后，曲师除了上传新的源音频，也可以填写分轨包网盘链接、提取码和处理说明，并把流程送回母带阶段。",
+              "en": "After the mastering engineer sends a track to mastering revision, the composer can either upload a revised source file or submit a stem-package cloud link, access code, and handling notes before returning the track to mastering."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "当前源音频保持可播放",
+              "en": "The current source audio remains playable"
+            },
+            "description": {
+              "zh-CN": "分轨链接会作为新的源版本历史记录保存，但不会覆盖曲目的源音频文件、存储位置或时长；母带交付入口也恢复为必须上传可播放母带音频文件。",
+              "en": "A stem-link submission is saved as a new source-version history entry, but it does not overwrite the track's source audio file, storage backend, or duration. Master delivery is again limited to playable mastered audio uploads."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.23",
     "date": "2026-05-30",
     "headline": {

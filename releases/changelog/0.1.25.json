@@ -1,0 +1,42 @@
+{
+  "version": "0.1.25",
+  "date": "2026-06-07",
+  "headline": {
+    "zh-CN": "曲目支持共同曲师",
+    "en": "Tracks now support co-composers"
+  },
+  "summary": {
+    "zh-CN": "提交曲目时可以选择专辑成员作为共同曲师。共同曲师会在曲目列表与详情中显示，并可参与源文件修订、问题状态处理、母带终审确认等曲师侧流程。",
+    "en": "Track submissions can now include album members as co-composers. Co-composers appear in track lists and details and can take the composer-side actions for source revisions, issue status updates, and final master approval."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "共同曲师",
+        "en": "Co-composers"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "提交时选择共同创作者",
+            "en": "Select collaborators during submission"
+          },
+          "description": {
+            "zh-CN": "曲目提交页新增共同曲师选择区，当前账号会自动加入，额外选择的专辑成员会一起获得曲师侧可见性和操作权限。",
+            "en": "The submit-track page now includes a co-composer selector. The current account is included automatically, and selected album members receive composer-side visibility and permissions."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "曲师侧流程同步扩展",
+            "en": "Composer-side workflow access expands"
+          },
+          "description": {
+            "zh-CN": "共同曲师现在可以查看私有曲目、处理公开问题状态、上传修订源文件、申请源音频补交，并参与母带终审确认；评审分配会自动避开所有曲师。",
+            "en": "Co-composers can now view private tracks, handle public issue status, upload revised source audio, request source follow-ups, and participate in final master approval. Reviewer assignment avoids every composer on the track."
+          }
+        }
+      ]
+    }
+  ]
+}

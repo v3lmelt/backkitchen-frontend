@@ -10,6 +10,7 @@ import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { formatRelativeTime, parseUTC } from '@/utils/time'
 import { hashId } from '@/utils/hash'
+import { trackComposerDisplayText } from '@/utils/trackComposers'
 import { TRACK_STATUS_COLORS } from '@/utils/status'
 import { buildTrackWorkspaceRoute, translateStepLabel } from '@/utils/workflow'
 import { useDashboardPins } from '@/composables/useDashboardPins'
@@ -20,6 +21,16 @@ import { Music, Search } from 'lucide-vue-next'
 const TRACK_PAGE_SIZE = 100
 const TRACK_DISPLAY_INITIAL = 50
 const TRACK_DISPLAY_STEP = 50
+function trackArtistDisplay(track: Track): string {
+  if (track.artist) return track.artist
+  if (track.composers?.length) return trackComposerDisplayText(track)
+  return track.submitter_id ? `#${hashId(track.submitter_id)}` : '--'
+}
+
+function trackArtistUsesHash(track: Track): boolean {
+  return Boolean(!track.artist && !track.composers?.length && track.submitter_id)
+}
+
 
 
 type DashboardFilterKey = '' | 'submitted' | 'peer_flow' | 'mastering_flow' | 'completed' | 'rejected'
@@ -779,7 +790,7 @@ function openTrack(track: Track) {
                     {{ originalMetaParts(track).join(' · ') }}
                   </div>
                 </td>
-                <td class="px-4 py-3 text-sm text-muted-foreground" :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</td>
+                <td class="px-4 py-3 text-sm text-muted-foreground" :class="{ 'font-mono': trackArtistUsesHash(track) }">{{ trackArtistDisplay(track) }}</td>
                 <td class="px-4 py-3 text-sm text-muted-foreground font-mono">{{ formatDuration(track.duration) }}</td>
                 <td class="px-4 py-3">
                   <StatusBadge
@@ -839,7 +850,7 @@ function openTrack(track: Track) {
                 {{ originalMetaParts(track).join(' · ') }}
               </div>
               <div class="flex items-center gap-3 text-xs text-muted-foreground">
-                <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
+                <span :class="{ 'font-mono': trackArtistUsesHash(track) }">{{ trackArtistDisplay(track) }}</span>
                 <span class="font-mono">{{ formatDuration(track.duration) }}</span>
                 <span class="font-mono">v{{ track.version }}</span>
                 <span v-if="track.open_issue_count" class="text-error">{{ t('dashboard.openCount', { count: track.open_issue_count }) }}</span>
