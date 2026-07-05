@@ -1112,7 +1112,7 @@ async function refreshDeliveries() {
 <template>
   <div v-if="loading" class="max-w-4xl mx-auto"><SkeletonLoader :rows="5" :card="true" /></div>
 
-  <div v-else-if="album" class="max-w-4xl mx-auto space-y-6">
+  <div v-else-if="album" :class="['mx-auto space-y-6', activeTab === 'workflow' ? 'max-w-7xl' : 'max-w-4xl']">
     <!-- Album header -->
     <div class="flex items-center gap-4">
       <div class="w-10 h-10 flex-shrink-0 overflow-hidden border border-border">
@@ -1823,11 +1823,11 @@ async function refreshDeliveries() {
       </div>
 
       <!-- Workflow editor -->
-      <div v-else-if="activeTab === 'workflow'" class="card space-y-5">
-        <div v-if="workflowTabLoading" class="text-sm text-muted-foreground">
+      <div v-else-if="activeTab === 'workflow'" class="space-y-5">
+        <div v-if="workflowTabLoading" class="card text-sm text-muted-foreground">
           {{ t('common.loading') }}
         </div>
-        <div v-if="!canManageAlbum" class="text-sm text-muted-foreground">
+        <div v-if="!canManageAlbum" class="card text-sm text-muted-foreground">
           {{ t('albumSettings.workflow.viewOnly') }}
         </div>
         <div v-if="workflowMigrations.length" class="bg-warning-bg border border-warning/20 rounded-none p-3 space-y-1">

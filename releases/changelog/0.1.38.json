@@ -1,0 +1,32 @@
+{
+  "version": "0.1.38",
+  "date": "2026-07-05",
+  "headline": {
+    "zh-CN": "放宽专辑设置工作流编辑区",
+    "en": "Widens the album settings workflow editor"
+  },
+  "summary": {
+    "zh-CN": "专辑设置页的工作流页签现在使用更宽的编辑工作区，让流程画布和右侧规则面板在大屏上并排显示。",
+    "en": "The workflow tab on album settings now uses a wider editor workspace so the canvas and rule inspector can sit side by side on large screens."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "专辑设置",
+        "en": "Album settings"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "工作流编辑器不再挤在窄列中",
+            "en": "Workflow editing no longer sits in a narrow column"
+          },
+          "description": {
+            "zh-CN": "只有工作流页签会切换到宽版容器，基础信息、团队、活动、清单、排序等页签仍保持原有详情页宽度。",
+            "en": "Only the workflow tab switches to the wider container, while info, team, activity, checklist, ordering, and other settings tabs keep the existing detail-page width."
+          }
+        }
+      ]
+    }
+  ]
+}
