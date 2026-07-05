@@ -1544,10 +1544,12 @@
     "copyInviteCodeLabel": "Copy invite code {code}",
     "remove": "Remove",
     "memberRemoved": "Member removed",
+    "memberRoleUpdated": "Member role updated",
     "roles": {
       "owner": "Owner",
       "member": "Member",
-      "mastering_engineer": "Mastering Engineer"
+      "mastering_engineer": "Mastering Engineer",
+      "co_producer": "Co-producer"
     },
     "createInvite": "Create Invite Code",
     "inviteRole": "Role",

@@ -129,8 +129,19 @@
             <span class="text-xs font-mono px-2 py-0.5 rounded-full" :class="roleBadgeClass(member.role)">
               {{ t(`circleDetail.roles.${member.role}`) }}
             </span>
+            <select
+              v-if="canEditMemberRole(member)"
+              class="select-field-sm w-40"
+              :value="member.role"
+              :disabled="updatingRoleUserIds.includes(member.user_id)"
+              @change="onMemberRoleChange(member, $event)"
+            >
+              <option v-for="option in memberRoleOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
             <button
-              v-if="canManageCircle && member.user_id !== currentUserId"
+              v-if="canRemoveMember(member)"
               class="text-error text-xs hover:underline"
               @click="promptRemoveMember(member)"
             >
@@ -156,7 +167,7 @@
                 v-model.number="newCodeDays"
                 type="number"
                 min="1"
-                max="30"
+                max="365"
                 class="input-field w-full"
               />
             </div>
@@ -394,7 +405,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { circleApi, API_ORIGIN } from '@/api'
-import type { Circle, CircleMember, InviteCode, WorkflowConfig, WorkflowTemplate } from '@/types'
+import type { Circle, CircleMember, CircleRole, InviteCode, WorkflowConfig, WorkflowTemplate } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { parseUTC } from '@/utils/time'
 import { hasAdminRole } from '@/utils/admin'
@@ -422,7 +433,13 @@ const roleOptions = computed(() => [
   { value: 'member', label: t('circleDetail.roles.member') },
   { value: 'mastering_engineer', label: t('circleDetail.roles.mastering_engineer') },
 ])
+const memberRoleOptions = computed(() => [
+  { value: 'member', label: t('circleDetail.roles.member') },
+  { value: 'mastering_engineer', label: t('circleDetail.roles.mastering_engineer') },
+  { value: 'co_producer', label: t('circleDetail.roles.co_producer') },
+])
 const newCodeDays = ref(7)
+const updatingRoleUserIds = ref<number[]>([])
 
 const editForm = reactive({ name: '', description: '', website: '', default_checklist_enabled: false })
 
@@ -445,10 +462,16 @@ const pendingTemplateAction = ref<{
 } | null>(null)
 
 const currentUserId = computed(() => appStore.currentUser?.id)
+const currentCircleMember = computed(() =>
+  circle.value?.members.find(member => member.user_id === currentUserId.value) ?? null
+)
 const isOwner = computed(() =>
   circle.value ? circle.value.created_by === currentUserId.value : false
 )
-const canManageCircle = computed(() => isOwner.value || hasAdminRole(appStore.currentUser, 'operator'))
+const canEditMemberRoles = computed(() => isOwner.value || hasAdminRole(appStore.currentUser, 'operator'))
+const canManageCircle = computed(() =>
+  canEditMemberRoles.value || currentCircleMember.value?.role === 'co_producer'
+)
 const uploadLogoLabel = computed(() => t('circleDetail.uploadLogoLabel'))
 
 const tabs = computed(() => {
@@ -534,8 +557,39 @@ watch(activeTab, (tab) => {
 
 function roleBadgeClass(role: string) {
   if (role === 'owner') return 'bg-warning-bg text-warning'
+  if (role === 'co_producer') return 'bg-success-bg text-success'
   if (role === 'mastering_engineer') return 'bg-info-bg text-info'
   return 'bg-border text-muted-foreground'
+}
+
+function canEditMemberRole(member: CircleMember) {
+  return canEditMemberRoles.value && member.role !== 'owner' && member.user_id !== circle.value?.created_by
+}
+
+function canRemoveMember(member: CircleMember) {
+  if (!canManageCircle.value || member.user_id === currentUserId.value) return false
+  if (member.role === 'owner' || member.user_id === circle.value?.created_by) return false
+  if (member.role === 'co_producer' && !canEditMemberRoles.value) return false
+  return true
+}
+
+async function updateMemberRole(member: CircleMember, role: CircleRole) {
+  if (!circle.value || member.role === role || role === 'owner') return
+  updatingRoleUserIds.value = [...updatingRoleUserIds.value, member.user_id]
+  try {
+    const updated = await circleApi.updateMemberRole(circle.value.id, member.user_id, { role })
+    const index = circle.value.members.findIndex(item => item.user_id === member.user_id)
+    if (index >= 0) circle.value.members.splice(index, 1, updated)
+    toast.success(t('circleDetail.memberRoleUpdated'))
+  } catch (e: any) {
+    toast.error(e.message)
+  } finally {
+    updatingRoleUserIds.value = updatingRoleUserIds.value.filter(userId => userId !== member.user_id)
+  }
+}
+
+function onMemberRoleChange(member: CircleMember, event: Event) {
+  updateMemberRole(member, (event.target as HTMLSelectElement).value as CircleRole)
 }
 
 async function uploadLogo(e: Event) {

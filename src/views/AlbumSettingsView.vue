@@ -436,7 +436,6 @@ async function loadAssignableUsers(currentAlbum: Album): Promise<boolean> {
       const byId = new Map<number, User>()
       const circle = await circleApi.get(currentAlbum.circle_id)
       for (const member of circle.members) byId.set(member.user.id, member.user)
-      if (currentAlbum.producer) byId.set(currentAlbum.producer.id, currentAlbum.producer)
       users.value = Array.from(byId.values())
     } else {
       users.value = await userApi.list()

@@ -5,6 +5,90 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.37",
+    "date": "2026-07-05",
+    "headline": {
+      "zh-CN": "新增社团副主催协管权限",
+      "en": "Adds circle co-producer management permissions"
+    },
+    "summary": {
+      "zh-CN": "社团主催现在可以将成员设为副主催。副主催可协助维护社团资料、邀请码、工作流模板、专辑设置和曲目流程，但不能任命副主催或执行删除社团等所有权操作。",
+      "en": "Circle owners can now promote members to co-producers. Co-producers can help manage circle details, invite codes, workflow templates, album settings, and track workflow actions without gaining ownership-only controls."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "社团协作",
+          "en": "Circle collaboration"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "成员列表支持副主催角色",
+              "en": "Member lists now support co-producers"
+            },
+            "description": {
+              "zh-CN": "主催可在社团成员页调整普通成员、母带师和副主催角色；副主催会在成员列表、权限入口和工作流协作中显示为独立身份。",
+              "en": "Owners can update member roles between member, mastering engineer, and co-producer from the circle members page, and co-producers appear as a distinct circle role across collaboration views."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "副主催可协助处理专辑流程",
+              "en": "Co-producers can help run album workflows"
+            },
+            "description": {
+              "zh-CN": "绑定社团的专辑会把副主催纳入 producer 侧流程权限和关键通知，让协管者可以处理审核、模板、团队、归档曲目和曲目排序等工作。",
+              "en": "Albums linked to a circle now include co-producers in producer-side workflow permissions and key notifications, covering reviews, templates, teams, archived tracks, and track ordering."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.36",
+    "date": "2026-07-05",
+    "headline": {
+      "zh-CN": "修复社团专辑成员范围与邀请码期限",
+      "en": "Fixes circle album member scope and invite code duration"
+    },
+    "summary": {
+      "zh-CN": "社团专辑的团队成员选择现在只显示社团成员，曲目作曲者与专辑邀请也会按社团范围校验；社团邀请码最长有效期调整为 365 天。",
+      "en": "Circle album team selection now only shows circle members, track composers and album invitations are validated against the circle scope, and circle invite codes can last up to 365 days."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "社团协作",
+          "en": "Circle collaboration"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "社团专辑用户范围更一致",
+              "en": "Circle album user scope is more consistent"
+            },
+            "description": {
+              "zh-CN": "绑定社团的专辑在选择团队成员和提交平台作曲者时会限制在社团用户范围内，通过用户 ID 邀请也会拒绝社团外用户。",
+              "en": "Albums linked to a circle now limit team member choices and platform composer submissions to circle users, and User ID invitations reject users outside the circle."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "邀请码最长可设为一年",
+              "en": "Invite codes can last for one year"
+            },
+            "description": {
+              "zh-CN": "社团邀请码有效期输入上限从 30 天调整为 365 天，前后端校验保持一致。",
+              "en": "The circle invite code duration limit is raised from 30 days to 365 days, with matching frontend and backend validation."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.34",
     "date": "2026-07-05",
     "headline": {

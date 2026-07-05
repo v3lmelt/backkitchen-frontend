@@ -1591,10 +1591,12 @@
     "copyInviteCodeLabel": "复制邀请码 {code}",
     "remove": "移除",
     "memberRemoved": "成员已移除",
+    "memberRoleUpdated": "成员角色已更新",
     "roles": {
       "owner": "创建者",
       "member": "成员",
-      "mastering_engineer": "母带师"
+      "mastering_engineer": "母带师",
+      "co_producer": "副主催"
     },
     "createInvite": "创建邀请码",
     "inviteRole": "邀请身份",

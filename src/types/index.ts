@@ -151,11 +151,13 @@ export interface Album {
   overdue_track_count?: number
 }
 
+export type CircleRole = 'owner' | 'member' | 'mastering_engineer' | 'co_producer'
+
 export interface CircleMember {
   id: number
   circle_id: number
   user_id: number
-  role: 'owner' | 'member' | 'mastering_engineer'
+  role: CircleRole
   joined_at: string
   user: User
 }
