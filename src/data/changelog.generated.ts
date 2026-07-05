@@ -5,6 +5,38 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.39",
+    "date": "2026-07-05",
+    "headline": {
+      "zh-CN": "新建专辑必须选择社团",
+      "en": "Requires a circle when creating albums"
+    },
+    "summary": {
+      "zh-CN": "新专辑创建流程现在要求先选择一个可访问社团；已有未关联社团的旧专辑仍可继续查看和管理。",
+      "en": "New album creation now requires selecting an accessible circle, while existing legacy albums without a circle remain viewable and manageable."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "专辑创建",
+          "en": "Album creation"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "新专辑不再支持空社团创建",
+              "en": "New albums can no longer be created without a circle"
+            },
+            "description": {
+              "zh-CN": "创建页会要求选择社团；没有可用社团时，会引导用户先创建社团或使用邀请码加入社团。",
+              "en": "The creation page now requires a circle selection, and users with no available circles are guided to create a circle or join one with an invite code."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.38",
     "date": "2026-07-05",
     "headline": {

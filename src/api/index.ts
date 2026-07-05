@@ -287,7 +287,7 @@ export const albumApi = {
     cover_color?: string
     release_date?: string | null
     catalog_number?: string | null
-    circle_id?: number | null
+    circle_id: number
     circle_name?: string | null
     genres?: string[] | null
     mastering_engineer_id?: number | null

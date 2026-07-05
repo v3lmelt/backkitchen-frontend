@@ -103,6 +103,11 @@ vi.mock('@/components/workflow/WorkflowEditor.vue', () => ({
 
 import AlbumNewView from './AlbumNewView.vue'
 
+async function selectBackKitchenCircle(wrapper: ReturnType<typeof mount>) {
+  await wrapper.findAll('button.custom-select-option').find(button => button.text() === 'Back Kitchen')!.trigger('click')
+  await flushPromises()
+}
+
 function mountAlbumNewViewWithZhI18n() {
   const pinia = createPinia()
   setActivePinia(pinia)
@@ -152,7 +157,9 @@ describe('AlbumNewView', () => {
       { id: 3, display_name: 'Member' },
       { id: 4, display_name: 'Outsider' },
     ])
-    mocks.circleListMock.mockResolvedValue([])
+    mocks.circleListMock.mockResolvedValue([
+      { id: 9, name: 'Back Kitchen', description: null, logo_url: null, created_by: 1, member_count: 2 },
+    ])
     mocks.listWorkflowTemplatesMock.mockResolvedValue([])
     mocks.createWorkflowTemplateMock.mockResolvedValue({})
     mocks.circleGetMock.mockResolvedValue({
@@ -186,12 +193,39 @@ describe('AlbumNewView', () => {
     expect(wrapper.text()).toContain('New Album')
   })
 
+  it('shows circle guidance instead of an actionable form when no circles are available', async () => {
+    mocks.circleListMock.mockResolvedValue([])
+
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Create or join a circle first')
+    expect(wrapper.text()).toContain('Join Circle')
+    expect(wrapper.text()).toContain('Create Circle')
+    expect(wrapper.find('input.input-field').exists()).toBe(false)
+    expect(mocks.createMock).not.toHaveBeenCalled()
+  })
+
+  it('does not submit album creation until a circle is selected', async () => {
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    await wrapper.find('input.input-field').setValue('Test Album')
+    const createButton = wrapper.findAll('button').find(button => button.text().includes('Create Album'))!
+
+    expect(createButton.attributes('disabled')).toBeDefined()
+    await createButton.trigger('click')
+
+    expect(mocks.createMock).not.toHaveBeenCalled()
+  })
+
   it('shows the create error inline and via toast when album creation fails', async () => {
     mocks.createMock.mockRejectedValue(new Error('Create failed'))
 
     const wrapper = mountWithPlugins(AlbumNewView)
     await flushPromises()
 
+    await selectBackKitchenCircle(wrapper)
     await wrapper.find('input.input-field').setValue('Test Album')
     await wrapper.findAll('button').find(button => button.text().includes('Create Album'))!.trigger('click')
     await flushPromises()
@@ -199,11 +233,12 @@ describe('AlbumNewView', () => {
     expect(mocks.createMock).toHaveBeenCalledWith({
       title: 'Test Album',
       description: '',
+      circle_id: 9,
       mastering_engineer_id: null,
       member_ids: [],
       deadline: null,
       phase_deadlines: null,
-      checklist_enabled: false,
+      checklist_enabled: null,
       quick_followup_enabled: false,
     })
     expect(wrapper.text()).toContain('Create failed')
@@ -231,6 +266,7 @@ describe('AlbumNewView', () => {
     const wrapper = mountWithPlugins(AlbumNewView)
     await flushPromises()
 
+    await selectBackKitchenCircle(wrapper)
     await wrapper.find('input.input-field').setValue('Album With Cover')
     const fileInput = wrapper.find('input[type="file"]')
     const file = new File(['cover'], 'cover.png', { type: 'image/png' })
@@ -263,8 +299,7 @@ describe('AlbumNewView', () => {
 
     expect(wrapper.text()).toContain('Outsider')
 
-    await wrapper.findAll('button.custom-select-option').find(button => button.text() === 'Back Kitchen')!.trigger('click')
-    await flushPromises()
+    await selectBackKitchenCircle(wrapper)
 
     expect(mocks.circleGetMock).toHaveBeenCalledWith(9)
     expect(wrapper.text()).not.toContain('Outsider')
@@ -297,8 +332,7 @@ describe('AlbumNewView', () => {
     const wrapper = mountWithPlugins(AlbumNewView)
     await flushPromises()
 
-    await wrapper.findAll('button.custom-select-option').find(button => button.text() === 'Back Kitchen')!.trigger('click')
-    await flushPromises()
+    await selectBackKitchenCircle(wrapper)
     await wrapper.findAll('button').find(button => button.text().includes('Workflow'))!.trigger('click')
     await flushPromises()
     await wrapper.findAll('button').find(button => button.text().includes('Load from Template'))!.trigger('click')
@@ -316,6 +350,7 @@ describe('AlbumNewView', () => {
     const wrapper = mountWithPlugins(AlbumNewView)
     await flushPromises()
 
+    await selectBackKitchenCircle(wrapper)
     await wrapper.find('input.input-field').setValue('Timed Album')
     await wrapper.find('input[type="date"]').setValue('2025-01-10')
 
@@ -332,13 +367,14 @@ describe('AlbumNewView', () => {
     expect(mocks.createMock).toHaveBeenCalledWith({
       title: 'Timed Album',
       description: '',
+      circle_id: 9,
       mastering_engineer_id: null,
       member_ids: [],
       deadline: '2025-01-10T00:00:00.000Z',
       phase_deadlines: {
         peer_review: '2025-01-05T00:00:00.000Z',
       },
-      checklist_enabled: false,
+      checklist_enabled: null,
       quick_followup_enabled: false,
     })
     expect(mocks.updateDeadlinesMock).not.toHaveBeenCalled()
@@ -360,8 +396,7 @@ describe('AlbumNewView', () => {
     const wrapper = mountWithPlugins(AlbumNewView)
     await flushPromises()
 
-    await wrapper.findAll('button.custom-select-option').find(button => button.text() === 'Back Kitchen')!.trigger('click')
-    await flushPromises()
+    await selectBackKitchenCircle(wrapper)
 
     await wrapper.find('input.input-field').setValue('Workflow Album')
     await wrapper.findAll('button').find(button => button.text().includes('Manual'))!.trigger('click')

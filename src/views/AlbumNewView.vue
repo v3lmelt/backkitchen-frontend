@@ -12,7 +12,7 @@ import {
   validateAlbumCoverFile,
 } from '@/utils/albumCover'
 import type { CircleSummary, User, WorkflowConfig, WorkflowTemplate } from '@/types'
-import { ChevronLeft, Upload, ChevronDown, ChevronRight, HelpCircle, BookTemplate, Save } from 'lucide-vue-next'
+import { ChevronLeft, Upload, ChevronDown, ChevronRight, HelpCircle, BookTemplate, Save, Plus, UserPlus } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
@@ -42,9 +42,14 @@ const circleMemberCache = new Map<number, User[]>()
 
 const form = ref({ title: '', description: '' })
 const titleError = ref('')
+const circleError = ref('')
 
 function validateTitle() {
   titleError.value = form.value.title.trim() ? '' : t('albumNew.titleRequired')
+}
+
+function validateCircle() {
+  circleError.value = selectedCircleId.value ? '' : t('albumNew.circleRequired')
 }
 
 const coverInputRef = ref<HTMLInputElement | null>(null)
@@ -94,9 +99,10 @@ const coverButtonLabel = computed(() => t('albumNew.coverButtonLabel'))
 
 const circleOptions = computed<SelectOption[]>(() =>
   circles.value
-    .filter((c) => c.created_by === appStore.currentUser?.id)
     .map((c) => ({ value: c.id, label: c.name }))
 )
+
+const hasAvailableCircles = computed(() => circleOptions.value.length > 0)
 
 const workflowMemberOptions = computed<SelectOption[]>(() => {
   const allKnownUsers = new Map<number, User>()
@@ -352,7 +358,8 @@ function toggleMember(userId: number) {
 
 async function create() {
   validateTitle()
-  if (titleError.value) return
+  validateCircle()
+  if (titleError.value || circleError.value || !selectedCircleId.value) return
   creating.value = true
   createError.value = ''
   let createdAlbumId: number | null = null
@@ -361,9 +368,7 @@ async function create() {
     sanitizeWorkflowConfigForMembers()
 
     const payload: any = { ...form.value }
-    if (selectedCircleId.value) {
-      payload.circle_id = selectedCircleId.value
-    }
+    payload.circle_id = selectedCircleId.value
     payload.mastering_engineer_id = teamState.mastering_engineer_id
     payload.member_ids = [...teamState.member_ids]
 
@@ -374,7 +379,7 @@ async function create() {
     payload.deadline = deadlineState.deadline ? new Date(deadlineState.deadline).toISOString() : null
     payload.phase_deadlines = Object.keys(phaseDeadlines).length ? phaseDeadlines : null
 
-    if (selectedCircleId.value && albumChecklistMode.value === 'circle_default') {
+    if (albumChecklistMode.value === 'circle_default') {
       payload.checklist_enabled = null
     } else {
       payload.checklist_enabled = albumChecklistMode.value !== 'disabled'
@@ -426,6 +431,24 @@ async function create() {
     </div>
 
     <template v-else>
+      <div v-if="!hasAvailableCircles" class="card max-w-2xl mx-auto text-center space-y-4">
+        <div class="space-y-2">
+          <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('albumNew.noCirclesTitle') }}</h2>
+          <p class="text-sm text-muted-foreground">{{ t('albumNew.noCirclesDesc') }}</p>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+          <RouterLink to="/circles" class="btn-secondary text-sm inline-flex items-center justify-center gap-2">
+            <UserPlus class="w-4 h-4" :stroke-width="2" />
+            {{ t('albumNew.joinCircleAction') }}
+          </RouterLink>
+          <RouterLink to="/circles/new" class="btn-primary text-sm inline-flex items-center justify-center gap-2">
+            <Plus class="w-4 h-4" :stroke-width="2" />
+            {{ t('albumNew.createCircleAction') }}
+          </RouterLink>
+        </div>
+      </div>
+
+      <template v-else>
       <!-- 基本信息 -->
       <div class="card space-y-5">
         <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('albumNew.basicInfo') }}</h2>
@@ -487,9 +510,15 @@ async function create() {
       </div>
 
       <!-- 社团 -->
-      <div v-if="circles.length" class="card space-y-4">
-        <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('settings.circleName') }}</h2>
-        <CustomSelect v-model="selectedCircleId" :options="circleOptions" :placeholder="t('settings.noneOption')" />
+      <div class="card space-y-4">
+        <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('albumNew.circleSection') }}</h2>
+        <CustomSelect
+          v-model="selectedCircleId"
+          :options="circleOptions"
+          :placeholder="t('albumNew.circlePlaceholder')"
+          @update:model-value="circleError = ''"
+        />
+        <p v-if="circleError" class="text-xs text-error">{{ circleError }}</p>
       </div>
 
       <!-- 团队 -->
@@ -788,11 +817,12 @@ async function create() {
         <button @click="router.back()" :disabled="creating" class="btn-secondary text-sm flex-1">
           {{ t('common.cancel') }}
         </button>
-        <button @click="create" :disabled="creating" class="btn-primary text-sm flex-1">
+        <button @click="create" :disabled="creating || !selectedCircleId" class="btn-primary text-sm flex-1">
           {{ creating ? t('albumNew.creating') : t('albumNew.createButton') }}
         </button>
       </div>
       <p v-if="createError" class="text-sm text-error">{{ createError }}</p>
+      </template>
     </template>
   </div>
 </template>
