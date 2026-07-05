@@ -77,6 +77,18 @@ function makeAssignment(overrides: Partial<StageAssignment> = {}): StageAssignme
   }
 }
 
+function makeUser(id: number, displayName: string) {
+  return {
+    id,
+    username: displayName.toLowerCase(),
+    display_name: displayName,
+    role: 'member',
+    avatar_color: '#000000',
+    is_admin: false,
+    created_at: '2026-01-01T00:00:00Z',
+  } as const
+}
+
 describe('reviewAssignments', () => {
   it('dedupes stale same-reviewer rows and prefers pending active assignments', () => {
     const assignments: StageAssignment[] = [
@@ -140,6 +152,20 @@ describe('reviewAssignments', () => {
 
     expect(canUserChangeIssueStatus(40, track, issue, assignments)).toBe(true)
     expect(canUserSubmitIssueStatus(10, track, issue)).toBe(true)
+  })
+
+  it('allows any listed composer to submit non-final issue status', () => {
+    const track = makeTrack({
+      status: 'peer_review',
+      composer_ids: [10, 11],
+      composers: [
+        makeUser(10, 'Primary'),
+        makeUser(11, 'Co'),
+      ],
+    })
+    const issue = makeIssue({ phase: 'peer', source_version_id: 5, master_delivery_id: null })
+
+    expect(canUserSubmitIssueStatus(11, track, issue)).toBe(true)
   })
 
   it('keeps revision-request-cancelled reviewers on internal issue status permissions', () => {

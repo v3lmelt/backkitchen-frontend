@@ -31,9 +31,10 @@ import BatchIssueActions from '@/components/workflow/BatchIssueActions.vue'
 import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
+import BaseModal from '@/components/common/BaseModal.vue'
 import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
 import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
-import { ChevronLeft, Upload, AlertCircle, CheckCircle2, UserRoundCog } from 'lucide-vue-next'
+import { ChevronLeft, Upload, AlertCircle, CheckCircle2, UserRoundCog, Link, Info } from 'lucide-vue-next'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useDiscussions } from '@/composables/useDiscussions'
 import { useIssuePreviewPlayback, type PreviewAction } from '@/composables/useIssuePreviewPlayback'
@@ -43,6 +44,7 @@ import { useTrackStore } from '@/stores/tracks'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { translateStepLabel } from '@/utils/workflow'
 import { hashId } from '@/utils/hash'
+import { externalComposerDisplayText, isComposerActor, trackComposerDisplayText, trackComposerIds } from '@/utils/trackComposers'
 import { extractAudioDuration } from '@/utils/audio'
 import { activeAssignmentsForStep, canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
 import { emptyMentionCandidates } from '@/utils/mentionCandidates'
@@ -80,6 +82,18 @@ watch(wsConnected, (connected) => {
 
 const track = ref<Track | null>(null)
 const isProxySubmission = computed(() => Boolean(track.value?.is_proxy_submission && track.value.external_submitter_name))
+const composerApprovalLabel = computed(() =>
+  isProxySubmission.value ? t('finalReview.externalSubmitterProxy') : t('trackDetail.composers')
+)
+function trackArtistDisplay(stepTrack: Track): string {
+  if (stepTrack.artist) return stepTrack.artist
+  const composerText = trackComposerDisplayText(stepTrack)
+  if (composerText !== '--') return composerText
+  return stepTrack.submitter_id ? `#${hashId(stepTrack.submitter_id)}` : '--'
+}
+function trackArtistUsesHash(stepTrack: Track): boolean {
+  return Boolean(!stepTrack.artist && trackComposerDisplayText(stepTrack) === '--' && stepTrack.submitter_id)
+}
 const issues = ref<Issue[]>([])
 const mentionCandidates = ref(emptyMentionCandidates())
 const sourceVersions = ref<TrackSourceVersion[]>([])
@@ -95,8 +109,14 @@ const loading = ref(true)
 const loadError = ref('')
 const acting = ref(false)
 const uploadFile = ref<File | null>(null)
+const deliveryMessage = ref('')
 const localDeliveryPreviewUrl = ref('')
 const revisionNotes = ref('')
+const externalStemLinkNotes = ref('')
+const revisionUploadMode = ref<'file' | 'link'>('file') // 'file' for upload, 'link' for external link
+const revisionTypeModalOpen = ref(false)
+const pendingRevisionDecision = ref<string | null>(null)
+const selectedRevisionType = ref<'source_audio' | 'stem_files'>('source_audio')
 const uploading = ref(false)
 const error = ref('')
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
@@ -161,7 +181,7 @@ onBeforeUnmount(() => {
 })
 
 function hasPendingUploadSelection(): boolean {
-  return Boolean(uploading.value || uploadFile.value)
+  return Boolean(uploading.value || uploadFile.value || deliveryMessage.value.trim() || externalStemLinkNotes.value.trim())
 }
 
 function handleBeforeUnload(event: BeforeUnloadEvent) {
@@ -281,14 +301,24 @@ const olderSourceVersions = computed(() =>
     .filter(version => version.id !== currentSourceVersionId.value)
     .sort((a, b) => b.version_number - a.version_number),
 )
+function sourceVersionOptionLabel(version: TrackSourceVersion): string {
+  const prefix = version.source_kind === 'external_link'
+    ? t('workflowStep.externalSourceVersionLabel')
+    : `v${version.version_number}`
+  return `${prefix} · ${fmtDate(version.created_at)}`
+}
+
+const olderPlayableSourceVersions = computed(() =>
+  olderSourceVersions.value.filter(version => version.source_kind !== 'external_link' && version.file_path !== null),
+)
 const sourceCompareOptions = computed<SelectOption[]>(() =>
-  olderSourceVersions.value.map((version) => ({
+  olderPlayableSourceVersions.value.map((version) => ({
     value: version.id,
-    label: `v${version.version_number} · ${fmtDate(version.created_at)}`,
+    label: sourceVersionOptionLabel(version),
   })),
 )
 const selectedCompareSourceVersion = computed(() =>
-  olderSourceVersions.value.find(version => version.id === selectedCompareSourceVersionId.value) ?? null,
+  olderPlayableSourceVersions.value.find(version => version.id === selectedCompareSourceVersionId.value) ?? null,
 )
 const isSourceCompareActive = computed(() => selectedCompareSourceVersion.value !== null)
 const displayedSourceVersionNumber = computed(() =>
@@ -464,7 +494,7 @@ const checklistByReviewer = computed(() => {
 const masterDelivery = computed<MasterDelivery | null>(() => track.value?.current_master_delivery ?? null)
 const masterAudioUrl = computed(() => {
   const d = masterDelivery.value
-  if (!d) return ''
+  if (!d?.file_path) return ''
   return `${API_ORIGIN}/api/tracks/${trackId.value}/master-audio?v=${d.delivery_number}&c=${d.workflow_cycle ?? 1}`
 })
 const sortedMasterDeliveries = computed(() =>
@@ -478,8 +508,11 @@ const olderMasterDeliveries = computed(() => {
   return sortedMasterDeliveries.value
     .filter(delivery => delivery.id !== currentId)
 })
+const olderPlayableMasterDeliveries = computed(() =>
+  olderMasterDeliveries.value.filter(delivery => Boolean(delivery.file_path)),
+)
 const masterCompareOptions = computed<SelectOption[]>(() =>
-  olderMasterDeliveries.value.map((delivery) => ({
+  olderPlayableMasterDeliveries.value.map((delivery) => ({
     value: delivery.id,
     label: masterDeliveryOptionLabel(delivery),
   })),
@@ -489,7 +522,7 @@ const selectedCompareMasterDelivery = computed(() =>
 )
 const selectedCompareMasterAudioUrl = computed(() => {
   const delivery = selectedCompareMasterDelivery.value
-  if (!delivery) return ''
+  if (!delivery?.file_path) return ''
   return `${API_ORIGIN}/api/tracks/${trackId.value}/master-deliveries/${delivery.id}/audio?v=${delivery.delivery_number}&c=${delivery.workflow_cycle}`
 })
 const finalReviewIssues = computed(() => {
@@ -499,6 +532,7 @@ const finalReviewIssues = computed(() => {
     issue => issue.phase === 'final_review' && issue.master_delivery_id === deliveryId,
   )
 })
+const canSubmitDelivery = computed(() => Boolean(uploadFile.value))
 const canConfirmDelivery = computed(() => {
   if (currentStep.value?.type !== 'delivery' || !track.value || !masterDelivery.value) return false
   if (!currentStep.value.require_confirmation) return false
@@ -508,7 +542,7 @@ const canConfirmDelivery = computed(() => {
   if (currentStep.value?.assignee_user_id) return currentStep.value.assignee_user_id === userId
   switch (currentStep.value?.assignee_role) {
     case 'submitter':
-      return track.value.submitter_id === userId
+      return isComposerActor(track.value, userId)
     case 'producer':
       return track.value.producer_id === userId
     case 'peer_reviewer':
@@ -524,19 +558,19 @@ const canApproveFinal = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId) return false
   if (userId === track.value.producer_id) return !masterDelivery.value.producer_approved_at
-  if (userId === track.value.submitter_id) return !masterDelivery.value.submitter_approved_at
+  if (isComposerActor(track.value, userId)) return !masterDelivery.value.submitter_approved_at
   return false
 })
 const canRequestReturn = computed(() => {
   if (!track.value) return false
   const userId = appStore.currentUser?.id
   if (!userId) return false
-  return userId === track.value.submitter_id && userId !== track.value.producer_id
+  return isComposerActor(track.value, userId) && userId !== track.value.producer_id
 })
 const canSeeMasteringSidebar = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId || !track.value) return false
-  const isParticipant = userId === track.value.submitter_id
+  const isParticipant = isComposerActor(track.value, userId)
     || userId === track.value.producer_id
     || userId === track.value.mastering_engineer_id
   const supportsSidebar = activeVariant.value === 'mastering' || activeVariant.value === 'final_review'
@@ -565,10 +599,61 @@ const revisionAssigneeUserId = computed<number | null>(() => {
 })
 
 const isRevisionAssignee = computed(() => {
-  const assigneeId = revisionAssigneeUserId.value
   const userId = appStore.currentUser?.id
-  return assigneeId != null && userId != null && assigneeId === userId
+  if (!userId || !track.value) return false
+  const step = currentStep.value
+  if (step?.type === 'revision' && step.assignee_user_id == null && step.assignee_role === 'submitter') {
+    return isComposerActor(track.value, userId)
+  }
+  const assigneeId = revisionAssigneeUserId.value
+  return assigneeId != null && assigneeId === userId
 })
+const masteringRevisionReturnStep = computed(() => {
+  const step = currentStep.value
+  if (!step || step.type !== 'revision' || !step.return_to) return null
+  return workflowConfig.value?.steps.find(item => item.id === step.return_to) ?? null
+})
+const isMasteringRevisionStep = computed(() => {
+  const returnStep = masteringRevisionReturnStep.value
+  if (!returnStep) return false
+  return returnStep.type === 'delivery'
+    || returnStep.ui_variant === 'mastering'
+    || returnStep.id.includes('master')
+    || returnStep.id.includes('mastering')
+})
+const requestedRevisionType = computed(() => track.value?.requested_revision_type ?? null)
+const shouldShowRevisionSubmitMethod = computed(() =>
+  isMasteringRevisionStep.value && requestedRevisionType.value == null,
+)
+const shouldShowRevisionFileUpload = computed(() =>
+  !isMasteringRevisionStep.value
+    || requestedRevisionType.value === 'source_audio'
+    || (requestedRevisionType.value == null && revisionUploadMode.value === 'file'),
+)
+const shouldShowExternalStemLinkForm = computed(() =>
+  isMasteringRevisionStep.value
+    && (
+      requestedRevisionType.value === 'stem_files'
+      || (requestedRevisionType.value == null && revisionUploadMode.value === 'link')
+    ),
+)
+const requestedRevisionTitle = computed(() => {
+  if (requestedRevisionType.value === 'source_audio') return t('workflowStep.revisionTypeRequestedSourceAudio')
+  if (requestedRevisionType.value === 'stem_files') return t('workflowStep.revisionTypeRequestedStemFiles')
+  return ''
+})
+const requestedRevisionHint = computed(() => {
+  if (requestedRevisionType.value === 'source_audio') return t('workflowStep.revisionTypeHintSourceAudio')
+  if (requestedRevisionType.value === 'stem_files') return t('workflowStep.revisionTypeHintStemFiles')
+  return ''
+})
+const canSubmitExternalStemLink = computed(() =>
+  shouldShowExternalStemLinkForm.value && externalStemLinkNotes.value.trim().length > 0,
+)
+
+watch(requestedRevisionType, (type) => {
+  revisionUploadMode.value = type === 'stem_files' ? 'link' : 'file'
+}, { immediate: true })
 
 const revisionAssigneeRoleLabel = computed(() => {
   const role = currentStep.value?.assignee_role
@@ -717,7 +802,7 @@ watch(trackId, () => {
   void loadPage()
 })
 
-watch(olderSourceVersions, (versions) => {
+watch(olderPlayableSourceVersions, (versions) => {
   if (!versions.some(version => version.id === selectedCompareSourceVersionId.value)) {
     selectedCompareSourceVersionId.value = null
   }
@@ -771,11 +856,14 @@ function toggleMasterCompare() {
 }
 
 function compareWithMasterDelivery(deliveryId: number) {
+  const delivery = olderMasterDeliveries.value.find(item => item.id === deliveryId)
+  if (!delivery?.file_path) return
   showMasterCompare.value = true
   selectedCompareMasterDeliveryId.value = deliveryId
 }
 
 function handleMasterVersionDownload(delivery: MasterDelivery) {
+  if (!delivery.file_path) return
   const url = `${API_ORIGIN}/api/tracks/${trackId.value}/master-deliveries/${delivery.id}/audio?v=${delivery.delivery_number}&c=${delivery.workflow_cycle}`
   const historySuffix = historicalDeliveryDownloadSuffix(delivery)
   downloadAudioAsset(url, `${track.value?.title ?? 'track'}_master_v${delivery.delivery_number}${historySuffix}`, delivery.file_path)
@@ -1040,6 +1128,18 @@ function pushToTrackDetail() {
 async function executeTransition(decision: string) {
   if (!track.value) return
   const previousStatus = track.value.status
+
+  // Check if this decision leads to a mastering revision step
+  const isMasteringRevisionRequest = _willTransitionToMasteringRevision(decision)
+
+  if (isMasteringRevisionRequest) {
+    // Show revision type selection modal (required for mastering revisions)
+    pendingRevisionDecision.value = decision
+    selectedRevisionType.value = 'source_audio' // default
+    revisionTypeModalOpen.value = true
+    return
+  }
+
   if (decision === 'reject_final') {
     const confirmed = window.confirm(t('producer.rejectFinalConfirm'))
     if (!confirmed) return
@@ -1068,8 +1168,54 @@ async function executeTransition(decision: string) {
   }
 }
 
+function _willTransitionToMasteringRevision(decision: string): boolean {
+  if (!track.value?.workflow_step || !workflowConfig.value) return false
+
+  const currentStep = track.value.workflow_step
+
+  if (currentStep.ui_variant !== 'mastering' && currentStep.id !== 'mastering') return false
+
+  // Check if this decision leads to a revision step
+  const targetStepId = currentStep.transitions?.[decision]
+  if (!targetStepId) return false
+
+  const targetStep = workflowConfig.value.steps.find(s => s.id === targetStepId)
+  return targetStep?.type === 'revision' && targetStep.return_to === currentStep.id
+}
+
+async function confirmRevisionType() {
+  if (!pendingRevisionDecision.value) return
+  const decision = pendingRevisionDecision.value
+  const revisionType = selectedRevisionType.value
+  revisionTypeModalOpen.value = false
+  pendingRevisionDecision.value = null
+
+  if (!track.value) return
+  const previousStatus = track.value.status
+  acting.value = true
+  error.value = ''
+  try {
+    if (inferClassicVariant(track.value.workflow_step ?? null) === 'peer_review' && checklistDirty.value) {
+      await persistChecklist(false)
+    }
+    const updatedTrack = await trackApi.workflowTransition(trackId.value, decision, revisionType)
+    if (updatedTrack.status === previousStatus) {
+      await loadPage()
+      toastSuccess(t('workflowStep.actionSubmitted'))
+      return
+    }
+    pushToTrackDetail()
+  } catch (err: any) {
+    error.value = err.message || t('workflowStep.transitionFailed')
+  } finally {
+    acting.value = false
+  }
+}
+
 async function handleUpload(kind: 'revision' | 'delivery') {
-  if (!uploadFile.value || !track.value) return
+  if (!track.value) return
+  const message = deliveryMessage.value.trim()
+  if (!uploadFile.value) return
   const previousStatus = track.value.status
   uploading.value = true
   uploadProgress.value = 0
@@ -1077,7 +1223,7 @@ async function handleUpload(kind: 'revision' | 'delivery') {
   try {
     const file = uploadFile.value
     let updatedTrack: Track
-    if (appStore.r2Enabled) {
+    if (file && appStore.r2Enabled) {
       const requestFn = kind === 'revision'
         ? r2Api.requestSourceVersionUpload
         : r2Api.requestMasterDeliveryUpload
@@ -1106,9 +1252,11 @@ async function handleUpload(kind: 'revision' | 'delivery') {
           upload_id: presigned.upload_id,
           object_key: presigned.object_key,
           duration,
+          delivery_message: message || null,
         })
       }
     } else if (kind === 'revision') {
+      if (!file) return
       updatedTrack = await trackApi.uploadSourceVersion(trackId.value, file, {
         revisionNotes: revisionNotes.value.trim() || undefined,
         resolvedIssueIds: [...selectedRevisionIssueIds.value],
@@ -1117,12 +1265,16 @@ async function handleUpload(kind: 'revision' | 'delivery') {
         uploadProgress.value = percent
       })
     } else {
-      updatedTrack = await trackApi.uploadMasterDelivery(trackId.value, file, (percent) => {
+      updatedTrack = await trackApi.uploadMasterDelivery(trackId.value, {
+        file,
+        deliveryMessage: message || null,
+      }, (percent) => {
         uploadProgress.value = percent
       })
     }
     if (kind === 'delivery') {
       uploadFile.value = null
+      deliveryMessage.value = ''
       resetDeliveryPreview()
       toastSuccess(t('workflowStep.deliveryUploaded'))
       if (updatedTrack.status !== previousStatus) {
@@ -1138,6 +1290,34 @@ async function handleUpload(kind: 'revision' | 'delivery') {
     revisionBatchNote.value = ''
     resetDeliveryPreview()
     toastSuccess(t('workflowStep.revisionUploaded'))
+    if (updatedTrack.status !== previousStatus) {
+      pushToTrackDetail()
+      return
+    }
+    await loadPage()
+  } catch (err: any) {
+    error.value = err.message || t('workflowStep.uploadFailed')
+  } finally {
+    uploading.value = false
+  }
+}
+
+async function handleExternalSourceLinkSubmit() {
+  if (!track.value || !canSubmitExternalStemLink.value) return
+  const previousStatus = track.value.status
+  uploading.value = true
+  uploadProgress.value = 0
+  error.value = ''
+  try {
+    const updatedTrack = await trackApi.submitSourceExternalLink(trackId.value, {
+      revisionNotes: externalStemLinkNotes.value,
+      resolvedIssueIds: [...selectedRevisionIssueIds.value],
+      resolutionNote: revisionBatchNote.value.trim() || null,
+    })
+    externalStemLinkNotes.value = ''
+    selectedRevisionIssueIds.value = []
+    revisionBatchNote.value = ''
+    toastSuccess(t('workflowStep.externalSourceLinkSubmitted'))
     if (updatedTrack.status !== previousStatus) {
       pushToTrackDetail()
       return
@@ -1314,7 +1494,8 @@ async function openReviewerAssignment() {
   try {
     const album = await albumApi.get(track.value.album_id)
     if (!track.value) return
-    reviewerAssignmentMembers.value = album.members.filter(member => member.user_id !== track.value!.submitter_id)
+    const composerIds = new Set(trackComposerIds(track.value))
+    reviewerAssignmentMembers.value = album.members.filter(member => !composerIds.has(member.user_id))
   } catch (err: any) {
     error.value = err.message || t('common.requestFailed')
   } finally {
@@ -1531,6 +1712,81 @@ function handleIssueLeave() {
 </script>
 
 <template>
+  <!-- Revision Type Selection Modal -->
+  <BaseModal
+    v-if="revisionTypeModalOpen"
+    @close="revisionTypeModalOpen = false"
+    max-width="max-w-lg"
+  >
+    <div class="space-y-6">
+      <div>
+        <h3 class="text-lg font-mono font-bold text-foreground">
+          {{ t('workflowStep.selectRevisionType') }}
+        </h3>
+        <p class="text-sm text-muted-foreground mt-2">
+          {{ t('workflowStep.selectRevisionTypeDesc') }}
+        </p>
+      </div>
+
+      <div class="space-y-3">
+        <!-- Source Audio Option -->
+        <label
+          class="flex items-start gap-3 p-4 border rounded-lg cursor-pointer transition-colors"
+          :class="selectedRevisionType === 'source_audio'
+            ? 'border-primary bg-primary/5'
+            : 'border-border hover:border-primary/30'"
+        >
+          <input
+            type="radio"
+            value="source_audio"
+            v-model="selectedRevisionType"
+            class="mt-1"
+          />
+          <div class="flex-1">
+            <div class="text-sm font-mono font-semibold text-foreground">
+              {{ t('workflowStep.revisionTypeSourceAudio') }}
+            </div>
+            <div class="text-xs text-muted-foreground mt-1">
+              {{ t('workflowStep.revisionTypeSourceAudioDesc') }}
+            </div>
+          </div>
+        </label>
+
+        <!-- Stem Files Option -->
+        <label
+          class="flex items-start gap-3 p-4 border rounded-lg cursor-pointer transition-colors"
+          :class="selectedRevisionType === 'stem_files'
+            ? 'border-primary bg-primary/5'
+            : 'border-border hover:border-primary/30'"
+        >
+          <input
+            type="radio"
+            value="stem_files"
+            v-model="selectedRevisionType"
+            class="mt-1"
+          />
+          <div class="flex-1">
+            <div class="text-sm font-mono font-semibold text-foreground">
+              {{ t('workflowStep.revisionTypeStemFiles') }}
+            </div>
+            <div class="text-xs text-muted-foreground mt-1">
+              {{ t('workflowStep.revisionTypeStemFilesDesc') }}
+            </div>
+          </div>
+        </label>
+      </div>
+
+      <div class="flex gap-2">
+        <button @click="confirmRevisionType" class="btn-primary flex-1">
+          {{ t('common.confirm') }}
+        </button>
+        <button @click="revisionTypeModalOpen = false" class="btn-secondary flex-1">
+          {{ t('common.cancel') }}
+        </button>
+      </div>
+    </div>
+  </BaseModal>
+
   <div v-if="loading" class="max-w-4xl mx-auto space-y-6">
     <div class="card animate-pulse h-24"></div>
   </div>
@@ -1714,7 +1970,7 @@ function handleIssueLeave() {
           <p class="text-xs text-muted-foreground leading-relaxed">{{ t('peerReview.waveformHint') }}</p>
           <div class="flex items-center gap-2 shrink-0">
             <button
-              v-if="olderSourceVersions.length > 0"
+              v-if="olderPlayableSourceVersions.length > 0"
               @click="toggleSourceCompare"
               class="btn-secondary text-xs px-3 py-1"
             >
@@ -1725,7 +1981,7 @@ function handleIssueLeave() {
             </button>
           </div>
         </div>
-        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="mb-3 space-y-2">
+        <div v-if="showSourceCompare && olderPlayableSourceVersions.length > 0" class="mb-3 space-y-2">
           <div class="flex items-center gap-2">
             <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
             <CustomSelect
@@ -1941,7 +2197,7 @@ function handleIssueLeave() {
           <p class="text-xs text-muted-foreground leading-relaxed">{{ t('producer.waveformHint') }}</p>
           <div class="flex items-center gap-2 shrink-0">
             <button
-              v-if="olderSourceVersions.length > 0"
+              v-if="olderPlayableSourceVersions.length > 0"
               @click="toggleSourceCompare"
               class="btn-secondary text-xs px-3 py-1"
             >
@@ -1952,7 +2208,7 @@ function handleIssueLeave() {
             </button>
           </div>
         </div>
-        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="mb-3 space-y-2">
+        <div v-if="showSourceCompare && olderPlayableSourceVersions.length > 0" class="mb-3 space-y-2">
           <div class="flex items-center gap-2">
             <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
             <CustomSelect
@@ -2203,7 +2459,7 @@ function handleIssueLeave() {
           <p class="text-xs text-muted-foreground leading-relaxed">{{ t('mastering.waveformHint') }}</p>
           <div class="flex items-center gap-2 shrink-0">
             <button
-              v-if="olderSourceVersions.length > 0"
+              v-if="olderPlayableSourceVersions.length > 0"
               @click="toggleSourceCompare"
               class="btn-secondary text-xs px-3 py-1"
             >
@@ -2214,7 +2470,7 @@ function handleIssueLeave() {
             </button>
           </div>
         </div>
-        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="mb-3 space-y-2">
+        <div v-if="showSourceCompare && olderPlayableSourceVersions.length > 0" class="mb-3 space-y-2">
           <div class="flex items-center gap-2">
             <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
             <CustomSelect
@@ -2308,30 +2564,44 @@ function handleIssueLeave() {
         <div class="card space-y-4">
           <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('mastering.actionsHeading') }}</h3>
           <div class="text-sm text-muted-foreground">{{ t('mastering.uploadReady') }}</div>
-          <input type="file" accept="audio/*" @change="onFileChange" class="input-field w-full" />
+          <div class="space-y-2">
+            <label class="block text-xs text-muted-foreground">{{ t('workflowStep.deliveryFileLabel') }}</label>
+            <input type="file" accept="audio/*" @change="onFileChange" class="input-field w-full" />
+          </div>
+          <div class="space-y-2">
+            <label class="block text-xs text-muted-foreground">{{ t('workflowStep.deliveryMessageLabel') }}</label>
+            <textarea
+              v-model="deliveryMessage"
+              class="textarea-field min-h-[120px]"
+              :placeholder="t('workflowStep.deliveryMessagePlaceholder')"
+              :disabled="uploading"
+            ></textarea>
+            <p class="text-xs text-muted-foreground">{{ t('workflowStep.deliveryMessageHint') }}</p>
+          </div>
           <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
             <div class="space-y-1">
               <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.deliveryPreviewHeading') }}</h4>
               <p class="text-sm text-muted-foreground">{{ t('workflowStep.deliveryPreviewNotice') }}</p>
             </div>
             <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" :compact="true" :height="96" />
-            <div class="flex flex-wrap gap-2">
-              <button
-                @click="handleUpload('delivery')"
-                :disabled="uploading"
-                class="btn-primary text-sm h-10 inline-flex items-center justify-center"
-              >
-                <Upload class="w-4 h-4 mr-2" />
-                {{ uploading ? t('workflowStep.uploading') : t('workflowStep.confirmUploadDelivery') }}
-              </button>
-              <button
-                @click="uploadFile = null; resetDeliveryPreview()"
-                :disabled="uploading"
-                class="btn-secondary text-sm"
-              >
-                {{ t('workflowStep.clearSelectedDelivery') }}
-              </button>
-            </div>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              @click="handleUpload('delivery')"
+              :disabled="uploading || !canSubmitDelivery"
+              class="btn-primary text-sm h-10 inline-flex items-center justify-center"
+            >
+              <Upload class="w-4 h-4 mr-2" />
+              {{ uploading ? t('workflowStep.uploading') : t('workflowStep.confirmUploadDelivery') }}
+            </button>
+            <button
+              v-if="uploadFile"
+              @click="uploadFile = null; resetDeliveryPreview()"
+              :disabled="uploading"
+              class="btn-secondary text-sm"
+            >
+              {{ t('workflowStep.clearSelectedDelivery') }}
+            </button>
           </div>
           <div v-if="uploading" class="space-y-1">
             <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
@@ -2342,17 +2612,17 @@ function handleIssueLeave() {
         </div>
       </div>
 
-      <div v-if="masterAudioUrl" class="card space-y-4">
+      <div v-if="masterDelivery" class="card space-y-4">
         <div class="flex items-start justify-between gap-3">
           <div>
             <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('workflowStep.currentDelivery') }}</h3>
             <p class="text-xs text-muted-foreground mt-1">
-              {{ masterDelivery?.confirmed_at ? t('workflowStep.deliveryConfirmed') : t('workflowStep.deliveryPendingConfirmation') }}
+              {{ masterDelivery.confirmed_at ? t('workflowStep.deliveryConfirmed') : t('workflowStep.deliveryPendingConfirmation') }}
             </p>
           </div>
-          <div class="flex items-center gap-2 shrink-0">
+          <div v-if="masterAudioUrl" class="flex items-center gap-2 shrink-0">
             <button
-              v-if="olderMasterDeliveries.length > 0"
+              v-if="olderPlayableMasterDeliveries.length > 0"
               @click="toggleMasterCompare"
               class="btn-secondary text-xs px-3 py-1"
             >
@@ -2363,7 +2633,7 @@ function handleIssueLeave() {
             </button>
           </div>
         </div>
-        <div v-if="showMasterCompare && olderMasterDeliveries.length > 0" class="flex items-center gap-2">
+        <div v-if="showMasterCompare && olderPlayableMasterDeliveries.length > 0" class="flex items-center gap-2">
           <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
           <CustomSelect
             v-model="selectedCompareMasterDeliveryId"
@@ -2379,7 +2649,12 @@ function handleIssueLeave() {
             {{ t('compare.clear') }}
           </button>
         </div>
-        <WaveformPlayer :audio-url="masterAudioUrl" :issues="[]" :track-id="trackId" playback-scope="master" :compare-audio-url="selectedCompareMasterAudioUrl" />
+        <div v-if="masterDelivery.delivery_message" class="border border-border bg-background rounded-none p-3">
+          <p class="text-xs text-muted-foreground mb-1">{{ t('workflowStep.deliveryMessageLabel') }}</p>
+          <p class="whitespace-pre-wrap break-words text-sm text-foreground">{{ masterDelivery.delivery_message }}</p>
+        </div>
+        <WaveformPlayer v-if="masterAudioUrl" :audio-url="masterAudioUrl" :issues="[]" :track-id="trackId" playback-scope="master" :compare-audio-url="selectedCompareMasterAudioUrl" />
+        <p v-else class="text-sm text-muted-foreground">{{ t('workflowStep.textDeliveryNoAudio') }}</p>
       </div>
 
       <div v-if="sortedMasterDeliveries.length > 0" class="card space-y-3">
@@ -2393,26 +2668,33 @@ function handleIssueLeave() {
             :key="delivery.id"
             class="flex flex-col gap-3 border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between"
           >
-            <div class="space-y-1 min-w-0">
+            <div class="space-y-2 min-w-0">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="text-sm font-mono font-semibold text-foreground">{{ masterDeliveryOptionLabel(delivery) }}</span>
                 <span v-if="delivery.id === masterDelivery?.id" class="bg-border text-foreground px-2 py-1 rounded-full text-[11px] font-mono">
                   {{ t('compare.currentVersion') }}
                 </span>
+                <span class="bg-border text-foreground px-2 py-1 rounded-full text-[11px] font-mono">
+                  {{ delivery.file_path ? t('workflowStep.fileDeliveryLabel') : t('workflowStep.textDeliveryLabel') }}
+                </span>
               </div>
               <p class="text-xs text-muted-foreground">
                 {{ delivery.confirmed_at ? t('workflowStep.deliveryConfirmed') : t('workflowStep.deliveryPendingConfirmation') }}
               </p>
+              <div v-if="delivery.delivery_message" class="border border-border bg-card rounded-none p-3">
+                <p class="text-xs text-muted-foreground mb-1">{{ t('workflowStep.deliveryMessageLabel') }}</p>
+                <p class="whitespace-pre-wrap break-words text-sm text-foreground">{{ delivery.delivery_message }}</p>
+              </div>
             </div>
             <div class="flex flex-wrap items-center gap-2 shrink-0">
               <button
-                v-if="delivery.id !== masterDelivery?.id"
+                v-if="delivery.id !== masterDelivery?.id && delivery.file_path"
                 @click="compareWithMasterDelivery(delivery.id)"
                 class="btn-secondary text-xs px-3 py-1"
               >
                 {{ t('compare.title') }}
               </button>
-              <button @click="handleMasterVersionDownload(delivery)" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              <button v-if="delivery.file_path" @click="handleMasterVersionDownload(delivery)" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
                 {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
               </button>
             </div>
@@ -2455,7 +2737,7 @@ function handleIssueLeave() {
       />
     </div>
 
-      <WorkflowActionBar :actions="deliveryActions" :hint="t('mastering.actionHint')" />
+    <WorkflowActionBar :actions="deliveryActions" :hint="t('mastering.actionHint')" />
   </div>
 
   <div v-else-if="activeVariant === 'final_review'" class="max-w-4xl mx-auto min-h-full flex flex-col">
@@ -2481,7 +2763,7 @@ function handleIssueLeave() {
           <p class="text-xs text-muted-foreground leading-relaxed">{{ t('finalReview.waveformHint') }}</p>
           <div class="flex items-center gap-2 shrink-0">
             <button
-              v-if="olderMasterDeliveries.length > 0"
+              v-if="olderPlayableMasterDeliveries.length > 0"
               @click="toggleMasterCompare"
               class="btn-secondary text-xs px-3 py-1"
             >
@@ -2492,7 +2774,7 @@ function handleIssueLeave() {
             </button>
           </div>
         </div>
-        <div v-if="showMasterCompare && olderMasterDeliveries.length > 0" class="flex items-center gap-2 mb-3">
+        <div v-if="showMasterCompare && olderPlayableMasterDeliveries.length > 0" class="flex items-center gap-2 mb-3">
           <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
           <CustomSelect
             v-model="selectedCompareMasterDeliveryId"
@@ -2507,6 +2789,10 @@ function handleIssueLeave() {
           >
             {{ t('compare.clear') }}
           </button>
+        </div>
+        <div v-if="masterDelivery?.delivery_message" class="border border-border bg-background rounded-none p-3 mb-3">
+          <p class="text-xs text-muted-foreground mb-1">{{ t('workflowStep.deliveryMessageLabel') }}</p>
+          <p class="whitespace-pre-wrap break-words text-sm text-foreground">{{ masterDelivery.delivery_message }}</p>
         </div>
         <WaveformPlayer
           ref="waveformRef"
@@ -2531,6 +2817,14 @@ function handleIssueLeave() {
           @timeupdate="onWaveformTimeUpdate"
           @playbackStateChange="onWaveformPlaybackStateChange"
         />
+      </div>
+      <div v-else-if="masterDelivery" class="card space-y-3">
+        <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('workflowStep.currentDelivery') }}</h3>
+        <p class="text-sm text-muted-foreground">{{ t('workflowStep.textDeliveryNoAudio') }}</p>
+        <div v-if="masterDelivery.delivery_message" class="border border-border bg-background rounded-none p-3">
+          <p class="text-xs text-muted-foreground mb-1">{{ t('workflowStep.deliveryMessageLabel') }}</p>
+          <p class="whitespace-pre-wrap break-words text-sm text-foreground">{{ masterDelivery.delivery_message }}</p>
+        </div>
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -2595,7 +2889,7 @@ function handleIssueLeave() {
             </span>
           </div>
           <div class="flex items-center justify-between gap-3 text-sm">
-            <span>{{ isProxySubmission ? t('finalReview.externalSubmitterProxy') : t('finalReview.submitter') }}</span>
+            <span>{{ composerApprovalLabel }}</span>
             <span
               :class="masterDelivery?.submitter_approved_at ? 'text-success' : 'text-muted-foreground'"
               class="text-right"
@@ -2621,26 +2915,33 @@ function handleIssueLeave() {
             :key="delivery.id"
             class="flex flex-col gap-3 border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between"
           >
-            <div class="space-y-1 min-w-0">
+            <div class="space-y-2 min-w-0">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="text-sm font-mono font-semibold text-foreground">{{ masterDeliveryOptionLabel(delivery) }}</span>
                 <span v-if="delivery.id === masterDelivery?.id" class="bg-border text-foreground px-2 py-1 rounded-full text-[11px] font-mono">
                   {{ t('compare.currentVersion') }}
                 </span>
+                <span class="bg-border text-foreground px-2 py-1 rounded-full text-[11px] font-mono">
+                  {{ delivery.file_path ? t('workflowStep.fileDeliveryLabel') : t('workflowStep.textDeliveryLabel') }}
+                </span>
               </div>
               <p class="text-xs text-muted-foreground">
                 {{ delivery.confirmed_at ? t('workflowStep.deliveryConfirmed') : t('workflowStep.deliveryPendingConfirmation') }}
               </p>
+              <div v-if="delivery.delivery_message" class="border border-border bg-card rounded-none p-3">
+                <p class="text-xs text-muted-foreground mb-1">{{ t('workflowStep.deliveryMessageLabel') }}</p>
+                <p class="whitespace-pre-wrap break-words text-sm text-foreground">{{ delivery.delivery_message }}</p>
+              </div>
             </div>
             <div class="flex flex-wrap items-center gap-2 shrink-0">
               <button
-                v-if="delivery.id !== masterDelivery?.id"
+                v-if="delivery.id !== masterDelivery?.id && delivery.file_path"
                 @click="compareWithMasterDelivery(delivery.id)"
                 class="btn-secondary text-xs px-3 py-1"
               >
                 {{ t('compare.title') }}
               </button>
-              <button @click="handleMasterVersionDownload(delivery)" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+              <button v-if="delivery.file_path" @click="handleMasterVersionDownload(delivery)" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
                 {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
               </button>
             </div>
@@ -2660,10 +2961,10 @@ function handleIssueLeave() {
       <div class="min-w-0 flex-1">
         <h1 class="text-2xl font-mono font-bold truncate">{{ track.title }}</h1>
         <p class="text-sm text-muted-foreground mt-0.5">
-          {{ translateStepLabel(currentStep, t) }} · <span :class="{ 'font-mono': !track.artist && track.submitter_id }">{{ track.artist ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
+          {{ translateStepLabel(currentStep, t) }} · <span :class="{ 'font-mono': trackArtistUsesHash(track) }">{{ trackArtistDisplay(track) }}</span>
         </p>
         <p v-if="isProxySubmission" class="mt-1 text-xs text-muted-foreground">
-          {{ t('trackDetail.externalSubmitter') }}: {{ track.external_submitter_name }} · {{ t('trackDetail.proxyUploader') }}: {{ track.proxy_uploader?.display_name ?? track.submitter?.display_name ?? '--' }}
+          {{ t('trackDetail.externalComposers') }}: {{ externalComposerDisplayText(track) }} · {{ t('trackDetail.composerProxyActor') }}: {{ track.proxy_uploader?.display_name ?? track.submitter?.display_name ?? '--' }}
         </p>
       </div>
       <StatusBadge :status="track.status" type="track" :label="currentStep?.label ?? null" />
@@ -2681,7 +2982,7 @@ function handleIssueLeave() {
       <div v-if="audioUrl" class="card space-y-3">
         <div class="flex items-center justify-end gap-2">
           <button
-            v-if="olderSourceVersions.length > 0"
+            v-if="olderPlayableSourceVersions.length > 0"
             @click="toggleSourceCompare"
             class="btn-secondary text-xs px-3 py-1"
           >
@@ -2691,7 +2992,7 @@ function handleIssueLeave() {
             {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
           </button>
         </div>
-        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="space-y-2">
+        <div v-if="showSourceCompare && olderPlayableSourceVersions.length > 0" class="space-y-2">
           <div class="flex items-center gap-2">
             <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
             <CustomSelect
@@ -2772,7 +3073,7 @@ function handleIssueLeave() {
       <div v-if="audioUrl" class="card space-y-3">
         <div class="flex items-center justify-end gap-2">
           <button
-            v-if="olderSourceVersions.length > 0"
+            v-if="olderPlayableSourceVersions.length > 0"
             @click="toggleSourceCompare"
             class="btn-secondary text-xs px-3 py-1"
           >
@@ -2782,7 +3083,7 @@ function handleIssueLeave() {
             {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
           </button>
         </div>
-        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="space-y-2">
+        <div v-if="showSourceCompare && olderPlayableSourceVersions.length > 0" class="space-y-2">
           <div class="flex items-center gap-2">
             <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
             <CustomSelect
@@ -2947,40 +3248,128 @@ function handleIssueLeave() {
       <div v-if="isRevisionAssignee" class="card space-y-4">
         <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.uploadRevisedSource') }}</h3>
         <p class="text-sm text-muted-foreground">{{ t('workflowStep.uploadRevisedSourceDesc') }}</p>
-        <input
-          type="file"
-          accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"
-          @change="onFileChange"
-          class="input-field"
-        />
-        <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
+
+        <div
+          v-if="isMasteringRevisionStep && requestedRevisionType"
+          class="flex items-start gap-3 border border-info/20 bg-info-bg rounded-none p-4"
+        >
+          <Info class="w-4 h-4 text-info flex-shrink-0 mt-0.5" :stroke-width="2" />
           <div class="space-y-1">
-            <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.revisedPreviewHeading') }}</h4>
-            <p class="text-sm text-muted-foreground">{{ t('workflowStep.revisedPreviewNotice') }}</p>
+            <p class="text-sm font-mono font-semibold text-info">{{ requestedRevisionTitle }}</p>
+            <p class="text-xs text-muted-foreground">{{ requestedRevisionHint }}</p>
           </div>
-          <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" />
-          <div>
-            <label class="block text-sm text-muted-foreground mb-1">{{ t('workflowStep.revisionNotes') }}</label>
-            <textarea v-model="revisionNotes" class="textarea-field w-full" rows="3" :placeholder="t('workflowStep.revisionNotesPlaceholder')"></textarea>
+        </div>
+
+        <!-- Submission method selection for legacy mastering revisions without a requested type -->
+        <div v-if="shouldShowRevisionSubmitMethod" class="space-y-3">
+          <label class="block text-sm text-muted-foreground">{{ t('workflowStep.revisionSubmitMethod') }}</label>
+          <div class="space-y-2">
+            <label class="flex items-center gap-3 p-3 border rounded-none cursor-pointer"
+                   :class="revisionUploadMode === 'file' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'">
+              <input type="radio" value="file" v-model="revisionUploadMode" />
+              <span class="text-sm text-foreground">{{ t('workflowStep.revisionSubmitMethodUploadFile') }}</span>
+            </label>
+            <label class="flex items-center gap-3 p-3 border rounded-none cursor-pointer"
+                   :class="revisionUploadMode === 'link' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'">
+              <input type="radio" value="link" v-model="revisionUploadMode" />
+              <span class="text-sm text-foreground">{{ t('workflowStep.revisionSubmitMethodExternalLink') }}</span>
+            </label>
           </div>
+        </div>
+
+        <template v-if="shouldShowRevisionFileUpload">
+          <input
+            type="file"
+            accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"
+            @change="onFileChange"
+            :disabled="uploading"
+            class="input-field"
+          />
+          <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
+            <div class="space-y-1">
+              <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.revisedPreviewHeading') }}</h4>
+              <p class="text-sm text-muted-foreground">{{ t('workflowStep.revisedPreviewNotice') }}</p>
+            </div>
+            <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" />
+            <div>
+              <label class="block text-sm text-muted-foreground mb-1">{{ t('workflowStep.revisionNotes') }}</label>
+              <textarea v-model="revisionNotes" class="textarea-field w-full" rows="3" :placeholder="t('workflowStep.revisionNotesPlaceholder')"></textarea>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                @click="handleUpload('revision')"
+                :disabled="uploading"
+                class="btn-primary text-sm h-10 inline-flex items-center justify-center"
+              >
+                <Upload class="w-4 h-4 mr-2" />
+                {{ uploading ? t('workflowStep.uploading') : t('workflowStep.uploadRevision') }}
+              </button>
+              <button
+                @click="uploadFile = null; revisionNotes = ''; resetDeliveryPreview()"
+                :disabled="uploading"
+                class="btn-secondary text-sm"
+              >
+                {{ t('workflowStep.clearRevision') }}
+              </button>
+            </div>
+          </div>
+        </template>
+
+        <div v-if="shouldShowExternalStemLinkForm" class="space-y-4 border border-primary/20 bg-primary/5 rounded-none p-4">
+          <div class="flex items-start gap-3">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+              <Link class="w-4 h-4 text-primary" :stroke-width="2" />
+            </div>
+            <div class="flex-1 space-y-1">
+              <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.externalStemLinkTitle') }}</h4>
+              <p class="text-xs text-muted-foreground">{{ t('workflowStep.externalStemLinkDesc') }}</p>
+            </div>
+          </div>
+
+          <div class="border border-border bg-background rounded-none p-3 space-y-2">
+            <div class="flex items-start gap-2">
+              <Info class="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-0.5" :stroke-width="2" />
+              <div class="flex-1 space-y-1">
+                <p class="text-xs font-mono text-muted-foreground">{{ t('workflowStep.externalStemLinkExampleHeading') }}</p>
+                <pre class="text-xs text-muted-foreground whitespace-pre-wrap font-sans leading-relaxed">{{ t('workflowStep.externalStemLinkExample') }}</pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <label class="block text-xs text-muted-foreground">{{ t('workflowStep.externalStemLinkLabel') }}</label>
+            <textarea
+              v-model="externalStemLinkNotes"
+              class="textarea-field w-full min-h-[140px]"
+              :placeholder="t('workflowStep.externalStemLinkPlaceholder')"
+              :disabled="uploading"
+            ></textarea>
+            <div class="flex items-start gap-2">
+              <Info class="w-3.5 h-3.5 text-info flex-shrink-0 mt-0.5" :stroke-width="2" />
+              <p class="text-xs text-info">{{ t('workflowStep.externalStemLinkHint') }}</p>
+            </div>
+          </div>
+
           <div class="flex flex-wrap gap-2">
             <button
-              @click="handleUpload('revision')"
-              :disabled="uploading"
+              @click="handleExternalSourceLinkSubmit"
+              :disabled="uploading || !canSubmitExternalStemLink"
               class="btn-primary text-sm h-10 inline-flex items-center justify-center"
             >
               <Upload class="w-4 h-4 mr-2" />
-              {{ uploading ? t('workflowStep.uploading') : t('workflowStep.uploadRevision') }}
+              {{ uploading ? t('workflowStep.uploading') : t('workflowStep.submitExternalStemLink') }}
             </button>
             <button
-              @click="uploadFile = null; revisionNotes = ''; resetDeliveryPreview()"
+              v-if="externalStemLinkNotes"
+              @click="externalStemLinkNotes = ''"
               :disabled="uploading"
               class="btn-secondary text-sm"
             >
-              {{ t('workflowStep.clearRevision') }}
+              {{ t('workflowStep.clearExternalStemLink') }}
             </button>
           </div>
         </div>
+
         <div v-if="uploading" class="space-y-1">
           <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
             <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
@@ -3011,7 +3400,7 @@ function handleIssueLeave() {
           <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.sourceAudio') }}</h3>
           <div class="flex items-center gap-2">
             <button
-              v-if="olderSourceVersions.length > 0"
+              v-if="olderPlayableSourceVersions.length > 0"
               @click="toggleSourceCompare"
               class="btn-secondary text-xs px-3 py-1"
             >
@@ -3022,7 +3411,7 @@ function handleIssueLeave() {
             </button>
           </div>
         </div>
-        <div v-if="showSourceCompare && olderSourceVersions.length > 0" class="space-y-2">
+        <div v-if="showSourceCompare && olderPlayableSourceVersions.length > 0" class="space-y-2">
           <div class="flex items-center gap-2">
             <span class="text-xs text-muted-foreground">{{ t('compare.selectVersion') }}</span>
             <CustomSelect
@@ -3048,49 +3437,68 @@ function handleIssueLeave() {
 
       <div class="card space-y-4">
         <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.uploadDelivery') }}</h3>
-        <input
-          type="file"
-          accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"
-          @change="onFileChange"
-          class="input-field"
-        />
+        <p class="text-sm text-muted-foreground">{{ t('workflowStep.deliveryMessageHint') }}</p>
+        <div class="space-y-2">
+          <label class="block text-xs text-muted-foreground">{{ t('workflowStep.deliveryFileLabel') }}</label>
+          <input
+            type="file"
+            accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"
+            @change="onFileChange"
+            class="input-field"
+          />
+        </div>
+        <div class="space-y-2">
+          <label class="block text-xs text-muted-foreground">{{ t('workflowStep.deliveryMessageLabel') }}</label>
+          <textarea
+            v-model="deliveryMessage"
+            class="textarea-field min-h-[120px]"
+            :placeholder="t('workflowStep.deliveryMessagePlaceholder')"
+            :disabled="uploading"
+          ></textarea>
+        </div>
         <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
           <div class="space-y-1">
             <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.deliveryPreviewHeading') }}</h4>
             <p class="text-sm text-muted-foreground">{{ t('workflowStep.deliveryPreviewNotice') }}</p>
           </div>
           <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" />
-          <div class="flex flex-wrap gap-2">
-            <button
-              @click="handleUpload('delivery')"
-              :disabled="uploading"
-              class="btn-primary text-sm h-10 inline-flex items-center justify-center"
-            >
-              <Upload class="w-4 h-4 mr-2" />
-              {{ uploading ? t('workflowStep.uploading') : t('workflowStep.confirmUploadDelivery') }}
-            </button>
-            <button
-              @click="uploadFile = null; resetDeliveryPreview()"
-              :disabled="uploading"
-              class="btn-secondary text-sm"
-            >
-              {{ t('workflowStep.clearSelectedDelivery') }}
-            </button>
-          </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button
+            @click="handleUpload('delivery')"
+            :disabled="uploading || !canSubmitDelivery"
+            class="btn-primary text-sm h-10 inline-flex items-center justify-center"
+          >
+            <Upload class="w-4 h-4 mr-2" />
+            {{ uploading ? t('workflowStep.uploading') : t('workflowStep.confirmUploadDelivery') }}
+          </button>
+          <button
+            v-if="uploadFile"
+            @click="uploadFile = null; resetDeliveryPreview()"
+            :disabled="uploading"
+            class="btn-secondary text-sm"
+          >
+            {{ t('workflowStep.clearSelectedDelivery') }}
+          </button>
         </div>
       </div>
 
-      <div v-if="masterAudioUrl" class="card space-y-3">
+      <div v-if="masterDelivery" class="card space-y-3">
         <div class="flex items-center justify-between">
           <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.currentDelivery') }}</h3>
-          <button @click="handleMasterDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
+          <button v-if="masterAudioUrl" @click="handleMasterDownload" :disabled="downloading" class="btn-secondary text-xs px-3 py-1">
             {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
           </button>
         </div>
         <p class="text-xs text-muted-foreground">
-          {{ masterDelivery?.confirmed_at ? t('workflowStep.deliveryConfirmed') : t('workflowStep.deliveryPendingConfirmation') }}
+          {{ masterDelivery.confirmed_at ? t('workflowStep.deliveryConfirmed') : t('workflowStep.deliveryPendingConfirmation') }}
         </p>
-        <WaveformPlayer :audio-url="masterAudioUrl" :issues="[]" :track-id="trackId" playback-scope="master" />
+        <div v-if="masterDelivery.delivery_message" class="border border-border bg-background rounded-none p-3">
+          <p class="text-xs text-muted-foreground mb-1">{{ t('workflowStep.deliveryMessageLabel') }}</p>
+          <p class="whitespace-pre-wrap break-words text-sm text-foreground">{{ masterDelivery.delivery_message }}</p>
+        </div>
+        <WaveformPlayer v-if="masterAudioUrl" :audio-url="masterAudioUrl" :issues="[]" :track-id="trackId" playback-scope="master" />
+        <p v-else class="text-sm text-muted-foreground">{{ t('workflowStep.textDeliveryNoAudio') }}</p>
       </div>
 
       <WorkflowActionBar v-if="deliveryActions.length" :actions="deliveryActions" :hint="t('common.actions')" />

@@ -1,0 +1,42 @@
+{
+  "version": "0.1.28",
+  "date": "2026-06-10",
+  "headline": {
+    "zh-CN": "艺术家绑定改为手填 UID",
+    "en": "Artist binding now uses manual UID entry"
+  },
+  "summary": {
+    "zh-CN": "曲目提交页的艺术家账号绑定从账号下拉改为手动填写 UID，第一行默认填入当前登录用户 UID，并允许绑定任意活跃平台用户。",
+    "en": "The track upload page now binds artist aliases by manually entering a UID, prefills the first row with the current user's UID, and allows any active platform user to be bound."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "提交页",
+        "en": "Upload page"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "手动填写绑定账号 UID",
+            "en": "Manual UID entry for bound accounts"
+          },
+          "description": {
+            "zh-CN": "每个艺术家名义现在可以直接填写平台用户 UID；第一行会默认填入当前登录用户 UID，留空则继续作为未绑定账号的姓名记录。",
+            "en": "Each artist alias can now include a platform user UID directly. The first row is prefilled with the current user's UID, and leaving it blank keeps the row as a name-only credit."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "可绑定任意活跃平台用户",
+            "en": "Bind any active platform user"
+          },
+          "description": {
+            "zh-CN": "UID 只要求对应用户存在且未封禁、未删除。被绑定用户会拥有该曲目，但不会自动加入专辑成员列表。",
+            "en": "A UID only needs to belong to an existing user who is not suspended or deleted. Bound users own the track, but are not automatically added as album members."
+          }
+        }
+      ]
+    }
+  ]
+}

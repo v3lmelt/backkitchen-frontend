@@ -17,6 +17,7 @@ import { formatTimestamp, formatTimestampShort, formatLocaleDate, formatDuration
 import { resolveAttachmentReferenceIndex, type MarkerIndexReference, type TimeReference, type TimestampTarget } from '@/utils/timestamps'
 import { ArrowDownUp, ChevronLeft, ChevronRight, Music, Pencil, Trash2 } from 'lucide-vue-next'
 import { canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
+import { isTrackComposer } from '@/utils/trackComposers'
 import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
@@ -118,7 +119,7 @@ const canChangeIssueStatus = computed(() => {
 })
 
 const shouldHideInternalComments = computed(() =>
-  Boolean(cachedTrack.value && appStore.currentUser?.id === cachedTrack.value.submitter_id),
+  Boolean(cachedTrack.value && isTrackComposer(cachedTrack.value, appStore.currentUser?.id)),
 )
 
 function isInternalIssueStatus(status: IssueStatus | string | null | undefined): boolean {
