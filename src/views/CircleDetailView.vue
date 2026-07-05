@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-4xl mx-auto space-y-6">
+  <div :class="['mx-auto space-y-6', activeTab === 'templates' ? 'max-w-7xl' : 'max-w-4xl']">
     <!-- loading -->
     <div v-if="loading">
       <SkeletonLoader :rows="4" :card="true" />
@@ -196,30 +196,36 @@
         <p v-else class="text-muted-foreground text-sm">{{ t('circleDetail.noInvites') }}</p>
       </div>
       <!-- workflow templates tab -->
-      <div v-if="activeTab === 'templates'" class="flex flex-col gap-6 max-w-xl">
+      <div v-if="activeTab === 'templates'" class="flex flex-col gap-6">
         <!-- New / edit template form -->
-        <div v-if="showNewTemplate" class="bg-card border border-border rounded-none p-6 space-y-4">
-          <h2 class="text-sm font-mono font-semibold text-foreground">
-            {{ editingTemplate ? t('workflowTemplate.editTemplate') : t('workflowTemplate.createTemplate') }}
-          </h2>
-          <div>
-            <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowTemplate.templateName') }}</label>
-            <input v-model="editTemplateName" class="input-field w-full" :placeholder="t('workflowTemplate.templateNamePlaceholder')" />
-          </div>
-          <div>
-            <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowTemplate.templateDescription') }}</label>
-            <textarea v-model="editTemplateDesc" class="textarea-field w-full h-16" :placeholder="t('workflowTemplate.templateDescriptionPlaceholder')" />
+        <div v-if="showNewTemplate" class="space-y-6">
+          <div class="bg-card border border-border rounded-none p-6 space-y-4">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <h2 class="text-sm font-mono font-semibold text-foreground">
+                {{ editingTemplate ? t('workflowTemplate.editTemplate') : t('workflowTemplate.createTemplate') }}
+              </h2>
+              <div class="flex flex-wrap gap-2">
+                <button @click="saveTemplate" :disabled="savingTpl || !editTemplateName.trim() || !editTemplateConfig" class="btn-primary text-xs">
+                  {{ savingTpl ? t('workflowTemplate.saving') : t('workflowTemplate.save') }}
+                </button>
+                <button @click="showNewTemplate = false" class="btn-secondary text-xs">{{ t('common.cancel') }}</button>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowTemplate.templateName') }}</label>
+                <input v-model="editTemplateName" class="input-field w-full" :placeholder="t('workflowTemplate.templateNamePlaceholder')" />
+              </div>
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowTemplate.templateDescription') }}</label>
+                <textarea v-model="editTemplateDesc" class="textarea-field w-full h-16" :placeholder="t('workflowTemplate.templateDescriptionPlaceholder')" />
+              </div>
+            </div>
           </div>
           <WorkflowEditor
             v-model:workflow-config="editTemplateConfig"
             :member-options="circleMemberOptions"
           />
-          <div class="flex gap-2">
-            <button @click="saveTemplate" :disabled="savingTpl || !editTemplateName.trim() || !editTemplateConfig" class="btn-primary text-xs">
-              {{ savingTpl ? t('workflowTemplate.saving') : t('workflowTemplate.save') }}
-            </button>
-            <button @click="showNewTemplate = false" class="btn-secondary text-xs">{{ t('common.cancel') }}</button>
-          </div>
         </div>
 
         <!-- Template list -->
@@ -244,25 +250,27 @@
             <p class="text-xs text-muted-foreground mt-1">{{ t('workflowTemplate.noTemplatesHint') }}</p>
           </div>
 
-          <div v-for="tpl in templates" :key="tpl.id" class="bg-card border border-border rounded-none p-4 space-y-2">
-            <div class="flex items-center gap-2">
-              <span class="text-sm font-mono font-semibold text-foreground flex-1">{{ tpl.name }}</span>
-              <span class="text-xs text-muted-foreground">
-                {{ tpl.album_count > 0 ? t('workflowTemplate.albumCount', { count: tpl.album_count }) : t('workflowTemplate.albumCountZero') }}
-              </span>
-            </div>
-            <p v-if="tpl.description" class="text-xs text-muted-foreground">{{ tpl.description }}</p>
-            <div class="flex items-center gap-3 text-xs text-muted-foreground">
-              <span>{{ tpl.workflow_config.steps.length }} steps</span>
-              <span v-if="tpl.created_by_user">{{ t('workflowTemplate.createdBy', { name: tpl.created_by_user.display_name }) }}</span>
-            </div>
-            <div v-if="canManageCircle" class="flex gap-2 pt-1">
-              <button @click="startEditTemplate(tpl)" class="btn-secondary text-xs">
-                <Pencil class="w-3 h-3 mr-1" /> {{ t('workflowTemplate.editTemplate') }}
-              </button>
-              <button @click="deleteTemplate(tpl)" class="text-xs text-error hover:underline">
-                <Trash2 class="w-3 h-3 inline mr-0.5" /> {{ t('workflowTemplate.deleteTemplate') }}
-              </button>
+          <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div v-for="tpl in templates" :key="tpl.id" class="bg-card border border-border rounded-none p-4 space-y-2 h-full flex flex-col">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-mono font-semibold text-foreground flex-1">{{ tpl.name }}</span>
+                <span class="text-xs text-muted-foreground">
+                  {{ tpl.album_count > 0 ? t('workflowTemplate.albumCount', { count: tpl.album_count }) : t('workflowTemplate.albumCountZero') }}
+                </span>
+              </div>
+              <p v-if="tpl.description" class="text-xs text-muted-foreground">{{ tpl.description }}</p>
+              <div class="flex items-center gap-3 text-xs text-muted-foreground">
+                <span>{{ tpl.workflow_config.steps.length }} steps</span>
+                <span v-if="tpl.created_by_user">{{ t('workflowTemplate.createdBy', { name: tpl.created_by_user.display_name }) }}</span>
+              </div>
+              <div v-if="canManageCircle" class="flex flex-wrap gap-2 pt-1 mt-auto">
+                <button @click="startEditTemplate(tpl)" class="btn-secondary text-xs">
+                  <Pencil class="w-3 h-3 mr-1" /> {{ t('workflowTemplate.editTemplate') }}
+                </button>
+                <button @click="deleteTemplate(tpl)" class="text-xs text-error hover:underline">
+                  <Trash2 class="w-3 h-3 inline mr-0.5" /> {{ t('workflowTemplate.deleteTemplate') }}
+                </button>
+              </div>
             </div>
           </div>
         </template>

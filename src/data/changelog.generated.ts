@@ -5,6 +5,48 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.34",
+    "date": "2026-07-05",
+    "headline": {
+      "zh-CN": "放宽社团工作流模板页",
+      "en": "Widens circle workflow templates"
+    },
+    "summary": {
+      "zh-CN": "社团详情页的工作流模板标签现在会使用更宽的工作区，模板列表和编辑器在大屏上不再挤在中间窄列。",
+      "en": "The workflow templates tab on circle details now uses a wider workspace so template cards and the editor no longer sit in a narrow centered column on large screens."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "社团模板",
+          "en": "Circle templates"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "模板页适配大屏",
+              "en": "Templates fit large screens"
+            },
+            "description": {
+              "zh-CN": "模板标签页会单独放宽页面容器，其他社团信息、成员、邀请码和危险操作页仍保持原有详情页宽度。",
+              "en": "The templates tab now widens its page container while the info, members, invite codes, and danger tabs keep the existing detail-page width."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "列表和编辑器更易浏览",
+              "en": "Lists and editing are easier to scan"
+            },
+            "description": {
+              "zh-CN": "模板列表在中大屏使用两列卡片布局，编辑模板时表单信息与工作流编辑器分区显示，编辑器可使用自身的大屏双栏布局。",
+              "en": "Template lists use two card columns on medium and large screens, and template editing separates metadata from the workflow editor so the editor can use its own wide two-column layout."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.33",
     "date": "2026-07-05",
     "headline": {
