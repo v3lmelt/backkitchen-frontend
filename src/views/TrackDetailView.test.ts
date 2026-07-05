@@ -744,6 +744,24 @@ describe('TrackDetailView', () => {
     expect(wrapper.text()).toContain('Kira')
   })
 
+  it('does not show platform composer ids when composer users are absent', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce(makeTrackDetailResponse({
+      track: {
+        artist: null,
+        submitter: null,
+        composer_ids: [16],
+        composers: [],
+      },
+      issues: [],
+    }))
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Platform composers')
+    expect(wrapper.text()).not.toContain('#16')
+  })
+
   it('opens compare mode from the route query', async () => {
     mocks.route = {
       name: 'track-detail',

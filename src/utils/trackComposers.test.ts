@@ -87,6 +87,27 @@ describe('trackComposers', () => {
     expect(platformComposerDisplayText(track)).toBe('Primary / Co')
   })
 
+  it('does not expose raw composer ids when composer users are missing', () => {
+    const track = makeTrack({
+      composer_ids: [10, 11],
+      composers: [],
+      submitter: makeUser(10, 'Primary'),
+    })
+
+    expect(platformComposerDisplayText(track)).toBe('--')
+    expect(trackComposerDisplayText(track)).toBe('--')
+  })
+
+  it('hides the platform composer summary when returned users are incomplete', () => {
+    const track = makeTrack({
+      composer_ids: [10, 11],
+      composers: [makeUser(10, 'Primary')],
+    })
+
+    expect(platformComposerDisplayText(track)).toBe('--')
+    expect(trackComposerDisplayText(track)).toBe('--')
+  })
+
   it('combines platform and external composer names for summary display', () => {
     const track = makeTrack({
       composer_ids: [10],

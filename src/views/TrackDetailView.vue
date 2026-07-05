@@ -1135,7 +1135,7 @@ const isSubmitter = computed(() => isComposerActor(track.value, appStore.current
 const composerSummary = computed(() => trackComposerDisplayText(track.value))
 const platformComposerSummary = computed(() => platformComposerDisplayText(track.value))
 const externalComposerSummary = computed(() => externalComposerDisplayText(track.value))
-const hasPlatformComposers = computed(() => trackComposerIds(track.value).length > 0)
+const hasPlatformComposers = computed(() => platformComposerSummary.value !== '--')
 const hasExternalComposers = computed(() => externalComposerSummary.value !== '--')
 const trackArtistDisplay = computed(() => {
   if (!track.value) return '--'
