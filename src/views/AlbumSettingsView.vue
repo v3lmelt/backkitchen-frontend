@@ -17,6 +17,7 @@ import { Archive, RotateCcw, Upload } from 'lucide-vue-next'
 import { hasAdminRole } from '@/utils/admin'
 import { formatRelativeTime } from '@/utils/time'
 import { formatWorkflowEvent, workflowEventDotColor } from '@/utils/workflow'
+import { sanitizeWorkflowUserReferences } from '@/utils/workflowConfig'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
@@ -209,7 +210,10 @@ async function saveWorkflow(config: WorkflowConfig) {
   savingWorkflow.value = true
   workflowMigrations.value = []
   try {
-    const result = await albumApi.updateWorkflow(album.value.id, config)
+    const result = await albumApi.updateWorkflow(
+      album.value.id,
+      sanitizeWorkflowUserReferences(config, users.value.map(user => user.id)),
+    )
     if (result.migrations?.length) {
       workflowMigrations.value = result.migrations
     }
@@ -428,9 +432,20 @@ function applyWebhookConfig(config: WebhookConfigPayload) {
 async function loadAssignableUsers(currentAlbum: Album): Promise<boolean> {
   loadingAssignableUsers.value = true
   try {
-    users.value = currentAlbum.circle_id
-      ? (await circleApi.get(currentAlbum.circle_id)).members.map(m => m.user)
-      : await userApi.list()
+    if (currentAlbum.circle_id) {
+      const byId = new Map<number, User>()
+      const circle = await circleApi.get(currentAlbum.circle_id)
+      for (const member of circle.members) byId.set(member.user.id, member.user)
+      users.value = Array.from(byId.values())
+    } else {
+      users.value = await userApi.list()
+    }
+    if (album.value?.workflow_config) {
+      album.value.workflow_config = sanitizeWorkflowUserReferences(
+        album.value.workflow_config,
+        users.value.map(user => user.id),
+      )
+    }
     return true
   } catch (e: any) {
     users.value = []
@@ -1097,7 +1112,7 @@ async function refreshDeliveries() {
 <template>
   <div v-if="loading" class="max-w-4xl mx-auto"><SkeletonLoader :rows="5" :card="true" /></div>
 
-  <div v-else-if="album" class="max-w-4xl mx-auto space-y-6">
+  <div v-else-if="album" :class="['mx-auto space-y-6', activeTab === 'workflow' ? 'max-w-7xl' : 'max-w-4xl']">
     <!-- Album header -->
     <div class="flex items-center gap-4">
       <div class="w-10 h-10 flex-shrink-0 overflow-hidden border border-border">
@@ -1808,11 +1823,11 @@ async function refreshDeliveries() {
       </div>
 
       <!-- Workflow editor -->
-      <div v-else-if="activeTab === 'workflow'" class="card space-y-5">
-        <div v-if="workflowTabLoading" class="text-sm text-muted-foreground">
+      <div v-else-if="activeTab === 'workflow'" class="space-y-5">
+        <div v-if="workflowTabLoading" class="card text-sm text-muted-foreground">
           {{ t('common.loading') }}
         </div>
-        <div v-if="!canManageAlbum" class="text-sm text-muted-foreground">
+        <div v-if="!canManageAlbum" class="card text-sm text-muted-foreground">
           {{ t('albumSettings.workflow.viewOnly') }}
         </div>
         <div v-if="workflowMigrations.length" class="bg-warning-bg border border-warning/20 rounded-none p-3 space-y-1">

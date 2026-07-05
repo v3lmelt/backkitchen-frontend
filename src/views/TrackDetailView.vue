@@ -2,9 +2,9 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, albumApi, r2Api, uploadToR2, API_ORIGIN, issueApi } from '@/api'
+import { trackApi, albumApi, circleApi, r2Api, uploadToR2, API_ORIGIN, issueApi } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Track, Issue, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, AlbumMember, StageAssignment } from '@/types'
+import type { Track, Issue, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, StageAssignment, User } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
 import { hashId } from '@/utils/hash'
 import {
@@ -46,6 +46,7 @@ const { success: toastSuccess, error: toastError } = useToast()
 
 
 type IssueDetailMode = 'inline' | 'legacy'
+type ReviewerCandidate = { user_id: number; user: User }
 
 const ISSUE_DETAIL_MODE_STORAGE_PREFIX = 'backkitchen_issue_detail_mode'
 
@@ -852,7 +853,7 @@ const isAutoAssign = computed(() => {
   return step?.assignment_mode === 'auto' || step?.assignment_mode === 'fixed' || (step?.assignee_user_id != null)
 })
 const showReassignModal = ref(false)
-const reassignMembers = ref<AlbumMember[]>([])
+const reassignMembers = ref<ReviewerCandidate[]>([])
 const reassignSelectedUserIds = ref<number[]>([])
 const reassigning = ref(false)
 const reassignReviewerLimit = computed(() => Math.max(1, track.value?.workflow_step?.required_reviewer_count ?? 1))
@@ -873,12 +874,32 @@ async function openReassignModal() {
         .map(a => a.user_id)
         .slice(0, reassignReviewerLimit.value)
     : []
-  if (!reassignMembers.value.length && track.value) {
+  if (track.value) {
     reassigning.value = true
     try {
       const album = await albumApi.get(track.value.album_id)
       const composerIds = new Set(trackComposerIds(track.value))
-      reassignMembers.value = album.members.filter(m => !composerIds.has(m.user_id))
+      const byId = new Map<number, ReviewerCandidate>()
+      if (album.circle_id) {
+        const circle = await circleApi.get(album.circle_id)
+        for (const member of circle.members) {
+          byId.set(member.user_id, { user_id: member.user_id, user: member.user })
+        }
+        if (album.producer) {
+          byId.set(album.producer.id, { user_id: album.producer.id, user: album.producer })
+        }
+      } else {
+        for (const member of album.members) {
+          byId.set(member.user_id, { user_id: member.user_id, user: member.user })
+        }
+        if (album.producer) {
+          byId.set(album.producer.id, { user_id: album.producer.id, user: album.producer })
+        }
+        if (album.mastering_engineer) {
+          byId.set(album.mastering_engineer.id, { user_id: album.mastering_engineer.id, user: album.mastering_engineer })
+        }
+      }
+      reassignMembers.value = Array.from(byId.values()).filter(m => !composerIds.has(m.user_id))
     } catch (e: any) {
       toastError(e?.message || t('common.requestFailed'))
       return

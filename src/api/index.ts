@@ -13,6 +13,7 @@ import type {
   ChecklistTemplateItem,
   ChecklistTemplateRead,
   Circle,
+  CircleMember,
   CircleSummary,
   Comment,
   Discussion,
@@ -427,6 +428,11 @@ export const circleApi = {
     request<void>(`/circles/${circleId}`, { method: 'DELETE' }),
   removeMember: (circleId: number, userId: number) =>
     request<void>(`/circles/${circleId}/members/${userId}`, { method: 'DELETE' }),
+  updateMemberRole: (circleId: number, userId: number, data: { role: 'member' | 'mastering_engineer' | 'co_producer' }) =>
+    request<CircleMember>(`/circles/${circleId}/members/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
   listInviteCodes: (circleId: number) =>
     request<InviteCode[]>(`/circles/${circleId}/invite-codes`),
   createInviteCode: (circleId: number, data: { role?: string; expires_in_days?: number }) =>

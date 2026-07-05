@@ -153,3 +153,22 @@ export function setFirstPeerReviewAssignmentMode(
   }
   return next
 }
+
+export function sanitizeWorkflowUserReferences(
+  config: WorkflowConfig,
+  allowedUserIds: Iterable<number>,
+): WorkflowConfig {
+  const allowed = new Set(allowedUserIds)
+  const next = cloneWorkflowConfig(config)
+
+  for (const step of next.steps) {
+    if (step.assignee_user_id != null && !allowed.has(step.assignee_user_id)) {
+      step.assignee_user_id = null
+    }
+    if (step.reviewer_pool) {
+      step.reviewer_pool = step.reviewer_pool.filter(userId => allowed.has(userId))
+    }
+  }
+
+  return next
+}

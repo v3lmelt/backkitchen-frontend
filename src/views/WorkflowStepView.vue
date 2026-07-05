@@ -2,14 +2,13 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { albumApi, checklistApi, issueApi, trackApi, r2Api, uploadToR2, API_ORIGIN } from '@/api'
+import { albumApi, checklistApi, circleApi, issueApi, trackApi, r2Api, uploadToR2, API_ORIGIN } from '@/api'
 import type {
   ChecklistItem,
   ChecklistDraftItem,
   ChecklistDraftPrefillMeta,
   ChecklistTemplateItem,
   Issue,
-  AlbumMember,
   StageAssignment,
   Track,
   TrackSourceVersion,
@@ -57,6 +56,7 @@ const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
 
 const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
 const DIRECT_REVISION_REQUEST_DECISION = 'request_revision_now'
+type ReviewerCandidate = { user_id: number; user: User }
 const appStore = useAppStore()
 const trackStore = useTrackStore()
 const trackId = computed(() => Number(route.params.id))
@@ -238,7 +238,7 @@ const currentUserHasRevisionSuggestion = computed(() =>
   && currentUserAssignment.value.decision === 'needs_revision',
 )
 const reviewerAssignmentModalOpen = ref(false)
-const reviewerAssignmentMembers = ref<AlbumMember[]>([])
+const reviewerAssignmentMembers = ref<ReviewerCandidate[]>([])
 const reviewerAssignmentSelectedUserIds = ref<number[]>([])
 const reviewerAssignmentLoadingMembers = ref(false)
 const reviewerAssignmentSaving = ref(false)
@@ -1495,7 +1495,27 @@ async function openReviewerAssignment() {
     const album = await albumApi.get(track.value.album_id)
     if (!track.value) return
     const composerIds = new Set(trackComposerIds(track.value))
-    reviewerAssignmentMembers.value = album.members.filter(member => !composerIds.has(member.user_id))
+    const byId = new Map<number, ReviewerCandidate>()
+    if (album.circle_id) {
+      const circle = await circleApi.get(album.circle_id)
+      for (const member of circle.members) {
+        byId.set(member.user_id, { user_id: member.user_id, user: member.user })
+      }
+      if (album.producer) {
+        byId.set(album.producer.id, { user_id: album.producer.id, user: album.producer })
+      }
+    } else {
+      for (const member of album.members) {
+        byId.set(member.user_id, { user_id: member.user_id, user: member.user })
+      }
+      if (album.producer) {
+        byId.set(album.producer.id, { user_id: album.producer.id, user: album.producer })
+      }
+      if (album.mastering_engineer) {
+        byId.set(album.mastering_engineer.id, { user_id: album.mastering_engineer.id, user: album.mastering_engineer })
+      }
+    }
+    reviewerAssignmentMembers.value = Array.from(byId.values()).filter(member => !composerIds.has(member.user_id))
   } catch (err: any) {
     error.value = err.message || t('common.requestFailed')
   } finally {

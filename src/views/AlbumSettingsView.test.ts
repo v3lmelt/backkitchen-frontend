@@ -118,7 +118,8 @@ vi.mock('@/components/workflow/WorkflowEditor.vue', () => ({
 
 vi.mock('@/components/common/CustomSelect.vue', () => ({
   default: {
-    template: '<div class="custom-select-stub" />',
+    props: ['options'],
+    template: '<div class="custom-select-stub"><span v-for="option in options" :key="option.value">{{ option.label }}</span></div>',
   },
 }))
 
@@ -495,6 +496,31 @@ describe('AlbumSettingsView', () => {
     await flushPromises()
     expect(mocks.invitationListForAlbumMock).toHaveBeenCalledWith(5)
     expect(mocks.circleGetMock).toHaveBeenCalledWith(9)
+  })
+
+  it('keeps User ID invitations while limiting circle album team choices to circle members', async () => {
+    mocks.userListMock.mockResolvedValueOnce([
+      makeUser(1, 'Producer'),
+      makeUser(3, 'Member'),
+      makeUser(8, 'Global Outsider'),
+    ])
+    mocks.circleGetMock.mockResolvedValue({
+      id: 9,
+      default_checklist_enabled: true,
+      members: [
+        { id: 2, user_id: 3, role: 'member', joined_at: '2024-01-01T00:00:00Z', user: makeUser(3, 'Member') },
+      ],
+    })
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'Team')!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Invite by User ID')
+    expect(mocks.userListMock).not.toHaveBeenCalled()
+    expect(wrapper.text()).not.toContain('Global Outsider')
   })
 
   it('loads legacy webhook config with composer email disabled', async () => {

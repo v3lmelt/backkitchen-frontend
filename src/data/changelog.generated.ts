@@ -5,6 +5,206 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.38",
+    "date": "2026-07-05",
+    "headline": {
+      "zh-CN": "放宽专辑设置工作流编辑区",
+      "en": "Widens the album settings workflow editor"
+    },
+    "summary": {
+      "zh-CN": "专辑设置页的工作流页签现在使用更宽的编辑工作区，让流程画布和右侧规则面板在大屏上并排显示。",
+      "en": "The workflow tab on album settings now uses a wider editor workspace so the canvas and rule inspector can sit side by side on large screens."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "专辑设置",
+          "en": "Album settings"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "工作流编辑器不再挤在窄列中",
+              "en": "Workflow editing no longer sits in a narrow column"
+            },
+            "description": {
+              "zh-CN": "只有工作流页签会切换到宽版容器，基础信息、团队、活动、清单、排序等页签仍保持原有详情页宽度。",
+              "en": "Only the workflow tab switches to the wider container, while info, team, activity, checklist, ordering, and other settings tabs keep the existing detail-page width."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.37",
+    "date": "2026-07-05",
+    "headline": {
+      "zh-CN": "新增社团副主催协管权限",
+      "en": "Adds circle co-producer management permissions"
+    },
+    "summary": {
+      "zh-CN": "社团主催现在可以将成员设为副主催。副主催可协助维护社团资料、邀请码、工作流模板、专辑设置和曲目流程，但不能任命副主催或执行删除社团等所有权操作。",
+      "en": "Circle owners can now promote members to co-producers. Co-producers can help manage circle details, invite codes, workflow templates, album settings, and track workflow actions without gaining ownership-only controls."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "社团协作",
+          "en": "Circle collaboration"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "成员列表支持副主催角色",
+              "en": "Member lists now support co-producers"
+            },
+            "description": {
+              "zh-CN": "主催可在社团成员页调整普通成员、母带师和副主催角色；副主催会在成员列表、权限入口和工作流协作中显示为独立身份。",
+              "en": "Owners can update member roles between member, mastering engineer, and co-producer from the circle members page, and co-producers appear as a distinct circle role across collaboration views."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "副主催可协助处理专辑流程",
+              "en": "Co-producers can help run album workflows"
+            },
+            "description": {
+              "zh-CN": "绑定社团的专辑会把副主催纳入 producer 侧流程权限和关键通知，让协管者可以处理审核、模板、团队、归档曲目和曲目排序等工作。",
+              "en": "Albums linked to a circle now include co-producers in producer-side workflow permissions and key notifications, covering reviews, templates, teams, archived tracks, and track ordering."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.36",
+    "date": "2026-07-05",
+    "headline": {
+      "zh-CN": "修复社团专辑成员范围与邀请码期限",
+      "en": "Fixes circle album member scope and invite code duration"
+    },
+    "summary": {
+      "zh-CN": "社团专辑的团队成员选择现在只显示社团成员，曲目作曲者与专辑邀请也会按社团范围校验；社团邀请码最长有效期调整为 365 天。",
+      "en": "Circle album team selection now only shows circle members, track composers and album invitations are validated against the circle scope, and circle invite codes can last up to 365 days."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "社团协作",
+          "en": "Circle collaboration"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "社团专辑用户范围更一致",
+              "en": "Circle album user scope is more consistent"
+            },
+            "description": {
+              "zh-CN": "绑定社团的专辑在选择团队成员和提交平台作曲者时会限制在社团用户范围内，通过用户 ID 邀请也会拒绝社团外用户。",
+              "en": "Albums linked to a circle now limit team member choices and platform composer submissions to circle users, and User ID invitations reject users outside the circle."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "邀请码最长可设为一年",
+              "en": "Invite codes can last for one year"
+            },
+            "description": {
+              "zh-CN": "社团邀请码有效期输入上限从 30 天调整为 365 天，前后端校验保持一致。",
+              "en": "The circle invite code duration limit is raised from 30 days to 365 days, with matching frontend and backend validation."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.34",
+    "date": "2026-07-05",
+    "headline": {
+      "zh-CN": "放宽社团工作流模板页",
+      "en": "Widens circle workflow templates"
+    },
+    "summary": {
+      "zh-CN": "社团详情页的工作流模板标签现在会使用更宽的工作区，模板列表和编辑器在大屏上不再挤在中间窄列。",
+      "en": "The workflow templates tab on circle details now uses a wider workspace so template cards and the editor no longer sit in a narrow centered column on large screens."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "社团模板",
+          "en": "Circle templates"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "模板页适配大屏",
+              "en": "Templates fit large screens"
+            },
+            "description": {
+              "zh-CN": "模板标签页会单独放宽页面容器，其他社团信息、成员、邀请码和危险操作页仍保持原有详情页宽度。",
+              "en": "The templates tab now widens its page container while the info, members, invite codes, and danger tabs keep the existing detail-page width."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "列表和编辑器更易浏览",
+              "en": "Lists and editing are easier to scan"
+            },
+            "description": {
+              "zh-CN": "模板列表在中大屏使用两列卡片布局，编辑模板时表单信息与工作流编辑器分区显示，编辑器可使用自身的大屏双栏布局。",
+              "en": "Template lists use two card columns on medium and large screens, and template editing separates metadata from the workflow editor so the editor can use its own wide two-column layout."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.33",
+    "date": "2026-07-05",
+    "headline": {
+      "zh-CN": "修正社团专辑审稿候选池",
+      "en": "Fixes circle album reviewer candidates"
+    },
+    "summary": {
+      "zh-CN": "社团专辑的手动指派、自动分配和工作流模板现在统一使用社团成员作为审稿候选，专辑协作成员不再限制审稿池。",
+      "en": "Circle albums now use circle members consistently for manual assignment, automatic assignment, and workflow templates, so album collaborators no longer limit the reviewer pool."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "审稿分配",
+          "en": "Review assignment"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "社团成员可直接进入审稿候选",
+              "en": "Circle members can be reviewer candidates"
+            },
+            "description": {
+              "zh-CN": "社团专辑的手动指派弹窗和工作流编辑器会从社团成员读取候选人，并继续排除当前曲目的作曲者。",
+              "en": "Manual assignment dialogs and the workflow editor now read candidates from circle members for circle albums while still excluding the current track composers."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "保存和自动分配会拒绝社团外用户",
+              "en": "Saving and auto assignment reject outside users"
+            },
+            "description": {
+              "zh-CN": "工作流保存、模板保存、手动指派和旧自动候选池都会过滤或拒绝社团外用户，避免错误分配继续出现。",
+              "en": "Workflow saves, template saves, manual assignment, and stale automatic pools now filter or reject users outside the circle to prevent invalid reviewer assignment."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.32",
     "date": "2026-07-05",
     "headline": {

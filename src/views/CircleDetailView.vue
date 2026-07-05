@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-4xl mx-auto space-y-6">
+  <div :class="['mx-auto space-y-6', activeTab === 'templates' ? 'max-w-7xl' : 'max-w-4xl']">
     <!-- loading -->
     <div v-if="loading">
       <SkeletonLoader :rows="4" :card="true" />
@@ -129,8 +129,19 @@
             <span class="text-xs font-mono px-2 py-0.5 rounded-full" :class="roleBadgeClass(member.role)">
               {{ t(`circleDetail.roles.${member.role}`) }}
             </span>
+            <select
+              v-if="canEditMemberRole(member)"
+              class="select-field-sm w-40"
+              :value="member.role"
+              :disabled="updatingRoleUserIds.includes(member.user_id)"
+              @change="onMemberRoleChange(member, $event)"
+            >
+              <option v-for="option in memberRoleOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
             <button
-              v-if="canManageCircle && member.user_id !== currentUserId"
+              v-if="canRemoveMember(member)"
               class="text-error text-xs hover:underline"
               @click="promptRemoveMember(member)"
             >
@@ -156,7 +167,7 @@
                 v-model.number="newCodeDays"
                 type="number"
                 min="1"
-                max="30"
+                max="365"
                 class="input-field w-full"
               />
             </div>
@@ -196,30 +207,36 @@
         <p v-else class="text-muted-foreground text-sm">{{ t('circleDetail.noInvites') }}</p>
       </div>
       <!-- workflow templates tab -->
-      <div v-if="activeTab === 'templates'" class="flex flex-col gap-6 max-w-xl">
+      <div v-if="activeTab === 'templates'" class="flex flex-col gap-6">
         <!-- New / edit template form -->
-        <div v-if="showNewTemplate" class="bg-card border border-border rounded-none p-6 space-y-4">
-          <h2 class="text-sm font-mono font-semibold text-foreground">
-            {{ editingTemplate ? t('workflowTemplate.editTemplate') : t('workflowTemplate.createTemplate') }}
-          </h2>
-          <div>
-            <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowTemplate.templateName') }}</label>
-            <input v-model="editTemplateName" class="input-field w-full" :placeholder="t('workflowTemplate.templateNamePlaceholder')" />
-          </div>
-          <div>
-            <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowTemplate.templateDescription') }}</label>
-            <textarea v-model="editTemplateDesc" class="textarea-field w-full h-16" :placeholder="t('workflowTemplate.templateDescriptionPlaceholder')" />
+        <div v-if="showNewTemplate" class="space-y-6">
+          <div class="bg-card border border-border rounded-none p-6 space-y-4">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <h2 class="text-sm font-mono font-semibold text-foreground">
+                {{ editingTemplate ? t('workflowTemplate.editTemplate') : t('workflowTemplate.createTemplate') }}
+              </h2>
+              <div class="flex flex-wrap gap-2">
+                <button @click="saveTemplate" :disabled="savingTpl || !editTemplateName.trim() || !editTemplateConfig" class="btn-primary text-xs">
+                  {{ savingTpl ? t('workflowTemplate.saving') : t('workflowTemplate.save') }}
+                </button>
+                <button @click="showNewTemplate = false" class="btn-secondary text-xs">{{ t('common.cancel') }}</button>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowTemplate.templateName') }}</label>
+                <input v-model="editTemplateName" class="input-field w-full" :placeholder="t('workflowTemplate.templateNamePlaceholder')" />
+              </div>
+              <div>
+                <label class="block text-xs text-muted-foreground mb-1">{{ t('workflowTemplate.templateDescription') }}</label>
+                <textarea v-model="editTemplateDesc" class="textarea-field w-full h-16" :placeholder="t('workflowTemplate.templateDescriptionPlaceholder')" />
+              </div>
+            </div>
           </div>
           <WorkflowEditor
             v-model:workflow-config="editTemplateConfig"
             :member-options="circleMemberOptions"
           />
-          <div class="flex gap-2">
-            <button @click="saveTemplate" :disabled="savingTpl || !editTemplateName.trim() || !editTemplateConfig" class="btn-primary text-xs">
-              {{ savingTpl ? t('workflowTemplate.saving') : t('workflowTemplate.save') }}
-            </button>
-            <button @click="showNewTemplate = false" class="btn-secondary text-xs">{{ t('common.cancel') }}</button>
-          </div>
         </div>
 
         <!-- Template list -->
@@ -244,25 +261,27 @@
             <p class="text-xs text-muted-foreground mt-1">{{ t('workflowTemplate.noTemplatesHint') }}</p>
           </div>
 
-          <div v-for="tpl in templates" :key="tpl.id" class="bg-card border border-border rounded-none p-4 space-y-2">
-            <div class="flex items-center gap-2">
-              <span class="text-sm font-mono font-semibold text-foreground flex-1">{{ tpl.name }}</span>
-              <span class="text-xs text-muted-foreground">
-                {{ tpl.album_count > 0 ? t('workflowTemplate.albumCount', { count: tpl.album_count }) : t('workflowTemplate.albumCountZero') }}
-              </span>
-            </div>
-            <p v-if="tpl.description" class="text-xs text-muted-foreground">{{ tpl.description }}</p>
-            <div class="flex items-center gap-3 text-xs text-muted-foreground">
-              <span>{{ tpl.workflow_config.steps.length }} steps</span>
-              <span v-if="tpl.created_by_user">{{ t('workflowTemplate.createdBy', { name: tpl.created_by_user.display_name }) }}</span>
-            </div>
-            <div v-if="canManageCircle" class="flex gap-2 pt-1">
-              <button @click="startEditTemplate(tpl)" class="btn-secondary text-xs">
-                <Pencil class="w-3 h-3 mr-1" /> {{ t('workflowTemplate.editTemplate') }}
-              </button>
-              <button @click="deleteTemplate(tpl)" class="text-xs text-error hover:underline">
-                <Trash2 class="w-3 h-3 inline mr-0.5" /> {{ t('workflowTemplate.deleteTemplate') }}
-              </button>
+          <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div v-for="tpl in templates" :key="tpl.id" class="bg-card border border-border rounded-none p-4 space-y-2 h-full flex flex-col">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-mono font-semibold text-foreground flex-1">{{ tpl.name }}</span>
+                <span class="text-xs text-muted-foreground">
+                  {{ tpl.album_count > 0 ? t('workflowTemplate.albumCount', { count: tpl.album_count }) : t('workflowTemplate.albumCountZero') }}
+                </span>
+              </div>
+              <p v-if="tpl.description" class="text-xs text-muted-foreground">{{ tpl.description }}</p>
+              <div class="flex items-center gap-3 text-xs text-muted-foreground">
+                <span>{{ tpl.workflow_config.steps.length }} steps</span>
+                <span v-if="tpl.created_by_user">{{ t('workflowTemplate.createdBy', { name: tpl.created_by_user.display_name }) }}</span>
+              </div>
+              <div v-if="canManageCircle" class="flex flex-wrap gap-2 pt-1 mt-auto">
+                <button @click="startEditTemplate(tpl)" class="btn-secondary text-xs">
+                  <Pencil class="w-3 h-3 mr-1" /> {{ t('workflowTemplate.editTemplate') }}
+                </button>
+                <button @click="deleteTemplate(tpl)" class="text-xs text-error hover:underline">
+                  <Trash2 class="w-3 h-3 inline mr-0.5" /> {{ t('workflowTemplate.deleteTemplate') }}
+                </button>
+              </div>
             </div>
           </div>
         </template>
@@ -386,7 +405,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { circleApi, API_ORIGIN } from '@/api'
-import type { Circle, CircleMember, InviteCode, WorkflowConfig, WorkflowTemplate } from '@/types'
+import type { Circle, CircleMember, CircleRole, InviteCode, WorkflowConfig, WorkflowTemplate } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { parseUTC } from '@/utils/time'
 import { hasAdminRole } from '@/utils/admin'
@@ -414,7 +433,13 @@ const roleOptions = computed(() => [
   { value: 'member', label: t('circleDetail.roles.member') },
   { value: 'mastering_engineer', label: t('circleDetail.roles.mastering_engineer') },
 ])
+const memberRoleOptions = computed(() => [
+  { value: 'member', label: t('circleDetail.roles.member') },
+  { value: 'mastering_engineer', label: t('circleDetail.roles.mastering_engineer') },
+  { value: 'co_producer', label: t('circleDetail.roles.co_producer') },
+])
 const newCodeDays = ref(7)
+const updatingRoleUserIds = ref<number[]>([])
 
 const editForm = reactive({ name: '', description: '', website: '', default_checklist_enabled: false })
 
@@ -437,10 +462,16 @@ const pendingTemplateAction = ref<{
 } | null>(null)
 
 const currentUserId = computed(() => appStore.currentUser?.id)
+const currentCircleMember = computed(() =>
+  circle.value?.members.find(member => member.user_id === currentUserId.value) ?? null
+)
 const isOwner = computed(() =>
   circle.value ? circle.value.created_by === currentUserId.value : false
 )
-const canManageCircle = computed(() => isOwner.value || hasAdminRole(appStore.currentUser, 'operator'))
+const canEditMemberRoles = computed(() => isOwner.value || hasAdminRole(appStore.currentUser, 'operator'))
+const canManageCircle = computed(() =>
+  canEditMemberRoles.value || currentCircleMember.value?.role === 'co_producer'
+)
 const uploadLogoLabel = computed(() => t('circleDetail.uploadLogoLabel'))
 
 const tabs = computed(() => {
@@ -526,8 +557,39 @@ watch(activeTab, (tab) => {
 
 function roleBadgeClass(role: string) {
   if (role === 'owner') return 'bg-warning-bg text-warning'
+  if (role === 'co_producer') return 'bg-success-bg text-success'
   if (role === 'mastering_engineer') return 'bg-info-bg text-info'
   return 'bg-border text-muted-foreground'
+}
+
+function canEditMemberRole(member: CircleMember) {
+  return canEditMemberRoles.value && member.role !== 'owner' && member.user_id !== circle.value?.created_by
+}
+
+function canRemoveMember(member: CircleMember) {
+  if (!canManageCircle.value || member.user_id === currentUserId.value) return false
+  if (member.role === 'owner' || member.user_id === circle.value?.created_by) return false
+  if (member.role === 'co_producer' && !canEditMemberRoles.value) return false
+  return true
+}
+
+async function updateMemberRole(member: CircleMember, role: CircleRole) {
+  if (!circle.value || member.role === role || role === 'owner') return
+  updatingRoleUserIds.value = [...updatingRoleUserIds.value, member.user_id]
+  try {
+    const updated = await circleApi.updateMemberRole(circle.value.id, member.user_id, { role })
+    const index = circle.value.members.findIndex(item => item.user_id === member.user_id)
+    if (index >= 0) circle.value.members.splice(index, 1, updated)
+    toast.success(t('circleDetail.memberRoleUpdated'))
+  } catch (e: any) {
+    toast.error(e.message)
+  } finally {
+    updatingRoleUserIds.value = updatingRoleUserIds.value.filter(userId => userId !== member.user_id)
+  }
+}
+
+function onMemberRoleChange(member: CircleMember, event: Event) {
+  updateMemberRole(member, (event.target as HTMLSelectElement).value as CircleRole)
 }
 
 async function uploadLogo(e: Event) {
