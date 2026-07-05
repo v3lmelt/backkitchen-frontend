@@ -1,0 +1,32 @@
+{
+  "version": "0.1.29",
+  "date": "2026-06-10",
+  "headline": {
+    "zh-CN": "修复 Checklist 设置重启恢复开启",
+    "en": "Fixes checklist settings after backend restarts"
+  },
+  "summary": {
+    "zh-CN": "后端启动时的历史数据填充会保留已关闭的专辑和社团 Checklist 设置，避免部署或重启后又恢复为开启。",
+    "en": "Backend startup backfill now preserves disabled album and circle checklist settings, preventing deploys or restarts from turning them back on."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "专辑设置",
+        "en": "Album settings"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "关闭的 Checklist 会保持关闭",
+            "en": "Disabled checklists stay disabled"
+          },
+          "description": {
+            "zh-CN": "启动兼容逻辑只会补齐缺失的旧数据空值，不再覆盖主催已经关闭的专辑 Checklist 和社团默认 Checklist。",
+            "en": "Startup compatibility logic now only fills missing legacy null values and no longer overwrites album checklist or circle default checklist settings that producers already disabled."
+          }
+        }
+      ]
+    }
+  ]
+}

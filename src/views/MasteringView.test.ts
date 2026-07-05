@@ -171,6 +171,13 @@ vi.mock('@/components/common/CustomSelect.vue', () => ({
   },
 }))
 
+vi.mock('@/components/common/BaseModal.vue', () => ({
+  default: {
+    emits: ['close'],
+    template: '<div class="base-modal"><slot /><button class="modal-close" @click="$emit(\'close\')">close</button></div>',
+  },
+}))
+
 vi.mock('@/components/common/DiscussionPanel.vue', () => ({
   default: {
     props: ['heading', 'discussions'],
@@ -387,6 +394,83 @@ describe('MasteringView', () => {
     expect(wrapper.find('.discussion-panel').text()).toContain('Mastering Communication (1)|1')
   })
 
+  it('shows the current external stem link handoff in mastering communication', async () => {
+    const externalSource = {
+      id: 12,
+      workflow_cycle: 1,
+      version_number: 2,
+      file_path: null,
+      source_kind: 'external_link',
+      duration: null,
+      uploaded_by_id: 99,
+      revision_notes: 'https://drive.example/stems\ncode: bk24',
+      created_at: '2024-01-04T00:00:00Z',
+    }
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
+      track: {
+        version: 2,
+        current_source_version: externalSource,
+      },
+      source_versions: [externalSource],
+    }))
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+
+    const wrapper = mountWithPlugins(MasteringView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Composer stem files')
+    expect(wrapper.text()).toContain('External stem link')
+    expect(wrapper.text()).toContain('https://drive.example/stems')
+    expect(wrapper.text()).toContain('code: bk24')
+
+    await wrapper.findAll('button').find(button => button.text().includes('Open link'))!.trigger('click')
+
+    expect(openSpy).toHaveBeenCalledWith('https://drive.example/stems', '_blank', 'noopener,noreferrer')
+    openSpy.mockRestore()
+  })
+
+  it('requires a revision type before requesting a mastering revision from the mastering workspace', async () => {
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
+      workflow_config: {
+        version: 2,
+        steps: [
+          {
+            id: 'mastering',
+            label: 'Mastering',
+            type: 'delivery',
+            ui_variant: 'mastering',
+            assignee_role: 'mastering_engineer',
+            order: 5,
+            transitions: { request_revision: 'mastering_revision' },
+          },
+          {
+            id: 'mastering_revision',
+            label: 'Mastering Revision',
+            type: 'revision',
+            assignee_role: 'submitter',
+            order: 6,
+            transitions: {},
+            return_to: 'mastering',
+          },
+        ],
+      },
+    }))
+
+    const wrapper = mountWithPlugins(MasteringView)
+    await flushPromises()
+
+    await wrapper.findAll('button').find(button => button.text().includes('Request Revision'))!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Select Revision Type')
+    await wrapper.findAll('input[type="radio"]')[1].setValue(true)
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'Confirm')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.workflowTransitionMock).toHaveBeenCalledWith(9, 'request_revision', 'stem_files')
+  })
+
   it('restores the requested mastering issue drawer from the route query', async () => {
     mocks.route = {
       params: { id: '9' },
@@ -591,7 +675,7 @@ describe('MasteringView', () => {
 
     expect(wrapper.text()).toContain('Master delivery requires a playable mastered audio file')
     await wrapper.find('textarea').setValue('https://cloud.example/stems\ncode: bk24')
-    const submitButton = wrapper.findAll('button').find(button => button.text() === 'Submit Delivery')!
+    const submitButton = wrapper.findAll('button').find(button => button.text() === 'Confirm Upload')!
 
     expect(submitButton.attributes('disabled')).toBeDefined()
     expect(mocks.uploadMasterDeliveryMock).not.toHaveBeenCalled()
@@ -610,7 +694,7 @@ describe('MasteringView', () => {
     Object.defineProperty(input.element, 'files', { value: [file], configurable: true })
     await input.trigger('change')
     await wrapper.find('textarea').setValue('Final WAV attached.')
-    await wrapper.findAll('button').find(button => button.text() === 'Submit Delivery')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Confirm Upload')!.trigger('click')
     await flushPromises()
 
     expect(mocks.uploadMasterDeliveryMock).toHaveBeenCalledWith(
@@ -629,7 +713,7 @@ describe('MasteringView', () => {
           delivery_number: 2,
           file_path: null,
           delivery_kind: 'text',
-          delivery_message: 'https://cloud.example/stems\ncode: bk24',
+          delivery_message: 'Legacy text delivery\nhttps://cloud.example/stems\ncode: bk24',
           uploaded_by_id: 2,
           confirmed_at: null,
           producer_approved_at: null,
@@ -644,7 +728,7 @@ describe('MasteringView', () => {
           delivery_number: 2,
           file_path: null,
           delivery_kind: 'text',
-          delivery_message: 'https://cloud.example/stems\ncode: bk24',
+          delivery_message: 'Legacy text delivery\nhttps://cloud.example/stems\ncode: bk24',
           uploaded_by_id: 2,
           confirmed_at: null,
           producer_approved_at: null,

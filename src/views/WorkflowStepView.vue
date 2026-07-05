@@ -621,9 +621,39 @@ const isMasteringRevisionStep = computed(() => {
     || returnStep.id.includes('master')
     || returnStep.id.includes('mastering')
 })
-const canSubmitExternalStemLink = computed(() =>
-  isMasteringRevisionStep.value && externalStemLinkNotes.value.trim().length > 0,
+const requestedRevisionType = computed(() => track.value?.requested_revision_type ?? null)
+const shouldShowRevisionSubmitMethod = computed(() =>
+  isMasteringRevisionStep.value && requestedRevisionType.value == null,
 )
+const shouldShowRevisionFileUpload = computed(() =>
+  !isMasteringRevisionStep.value
+    || requestedRevisionType.value === 'source_audio'
+    || (requestedRevisionType.value == null && revisionUploadMode.value === 'file'),
+)
+const shouldShowExternalStemLinkForm = computed(() =>
+  isMasteringRevisionStep.value
+    && (
+      requestedRevisionType.value === 'stem_files'
+      || (requestedRevisionType.value == null && revisionUploadMode.value === 'link')
+    ),
+)
+const requestedRevisionTitle = computed(() => {
+  if (requestedRevisionType.value === 'source_audio') return t('workflowStep.revisionTypeRequestedSourceAudio')
+  if (requestedRevisionType.value === 'stem_files') return t('workflowStep.revisionTypeRequestedStemFiles')
+  return ''
+})
+const requestedRevisionHint = computed(() => {
+  if (requestedRevisionType.value === 'source_audio') return t('workflowStep.revisionTypeHintSourceAudio')
+  if (requestedRevisionType.value === 'stem_files') return t('workflowStep.revisionTypeHintStemFiles')
+  return ''
+})
+const canSubmitExternalStemLink = computed(() =>
+  shouldShowExternalStemLinkForm.value && externalStemLinkNotes.value.trim().length > 0,
+)
+
+watch(requestedRevisionType, (type) => {
+  revisionUploadMode.value = type === 'stem_files' ? 'link' : 'file'
+}, { immediate: true })
 
 const revisionAssigneeRoleLabel = computed(() => {
   const role = currentStep.value?.assignee_role
@@ -1143,9 +1173,7 @@ function _willTransitionToMasteringRevision(decision: string): boolean {
 
   const currentStep = track.value.workflow_step
 
-  // Only review steps with mastering ui_variant can request mastering revision
-  if (currentStep.type !== 'review') return false
-  if (currentStep.ui_variant !== 'mastering') return false
+  if (currentStep.ui_variant !== 'mastering' && currentStep.id !== 'mastering') return false
 
   // Check if this decision leads to a revision step
   const targetStepId = currentStep.transitions?.[decision]
@@ -3221,8 +3249,19 @@ function handleIssueLeave() {
         <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.uploadRevisedSource') }}</h3>
         <p class="text-sm text-muted-foreground">{{ t('workflowStep.uploadRevisedSourceDesc') }}</p>
 
-        <!-- Submission method selection (only show for mastering revision) -->
-        <div v-if="isMasteringRevisionStep" class="space-y-3">
+        <div
+          v-if="isMasteringRevisionStep && requestedRevisionType"
+          class="flex items-start gap-3 border border-info/20 bg-info-bg rounded-none p-4"
+        >
+          <Info class="w-4 h-4 text-info flex-shrink-0 mt-0.5" :stroke-width="2" />
+          <div class="space-y-1">
+            <p class="text-sm font-mono font-semibold text-info">{{ requestedRevisionTitle }}</p>
+            <p class="text-xs text-muted-foreground">{{ requestedRevisionHint }}</p>
+          </div>
+        </div>
+
+        <!-- Submission method selection for legacy mastering revisions without a requested type -->
+        <div v-if="shouldShowRevisionSubmitMethod" class="space-y-3">
           <label class="block text-sm text-muted-foreground">{{ t('workflowStep.revisionSubmitMethod') }}</label>
           <div class="space-y-2">
             <label class="flex items-center gap-3 p-3 border rounded-none cursor-pointer"
@@ -3238,8 +3277,7 @@ function handleIssueLeave() {
           </div>
         </div>
 
-        <!-- File upload form (shown when 'file' is selected OR when not in mastering revision) -->
-        <template v-if="!isMasteringRevisionStep || revisionUploadMode === 'file'">
+        <template v-if="shouldShowRevisionFileUpload">
           <input
             type="file"
             accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"
@@ -3277,8 +3315,7 @@ function handleIssueLeave() {
           </div>
         </template>
 
-        <!-- External link form (shown when 'link' is selected in mastering revision) -->
-        <div v-if="isMasteringRevisionStep && revisionUploadMode === 'link'" class="space-y-4 border border-primary/20 bg-primary/5 rounded-none p-4">
+        <div v-if="shouldShowExternalStemLinkForm" class="space-y-4 border border-primary/20 bg-primary/5 rounded-none p-4">
           <div class="flex items-start gap-3">
             <div class="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
               <Link class="w-4 h-4 text-primary" :stroke-width="2" />

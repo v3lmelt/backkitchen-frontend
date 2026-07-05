@@ -1681,6 +1681,7 @@ describe('WorkflowStepView', () => {
         original_artist: null,
         author_notes: null,
         mastering_notes: null,
+        requested_revision_type: 'stem_files',
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-02T00:00:00Z',
         archived_at: null,
@@ -1740,10 +1741,9 @@ describe('WorkflowStepView', () => {
     const wrapper = mountWithPlugins(WorkflowStepView)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Submit cloud link (stems/multitracks)')
-    await wrapper.findAll('input[type="radio"]')[1].setValue(true)
-    await flushPromises()
-
+    expect(wrapper.text()).toContain('Mastering engineer requested: Provide stem files via cloud link')
+    expect(wrapper.findAll('input[type="radio"]')).toHaveLength(0)
+    expect(wrapper.find('input[type="file"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('Submit stems / multitrack cloud link')
     await wrapper.find('textarea').setValue('https://cloud.example/stems\ncode: bk24')
     await wrapper.findAll('button').find(button => button.text().includes('Submit Stem Link'))!.trigger('click')
@@ -1758,6 +1758,84 @@ describe('WorkflowStepView', () => {
       path: '/tracks/9',
       query: { returnTo: '/tracks/9/step/mastering_revision' },
     })
+  })
+
+  it('locks mastering revisions to source audio upload when requested by the mastering engineer', async () => {
+    mocks.route = {
+      params: { id: '9', stepId: 'mastering_revision' },
+      query: {},
+      path: '/tracks/9/step/mastering_revision',
+      fullPath: '/tracks/9/step/mastering_revision',
+    }
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Source Revision Track',
+        artist: 'Nova',
+        album_id: 3,
+        status: 'mastering_revision',
+        workflow_variant: 'standard',
+        version: 2,
+        workflow_cycle: 1,
+        file_path: '/audio.wav',
+        duration: null,
+        bpm: null,
+        original_title: null,
+        original_artist: null,
+        author_notes: null,
+        mastering_notes: null,
+        requested_revision_type: 'source_audio',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-02T00:00:00Z',
+        archived_at: null,
+        submitter_id: 1,
+        peer_reviewer_id: 4,
+        producer_id: 8,
+        mastering_engineer_id: 12,
+        allowed_actions: ['upload_revision'],
+        is_public: false,
+        workflow_step: {
+          id: 'mastering_revision',
+          label: 'Mastering Revision',
+          type: 'revision',
+          assignee_role: 'submitter',
+          order: 6,
+          transitions: {},
+          return_to: 'mastering',
+        },
+        workflow_transitions: [],
+        current_source_version: {
+          id: 22,
+          workflow_cycle: 1,
+          version_number: 2,
+          file_path: '/audio.wav',
+          source_kind: 'file',
+          duration: null,
+          uploaded_by_id: 1,
+          revision_notes: null,
+          created_at: '2024-01-02T00:00:00Z',
+        },
+      },
+      issues: [],
+      checklist_items: [],
+      source_versions: [],
+      master_deliveries: [],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'mastering', label: 'Mastering', type: 'delivery', ui_variant: 'mastering', assignee_role: 'mastering_engineer', order: 5, transitions: {} },
+          { id: 'mastering_revision', label: 'Mastering Revision', type: 'revision', assignee_role: 'submitter', order: 6, transitions: {}, return_to: 'mastering' },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Mastering engineer requested: Re-upload source audio file')
+    expect(wrapper.findAll('input[type="radio"]')).toHaveLength(0)
+    expect(wrapper.find('input[type="file"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('Submit stems / multitrack cloud link')
   })
 
   it('returns to track detail after a delivery upload advances beyond the current workspace', async () => {

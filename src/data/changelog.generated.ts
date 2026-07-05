@@ -5,6 +5,160 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.29",
+    "date": "2026-06-10",
+    "headline": {
+      "zh-CN": "修复 Checklist 设置重启恢复开启",
+      "en": "Fixes checklist settings after backend restarts"
+    },
+    "summary": {
+      "zh-CN": "后端启动时的历史数据填充会保留已关闭的专辑和社团 Checklist 设置，避免部署或重启后又恢复为开启。",
+      "en": "Backend startup backfill now preserves disabled album and circle checklist settings, preventing deploys or restarts from turning them back on."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "专辑设置",
+          "en": "Album settings"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "关闭的 Checklist 会保持关闭",
+              "en": "Disabled checklists stay disabled"
+            },
+            "description": {
+              "zh-CN": "启动兼容逻辑只会补齐缺失的旧数据空值，不再覆盖主催已经关闭的专辑 Checklist 和社团默认 Checklist。",
+              "en": "Startup compatibility logic now only fills missing legacy null values and no longer overwrites album checklist or circle default checklist settings that producers already disabled."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.28",
+    "date": "2026-06-10",
+    "headline": {
+      "zh-CN": "艺术家绑定改为手填 UID",
+      "en": "Artist binding now uses manual UID entry"
+    },
+    "summary": {
+      "zh-CN": "曲目提交页的艺术家账号绑定从账号下拉改为手动填写 UID，第一行默认填入当前登录用户 UID，并允许绑定任意活跃平台用户。",
+      "en": "The track upload page now binds artist aliases by manually entering a UID, prefills the first row with the current user's UID, and allows any active platform user to be bound."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "提交页",
+          "en": "Upload page"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "手动填写绑定账号 UID",
+              "en": "Manual UID entry for bound accounts"
+            },
+            "description": {
+              "zh-CN": "每个艺术家名义现在可以直接填写平台用户 UID；第一行会默认填入当前登录用户 UID，留空则继续作为未绑定账号的姓名记录。",
+              "en": "Each artist alias can now include a platform user UID directly. The first row is prefilled with the current user's UID, and leaving it blank keeps the row as a name-only credit."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "可绑定任意活跃平台用户",
+              "en": "Bind any active platform user"
+            },
+            "description": {
+              "zh-CN": "UID 只要求对应用户存在且未封禁、未删除。被绑定用户会拥有该曲目，但不会自动加入专辑成员列表。",
+              "en": "A UID only needs to belong to an existing user who is not suspended or deleted. Bound users own the track, but are not automatically added as album members."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.27",
+    "date": "2026-06-09",
+    "headline": {
+      "zh-CN": "母带打回可选择素材类型",
+      "en": "Mastering revision requests can choose the material type"
+    },
+    "summary": {
+      "zh-CN": "母带师在母带工作台打回曲目时，现在会先选择需要曲师重新提交源音频，还是提供分轨文件链接；曲师修订页也会锁定对应提交方式。",
+      "en": "When a mastering engineer requests a revision from the mastering workspace, they can choose whether the composer should re-upload source audio or provide stem files, and the composer revision page now locks to that method."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "母带流程",
+          "en": "Mastering workflow"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "补上母带工作台的打回选项",
+              "en": "Revision type selection in the mastering workspace"
+            },
+            "description": {
+              "zh-CN": "在母带工作台点击请求修订时，会弹出源音频修订与分轨文件两种选项，并把选择同步到后续曲师上传流程。",
+              "en": "Clicking Request Revision in the mastering workspace now opens the source-audio versus stem-file choice and carries that choice into the composer upload flow."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "曲师只能按请求类型提交",
+              "en": "Composer submissions follow the requested type"
+            },
+            "description": {
+              "zh-CN": "如果母带师请求源音频，曲师页只显示音频上传；如果请求分轨文件，曲师页只显示网盘链接提交，避免提交到错误类型。",
+              "en": "If source audio was requested, the composer only sees audio upload. If stem files were requested, they only see the cloud-link form, preventing the wrong submission type."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "母带沟通显示分轨交接",
+              "en": "Stem handoff is visible in mastering communication"
+            },
+            "description": {
+              "zh-CN": "曲师提交分轨网盘链接后，母带沟通页会在讨论上方显示当前分轨交接内容，并提供打开链接和复制内容操作。",
+              "en": "After the composer submits a stem cloud link, the mastering communication tab now shows the current stem handoff above the discussion thread with actions to open the link or copy the full content."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "提交页",
+          "en": "Upload page"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "修复平台内曲师文案",
+              "en": "Fixed platform composer labels"
+            },
+            "description": {
+              "zh-CN": "曲目提交页的平台内曲师标题和说明现在会正常显示，不再出现 i18n key。",
+              "en": "The platform composer title and hint on the track upload page now render as localized text instead of raw i18n keys."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "艺术家名义可绑定平台账号",
+              "en": "Artist aliases can be bound to platform accounts"
+            },
+            "description": {
+              "zh-CN": "曲目提交页将艺术家名义和平台账号绑定合并到同一个列表：每个名义可手动选择对应账号，同一账号可使用多个名义；未绑定账号的名义作为外部曲师记录，若整首曲目都未绑定账号则由制作者代办后续曲师侧流程。",
+              "en": "The upload page now keeps artist aliases and platform-account binding in one list: each alias can be manually linked to an account, one account can use multiple aliases, and unlinked aliases are recorded as external composers. If the whole track has no linked account, the producer handles later composer-side workflow."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.26",
     "date": "2026-06-08",
     "headline": {

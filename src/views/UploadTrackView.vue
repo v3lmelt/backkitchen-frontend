@@ -11,6 +11,11 @@ import { Plus, Upload, X } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 
+type ArtistEntry = {
+  name: string
+  uid: string
+}
+
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
@@ -29,86 +34,24 @@ const dragOver = ref(false)
 
 const form = ref({
   title: '',
-  artist: '',
   album_id: null as number | null,
   bpm: '',
   original_title: '',
   original_artist: '',
   author_notes: '',
-  proxy_submission: false,
-  external_submitter_name: '',
-  external_composer_names: [''] as string[],
-  composer_ids: [] as number[],
+  artist_entries: [createArtistEntry({ prefillUid: true })] as ArtistEntry[],
 })
 const selectedFile = ref<File | null>(null)
 const audioDuration = ref<number | null>(null)
 const titleError = ref('')
 const artistError = ref('')
-const proxyNameError = ref('')
 const draftRestored = ref(false)
 const needsFileReselect = ref(false)
 const savedFileName = ref('')
 const submitted = ref(false)
 
-function clearProxySubmission() {
-  form.value.proxy_submission = false
-  proxyNameError.value = ''
-}
-
 function validateTitle() {
   titleError.value = form.value.title.trim() ? '' : t('upload.titleRequired')
-}
-function validateArtist() {
-  artistError.value = form.value.artist.trim() ? '' : t('upload.artistRequired')
-}
-function validateProxySubmitterName() {
-  proxyNameError.value = form.value.proxy_submission && canProxySubmission.value && normalizedExternalComposerNames().length === 0
-    ? t('upload.proxyNameRequired')
-    : ''
-}
-function toggleProxySubmission() {
-  if (!canProxySubmission.value) {
-    clearProxySubmission()
-    return
-  }
-  if (!form.value.proxy_submission) {
-    clearProxySubmission()
-    return
-  }
-  const firstExternalName = normalizedExternalComposerNames()[0]
-  if (firstExternalName && !form.value.artist.trim()) {
-    form.value.artist = firstExternalName
-  }
-  validateProxySubmitterName()
-}
-
-function normalizedExternalComposerNames(): string[] {
-  const names: string[] = []
-  const seen = new Set<string>()
-  for (const rawName of form.value.external_composer_names) {
-    const name = rawName.trim()
-    if (!name) continue
-    const key = name.toLocaleLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    names.push(name)
-  }
-  return names
-}
-
-function ensureExternalComposerInput() {
-  if (form.value.external_composer_names.length === 0) {
-    form.value.external_composer_names = ['']
-  }
-}
-
-function addExternalComposer() {
-  form.value.external_composer_names.push('')
-}
-
-function removeExternalComposer(index: number) {
-  form.value.external_composer_names.splice(index, 1)
-  ensureExternalComposerInput()
 }
 
 function formatDurationFull(seconds: number): string {
@@ -142,43 +85,147 @@ const canProxySubmission = computed(() =>
   && selectedAlbum.value.producer_id === appStore.currentUser.id
 )
 
-const proxySubmitterNameMissing = computed(() =>
-  form.value.proxy_submission
-  && canProxySubmission.value
-  && normalizedExternalComposerNames().length === 0
+function currentUserUid(): string {
+  const id = appStore.currentUser?.id
+  return typeof id === 'number' && Number.isSafeInteger(id) && id > 0 ? String(id) : ''
+}
+
+function createArtistEntry(options: { prefillUid?: boolean } = {}): ArtistEntry {
+  return { name: '', uid: options.prefillUid ? currentUserUid() : '' }
+}
+
+function ensureArtistEntry() {
+  if (form.value.artist_entries.length === 0) {
+    form.value.artist_entries = [createArtistEntry({ prefillUid: true })]
+  }
+}
+
+function addArtistEntry() {
+  form.value.artist_entries.push(createArtistEntry())
+}
+
+function removeArtistEntry(index: number) {
+  form.value.artist_entries.splice(index, 1)
+  ensureArtistEntry()
+  validateArtists()
+}
+
+function normalizedArtistEntries(): ArtistEntry[] {
+  return form.value.artist_entries
+    .map(entry => ({ name: entry.name.trim(), uid: entry.uid.trim() }))
+    .filter(entry => entry.name || entry.uid)
+}
+
+function hasArtistDraftContent(): boolean {
+  const defaultUid = currentUserUid()
+  return form.value.artist_entries.some((entry, index) => {
+    const name = entry.name.trim()
+    const uid = entry.uid.trim()
+    if (!name && !uid) return index > 0
+    return Boolean(name || uid !== defaultUid)
+  })
+}
+
+function dedupeNames(names: string[]): string[] {
+  const result: string[] = []
+  const seen = new Set<string>()
+  for (const name of names) {
+    const key = name.toLocaleLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(name)
+  }
+  return result
+}
+
+const artistDisplayName = computed(() =>
+  normalizedArtistEntries()
+    .filter(entry => entry.name)
+    .map(entry => entry.name)
+    .join(' / ')
 )
 
-
-const collaboratorOptions = computed(() => {
-  const currentUserId = appStore.currentUser?.id
-  return (selectedAlbum.value?.members ?? [])
-    .filter(member => member.user_id !== currentUserId)
-    .filter(member => !member.user.deleted_at && !member.user.suspended_at)
+const selectedComposerIds = computed(() => {
+  const ids = normalizedArtistEntries()
+    .map(entry => parseArtistUid(entry.uid))
+    .filter((id): id is number => id !== null)
+  return Array.from(new Set(ids))
 })
 
-function selectedComposerIds(proxySubmission = false): number[] {
-  const currentUserId = appStore.currentUser?.id
-  const ids = proxySubmission
-    ? form.value.composer_ids
-    : [
-        ...(currentUserId != null ? [currentUserId] : []),
-        ...form.value.composer_ids,
-      ]
-  return Array.from(new Set(ids))
+const externalComposerNames = computed(() =>
+  dedupeNames(
+    normalizedArtistEntries()
+      .filter(entry => !entry.uid && entry.name)
+      .map(entry => entry.name)
+  )
+)
+
+function isValidArtistUid(uid: string): boolean {
+  if (!/^[1-9]\d*$/.test(uid)) return false
+  const parsed = Number(uid)
+  return Number.isSafeInteger(parsed)
 }
+
+function parseArtistUid(uid: string): number | null {
+  if (!uid) return null
+  return isValidArtistUid(uid) ? Number(uid) : null
+}
+
+const autoProxySubmission = computed(() =>
+  selectedComposerIds.value.length === 0
+  && externalComposerNames.value.length > 0
+  && canProxySubmission.value
+)
+
+const canSubmitArtists = computed(() => {
+  const entries = normalizedArtistEntries()
+  if (entries.length === 0) return false
+  if (entries.some(entry => !entry.name || entry.name.length > 100)) return false
+  if (entries.some(entry => entry.uid && !isValidArtistUid(entry.uid))) return false
+  if (!artistDisplayName.value || artistDisplayName.value.length > 100) return false
+  if (selectedComposerIds.value.length === 0 && externalComposerNames.value.length > 0 && !canProxySubmission.value) return false
+  return selectedComposerIds.value.length > 0 || externalComposerNames.value.length > 0
+})
+
+function validateArtists() {
+  const entries = normalizedArtistEntries()
+  if (entries.some(entry => entry.uid && !entry.name)) {
+    artistError.value = t('upload.artistNameRequiredForAccount')
+    return
+  }
+  if (entries.length === 0 || !artistDisplayName.value) {
+    artistError.value = t('upload.artistRequired')
+    return
+  }
+  if (entries.some(entry => entry.uid && !isValidArtistUid(entry.uid))) {
+    artistError.value = t('upload.artistUidInvalid')
+    return
+  }
+  if (entries.some(entry => entry.name.length > 100)) {
+    artistError.value = t('upload.artistNameTooLong')
+    return
+  }
+  if (artistDisplayName.value.length > 100) {
+    artistError.value = t('upload.artistDisplayTooLong')
+    return
+  }
+  if (selectedComposerIds.value.length === 0 && externalComposerNames.value.length > 0 && !canProxySubmission.value) {
+    artistError.value = t('upload.artistAccountRequired')
+    return
+  }
+  artistError.value = ''
+}
+
 const hasDraft = computed(() => {
   return Boolean(
     selectedFile.value
     || savedFileName.value
     || form.value.title.trim()
-    || form.value.artist.trim()
     || form.value.bpm.trim()
     || form.value.original_title.trim()
     || form.value.original_artist.trim()
     || form.value.author_notes.trim()
-    || form.value.proxy_submission
-    || normalizedExternalComposerNames().length > 0
-    || form.value.composer_ids.length > 0,
+    || hasArtistDraftContent(),
   )
 })
 
@@ -209,18 +256,58 @@ function restoreDraft() {
   }
 
   try {
-    const draft = JSON.parse(raw) as Partial<typeof form.value> & { saved_file_name?: string }
+    const draft = JSON.parse(raw) as Partial<typeof form.value> & {
+      saved_file_name?: string
+      artist?: string
+      composer_ids?: unknown
+      external_composer_names?: unknown
+      external_submitter_name?: unknown
+    }
     const rawComposerIds = Array.isArray((draft as any).composer_ids)
-      ? (draft as any).composer_ids.filter((id: unknown): id is number => typeof id === 'number')
+      ? (draft as any).composer_ids
+          .filter((id: unknown): id is number | string => typeof id === 'number' || typeof id === 'string')
+          .map((id: number | string) => String(id).trim())
+          .filter(isValidArtistUid)
       : []
     const rawExternalComposerNames = Array.isArray((draft as any).external_composer_names)
       ? (draft as any).external_composer_names.filter((name: unknown): name is string => typeof name === 'string')
       : (typeof draft.external_submitter_name === 'string' && draft.external_submitter_name.trim()
           ? [draft.external_submitter_name]
-          : [''])
+          : [])
+    const rawArtistEntries = Array.isArray((draft as any).artist_entries)
+      ? (draft as any).artist_entries
+          .filter((entry: unknown): entry is ArtistEntry =>
+            typeof entry === 'object'
+            && entry !== null
+            && typeof (entry as ArtistEntry).name === 'string'
+            && (
+              typeof (entry as ArtistEntry).uid === 'string'
+              || (entry as any).user_id === null
+              || typeof (entry as any).user_id === 'number'
+              || typeof (entry as any).user_id === 'string'
+            )
+          )
+          .map((entry: ArtistEntry & { user_id?: number | string | null }) => ({
+            name: entry.name,
+            uid: typeof entry.uid === 'string'
+              ? entry.uid
+              : (entry.user_id === null || entry.user_id === undefined ? '' : String(entry.user_id)),
+          }))
+      : []
+    const migratedArtistEntries = rawArtistEntries.length
+      ? rawArtistEntries
+      : [
+          ...rawComposerIds.map((userId: string) => ({
+            name: typeof draft.artist === 'string' && draft.artist.trim() ? draft.artist : '',
+            uid: userId,
+          })),
+          ...rawExternalComposerNames.map((name: string) => ({ name, uid: '' })),
+          ...(!rawComposerIds.length && !rawExternalComposerNames.length && typeof draft.artist === 'string' && draft.artist.trim()
+            ? [{ name: draft.artist, uid: '' }]
+            : []),
+        ]
     form.value = {
       title: typeof draft.title === 'string' ? draft.title : '',
-      artist: typeof draft.artist === 'string' ? draft.artist : '',
       album_id: typeof draft.album_id === 'number' && albums.value.some(album => album.id === draft.album_id)
         ? draft.album_id
         : (albums.value[0]?.id ?? null),
@@ -228,13 +315,7 @@ function restoreDraft() {
       original_title: typeof draft.original_title === 'string' ? draft.original_title : '',
       original_artist: typeof draft.original_artist === 'string' ? draft.original_artist : '',
       author_notes: typeof draft.author_notes === 'string' ? draft.author_notes : '',
-      proxy_submission: typeof draft.proxy_submission === 'boolean' ? draft.proxy_submission : false,
-      external_submitter_name: typeof draft.external_submitter_name === 'string' ? draft.external_submitter_name : '',
-      external_composer_names: rawExternalComposerNames.length ? rawExternalComposerNames : [''],
-      composer_ids: rawComposerIds,
-    }
-    if (form.value.proxy_submission && !canProxySubmission.value) {
-      clearProxySubmission()
+      artist_entries: migratedArtistEntries.length ? migratedArtistEntries : [createArtistEntry({ prefillUid: true })],
     }
     savedFileName.value = typeof draft.saved_file_name === 'string' ? draft.saved_file_name : ''
     needsFileReselect.value = Boolean(savedFileName.value)
@@ -285,28 +366,6 @@ watch(form, () => {
   persistDraft()
 }, { deep: true })
 
-watch(canProxySubmission, (allowed) => {
-  if (!allowed && form.value.proxy_submission) {
-    clearProxySubmission()
-  }
-})
-
-watch(() => form.value.external_composer_names, () => {
-  if (form.value.proxy_submission && !form.value.artist.trim()) {
-    form.value.artist = normalizedExternalComposerNames()[0] ?? ''
-  }
-  if (proxyNameError.value) validateProxySubmitterName()
-}, { deep: true })
-
-watch(selectedAlbum, (album) => {
-  if (!album) {
-    form.value.composer_ids = []
-    return
-  }
-  const allowed = new Set((album.members ?? []).map(member => member.user_id))
-  form.value.composer_ids = form.value.composer_ids.filter(id => allowed.has(id))
-})
-
 function validateFileSize(file: File): boolean {
   if (file.size > MAX_AUDIO_SIZE) {
     toastError(t('upload.fileTooLarge', { max: '200 MB' }))
@@ -346,17 +405,9 @@ function onDrop(e: DragEvent) {
 }
 
 async function upload() {
-  if (form.value.proxy_submission && !canProxySubmission.value) {
-    clearProxySubmission()
-  }
-  const externalComposerNames = normalizedExternalComposerNames()
-  if (form.value.proxy_submission && !form.value.artist.trim() && externalComposerNames[0]) {
-    form.value.artist = externalComposerNames[0]
-  }
   validateTitle()
-  validateArtist()
-  validateProxySubmitterName()
-  if (titleError.value || artistError.value || proxyNameError.value) return
+  validateArtists()
+  if (titleError.value || artistError.value) return
   if (!selectedFile.value) return
   if (albumLoadError.value) {
     toastError(albumLoadError.value)
@@ -370,9 +421,10 @@ async function upload() {
   uploadProgress.value = 0
   try {
     let track: Track
-    const proxySubmission = form.value.proxy_submission && canProxySubmission.value
-    const externalSubmitterName = proxySubmission ? (externalComposerNames[0] ?? null) : null
-    const composerIds = selectedComposerIds(proxySubmission)
+    const artist = artistDisplayName.value
+    const proxySubmission = autoProxySubmission.value
+    const externalSubmitterName = proxySubmission ? (externalComposerNames.value[0] ?? null) : null
+    const composerIds = selectedComposerIds.value
     if (appStore.r2Enabled) {
       // R2 presigned upload flow
       const file = selectedFile.value
@@ -383,14 +435,14 @@ async function upload() {
           file_size: file.size,
           album_id: form.value.album_id,
           title: form.value.title,
-          artist: form.value.artist,
+          artist,
           bpm: form.value.bpm || null,
           original_title: form.value.original_title || null,
           original_artist: form.value.original_artist || null,
           author_notes: form.value.author_notes || null,
           proxy_submission: proxySubmission,
           external_submitter_name: externalSubmitterName,
-          external_composer_names: externalComposerNames,
+          external_composer_names: externalComposerNames.value,
           composer_ids: composerIds,
         }),
         extractAudioDuration(file).catch(() => null),
@@ -404,14 +456,14 @@ async function upload() {
         duration,
         album_id: form.value.album_id,
         title: form.value.title,
-        artist: form.value.artist,
+        artist,
         bpm: form.value.bpm || null,
         original_title: form.value.original_title || null,
         original_artist: form.value.original_artist || null,
         author_notes: form.value.author_notes || null,
         proxy_submission: proxySubmission,
         external_submitter_name: externalSubmitterName,
-        external_composer_names: externalComposerNames,
+        external_composer_names: externalComposerNames.value,
         composer_ids: composerIds,
       })
     } else {
@@ -419,7 +471,7 @@ async function upload() {
       const formData = new FormData()
       formData.append('file', selectedFile.value)
       formData.append('title', form.value.title)
-      formData.append('artist', form.value.artist)
+      formData.append('artist', artist)
       formData.append('album_id', String(form.value.album_id))
       if (form.value.bpm) formData.append('bpm', form.value.bpm)
       if (form.value.original_title) formData.append('original_title', form.value.original_title)
@@ -429,7 +481,7 @@ async function upload() {
         formData.append('proxy_submission', 'true')
         formData.append('external_submitter_name', externalSubmitterName)
       }
-      for (const externalName of externalComposerNames) {
+      for (const externalName of externalComposerNames.value) {
         formData.append('external_composer_names', externalName)
       }
       for (const composerId of composerIds) {
@@ -510,11 +562,6 @@ function formatFileSize(bytes: number): string {
         <input v-model="form.title" class="input-field w-full" :class="{ 'border-error': titleError }" :placeholder="t('upload.titlePlaceholder')" @blur="validateTitle" />
         <p v-if="titleError" class="text-xs text-error mt-1">{{ titleError }}</p>
       </div>
-      <div>
-        <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.artist') }}</label>
-        <input v-model="form.artist" class="input-field w-full" :class="{ 'border-error': artistError }" :placeholder="t('upload.artistPlaceholder')" @blur="validateArtist" />
-        <p v-if="artistError" class="text-xs text-error mt-1">{{ artistError }}</p>
-      </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm text-muted-foreground mb-1">{{ t('upload.album') }}</label>
@@ -525,75 +572,52 @@ function formatFileSize(bytes: number): string {
           <input v-model="form.bpm" type="text" class="input-field w-full" :placeholder="t('upload.bpmPlaceholder')" />
         </div>
       </div>
-      <div class="border border-border bg-background p-4 space-y-3">
+      <div class="border border-border bg-background p-4 space-y-4">
         <div>
-          <label class="block text-sm font-mono font-semibold text-foreground">{{ t('upload.externalComposers') }}</label>
-          <p class="text-xs text-muted-foreground mt-1">{{ t('upload.externalComposersHint') }}</p>
+          <label class="block text-sm font-mono font-semibold text-foreground">{{ t('upload.artist') }}</label>
+          <p class="text-xs text-muted-foreground mt-1">{{ t('upload.artistHint') }}</p>
         </div>
-        <div class="space-y-2">
+        <div class="space-y-3">
           <div
-            v-for="(_name, index) in form.external_composer_names"
+            v-for="(entry, index) in form.artist_entries"
             :key="index"
-            class="flex items-center gap-2"
+            data-testid="artist-entry-row"
+            class="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_160px_40px] sm:items-center"
           >
             <input
-              v-model="form.external_composer_names[index]"
+              v-model="entry.name"
               class="input-field min-w-0 flex-1"
-              :class="{ 'border-error': proxyNameError }"
-              :placeholder="t('upload.externalComposerPlaceholder')"
-              @blur="validateProxySubmitterName"
+              :class="{ 'border-error': artistError }"
+              :placeholder="t('upload.artistNamePlaceholder')"
+              @blur="validateArtists"
+            />
+            <input
+              v-model="entry.uid"
+              type="text"
+              inputmode="numeric"
+              class="input-field min-w-0 !h-10"
+              :class="{ 'border-error': artistError }"
+              :placeholder="t('upload.artistUidPlaceholder')"
+              :aria-label="t('upload.artistUidLabel')"
+              @blur="validateArtists"
             />
             <button
               type="button"
               class="btn-secondary !h-10 !w-10 !p-0 inline-flex items-center justify-center"
               :aria-label="t('common.delete')"
-              @click="removeExternalComposer(index)"
+              @click="removeArtistEntry(index)"
             >
               <X class="w-4 h-4" :stroke-width="2" />
             </button>
           </div>
         </div>
-        <button type="button" class="btn-secondary text-sm inline-flex items-center gap-2" @click="addExternalComposer">
+        <button type="button" class="btn-secondary text-sm inline-flex items-center gap-2" @click="addArtistEntry">
           <Plus class="w-4 h-4" :stroke-width="2" />
-          {{ t('upload.addExternalComposer') }}
+          {{ t('upload.addArtist') }}
         </button>
-        <p v-if="proxyNameError" class="text-xs text-error">{{ proxyNameError }}</p>
-      </div>
-
-      <div v-if="canProxySubmission" class="border border-border bg-background p-4 space-y-3">
-        <label class="flex items-start gap-3 text-sm text-foreground">
-          <input
-            v-model="form.proxy_submission"
-            type="checkbox"
-            class="checkbox mt-0.5"
-            @change="toggleProxySubmission"
-          />
-          <span class="space-y-1">
-            <span class="block font-mono text-sm font-semibold">{{ t('upload.proxySubmission') }}</span>
-            <span class="block text-xs text-muted-foreground">{{ t('upload.proxySubmissionHint') }}</span>
-          </span>
-        </label>
-      </div>
-      <div v-if="collaboratorOptions.length" class="border border-border bg-background p-4 space-y-3">
-        <div>
-          <label class="block text-sm font-mono font-semibold text-foreground">{{ t('upload.composers') }}</label>
-          <p class="text-xs text-muted-foreground mt-1">{{ t('upload.composersHint') }}</p>
-        </div>
-        <div class="space-y-2">
-          <label
-            v-for="member in collaboratorOptions"
-            :key="member.user_id"
-            class="flex items-center gap-3 text-sm text-foreground"
-          >
-            <input
-              v-model="form.composer_ids"
-              :value="member.user_id"
-              type="checkbox"
-              class="checkbox"
-            />
-            <span class="min-w-0 flex-1 truncate">{{ member.user.display_name }}</span>
-          </label>
-        </div>
+        <p v-if="autoProxySubmission" class="text-xs text-warning">{{ t('upload.autoProxySubmissionHint') }}</p>
+        <p v-else class="text-xs text-muted-foreground">{{ t('upload.artistBindingHint') }}</p>
+        <p v-if="artistError" class="text-xs text-error">{{ artistError }}</p>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
@@ -617,10 +641,10 @@ function formatFileSize(bytes: number): string {
         </button>
         <button
           @click="upload"
-          :disabled="uploading || loadingAlbums || !!albumLoadError || !selectedFile || !form.title || !form.artist || proxySubmitterNameMissing"
+          :disabled="uploading || loadingAlbums || !!albumLoadError || !selectedFile || !form.title || !canSubmitArtists"
           :class="[
             'flex-1 text-sm font-medium px-4 py-3 rounded-full transition-colors',
-            uploading || loadingAlbums || !!albumLoadError || !selectedFile || !form.title || !form.artist || proxySubmitterNameMissing
+            uploading || loadingAlbums || !!albumLoadError || !selectedFile || !form.title || !canSubmitArtists
               ? 'bg-border text-muted-foreground cursor-not-allowed'
               : 'btn-primary'
           ]"

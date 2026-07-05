@@ -24,6 +24,7 @@ import BatchIssueActions from '@/components/workflow/BatchIssueActions.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
+import BaseModal from '@/components/common/BaseModal.vue'
 import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
 import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
@@ -33,7 +34,7 @@ import { useIssuePreviewPlayback, type PreviewAction } from '@/composables/useIs
 import { useToast } from '@/composables/useToast'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { emptyMentionCandidates } from '@/utils/mentionCandidates'
-import { ChevronLeft, ChevronDown, Upload, Check } from 'lucide-vue-next'
+import { ChevronLeft, ChevronDown, Upload, Check, Copy, ExternalLink } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -57,6 +58,9 @@ const loading = ref(true)
 const loadError = ref(false)
 const acting = ref(false)
 const actionError = ref('')
+const revisionTypeModalOpen = ref(false)
+const pendingRevisionDecision = ref<string | null>(null)
+const selectedRevisionType = ref<'source_audio' | 'stem_files'>('source_audio')
 
 // Mastering notes editing
 const editingMasteringNotes = ref(false)
@@ -291,11 +295,51 @@ const audioUrl = computed(() =>
   track.value?.file_path ? `${API_ORIGIN}/api/tracks/${trackId.value}/audio?v=${track.value.version ?? 0}` : '',
 )
 const currentSourceVersionId = computed(() => track.value?.current_source_version?.id ?? null)
+const currentExternalSourceVersion = computed<TrackSourceVersion | null>(() => {
+  const current = track.value?.current_source_version
+  if (!current || current.source_kind !== 'external_link') return null
+  const fullVersion = sourceVersions.value.find(version => version.id === current.id)
+  const revisionNotes = (fullVersion?.revision_notes ?? current.revision_notes ?? '').trim()
+  if (!revisionNotes) return null
+  return {
+    ...current,
+    ...fullVersion,
+    revision_notes: revisionNotes,
+  }
+})
+const currentExternalSourceNotes = computed(() => currentExternalSourceVersion.value?.revision_notes?.trim() ?? '')
+const currentExternalSourceUrl = computed(() => extractFirstUrl(currentExternalSourceNotes.value))
 const olderSourceVersions = computed(() =>
   sourceVersions.value
     .filter(v => v.id !== currentSourceVersionId.value)
     .sort((a, b) => b.version_number - a.version_number),
 )
+
+function extractFirstUrl(text: string): string {
+  const match = text.match(/https?:\/\/[^\s<>"']+/i)
+  if (!match) return ''
+  let url = match[0]
+  while (url.length > 0 && '.,;:!?)'.includes(url[url.length - 1])) {
+    url = url.slice(0, -1)
+  }
+  return url
+}
+
+function openExternalSourceUrl() {
+  if (!currentExternalSourceUrl.value) return
+  window.open(currentExternalSourceUrl.value, '_blank', 'noopener,noreferrer')
+}
+
+async function copyExternalSourceNotes() {
+  if (!currentExternalSourceNotes.value) return
+  try {
+    await navigator.clipboard.writeText(currentExternalSourceNotes.value)
+    toastSuccess(t('masteringPage.stemHandoffCopied'))
+  } catch {
+    toastError(t('common.error'))
+  }
+}
+
 function sourceVersionOptionLabel(version: TrackSourceVersion): string {
   const prefix = version.source_kind === 'external_link'
     ? t('workflowStep.externalSourceVersionLabel')
@@ -667,6 +711,12 @@ const canConfirmDelivery = computed(() => {
 // Workflow transition
 async function executeTransition(decision: string) {
   if (!track.value) return
+  if (willTransitionToMasteringRevision(decision)) {
+    pendingRevisionDecision.value = decision
+    selectedRevisionType.value = 'source_audio'
+    revisionTypeModalOpen.value = true
+    return
+  }
   if (decision === 'reject_final') {
     const confirmed = window.confirm(t('producer.rejectFinalConfirm'))
     if (!confirmed) return
@@ -676,6 +726,42 @@ async function executeTransition(decision: string) {
   try {
     const previousStatus = track.value.status
     const updatedTrack = await trackApi.workflowTransition(trackId.value, decision)
+    if (updatedTrack.status === previousStatus) {
+      await loadData()
+      toastSuccess(t('workflowStep.actionSubmitted'))
+      return
+    }
+    pushToTrackDetail()
+  } catch (err: any) {
+    actionError.value = err.message || t('workflowStep.transitionFailed')
+  } finally {
+    acting.value = false
+  }
+}
+
+function willTransitionToMasteringRevision(decision: string): boolean {
+  const step = currentStep.value
+  if (!step || !workflowConfig.value) return false
+  if (step.ui_variant !== 'mastering' && step.id !== 'mastering') return false
+
+  const targetStepId = step.transitions?.[decision]
+  if (!targetStepId) return false
+  const targetStep = workflowConfig.value.steps.find(item => item.id === targetStepId)
+  return targetStep?.type === 'revision' && targetStep.return_to === step.id
+}
+
+async function confirmRevisionType() {
+  if (!pendingRevisionDecision.value || !track.value) return
+  const decision = pendingRevisionDecision.value
+  const revisionType = selectedRevisionType.value
+  revisionTypeModalOpen.value = false
+  pendingRevisionDecision.value = null
+
+  acting.value = true
+  actionError.value = ''
+  try {
+    const previousStatus = track.value.status
+    const updatedTrack = await trackApi.workflowTransition(trackId.value, decision, revisionType)
     if (updatedTrack.status === previousStatus) {
       await loadData()
       toastSuccess(t('workflowStep.actionSubmitted'))
@@ -1011,6 +1097,78 @@ watch(olderMasterDeliveries, (deliveries) => {
 </script>
 
 <template>
+  <BaseModal
+    v-if="revisionTypeModalOpen"
+    @close="revisionTypeModalOpen = false"
+    max-width="max-w-lg"
+  >
+    <div class="space-y-6">
+      <div>
+        <h3 class="text-lg font-mono font-bold text-foreground">
+          {{ t('workflowStep.selectRevisionType') }}
+        </h3>
+        <p class="text-sm text-muted-foreground mt-2">
+          {{ t('workflowStep.selectRevisionTypeDesc') }}
+        </p>
+      </div>
+
+      <div class="space-y-3">
+        <label
+          class="flex items-start gap-3 p-4 border rounded-none cursor-pointer transition-colors"
+          :class="selectedRevisionType === 'source_audio'
+            ? 'border-primary bg-primary/5'
+            : 'border-border hover:border-primary/30'"
+        >
+          <input
+            type="radio"
+            value="source_audio"
+            v-model="selectedRevisionType"
+            class="mt-1"
+          />
+          <span class="flex-1">
+            <span class="block text-sm font-mono font-semibold text-foreground">
+              {{ t('workflowStep.revisionTypeSourceAudio') }}
+            </span>
+            <span class="block text-xs text-muted-foreground mt-1">
+              {{ t('workflowStep.revisionTypeSourceAudioDesc') }}
+            </span>
+          </span>
+        </label>
+
+        <label
+          class="flex items-start gap-3 p-4 border rounded-none cursor-pointer transition-colors"
+          :class="selectedRevisionType === 'stem_files'
+            ? 'border-primary bg-primary/5'
+            : 'border-border hover:border-primary/30'"
+        >
+          <input
+            type="radio"
+            value="stem_files"
+            v-model="selectedRevisionType"
+            class="mt-1"
+          />
+          <span class="flex-1">
+            <span class="block text-sm font-mono font-semibold text-foreground">
+              {{ t('workflowStep.revisionTypeStemFiles') }}
+            </span>
+            <span class="block text-xs text-muted-foreground mt-1">
+              {{ t('workflowStep.revisionTypeStemFilesDesc') }}
+            </span>
+          </span>
+        </label>
+      </div>
+
+      <div class="flex gap-2">
+        <button @click="confirmRevisionType" class="btn-primary flex-1">
+          {{ t('common.confirm') }}
+        </button>
+        <button @click="revisionTypeModalOpen = false" class="btn-secondary flex-1">
+          {{ t('common.cancel') }}
+        </button>
+      </div>
+    </div>
+  </BaseModal>
+
   <div v-if="loading" class="max-w-4xl mx-auto"><SkeletonLoader :rows="5" :card="true" /></div>
   <div v-else-if="loadError" class="card max-w-md mx-auto mt-12 text-center space-y-3">
     <p class="text-sm text-error">{{ t('common.loadFailed') }}</p>
@@ -1111,6 +1269,47 @@ watch(olderMasterDeliveries, (deliveries) => {
         <div v-if="track.mastering_notes" class="card border border-primary/20 bg-primary/5 space-y-2">
           <div class="text-xs font-mono text-primary">{{ t('masteringCommunication.masteringNotes') }}</div>
           <p class="text-sm text-foreground whitespace-pre-wrap">{{ track.mastering_notes }}</p>
+        </div>
+
+        <div v-if="canSeeMasteringDiscussion && currentExternalSourceVersion" class="card space-y-3">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div class="min-w-0 space-y-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('masteringPage.stemHandoffTitle') }}</h3>
+                <span class="rounded-full bg-info-bg px-2 py-0.5 text-[11px] font-mono text-info">
+                  {{ t('workflowStep.externalSourceVersionLabel') }}
+                </span>
+              </div>
+              <p class="text-xs text-muted-foreground">
+                {{ t('masteringPage.stemHandoffMeta', {
+                  version: currentExternalSourceVersion.version_number,
+                  date: fmtDate(currentExternalSourceVersion.created_at),
+                }) }}
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                v-if="currentExternalSourceUrl"
+                type="button"
+                class="btn-secondary inline-flex items-center gap-2 text-xs px-3 py-1.5"
+                @click="openExternalSourceUrl"
+              >
+                <ExternalLink class="h-3.5 w-3.5" :stroke-width="2" />
+                {{ t('masteringPage.openStemHandoff') }}
+              </button>
+              <button
+                type="button"
+                class="btn-secondary inline-flex items-center gap-2 text-xs px-3 py-1.5"
+                @click="copyExternalSourceNotes"
+              >
+                <Copy class="h-3.5 w-3.5" :stroke-width="2" />
+                {{ t('masteringPage.copyStemHandoff') }}
+              </button>
+            </div>
+          </div>
+          <div class="border border-border bg-background p-3 rounded-none">
+            <p class="text-sm text-foreground whitespace-pre-wrap break-words">{{ currentExternalSourceNotes }}</p>
+          </div>
         </div>
 
         <DiscussionPanel
