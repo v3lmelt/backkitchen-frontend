@@ -1,0 +1,42 @@
+{
+  "version": "0.1.31",
+  "date": "2026-07-05",
+  "headline": {
+    "zh-CN": "收紧匿名曲师显示",
+    "en": "Tightens anonymous composer display"
+  },
+  "summary": {
+    "zh-CN": "匿名视图不再把平台内曲师回退显示为用户 ID，匿名编号也已轮换为新版规则。",
+    "en": "Anonymous views no longer fall back to platform composer user IDs, and anonymous labels now use the refreshed ID rule."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "隐私显示",
+        "en": "Privacy display"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "隐藏缺少姓名的曲师 ID",
+            "en": "Hide composer IDs without names"
+          },
+          "description": {
+            "zh-CN": "当前端只拿到平台内曲师的用户 ID、没有拿到可展示姓名时，曲目详情不再显示平台内曲师行，避免暴露真实账号线索。",
+            "en": "When the frontend only receives platform composer user IDs without displayable names, track details no longer render the platform composer row."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "轮换匿名编号",
+            "en": "Refresh anonymous labels"
+          },
+          "description": {
+            "zh-CN": "同行评审等匿名场景使用新版前端匿名编号，同一用户仍保持全站一致，但旧编号会被替换。",
+            "en": "Anonymous peer-review labels now use the refreshed frontend hash. The same user remains consistent across the app, while old labels are replaced."
+          }
+        }
+      ]
+    }
+  ]
+}

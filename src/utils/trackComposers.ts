@@ -21,12 +21,12 @@ export function isComposerActor(track: Track | null | undefined, userId: number 
 
 export function platformComposerDisplayNames(track: Track | null | undefined): string[] {
   if (!track) return []
+  const ids = trackComposerIds(track)
+  if (!ids.length) return []
   const usersById = new Map((track.composers ?? []).map(user => [user.id, user.display_name]))
-  return trackComposerIds(track).map((id) => {
-    if (usersById.has(id)) return usersById.get(id)!
-    if (track.submitter?.id === id) return track.submitter.display_name
-    return `#${id}`
-  })
+  const names = ids.map(id => usersById.get(id))
+  if (names.some(name => !name)) return []
+  return names as string[]
 }
 
 export function externalComposerDisplayNames(track: Track | null | undefined): string[] {
