@@ -17,6 +17,7 @@ import { Archive, RotateCcw, Upload } from 'lucide-vue-next'
 import { hasAdminRole } from '@/utils/admin'
 import { formatRelativeTime } from '@/utils/time'
 import { formatWorkflowEvent, workflowEventDotColor } from '@/utils/workflow'
+import { sanitizeWorkflowUserReferences } from '@/utils/workflowConfig'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
@@ -209,7 +210,10 @@ async function saveWorkflow(config: WorkflowConfig) {
   savingWorkflow.value = true
   workflowMigrations.value = []
   try {
-    const result = await albumApi.updateWorkflow(album.value.id, config)
+    const result = await albumApi.updateWorkflow(
+      album.value.id,
+      sanitizeWorkflowUserReferences(config, users.value.map(user => user.id)),
+    )
     if (result.migrations?.length) {
       workflowMigrations.value = result.migrations
     }
@@ -428,9 +432,21 @@ function applyWebhookConfig(config: WebhookConfigPayload) {
 async function loadAssignableUsers(currentAlbum: Album): Promise<boolean> {
   loadingAssignableUsers.value = true
   try {
-    users.value = currentAlbum.circle_id
-      ? (await circleApi.get(currentAlbum.circle_id)).members.map(m => m.user)
-      : await userApi.list()
+    if (currentAlbum.circle_id) {
+      const byId = new Map<number, User>()
+      const circle = await circleApi.get(currentAlbum.circle_id)
+      for (const member of circle.members) byId.set(member.user.id, member.user)
+      if (currentAlbum.producer) byId.set(currentAlbum.producer.id, currentAlbum.producer)
+      users.value = Array.from(byId.values())
+    } else {
+      users.value = await userApi.list()
+    }
+    if (album.value?.workflow_config) {
+      album.value.workflow_config = sanitizeWorkflowUserReferences(
+        album.value.workflow_config,
+        users.value.map(user => user.id),
+      )
+    }
     return true
   } catch (e: any) {
     users.value = []

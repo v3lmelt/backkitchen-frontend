@@ -1,0 +1,42 @@
+{
+  "version": "0.1.33",
+  "date": "2026-07-05",
+  "headline": {
+    "zh-CN": "修正社团专辑审稿候选池",
+    "en": "Fixes circle album reviewer candidates"
+  },
+  "summary": {
+    "zh-CN": "社团专辑的手动指派、自动分配和工作流模板现在统一使用社团成员作为审稿候选，专辑协作成员不再限制审稿池。",
+    "en": "Circle albums now use circle members consistently for manual assignment, automatic assignment, and workflow templates, so album collaborators no longer limit the reviewer pool."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "审稿分配",
+        "en": "Review assignment"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "社团成员可直接进入审稿候选",
+            "en": "Circle members can be reviewer candidates"
+          },
+          "description": {
+            "zh-CN": "社团专辑的手动指派弹窗和工作流编辑器会从社团成员读取候选人，并继续排除当前曲目的作曲者。",
+            "en": "Manual assignment dialogs and the workflow editor now read candidates from circle members for circle albums while still excluding the current track composers."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "保存和自动分配会拒绝社团外用户",
+            "en": "Saving and auto assignment reject outside users"
+          },
+          "description": {
+            "zh-CN": "工作流保存、模板保存、手动指派和旧自动候选池都会过滤或拒绝社团外用户，避免错误分配继续出现。",
+            "en": "Workflow saves, template saves, manual assignment, and stale automatic pools now filter or reject users outside the circle to prevent invalid reviewer assignment."
+          }
+        }
+      ]
+    }
+  ]
+}

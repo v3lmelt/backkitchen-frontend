@@ -21,6 +21,7 @@ import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import {
   buildDefaultWorkflowConfig,
   getFirstPeerReviewAssignmentMode,
+  sanitizeWorkflowUserReferences,
   type ReviewAssignmentMode,
   setFirstPeerReviewAssignmentMode,
 } from '@/utils/workflowConfig'
@@ -108,6 +109,13 @@ const workflowMemberOptions = computed<SelectOption[]>(() => {
     byId.set(currentUser.id, { value: currentUser.id, label: currentUser.display_name })
   }
 
+  if (selectedCircleId.value) {
+    for (const member of circleMemberUsers.value) {
+      byId.set(member.id, { value: member.id, label: member.display_name })
+    }
+    return Array.from(byId.values())
+  }
+
   if (teamState.mastering_engineer_id) {
     const mastering = allKnownUsers.get(teamState.mastering_engineer_id)
     if (mastering) {
@@ -124,6 +132,16 @@ const workflowMemberOptions = computed<SelectOption[]>(() => {
 
   return Array.from(byId.values())
 })
+
+function sanitizeWorkflowConfigForMembers() {
+  if (!workflowConfig.value) return
+  if (selectedCircleId.value && circleMembersLoading.value) return
+  const allowedUserIds = workflowMemberOptions.value.map(option => Number(option.value))
+  const sanitized = sanitizeWorkflowUserReferences(workflowConfig.value, allowedUserIds)
+  if (JSON.stringify(sanitized) !== JSON.stringify(workflowConfig.value)) {
+    workflowConfig.value = sanitized
+  }
+}
 
 const reviewerAssignmentMode = computed<ReviewAssignmentMode>({
   get: () => getFirstPeerReviewAssignmentMode(workflowConfig.value),
@@ -237,6 +255,7 @@ watch(selectedCircleId, async (circleId, previousCircleId) => {
       albumChecklistMode.value = 'disabled'
     }
     sanitizeTeamState(allUsers.value)
+    sanitizeWorkflowConfigForMembers()
     return
   }
 
@@ -244,7 +263,13 @@ watch(selectedCircleId, async (circleId, previousCircleId) => {
     albumChecklistMode.value = 'circle_default'
   }
   await loadCircleMembers(circleId)
+  sanitizeWorkflowConfigForMembers()
 })
+
+watch(
+  () => workflowMemberOptions.value.map(option => option.value).join(','),
+  () => sanitizeWorkflowConfigForMembers(),
+)
 
 async function loadTemplates() {
   if (!selectedCircleId.value) return
@@ -263,6 +288,7 @@ async function loadTemplates() {
 
 async function loadFromTemplate(template: WorkflowTemplate) {
   workflowConfig.value = JSON.parse(JSON.stringify(template.workflow_config))
+  sanitizeWorkflowConfigForMembers()
   selectedTemplateId.value = template.id
   showTemplateList.value = false
 }
@@ -332,6 +358,7 @@ async function create() {
   let createdAlbumId: number | null = null
   try {
     sanitizeTeamState(assignableUsers.value)
+    sanitizeWorkflowConfigForMembers()
 
     const payload: any = { ...form.value }
     if (selectedCircleId.value) {
