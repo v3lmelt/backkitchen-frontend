@@ -35,6 +35,7 @@ import { useToast } from '@/composables/useToast'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { emptyMentionCandidates } from '@/utils/mentionCandidates'
 import { ChevronLeft, ChevronDown, Upload, Check, Copy, ExternalLink } from 'lucide-vue-next'
+import { viewerCanManageAlbum } from '@/utils/albumPermissions'
 
 const route = useRoute()
 const router = useRouter()
@@ -138,6 +139,9 @@ const selectedCompareMasterDeliveryId = ref<number | null>(null)
 const isSubmitter = computed(() => isComposerActor(track.value, appStore.currentUser?.id))
 const isMasteringEngineer = computed(() => track.value?.mastering_engineer_id === appStore.currentUser?.id)
 const isProxySubmission = computed(() => Boolean(track.value?.is_proxy_submission && track.value.external_submitter_name))
+const viewerCanManageTrackAlbum = computed(() =>
+  track.value ? viewerCanManageAlbum(track.value, appStore.currentUser) : false,
+)
 const composerApprovalLabel = computed(() =>
   isProxySubmission.value ? t('trackDetail.externalSubmitterProxy') : t('trackDetail.composers')
 )
@@ -152,7 +156,7 @@ const canSeeMasteringDiscussion = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId || !track.value) return false
   return isComposerActor(track.value, userId)
-    || userId === track.value.producer_id
+    || viewerCanManageTrackAlbum.value
     || userId === track.value.mastering_engineer_id
 })
 
@@ -226,6 +230,9 @@ const isDeliveryAssignee = computed(() => {
   if (step?.type === 'delivery' && step.assignee_user_id == null && step.assignee_role === 'submitter') {
     return isComposerActor(track.value, userId)
   }
+  if (step?.type === 'delivery' && step.assignee_user_id == null && step.assignee_role === 'producer') {
+    return viewerCanManageTrackAlbum.value
+  }
   const assigneeId = deliveryAssigneeUserId.value
   return assigneeId != null && assigneeId === userId
 })
@@ -238,7 +245,7 @@ const canApproveFinal = computed(() => {
   if (!track.value?.current_master_delivery?.confirmed_at || !isFinalReviewStep.value) return false
   const userId = appStore.currentUser?.id
   if (!userId) return false
-  if (userId === track.value.producer_id) return !track.value.current_master_delivery.producer_approved_at
+  if (viewerCanManageTrackAlbum.value) return !track.value.current_master_delivery.producer_approved_at
   if (isComposerActor(track.value, userId)) return !track.value.current_master_delivery.submitter_approved_at
   return false
 })
@@ -275,7 +282,7 @@ function canCurrentUserContinueInMasteringWorkspace(nextTrack: Track): boolean {
 
   const delivery = nextTrack.current_master_delivery
   if (!delivery?.confirmed_at) return false
-  if (userId === nextTrack.producer_id) return !delivery.producer_approved_at
+  if (viewerCanManageAlbum(nextTrack, appStore.currentUser)) return !delivery.producer_approved_at
   if (isComposerActor(nextTrack, userId)) return !delivery.submitter_approved_at
   return false
 }

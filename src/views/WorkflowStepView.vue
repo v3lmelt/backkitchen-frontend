@@ -47,6 +47,7 @@ import { externalComposerDisplayText, isComposerActor, trackComposerDisplayText,
 import { extractAudioDuration } from '@/utils/audio'
 import { activeAssignmentsForStep, canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
 import { emptyMentionCandidates } from '@/utils/mentionCandidates'
+import { viewerCanManageAlbum } from '@/utils/albumPermissions'
 
 const route = useRoute()
 const router = useRouter()
@@ -242,12 +243,11 @@ const reviewerAssignmentMembers = ref<ReviewerCandidate[]>([])
 const reviewerAssignmentSelectedUserIds = ref<number[]>([])
 const reviewerAssignmentLoadingMembers = ref(false)
 const reviewerAssignmentSaving = ref(false)
-const isProducer = computed(() => {
-  const userId = appStore.currentUser?.id
-  return Boolean(userId && track.value?.producer_id === userId)
-})
+const viewerCanManageTrackAlbum = computed(() =>
+  track.value ? viewerCanManageAlbum(track.value, appStore.currentUser) : false,
+)
 const canManageReviewAssignments = computed(() =>
-  isProducer.value && currentStep.value?.type === 'review',
+  viewerCanManageTrackAlbum.value && currentStep.value?.type === 'review',
 )
 const isAutomaticReviewerAssignment = computed(() => {
   const step = currentStep.value
@@ -544,7 +544,7 @@ const canConfirmDelivery = computed(() => {
     case 'submitter':
       return isComposerActor(track.value, userId)
     case 'producer':
-      return track.value.producer_id === userId
+      return viewerCanManageTrackAlbum.value
     case 'peer_reviewer':
       return track.value.peer_reviewer_id === userId
     case 'mastering_engineer':
@@ -557,7 +557,7 @@ const canApproveFinal = computed(() => {
   if (!track.value || !masterDelivery.value) return false
   const userId = appStore.currentUser?.id
   if (!userId) return false
-  if (userId === track.value.producer_id) return !masterDelivery.value.producer_approved_at
+  if (viewerCanManageTrackAlbum.value) return !masterDelivery.value.producer_approved_at
   if (isComposerActor(track.value, userId)) return !masterDelivery.value.submitter_approved_at
   return false
 })
@@ -565,13 +565,13 @@ const canRequestReturn = computed(() => {
   if (!track.value) return false
   const userId = appStore.currentUser?.id
   if (!userId) return false
-  return isComposerActor(track.value, userId) && userId !== track.value.producer_id
+  return isComposerActor(track.value, userId) && !viewerCanManageTrackAlbum.value
 })
 const canSeeMasteringSidebar = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId || !track.value) return false
   const isParticipant = isComposerActor(track.value, userId)
-    || userId === track.value.producer_id
+    || viewerCanManageTrackAlbum.value
     || userId === track.value.mastering_engineer_id
   const supportsSidebar = activeVariant.value === 'mastering' || activeVariant.value === 'final_review'
   return isParticipant && supportsSidebar
@@ -604,6 +604,9 @@ const isRevisionAssignee = computed(() => {
   const step = currentStep.value
   if (step?.type === 'revision' && step.assignee_user_id == null && step.assignee_role === 'submitter') {
     return isComposerActor(track.value, userId)
+  }
+  if (step?.type === 'revision' && step.assignee_user_id == null && step.assignee_role === 'producer') {
+    return viewerCanManageTrackAlbum.value
   }
   const assigneeId = revisionAssigneeUserId.value
   return assigneeId != null && assigneeId === userId

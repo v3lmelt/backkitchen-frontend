@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   trackRequestReopenMock: vi.fn(),
   discussionCreateMock: vi.fn(),
   issueUpdateMock: vi.fn(),
+  setVisibilityMock: vi.fn(),
   currentUser: { id: 2 },
   waveformPlayFromMock: vi.fn(),
   waveformSeekToMock: vi.fn(),
@@ -51,6 +52,7 @@ vi.mock('@/api', () => ({
     cancelSourceFollowup: mocks.cancelSourceFollowupMock,
     reopen: mocks.trackReopenMock,
     requestReopen: mocks.trackRequestReopenMock,
+    setVisibility: mocks.setVisibilityMock,
   },
   issueApi: {
     update: mocks.issueUpdateMock,
@@ -338,6 +340,7 @@ describe('TrackDetailView', () => {
     mocks.uploadToR2Mock.mockReset()
     mocks.trackReopenMock.mockReset()
     mocks.trackRequestReopenMock.mockReset()
+    mocks.setVisibilityMock.mockReset()
     mocks.issueUpdateMock.mockReset()
     mocks.waveformPlayFromMock.mockReset()
     mocks.waveformSeekToMock.mockReset()
@@ -348,6 +351,7 @@ describe('TrackDetailView', () => {
     vi.stubGlobal('open', mocks.openMock)
     mocks.trackReopenMock.mockResolvedValue({})
     mocks.trackRequestReopenMock.mockResolvedValue({})
+    mocks.setVisibilityMock.mockResolvedValue({ is_public: true })
     mocks.uploadSourceVersionMock.mockResolvedValue({})
     mocks.createSourceFollowupMock.mockResolvedValue({})
     mocks.decideSourceFollowupMock.mockResolvedValue({})
@@ -785,6 +789,31 @@ describe('TrackDetailView', () => {
 
     expect(wrapper.text()).toContain('Visible to participants only')
     expect(wrapper.findAll('button').some(button => button.text() === 'Make visible to all members')).toBe(true)
+  })
+
+  it('lets manager-flagged viewers control producer-side visibility', async () => {
+    mocks.currentUser = { id: 42 }
+    mocks.trackGetMock.mockResolvedValueOnce(makeTrackDetailResponse({
+      track: {
+        producer_id: 8,
+        submitter_id: 2,
+        viewer_is_album_manager: true,
+        is_public: false,
+      },
+    }))
+    mocks.setVisibilityMock.mockResolvedValueOnce({ is_public: true })
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    const visibilityButton = wrapper.findAll('button').find(button => button.text() === 'Make visible to all members')
+    expect(visibilityButton).toBeTruthy()
+
+    await visibilityButton!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.setVisibilityMock).toHaveBeenCalledWith(7, true)
+    expect(wrapper.text()).toContain('Visible to all members')
   })
 
   it('renders the mastering chat sidebar before the track enters mastering', async () => {

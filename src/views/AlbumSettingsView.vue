@@ -14,7 +14,7 @@ import {
 } from '@/utils/albumCover'
 import type { Album, ChecklistTemplateItem, Invitation, Track, User, WebhookConfig, WebhookDelivery, WorkflowConfig, WorkflowEvent } from '@/types'
 import { Archive, RotateCcw, Upload } from 'lucide-vue-next'
-import { hasAdminRole } from '@/utils/admin'
+import { albumViewerRoleLabel, viewerCanAccessAlbum, viewerCanManageAlbum } from '@/utils/albumPermissions'
 import { formatRelativeTime } from '@/utils/time'
 import { formatWorkflowEvent, workflowEventDotColor } from '@/utils/workflow'
 import { sanitizeWorkflowUserReferences } from '@/utils/workflowConfig'
@@ -229,21 +229,19 @@ async function saveWorkflow(config: WorkflowConfig) {
 }
 
 const isProducerOfAlbum = computed(() => album.value?.producer_id === appStore.currentUser?.id)
-const canManageAlbum = computed(() => isProducerOfAlbum.value || hasAdminRole(appStore.currentUser, 'operator'))
+const canManageAlbum = computed(() => album.value ? viewerCanManageAlbum(album.value, appStore.currentUser) : false)
 const isMasteringEngineerOfAlbum = computed(() => album.value?.mastering_engineer_id === appStore.currentUser?.id)
 const isMemberOfAlbum = computed(() => album.value?.members.some(m => m.user_id === appStore.currentUser?.id) ?? false)
 
-const userRoleInAlbum = computed(() => {
-  if (isProducerOfAlbum.value) return t('roles.producer')
-  if (canManageAlbum.value) return t('roles.admin')
-  if (isMasteringEngineerOfAlbum.value) return t('roles.masteringEngineer')
-  return t('roles.member')
-})
+const userRoleInAlbum = computed(() =>
+  album.value ? albumViewerRoleLabel(album.value, appStore.currentUser, t) : '',
+)
 
 const roleBadgeClass = computed(() => {
   if (isProducerOfAlbum.value) return 'bg-warning-bg text-warning'
-  if (canManageAlbum.value) return 'bg-info-bg text-info'
   if (isMasteringEngineerOfAlbum.value) return 'bg-info-bg text-info'
+  if (album.value?.viewer_is_album_manager === true) return 'bg-success-bg text-success'
+  if (canManageAlbum.value) return 'bg-info-bg text-info'
   return 'bg-border text-foreground'
 })
 
@@ -624,13 +622,7 @@ onMounted(async () => {
     const albumData = await albumApi.get(albumId.value)
     album.value = albumData
 
-    const userId = appStore.currentUser?.id
-    if (!userId) { router.replace('/albums'); return }
-
-    const authorized =
-      albumData.producer_id === userId ||
-      albumData.mastering_engineer_id === userId ||
-      albumData.members.some(m => m.user_id === userId)
+    const authorized = viewerCanAccessAlbum(albumData, appStore.currentUser)
     if (!authorized) { router.replace('/albums'); return }
 
     syncTeamState()

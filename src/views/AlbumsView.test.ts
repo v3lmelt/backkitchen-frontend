@@ -6,6 +6,7 @@ import { mountWithPlugins } from '@/tests/utils'
 const mocks = vi.hoisted(() => ({
   pushMock: vi.fn(),
   listMock: vi.fn(),
+  circleListMock: vi.fn(),
   currentUser: { id: 7, role: 'producer' },
 }))
 
@@ -18,6 +19,9 @@ vi.mock('@/api', () => ({
   API_ORIGIN: '',
   albumApi: {
     list: mocks.listMock,
+  },
+  circleApi: {
+    list: mocks.circleListMock,
   },
 }))
 
@@ -76,6 +80,9 @@ describe('AlbumsView', () => {
   beforeEach(() => {
     mocks.pushMock.mockReset()
     mocks.listMock.mockReset()
+    mocks.circleListMock.mockReset()
+    mocks.currentUser = { id: 7, role: 'producer' }
+    mocks.circleListMock.mockResolvedValue([])
   })
 
   it('shows a retryable error state instead of the empty state when loading fails', async () => {
@@ -118,6 +125,51 @@ describe('AlbumsView', () => {
     const titles = wrapper.findAll('h3').map(node => node.text())
     expect(titles[0]).toBe('Urgent Album')
     expect(titles[1]).toBe('Calm Album')
+  })
+
+  it('keeps manager-flagged circle albums visible with the co-producer role label', async () => {
+    mocks.currentUser = { id: 42, role: 'member' }
+    mocks.listMock.mockResolvedValue([
+      albumFixture(3, 'Circle Managed Album', {
+        producer_id: 1,
+        mastering_engineer_id: 2,
+        members: [{ id: 9, user_id: 3, user: { id: 3, display_name: 'Member' } }],
+        viewer_is_album_manager: true,
+        circle_name: 'Back Kitchen',
+      }),
+    ])
+
+    const wrapper = mountWithPlugins(AlbumsView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Circle Managed Album')
+    expect(wrapper.text()).toContain('Co-producer')
+    expect(wrapper.text()).not.toContain('No Albums')
+  })
+
+  it('shows the new album CTA for a co-producer when their managed circle has no albums yet', async () => {
+    mocks.currentUser = { id: 42, role: 'member' }
+    mocks.listMock.mockResolvedValue([])
+    mocks.circleListMock.mockResolvedValue([
+      {
+        id: 9,
+        name: 'Back Kitchen',
+        description: null,
+        logo_url: null,
+        default_checklist_enabled: true,
+        created_by: 1,
+        member_count: 2,
+        viewer_can_create_album: true,
+      },
+    ])
+
+    const wrapper = mountWithPlugins(AlbumsView)
+    await flushPromises()
+
+    expect(mocks.listMock).toHaveBeenCalled()
+    expect(mocks.circleListMock).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('New Album')
+    expect(wrapper.text()).toContain('No Albums')
   })
 
   it('debounces album search requests', async () => {

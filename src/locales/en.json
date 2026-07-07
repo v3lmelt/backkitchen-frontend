@@ -149,6 +149,7 @@
   "roles": {
     "masteringEngineer": "Mastering Engineer",
     "producer": "Producer",
+    "coProducer": "Co-producer",
     "member": "Member",
     "admin": "Admin"
   },

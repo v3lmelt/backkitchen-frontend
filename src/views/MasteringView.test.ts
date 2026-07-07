@@ -558,6 +558,67 @@ describe('MasteringView', () => {
     expect(wrapper.text()).not.toContain('Confirm My Upload')
   })
 
+  it('lets a non-producer album manager approve final review from the mastering workspace', async () => {
+    mocks.currentUser.id = 42
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
+      track: {
+        submitter_id: 4,
+        mastering_engineer_id: 7,
+        producer_id: 8,
+        viewer_is_album_manager: true,
+        status: 'final_review',
+        workflow_step: {
+          id: 'final_review',
+          label: 'Final Review',
+          type: 'approval',
+          ui_variant: 'final_review',
+          assignee_role: 'producer',
+          order: 1,
+          transitions: { reject_to_mastering: 'mastering' },
+        },
+        current_master_delivery: {
+          id: 21,
+          workflow_cycle: 1,
+          delivery_number: 1,
+          file_path: '/master.wav',
+          uploaded_by_id: 7,
+          confirmed_at: '2024-01-02T12:00:00Z',
+          producer_approved_at: null,
+          submitter_approved_at: '2024-01-02T13:00:00Z',
+          created_at: '2024-01-02T00:00:00Z',
+        },
+      },
+      master_deliveries: [
+        {
+          id: 21,
+          workflow_cycle: 1,
+          delivery_number: 1,
+          file_path: '/master.wav',
+          uploaded_by_id: 7,
+          confirmed_at: '2024-01-02T12:00:00Z',
+          producer_approved_at: null,
+          submitter_approved_at: '2024-01-02T13:00:00Z',
+          created_at: '2024-01-02T00:00:00Z',
+        },
+      ],
+    }))
+
+    const wrapper = mountWithPlugins(MasteringView)
+    await flushPromises()
+
+    expect(wrapper.find('.discussion-panel').exists()).toBe(true)
+
+    await openDeliveryTab(wrapper)
+
+    const approveButton = wrapper.findAll('button').find(button => button.text() === 'Approve Delivery')
+    expect(approveButton).toBeTruthy()
+
+    await approveButton!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.approveFinalReviewMock).toHaveBeenCalledWith(9)
+  })
+
   it('lets the drawer audition final-review issues through the master waveform on the listen tab', async () => {
     mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
       track: {

@@ -292,8 +292,8 @@
         <div class="bg-card border border-error/40 rounded-none p-6 space-y-4">
           <h3 class="text-sm font-mono font-semibold text-error">{{ t('circleDetail.danger.title') }}</h3>
 
-          <!-- Owner: delete circle -->
-          <template v-if="canManageCircle">
+          <!-- Owner/operator: delete circle -->
+          <template v-if="canDeleteCircle">
             <div class="space-y-2">
               <p class="text-sm font-mono font-semibold text-foreground">{{ t('circleDetail.danger.deleteTitle') }}</p>
               <p class="text-xs text-muted-foreground">{{ t('circleDetail.danger.deleteDesc') }}</p>
@@ -469,6 +469,7 @@ const isOwner = computed(() =>
   circle.value ? circle.value.created_by === currentUserId.value : false
 )
 const canEditMemberRoles = computed(() => isOwner.value || hasAdminRole(appStore.currentUser, 'operator'))
+const canDeleteCircle = computed(() => isOwner.value || hasAdminRole(appStore.currentUser, 'operator'))
 const canManageCircle = computed(() =>
   canEditMemberRoles.value || currentCircleMember.value?.role === 'co_producer'
 )

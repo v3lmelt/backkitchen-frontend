@@ -336,6 +336,32 @@ describe('AlbumSettingsView', () => {
     mocks.albumRestoreMock.mockResolvedValue(makeAlbum())
   })
 
+  it('lets viewer manager flag users enter settings and use manager tabs', async () => {
+    mocks.currentUser = { id: 42 }
+    mocks.albumGetMock.mockResolvedValue(makeAlbum({
+      producer_id: 1,
+      mastering_engineer_id: 2,
+      members: [],
+      viewer_is_album_manager: true,
+    }))
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    expect(mocks.replaceMock).not.toHaveBeenCalled()
+    expect(findButtonByText(wrapper, 'Workflow')).toBeTruthy()
+    expect(findButtonByText(wrapper, 'Track Order')).toBeTruthy()
+    expect(findButtonByText(wrapper, 'Archive')).toBeTruthy()
+    expect(findButtonByText(wrapper, 'Webhook')).toBeTruthy()
+    expect(findButtonByText(wrapper, 'Danger Zone')).toBeTruthy()
+
+    await findButtonByText(wrapper, 'Workflow')!.trigger('click')
+    expect(wrapper.find('button.workflow-editor-save').exists()).toBe(true)
+
+    await findButtonByText(wrapper, 'Danger Zone')!.trigger('click')
+    expect(wrapper.text()).toContain('Archive this album')
+  })
+
   it('saves workflow changes and renders migration details', async () => {
     mocks.albumUpdateWorkflowMock.mockResolvedValue({
       ok: true,

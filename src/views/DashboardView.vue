@@ -673,7 +673,7 @@ function openTrack(track: Track) {
               <div class="flex items-center justify-between mb-4">
                 <p class="text-xs text-muted-foreground">{{ albumStatsMap[album.id].total_tracks }} {{ t('dashboard.tracks') }}</p>
                 <button
-                  v-if="album.producer_id === appStore.currentUser?.id && completedCount(album.id) > 0"
+                  v-if="album.viewer_is_album_manager === true && completedCount(album.id) > 0"
                   @click.stop="handleExport(album.id)"
                   :disabled="exportingAlbum === album.id"
                   class="btn-secondary text-xs px-3 py-1"

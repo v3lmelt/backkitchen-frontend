@@ -243,6 +243,44 @@ describe('UploadTrackView', () => {
     expect(submitBtn.attributes('disabled')).toBeUndefined()
   })
 
+  it('allows manager-flagged albums to submit external-only proxy rows', async () => {
+    mocks.appStoreState.currentUser = { id: 99, display_name: 'Kira' }
+    mocks.albumListMock.mockResolvedValue([
+      {
+        id: 1,
+        title: 'Managed Album',
+        producer_id: 100,
+        viewer_is_album_manager: true,
+        members: [],
+      },
+    ])
+    mocks.uploadWithProgressMock.mockResolvedValue({ id: 42 })
+
+    const wrapper = mountWithPlugins(UploadTrackView)
+    await flushPromises()
+
+    const fileInput = wrapper.find('input[type="file"]')
+    const file = new File(['audio'], 'proxy.wav', { type: 'audio/wav' })
+    Object.defineProperty(fileInput.element, 'files', { value: [file] })
+    await fileInput.trigger('change')
+
+    await wrapper.find('input[placeholder="Enter track title"]').setValue('Proxy Track')
+    await wrapper.find('input[placeholder="Artist alias"]').setValue('Offline Composer')
+    await setArtistUid(wrapper, 0, '')
+
+    const submitBtn = wrapper.findAll('button').find(button => button.text().includes('Submit Track'))!
+    expect(submitBtn.attributes('disabled')).toBeUndefined()
+
+    await submitBtn.trigger('click')
+    await flushPromises()
+
+    const formData = mocks.uploadWithProgressMock.mock.calls[0][1] as FormData
+    expect(formData.get('proxy_submission')).toBe('true')
+    expect(formData.get('external_submitter_name')).toBe('Offline Composer')
+    expect(formData.getAll('external_composer_names')).toEqual(['Offline Composer'])
+    expect(formData.getAll('composer_ids')).toEqual([])
+  })
+
   it('keeps manually entered artist UIDs after switching albums', async () => {
     mocks.appStoreState.currentUser = { id: 99, display_name: 'Kira' }
     mocks.albumListMock.mockResolvedValue([

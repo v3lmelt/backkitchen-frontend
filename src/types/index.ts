@@ -132,6 +132,7 @@ export interface Album {
   quick_followup_enabled?: boolean
   producer_id: number | null
   mastering_engineer_id: number | null
+  viewer_is_album_manager?: boolean
   deadline?: string | null
   phase_deadlines?: Record<string, string> | null
   workflow_config?: WorkflowConfig | null
@@ -182,6 +183,7 @@ export interface CircleSummary {
   default_checklist_enabled?: boolean
   created_by: number
   member_count: number
+  viewer_can_create_album?: boolean
 }
 
 export interface InviteCode {
@@ -410,6 +412,7 @@ export interface Track {
   peer_reviewer_id: number | null
   producer_id: number | null
   mastering_engineer_id: number | null
+  viewer_is_album_manager?: boolean
   external_submitter_name?: string | null
   is_proxy_submission?: boolean
   author_notes: string | null

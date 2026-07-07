@@ -10,6 +10,7 @@ import { extractAudioDuration } from '@/utils/audio'
 import { Plus, Upload, X } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
+import { viewerCanManageAlbum } from '@/utils/albumPermissions'
 
 type ArtistEntry = {
   name: string
@@ -80,9 +81,7 @@ const selectedAlbum = computed(() =>
 )
 
 const canProxySubmission = computed(() =>
-  selectedAlbum.value?.producer_id != null
-  && appStore.currentUser?.id != null
-  && selectedAlbum.value.producer_id === appStore.currentUser.id
+  selectedAlbum.value ? viewerCanManageAlbum(selectedAlbum.value, appStore.currentUser) : false,
 )
 
 function currentUserUid(): string {

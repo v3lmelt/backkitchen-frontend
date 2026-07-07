@@ -2,13 +2,14 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { albumApi, API_ORIGIN } from '@/api'
+import { albumApi, circleApi, API_ORIGIN } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Album } from '@/types'
 import { Music, Archive, Search } from 'lucide-vue-next'
 import EmptyState from '@/components/common/EmptyState.vue'
 import AlbumCoverImage from '@/components/common/AlbumCoverImage.vue'
 import { parseUTC } from '@/utils/time'
+import { albumViewerRoleLabel } from '@/utils/albumPermissions'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -19,6 +20,7 @@ const loadError = ref('')
 const activeTab = ref<'active' | 'archived'>('active')
 const searchQuery = ref('')
 const sortMode = ref<'attention' | 'recent' | 'title'>('attention')
+const canCreateAlbum = ref(false)
 
 let albumLoadSerial = 0
 let searchTimer: ReturnType<typeof setTimeout> | null = null
@@ -45,7 +47,10 @@ async function load() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  void load()
+  void loadCreateAccess()
+})
 
 watch(activeTab, () => {
   if (searchTimer) clearTimeout(searchTimer)
@@ -64,15 +69,22 @@ onBeforeUnmount(() => {
   if (searchTimer) clearTimeout(searchTimer)
 })
 
-const myAlbums = computed(() => {
-  const userId = appStore.currentUser?.id
-  if (!userId) return []
-  return albums.value.filter(album =>
-    album.producer_id === userId ||
-    album.mastering_engineer_id === userId ||
-    album.members.some(m => m.user_id === userId)
-  )
-})
+async function loadCreateAccess() {
+  if (!appStore.currentUser) {
+    canCreateAlbum.value = false
+    return
+  }
+  if (appStore.currentUser.role === 'producer') {
+    canCreateAlbum.value = true
+    return
+  }
+  try {
+    const circles = await circleApi.list()
+    canCreateAlbum.value = circles.some(circle => circle.viewer_can_create_album === true)
+  } catch {
+    canCreateAlbum.value = false
+  }
+}
 
 function deadlineInfo(album: Album): { text: string; overdue: boolean } | null {
   if (!album.deadline) return null
@@ -88,7 +100,7 @@ function attentionScore(album: Album): number {
 }
 
 const displayedAlbums = computed(() => {
-  const next = [...myAlbums.value]
+  const next = [...albums.value]
   return next.sort((left, right) => {
     if (sortMode.value === 'title') {
       return left.title.localeCompare(right.title)
@@ -103,20 +115,15 @@ const displayedAlbums = computed(() => {
   })
 })
 
-const isProducer = computed(() => appStore.currentUser?.role === 'producer')
-
 function userRoleInAlbum(album: Album): string {
-  const userId = appStore.currentUser?.id
-  if (!userId) return ''
-  if (album.producer_id === userId) return t('roles.producer')
-  if (album.mastering_engineer_id === userId) return t('roles.masteringEngineer')
-  return t('roles.member')
+  return albumViewerRoleLabel(album, appStore.currentUser, t)
 }
 
 function roleBadgeClass(album: Album): string {
   const userId = appStore.currentUser?.id
   if (album.producer_id === userId) return 'bg-warning-bg text-warning'
   if (album.mastering_engineer_id === userId) return 'bg-info-bg text-info'
+  if (album.viewer_is_album_manager === true) return 'bg-success-bg text-success'
   return 'bg-border text-foreground'
 }
 </script>
@@ -140,7 +147,7 @@ function roleBadgeClass(album: Album): string {
           <option value="recent">{{ t('dashboard.recentUpdates') }}</option>
           <option value="title">{{ t('albumNew.albumTitle') }}</option>
         </select>
-        <RouterLink v-if="isProducer" to="/albums/new" class="btn-primary text-sm">
+        <RouterLink v-if="canCreateAlbum" to="/albums/new" class="btn-primary text-sm">
           {{ t('albums.newAlbum') }}
         </RouterLink>
       </div>

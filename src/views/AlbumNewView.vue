@@ -2,7 +2,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { albumApi, circleApi, userApi } from '@/api'
+import { albumApi, circleApi } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
 import {
@@ -11,7 +11,7 @@ import {
   localizeAlbumCoverValidationError,
   validateAlbumCoverFile,
 } from '@/utils/albumCover'
-import type { CircleSummary, User, WorkflowConfig, WorkflowTemplate } from '@/types'
+import type { Circle, CircleSummary, User, WorkflowConfig, WorkflowTemplate } from '@/types'
 import { ChevronLeft, Upload, ChevronDown, ChevronRight, HelpCircle, BookTemplate, Save, Plus, UserPlus } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
@@ -171,17 +171,24 @@ function partialSetupWarning(message: string) {
   return t('albumNew.coverUploadPartialFailure', { message })
 }
 
+function cacheCircleDetails(circle: Circle) {
+  const members = circle.members.map(member => member.user)
+  circleMemberCache.set(circle.id, members)
+  circleChecklistDefaults.set(circle.id, circle.default_checklist_enabled ?? false)
+}
+
+
 async function loadInitialOptions() {
-  if (appStore.currentUser?.role !== 'producer') {
+  if (!appStore.currentUser) {
     router.replace('/albums')
     return
   }
   loading.value = true
   loadError.value = ''
   try {
-    const [userList, circleList] = await Promise.all([userApi.list(), circleApi.list()])
-    allUsers.value = userList
-    circles.value = circleList
+    const circleList = await circleApi.list()
+    allUsers.value = []
+    circles.value = circleList.filter(circle => circle.viewer_can_create_album === true)
   } catch (error: any) {
     allUsers.value = []
     circleMemberUsers.value = []
@@ -227,12 +234,10 @@ async function loadCircleMembers(circleId: number) {
     const circle = await circleApi.get(circleId)
     if (requestId !== latestCircleMembersRequest || selectedCircleId.value !== circleId) return
 
-    const members = circle.members.map(member => member.user)
-    circleMemberCache.set(circleId, members)
-    circleChecklistDefaults.set(circleId, circle.default_checklist_enabled ?? false)
+    cacheCircleDetails(circle)
     selectedCircleDefaultChecklistEnabled.value = circle.default_checklist_enabled ?? false
-    circleMemberUsers.value = members
-    sanitizeTeamState(members)
+    circleMemberUsers.value = circleMemberCache.get(circleId) ?? []
+    sanitizeTeamState(circleMemberUsers.value)
   } catch (error: any) {
     if (requestId !== latestCircleMembersRequest || selectedCircleId.value !== circleId) return
 

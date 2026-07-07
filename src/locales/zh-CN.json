@@ -149,6 +149,7 @@
   "roles": {
     "masteringEngineer": "母带师",
     "producer": "主催",
+    "coProducer": "副主催",
     "member": "成员",
     "admin": "管理员"
   },

@@ -35,6 +35,7 @@ import { useIssuePreviewPlayback, type PreviewAction } from '@/composables/useIs
 import { useTrackStore } from '@/stores/tracks'
 import { emptyMentionCandidates } from '@/utils/mentionCandidates'
 import { extractAudioDuration } from '@/utils/audio'
+import { viewerCanManageAlbum } from '@/utils/albumPermissions'
 
 const route = useRoute()
 const router = useRouter()
@@ -709,12 +710,14 @@ const selectedCompareVersionNotes = computed(() => {
   return sv?.revision_notes ?? null
 })
 
-const isProducer = computed(() => track.value?.producer_id === appStore.currentUser?.id)
+const viewerCanManageTrackAlbum = computed(() =>
+  track.value ? viewerCanManageAlbum(track.value, appStore.currentUser) : false,
+)
 const canSeeMastering = computed(() => {
   const userId = appStore.currentUser?.id
   if (!userId || !track.value) return false
   return isComposerActor(track.value, userId)
-    || userId === track.value.producer_id
+    || viewerCanManageTrackAlbum.value
     || userId === track.value.mastering_engineer_id
 })
 const hasMasteringHistory = computed(() => Boolean(track.value?.current_master_delivery))
@@ -739,7 +742,7 @@ const togglingVisibility = ref(false)
 // ── Edit metadata ─────────────────────────────────────────────────────────
 const canEditMetadata = computed(() => {
   if (!track.value || !appStore.currentUser) return false
-  return isComposerActor(track.value, appStore.currentUser.id) || isProducer.value
+  return isComposerActor(track.value, appStore.currentUser.id) || viewerCanManageTrackAlbum.value
 })
 const editingMetadata = ref(false)
 const metadataForm = ref({ title: '', artist: '', bpm: '', original_title: '', original_artist: '' })
@@ -846,7 +849,7 @@ async function archiveTrack() {
 
 // Reassign reviewer
 const canReassignReviewer = computed(() =>
-  isProducer.value && track.value?.workflow_step?.type === 'review'
+  viewerCanManageTrackAlbum.value && track.value?.workflow_step?.type === 'review'
 )
 const isAutoAssign = computed(() => {
   const step = track.value?.workflow_step
@@ -1027,7 +1030,7 @@ const sourceFollowupTargetStages = computed<WorkflowStepDef[]>(() => {
   return steps
     .filter(step => step.type !== 'revision')
     .filter(step => firstDeliveryOrder == null || step.order <= firstDeliveryOrder)
-    .filter(step => isProducer.value || sourceFollowupTargetIsMasteringRelated(step))
+    .filter(step => viewerCanManageTrackAlbum.value || sourceFollowupTargetIsMasteringRelated(step))
     .slice()
     .sort((a, b) => a.order - b.order)
 })
@@ -1175,8 +1178,8 @@ const composerProxyActorDisplay = computed(() => {
   if (!track.value || hasPlatformComposers.value || !hasExternalComposers.value) return ''
   return track.value.proxy_uploader?.display_name ?? track.value.submitter?.display_name ?? '--'
 })
-const canDirectReopen = computed(() => track.value?.status === 'completed' && (isProducer.value || isMasteringEngineer.value))
-const canRequestReopen = computed(() => track.value?.status === 'completed' && isSubmitter.value && !isProducer.value && !isMasteringEngineer.value)
+const canDirectReopen = computed(() => track.value?.status === 'completed' && (viewerCanManageTrackAlbum.value || isMasteringEngineer.value))
+const canRequestReopen = computed(() => track.value?.status === 'completed' && isSubmitter.value && !viewerCanManageTrackAlbum.value && !isMasteringEngineer.value)
 const completedProcessMode = ref<'reopen' | 'source_followup'>('reopen')
 const completedProcessButtonLabel = computed(() => {
   if (track.value?.status === 'completed' && canRequestSourceFollowup.value) return t('trackDetail.processCompleted')
@@ -2032,8 +2035,8 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
           </div>
         </Teleport>
 
-        <!-- Visibility toggle (producer only, non-archived) -->
-        <div v-if="isProducer && !track.archived_at" class="pt-2">
+        <!-- Visibility toggle (album manager only, non-archived) -->
+        <div v-if="viewerCanManageTrackAlbum && !track.archived_at" class="pt-2">
           <div class="flex items-center justify-between gap-4">
             <div class="space-y-1">
               <span class="text-xs text-muted-foreground">{{ t('trackDetail.visibility') }}</span>
@@ -2051,8 +2054,8 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
           </div>
         </div>
 
-        <!-- Archive (producer only) -->
-        <div v-if="isProducer && !track.archived_at" class="pt-2">
+        <!-- Archive (album manager only) -->
+        <div v-if="viewerCanManageTrackAlbum && !track.archived_at" class="pt-2">
           <button
             v-if="!showArchiveConfirm"
             @click="showArchiveConfirm = true"
