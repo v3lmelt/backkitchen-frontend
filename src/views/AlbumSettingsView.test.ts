@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   userListMock: vi.fn(),
   circleGetMock: vi.fn(),
   trackRestoreMock: vi.fn(),
+  trackForceStatusMock: vi.fn(),
   toastSuccessMock: vi.fn(),
   toastErrorMock: vi.fn(),
   currentUser: { id: 1 },
@@ -70,6 +71,7 @@ vi.mock('@/api', () => ({
   },
   trackApi: {
     restore: mocks.trackRestoreMock,
+    forceStatus: mocks.trackForceStatusMock,
   },
   checklistApi: {
     getTemplate: mocks.checklistGetTemplateMock,
@@ -195,6 +197,7 @@ function makeAlbum(overrides: Record<string, unknown> = {}) {
     cover_image: null,
     producer_id: 1,
     mastering_engineer_id: 2,
+    viewer_can_force_track_status: true,
     workflow_config: makeWorkflowConfig(),
     producer,
     mastering_engineer: masteringEngineer,
@@ -272,6 +275,7 @@ describe('AlbumSettingsView', () => {
     mocks.circleGetMock.mockReset()
     mocks.userListMock.mockReset()
     mocks.trackRestoreMock.mockReset()
+    mocks.trackForceStatusMock.mockReset()
     mocks.toastSuccessMock.mockReset()
     mocks.toastErrorMock.mockReset()
     mocks.currentUser = { id: 1 }
@@ -332,6 +336,7 @@ describe('AlbumSettingsView', () => {
     })
     mocks.userListMock.mockResolvedValue([makeUser(1, 'Producer'), makeUser(3, 'Member')])
     mocks.trackRestoreMock.mockResolvedValue(makeTrack(91, 'Archived Track'))
+    mocks.trackForceStatusMock.mockResolvedValue(makeTrack(11, 'Track A', { status: 'peer_review' }))
     mocks.albumArchiveMock.mockResolvedValue(makeAlbum({ archived_at: '2024-01-05T00:00:00Z' }))
     mocks.albumRestoreMock.mockResolvedValue(makeAlbum())
   })
@@ -360,6 +365,86 @@ describe('AlbumSettingsView', () => {
 
     await findButtonByText(wrapper, 'Danger Zone')!.trigger('click')
     expect(wrapper.text()).toContain('Archive this album')
+  })
+
+  it('shows progress tab for viewer managers', async () => {
+    mocks.currentUser = { id: 42 }
+    mocks.albumGetMock.mockResolvedValue(makeAlbum({
+      producer_id: 1,
+      mastering_engineer_id: 2,
+      members: [],
+      viewer_is_album_manager: true,
+    }))
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    expect(findButtonByText(wrapper, 'Progress')).toBeTruthy()
+  })
+
+  it('does not show progress tab for non-managers', async () => {
+    mocks.currentUser = { id: 3 }
+    mocks.albumGetMock.mockResolvedValue(makeAlbum({
+      viewer_is_album_manager: false,
+      viewer_can_force_track_status: false,
+    }))
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    expect(findButtonByText(wrapper, 'Progress')).toBeUndefined()
+  })
+
+  it('force-updates a track from album settings progress tab', async () => {
+    mocks.albumTracksMock.mockResolvedValue([
+      makeTrack(11, 'Track A', { status: 'intake', track_number: 1 }),
+    ])
+    mocks.trackForceStatusMock.mockResolvedValue(
+      makeTrack(11, 'Track A', { status: 'peer_review', track_number: 1 }),
+    )
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'Progress')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.albumTracksMock).toHaveBeenCalledWith(5)
+
+    const selects = wrapper.findAll('select')
+    await selects[0].setValue('11')
+    await selects[1].setValue('peer_review')
+    await wrapper.find('input[placeholder="Record why this progress change is needed…"]').setValue('Need another review')
+
+    await findButtonByText(wrapper, 'Update progress')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.trackForceStatusMock).toHaveBeenCalledWith(11, {
+      new_status: 'peer_review',
+      reason: 'Need another review',
+    })
+    expect(mocks.toastSuccessMock).toHaveBeenCalledWith('Track progress updated')
+    expect(wrapper.text()).toContain('Track A · Peer Review')
+  })
+
+  it('does not submit when target equals current status', async () => {
+    mocks.albumTracksMock.mockResolvedValue([
+      makeTrack(11, 'Track A', { status: 'intake', track_number: 1 }),
+    ])
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'Progress')!.trigger('click')
+    await flushPromises()
+
+    const selects = wrapper.findAll('select')
+    await selects[0].setValue('11')
+    await selects[1].setValue('intake')
+
+    const updateButton = findButtonByText(wrapper, 'Update progress')!
+    expect(updateButton.attributes('disabled')).toBeDefined()
+    expect(mocks.trackForceStatusMock).not.toHaveBeenCalled()
   })
 
   it('saves workflow changes and renders migration details', async () => {

@@ -662,7 +662,8 @@
       "reviewer_reassigned": "{name} reassigned reviewers",
       "delivery_confirmed": "{name} confirmed the delivery",
       "track_archived": "{name} archived the track",
-      "track_restored": "{name} restored the track"
+      "track_restored": "{name} restored the track",
+      "track_force_status": "{name} manually adjusted track progress"
     },
     "timeline": {
       "issueCreated": "{name} created issue #{num}",
@@ -1418,7 +1419,8 @@
       "archive": "Archive",
       "webhook": "Webhook",
       "danger": "Danger Zone",
-      "activity": "Activity"
+      "activity": "Activity",
+      "progress": "Progress"
     },
     "info": {
       "coverHint": "Click to change cover",
@@ -1500,6 +1502,22 @@
       "title": "Activity Feed",
       "empty": "No activity yet",
       "loadMore": "Load More"
+    },
+    "progress": {
+      "title": "Track Progress Management",
+      "description": "Producers and co-producers can manually adjust the current stage for tracks in this circle album. This entry does not reject tracks; use workflow reject/return actions for rejection.",
+      "track": "Track",
+      "targetStatus": "Target stage",
+      "reason": "Reason (optional)",
+      "reasonPlaceholder": "Record why this progress change is needed…",
+      "selectTrack": "Select track",
+      "selectStatus": "Select target stage",
+      "save": "Update progress",
+      "saving": "Updating…",
+      "saved": "Track progress updated",
+      "failed": "Failed to update progress",
+      "noTracks": "No adjustable tracks in this album",
+      "sameStatusHint": "Choose a target stage different from the current stage."
     }
   },
   "circles": {
@@ -1858,7 +1876,8 @@
       "track_restored": "Track restored",
       "track_deleted": "Track deleted",
       "admin_force_status": "Admin forced status",
-      "admin_reassign": "Admin reassigned members"
+      "admin_reassign": "Admin reassigned members",
+      "track_force_status": "Track progress manually adjusted"
     },
     "auditActions": {
       "user_updated": "User updated",

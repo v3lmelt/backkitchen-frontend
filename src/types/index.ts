@@ -133,6 +133,7 @@ export interface Album {
   producer_id: number | null
   mastering_engineer_id: number | null
   viewer_is_album_manager?: boolean
+  viewer_can_force_track_status?: boolean
   deadline?: string | null
   phase_deadlines?: Record<string, string> | null
   workflow_config?: WorkflowConfig | null

@@ -552,6 +552,11 @@ export const trackApi = {
         revision_type: revisionType ?? null,
       }),
     }),
+  forceStatus: (trackId: number, data: { new_status: string; reason?: string }) =>
+    request<Track>(`/tracks/${trackId}/force-status`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   // Stage assignments
   assignReviewer: (trackId: number, userIds: number[]) =>
     request<StageAssignment[]>(`/tracks/${trackId}/assign-reviewer`, {

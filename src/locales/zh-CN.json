@@ -661,7 +661,8 @@
       "reviewer_reassigned": "{name} 重新分配了评审人",
       "delivery_confirmed": "{name} 确认了交付物",
       "track_archived": "{name} 归档了曲目",
-      "track_restored": "{name} 恢复了曲目"
+      "track_restored": "{name} 恢复了曲目",
+      "track_force_status": "{name} 手动调整了曲目进度"
     },
     "timeline": {
       "issueCreated": "{name} 创建了问题 #{num}",
@@ -1465,7 +1466,8 @@
       "archive": "归档管理",
       "webhook": "Webhook",
       "danger": "危险区域",
-      "activity": "活动记录"
+      "activity": "活动记录",
+      "progress": "进度管理"
     },
     "info": {
       "coverHint": "点击更换封面图",
@@ -1547,6 +1549,22 @@
       "title": "活动记录",
       "empty": "暂无活动记录",
       "loadMore": "加载更多"
+    },
+    "progress": {
+      "title": "曲目进度管理",
+      "description": "主催和副主催可以在本社团专辑内手动调整曲目的当前阶段。此入口不会执行拒绝操作；如需拒绝，请使用工作流里的打回/拒绝动作。",
+      "track": "曲目",
+      "targetStatus": "目标阶段",
+      "reason": "原因（可选）",
+      "reasonPlaceholder": "记录这次进度调整的原因…",
+      "selectTrack": "选择曲目",
+      "selectStatus": "选择目标阶段",
+      "save": "变更进度",
+      "saving": "变更中…",
+      "saved": "曲目进度已变更",
+      "failed": "进度变更失败",
+      "noTracks": "该专辑暂无可调整的曲目",
+      "sameStatusHint": "请选择不同于当前阶段的目标。"
     }
   },
   "circles": {
@@ -1861,7 +1879,8 @@
       "track_restored": "曲目已恢复",
       "track_deleted": "曲目已删除",
       "admin_force_status": "管理员强制改状态",
-      "admin_reassign": "管理员重新分配成员"
+      "admin_reassign": "管理员重新分配成员",
+      "track_force_status": "手动调整曲目进度"
     },
     "auditActions": {
       "user_updated": "更新用户",

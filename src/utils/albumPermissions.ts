@@ -11,6 +11,14 @@ export function viewerCanManageAlbum(
   return entity.viewer_is_album_manager === true || entity.producer_id === user.id || hasAdminRole(user, 'operator')
 }
 
+export function viewerCanForceTrackStatus(
+  entity: { viewer_can_force_track_status?: boolean },
+  user: User | null | undefined,
+): boolean {
+  if (!user) return false
+  return entity.viewer_can_force_track_status === true || hasAdminRole(user, 'operator')
+}
+
 export function viewerCanAccessAlbum(album: Album, user: User | null | undefined): boolean {
   if (!user) return false
   return (

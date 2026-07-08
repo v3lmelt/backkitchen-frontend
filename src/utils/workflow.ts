@@ -140,6 +140,7 @@ export function workflowEventDotColor(eventType: string): string {
   if (eventType.includes('issue')) return 'bg-warning'
   if (eventType.includes('revision') || eventType.includes('returned')) return 'bg-warning'
   if (eventType.includes('source_followup')) return 'bg-warning'
+  if (eventType.includes('force_status')) return 'bg-info'
   if (eventType.includes('upload') || eventType.includes('deliver')) return 'bg-info'
   return 'bg-muted-foreground'
 }

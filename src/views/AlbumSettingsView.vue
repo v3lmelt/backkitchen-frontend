@@ -14,9 +14,9 @@ import {
 } from '@/utils/albumCover'
 import type { Album, ChecklistTemplateItem, Invitation, Track, User, WebhookConfig, WebhookDelivery, WorkflowConfig, WorkflowEvent } from '@/types'
 import { Archive, RotateCcw, Upload } from 'lucide-vue-next'
-import { albumViewerRoleLabel, viewerCanAccessAlbum, viewerCanManageAlbum } from '@/utils/albumPermissions'
+import { albumViewerRoleLabel, viewerCanAccessAlbum, viewerCanForceTrackStatus, viewerCanManageAlbum } from '@/utils/albumPermissions'
 import { formatRelativeTime } from '@/utils/time'
-import { formatWorkflowEvent, workflowEventDotColor } from '@/utils/workflow'
+import { formatWorkflowEvent, translateStepLabel, translateWorkflowStatusLabel, workflowEventDotColor } from '@/utils/workflow'
 import { sanitizeWorkflowUserReferences } from '@/utils/workflowConfig'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
@@ -26,7 +26,7 @@ import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import AlbumCoverImage from '@/components/common/AlbumCoverImage.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
@@ -47,6 +47,7 @@ type AlbumSettingsTab =
   | 'activity'
   | 'checklist'
   | 'workflow'
+  | 'progress'
   | 'order'
   | 'archive'
   | 'webhook'
@@ -129,6 +130,7 @@ const COMMON_ACTIVITY_EVENT_TYPES = [
   'workflow_migration',
   'track_reopened',
   'reviewer_reassigned',
+  'track_force_status',
 ]
 
 // Checklist state
@@ -151,6 +153,11 @@ const tracks = ref<Track[]>([])
 const loadingTracks = ref(false)
 const savingOrder = ref(false)
 const orderMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
+const progressTrackId = ref<number | null>(null)
+const progressStatus = ref('')
+const progressReason = ref('')
+const progressSubmitting = ref(false)
+const progressMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 
 // Archived tracks state
 const archivedTracks = ref<Track[]>([])
@@ -230,6 +237,7 @@ async function saveWorkflow(config: WorkflowConfig) {
 
 const isProducerOfAlbum = computed(() => album.value?.producer_id === appStore.currentUser?.id)
 const canManageAlbum = computed(() => album.value ? viewerCanManageAlbum(album.value, appStore.currentUser) : false)
+const canManageProgress = computed(() => album.value ? viewerCanForceTrackStatus(album.value, appStore.currentUser) : false)
 const isMasteringEngineerOfAlbum = computed(() => album.value?.mastering_engineer_id === appStore.currentUser?.id)
 const isMemberOfAlbum = computed(() => album.value?.members.some(m => m.user_id === appStore.currentUser?.id) ?? false)
 
@@ -263,6 +271,7 @@ const availableTabs = computed(() => {
   }
   if (canManageAlbum.value) {
     tabs.push({ key: 'workflow', label: t('albumSettings.tabs.workflow') })
+    if (canManageProgress.value) tabs.push({ key: 'progress', label: t('albumSettings.tabs.progress') })
     tabs.push({ key: 'order', label: t('albumSettings.tabs.order') })
     tabs.push({ key: 'archive', label: t('albumSettings.tabs.archive') })
     tabs.push({ key: 'webhook', label: t('albumSettings.tabs.webhook') })
@@ -286,6 +295,28 @@ const workflowTabLoading = computed(() =>
 const orderTabLoading = computed(() =>
   !tabDataLoaded.tracks &&
   loadingTracks.value
+)
+
+const progressTrack = computed(() => tracks.value.find(track => track.id === progressTrackId.value) ?? null)
+
+const progressStatusOptions = computed<SelectOption[]>(() => {
+  const options = (album.value?.workflow_config?.steps ?? []).map(step => ({
+    value: step.id,
+    label: translateStepLabel(step, t),
+  }))
+  if (!options.some(option => option.value === 'completed')) {
+    options.push({ value: 'completed', label: t('status.completed') })
+  }
+  return options
+})
+
+const canSubmitProgressChange = computed(() =>
+  Boolean(
+    progressTrack.value &&
+    progressStatus.value &&
+    progressStatus.value !== progressTrack.value.status &&
+    !progressSubmitting.value,
+  ),
 )
 
 const activityEventOptions = computed<SelectOption[]>(() => {
@@ -580,6 +611,13 @@ async function ensureTabDataLoaded(tab: AlbumSettingsTab) {
   if (tab === 'checklist') {
     if ((canManageAlbum.value || isMemberOfAlbum.value) && !tabDataLoaded.checklist) {
       tabDataLoaded.checklist = await loadChecklistTemplate(album.value.id)
+    }
+    return
+  }
+
+  if (tab === 'progress') {
+    if (canManageProgress.value && !tabDataLoaded.tracks) {
+      tabDataLoaded.tracks = await loadTrackList(album.value.id)
     }
     return
   }
@@ -988,6 +1026,34 @@ async function resetTemplate() {
     templateError.value = err.message || t('settings.templateSaveFailed')
   } finally {
     savingTemplate.value = false
+  }
+}
+
+function progressTrackOptionLabel(track: Track): string {
+  const prefix = track.track_number ? `${track.track_number}. ` : ''
+  const statusLabel = translateWorkflowStatusLabel(track.status, album.value?.workflow_config ?? null, t, te)
+  return `${prefix}${track.title} · ${statusLabel}`
+}
+
+async function submitProgressChange() {
+  if (!progressTrack.value || !progressStatus.value) return
+  progressSubmitting.value = true
+  progressMessage.value = null
+  try {
+    const updated = await trackApi.forceStatus(progressTrack.value.id, {
+      new_status: progressStatus.value,
+      reason: progressReason.value,
+    })
+    tracks.value = tracks.value.map(track => track.id === updated.id ? updated : track)
+    progressStatus.value = ''
+    progressReason.value = ''
+    progressMessage.value = { type: 'success', text: t('albumSettings.progress.saved') }
+    toastSuccess(t('albumSettings.progress.saved'))
+  } catch (e: any) {
+    progressMessage.value = { type: 'error', text: e.message || t('albumSettings.progress.failed') }
+    toastError(e.message || t('albumSettings.progress.failed'))
+  } finally {
+    progressSubmitting.value = false
   }
 }
 
@@ -1761,6 +1827,70 @@ async function refreshDeliveries() {
                 {{ item.required ? t('settings.required') : t('settings.optional') }}
               </span>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Track progress tab (manager only) -->
+      <div v-else-if="activeTab === 'progress'" class="card space-y-4">
+        <div class="space-y-1">
+          <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('albumSettings.progress.title') }}</h2>
+          <p class="text-xs text-muted-foreground">{{ t('albumSettings.progress.description') }}</p>
+        </div>
+        <template v-if="orderTabLoading && tracks.length === 0">
+          <p class="text-sm text-muted-foreground py-4 text-center">{{ t('common.loading') }}</p>
+        </template>
+        <p v-else-if="tracks.length === 0" class="text-sm text-muted-foreground py-4 text-center">
+          {{ t('albumSettings.progress.noTracks') }}
+        </p>
+        <div v-else class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="space-y-1">
+              <span class="block text-xs text-muted-foreground">{{ t('albumSettings.progress.track') }}</span>
+              <select v-model.number="progressTrackId" class="select-field w-full">
+                <option :value="null" disabled>{{ t('albumSettings.progress.selectTrack') }}</option>
+                <option v-for="track in tracks" :key="track.id" :value="track.id">
+                  {{ progressTrackOptionLabel(track) }}
+                </option>
+              </select>
+            </label>
+            <label class="space-y-1">
+              <span class="block text-xs text-muted-foreground">{{ t('albumSettings.progress.targetStatus') }}</span>
+              <select v-model="progressStatus" class="select-field w-full">
+                <option value="" disabled>{{ t('albumSettings.progress.selectStatus') }}</option>
+                <option v-for="option in progressStatusOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+          </div>
+          <label class="block space-y-1">
+            <span class="block text-xs text-muted-foreground">{{ t('albumSettings.progress.reason') }}</span>
+            <input
+              v-model="progressReason"
+              class="input-field w-full"
+              :placeholder="t('albumSettings.progress.reasonPlaceholder')"
+            />
+          </label>
+          <p v-if="progressTrack && progressStatus === progressTrack.status" class="text-xs text-muted-foreground">
+            {{ t('albumSettings.progress.sameStatusHint') }}
+          </p>
+          <div class="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              class="btn-primary text-sm"
+              :disabled="!canSubmitProgressChange"
+              @click="submitProgressChange"
+            >
+              {{ progressSubmitting ? t('albumSettings.progress.saving') : t('albumSettings.progress.save') }}
+            </button>
+            <span
+              v-if="progressMessage"
+              class="text-xs"
+              :class="progressMessage.type === 'success' ? 'text-success' : 'text-error'"
+            >
+              {{ progressMessage.text }}
+            </span>
           </div>
         </div>
       </div>
