@@ -15,7 +15,9 @@ export function isComposerActor(track: Track | null | undefined, userId: number 
   if (!track || userId == null) return false
   if (isTrackComposer(track, userId)) return true
   if (trackComposerIds(track).length > 0) return false
-  if (externalComposerDisplayNames(track).length > 0) return track.producer_id === userId
+  if (externalComposerDisplayNames(track).length > 0) {
+    return (track.proxy_uploader_id ?? track.producer_id ?? track.submitter_id) === userId
+  }
   return track.submitter_id === userId
 }
 

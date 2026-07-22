@@ -1,5 +1,5 @@
 import type { Issue, StageAssignment, Track } from '@/types'
-import { isTrackComposer } from '@/utils/trackComposers'
+import { isComposerActor } from '@/utils/trackComposers'
 
 const REVISION_REQUESTED_CANCEL_REASON = 'revision_requested'
 
@@ -9,6 +9,32 @@ function phaseAliases(phase: string): Set<string> {
   if (phase === 'mastering') return new Set(['mastering'])
   if (phase === 'final_review') return new Set(['final_review'])
   return new Set([phase])
+}
+
+function assignmentReviewerIdsForPhase(phase: string, assignments: StageAssignment[]): number[] {
+  const aliases = phaseAliases(phase)
+  return Array.from(new Set(
+    assignments
+      .filter(assignment =>
+        aliases.has(assignment.stage_id)
+        && (
+          assignment.status !== 'cancelled'
+          || assignment.cancellation_reason === REVISION_REQUESTED_CANCEL_REASON
+        ),
+      )
+      .map(assignment => assignment.user_id),
+  ))
+}
+
+function canCurrentViewerUseAlbumManagerFallback(
+  track: Track,
+  phase: string,
+  assignments: StageAssignment[],
+): boolean {
+  if (!track.viewer_is_album_manager || assignmentReviewerIdsForPhase(phase, assignments).length > 0) {
+    return false
+  }
+  return phase === 'producer' || phase === 'producer_gate' || phase === 'final_review'
 }
 
 function assignmentTime(assignment: StageAssignment): number {
@@ -47,18 +73,7 @@ export function reviewerIdsForPhase(
 ): number[] {
   if (!track) return []
 
-  const aliases = phaseAliases(phase)
-  const assignmentReviewerIds = Array.from(new Set(
-    assignments
-      .filter(assignment =>
-        aliases.has(assignment.stage_id)
-        && (
-          assignment.status !== 'cancelled'
-          || assignment.cancellation_reason === REVISION_REQUESTED_CANCEL_REASON
-        ),
-      )
-      .map(assignment => assignment.user_id),
-  ))
+  const assignmentReviewerIds = assignmentReviewerIdsForPhase(phase, assignments)
   if (assignmentReviewerIds.length > 0) return assignmentReviewerIds
 
   switch (phase) {
@@ -104,7 +119,8 @@ export function canUserReviewIssue(
 ): boolean {
   if (!userId || !track) return false
   if (userId === issue.author_id) return true
-  return reviewerIdsForIssue(track, issue, assignments).includes(userId)
+  if (reviewerIdsForIssue(track, issue, assignments).includes(userId)) return true
+  return canCurrentViewerUseAlbumManagerFallback(track, issue.phase, assignments)
 }
 
 export function canUserChangeIssueStatus(
@@ -115,7 +131,9 @@ export function canUserChangeIssueStatus(
 ): boolean {
   if (!userId || !track) return false
   if (issue.phase !== 'final_review' && userId === issue.author_id) return true
-  return statusHandlerIdsForIssue(track, issue, assignments).includes(userId)
+  if (statusHandlerIdsForIssue(track, issue, assignments).includes(userId)) return true
+  return issue.phase !== 'final_review'
+    && canCurrentViewerUseAlbumManagerFallback(track, issue.phase, assignments)
 }
 
 export function canUserSubmitIssueStatus(
@@ -124,5 +142,5 @@ export function canUserSubmitIssueStatus(
   issue: Issue,
 ): boolean {
   if (!userId || !track) return false
-  return issue.phase !== 'final_review' && isTrackComposer(track, userId)
+  return issue.phase !== 'final_review' && isComposerActor(track, userId)
 }

@@ -118,7 +118,20 @@ describe('trackComposers', () => {
     expect(externalComposerDisplayText(track)).toBe('Guest A / Guest B')
   })
 
-  it('treats the producer as composer actor only for external-only tracks', () => {
+  it('uses the proxy uploader for external-only tracks', () => {
+    const track = makeTrack({
+      composer_ids: [],
+      composers: [],
+      external_composer_names: ['Offline'],
+      proxy_uploader_id: 50,
+      producer_id: 30,
+    })
+
+    expect(isComposerActor(track, 50)).toBe(true)
+    expect(isComposerActor(track, 30)).toBe(false)
+  })
+
+  it('falls back to the producer for legacy external-only tracks', () => {
     const track = makeTrack({
       composer_ids: [],
       composers: [],
