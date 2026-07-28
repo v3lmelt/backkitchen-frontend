@@ -11,12 +11,37 @@ function phaseAliases(phase: string): Set<string> {
   return new Set([phase])
 }
 
-function assignmentReviewerIdsForPhase(phase: string, assignments: StageAssignment[]): number[] {
+function workflowStepPhase(step: NonNullable<Track['workflow_step']>): string {
+  if (step.ui_variant === 'peer_review' || step.id === 'peer_review') return 'peer'
+  if (step.ui_variant === 'producer_gate' || step.id === 'producer_gate') return 'producer'
+  if (step.ui_variant === 'mastering' || step.id === 'mastering') return 'mastering'
+  if (step.ui_variant === 'final_review' || step.id === 'final_review') return 'final_review'
+  return step.id
+}
+
+function assignmentStageIdsForPhase(track: Track, phase: string): Set<string> {
   const aliases = phaseAliases(phase)
+  const step = track.workflow_step
+  if (
+    step
+    && step.type === 'review'
+    && (aliases.has(step.id) || aliases.has(workflowStepPhase(step)))
+  ) {
+    aliases.add(step.id)
+  }
+  return aliases
+}
+
+function assignmentReviewerIdsForPhase(
+  track: Track,
+  phase: string,
+  assignments: StageAssignment[],
+): number[] {
+  const stageIds = assignmentStageIdsForPhase(track, phase)
   return Array.from(new Set(
     assignments
       .filter(assignment =>
-        aliases.has(assignment.stage_id)
+        stageIds.has(assignment.stage_id)
         && (
           assignment.status !== 'cancelled'
           || assignment.cancellation_reason === REVISION_REQUESTED_CANCEL_REASON
@@ -31,7 +56,7 @@ function canCurrentViewerUseAlbumManagerFallback(
   phase: string,
   assignments: StageAssignment[],
 ): boolean {
-  if (!track.viewer_is_album_manager || assignmentReviewerIdsForPhase(phase, assignments).length > 0) {
+  if (!track.viewer_is_album_manager || assignmentReviewerIdsForPhase(track, phase, assignments).length > 0) {
     return false
   }
   return phase === 'producer' || phase === 'producer_gate' || phase === 'final_review'
@@ -73,7 +98,7 @@ export function reviewerIdsForPhase(
 ): number[] {
   if (!track) return []
 
-  const assignmentReviewerIds = assignmentReviewerIdsForPhase(phase, assignments)
+  const assignmentReviewerIds = assignmentReviewerIdsForPhase(track, phase, assignments)
   if (assignmentReviewerIds.length > 0) return assignmentReviewerIds
 
   switch (phase) {

@@ -204,6 +204,31 @@ describe('reviewAssignments', () => {
     expect(canUserChangeIssueStatus(60, track, issue, assignments)).toBe(true)
   })
 
+  it('recognizes explicit reviewers on custom producer review stages', () => {
+    const track = makeTrack({
+      status: 'producer_quality_gate',
+      viewer_is_album_manager: true,
+      workflow_step: {
+        id: 'producer_quality_gate',
+        label: 'Producer Quality Gate',
+        type: 'review',
+        ui_variant: 'producer_gate',
+        assignee_role: 'producer',
+        order: 0,
+        transitions: {},
+        assignment_mode: 'manual',
+      },
+    })
+    const issue = makeIssue({ phase: 'producer', author_id: 40 })
+    const assignments = [
+      makeAssignment({ stage_id: 'producer_quality_gate', user_id: 60 }),
+    ]
+
+    expect(canUserReviewIssue(50, track, issue, assignments)).toBe(false)
+    expect(canUserChangeIssueStatus(50, track, issue, assignments)).toBe(false)
+    expect(canUserChangeIssueStatus(60, track, issue, assignments)).toBe(true)
+  })
+
   it('ignores membership-revoked assignments for the album-manager fallback', () => {
     const track = makeTrack({
       status: 'producer_gate',
