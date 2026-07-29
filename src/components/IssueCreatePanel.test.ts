@@ -69,6 +69,8 @@ describe('IssueCreatePanel', () => {
     vm.handleClick(1.5)
     await wrapper.vm.$nextTick()
 
+    expect(wrapper.findAll('button').some(button => ['Public', 'Internal'].includes(button.text()))).toBe(false)
+
     await wrapper.find('input').setValue('Clicks at 1:30')
     await wrapper.find('textarea').setValue('Audible clicking artifacts')
 
@@ -153,6 +155,27 @@ describe('IssueCreatePanel', () => {
     expect(payload.images.map((file: File) => file.name)).toEqual(['image-1.png', 'image-2.png', 'image-3.png'])
   })
 
+  it('hides internal visibility and submits public when explicitly disabled', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 9, phase: 'peer', allowInternalVisibility: false },
+    })
+
+    const vm = wrapper.vm as any
+    vm.handleClick(4.2)
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.findAll('button').some(button => ['Public', 'Internal'].includes(button.text()))).toBe(false)
+
+    await wrapper.find('input').setValue('Needs balance tweak')
+    await wrapper.find('textarea').setValue('Low end is masking the vocal')
+    const submitBtn = wrapper.findAll('button').find(button => button.classes().includes('btn-primary') && button.classes().includes('text-sm'))!
+    await submitBtn.trigger('click')
+    await flushPromises()
+
+    expect(mocks.createMock).toHaveBeenCalledTimes(1)
+    expect(mocks.createMock.mock.calls[0][1].visibility).toBe('public')
+  })
+
   it('defaults multi-review issues to public visibility and submits it explicitly', async () => {
     const wrapper = mountWithPlugins(IssueCreatePanel, {
       props: { trackId: 9, phase: 'peer', allowInternalVisibility: true },
@@ -184,8 +207,9 @@ describe('IssueCreatePanel', () => {
     vm.handleClick(4.2)
     await wrapper.vm.$nextTick()
 
-    const visibilityToggle = wrapper.findAll('button').find(b => b.text().includes('Public'))!
-    await visibilityToggle.trigger('click')
+    const visibilityToggle = wrapper.findAll('button').find(b => b.text().includes('Public'))
+    expect(visibilityToggle).toBeTruthy()
+    await visibilityToggle!.trigger('click')
     await wrapper.find('input').setValue('Needs balance tweak')
     await wrapper.find('textarea').setValue('Low end is masking the vocal')
 
@@ -197,6 +221,60 @@ describe('IssueCreatePanel', () => {
     expect(mocks.createMock).toHaveBeenCalledTimes(1)
     const [, payload] = mocks.createMock.mock.calls[0]
     expect(payload.visibility).toBe('internal')
+  })
+
+  it('resets internal visibility to public when permission is removed', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 9, phase: 'peer', allowInternalVisibility: true },
+    })
+
+    const vm = wrapper.vm as any
+    vm.handleClick(4.2)
+    await wrapper.vm.$nextTick()
+
+    const visibilityToggle = wrapper.findAll('button').find(button => button.text().includes('Public'))!
+    await visibilityToggle.trigger('click')
+    await wrapper.setProps({ allowInternalVisibility: false })
+
+    expect(wrapper.findAll('button').some(button => ['Public', 'Internal'].includes(button.text()))).toBe(false)
+
+    await wrapper.find('input').setValue('Needs balance tweak')
+    await wrapper.find('textarea').setValue('Low end is masking the vocal')
+    const submitBtn = wrapper.findAll('button').find(button => button.classes().includes('btn-primary') && button.classes().includes('text-sm'))!
+    await submitBtn.trigger('click')
+    await flushPromises()
+
+    expect(mocks.createMock).toHaveBeenCalledTimes(1)
+    expect(mocks.createMock.mock.calls[0][1].visibility).toBe('public')
+  })
+
+  it('restores an internal draft as public when internal visibility is not allowed', async () => {
+    localStorage.setItem('backkitchen_issue_draft:9:peer:none', JSON.stringify({
+      showForm: true,
+      issueMode: 'timed',
+      issueVisibility: 'internal',
+      issueVisibilityTouched: true,
+      title: 'Draft title',
+      description: 'Draft description',
+      severity: 'major',
+      markers: [{ marker_type: 'point', time_start: 4.2, time_end: null }],
+      rangeAnchor: null,
+    }))
+
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 9, phase: 'peer', allowInternalVisibility: false },
+    })
+    await wrapper.vm.$nextTick()
+
+    expect((wrapper.find('input').element as HTMLInputElement).value).toBe('Draft title')
+    expect(wrapper.findAll('button').some(button => ['Public', 'Internal'].includes(button.text()))).toBe(false)
+
+    const submitBtn = wrapper.findAll('button').find(button => button.classes().includes('btn-primary') && button.classes().includes('text-sm'))!
+    await submitBtn.trigger('click')
+    await flushPromises()
+
+    expect(mocks.createMock).toHaveBeenCalledTimes(1)
+    expect(mocks.createMock.mock.calls[0][1].visibility).toBe('public')
   })
 
   it('switches mention candidates with public and internal visibility', async () => {
@@ -218,8 +296,9 @@ describe('IssueCreatePanel', () => {
 
     expect(vm.activeMentionUsers).toEqual(publicMentionUsers)
 
-    const visibilityToggle = wrapper.findAll('button').find(b => b.text().includes('Public'))!
-    await visibilityToggle.trigger('click')
+    const visibilityToggle = wrapper.findAll('button').find(b => b.text().includes('Public'))
+    expect(visibilityToggle).toBeTruthy()
+    await visibilityToggle!.trigger('click')
 
     expect(vm.activeMentionUsers).toEqual(internalMentionUsers)
   })
