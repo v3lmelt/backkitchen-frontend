@@ -138,6 +138,8 @@ vi.mock('@/components/audio/IssueMarkerList.vue', () => ({
 
 vi.mock('@/components/IssueCreatePanel.vue', () => ({
   default: {
+    name: 'IssueCreatePanel',
+    props: ['trackId', 'phase', 'allowInternalVisibility'],
     template: '<div class="issue-create" />',
   },
 }))
@@ -351,6 +353,10 @@ describe('WorkflowStepView', () => {
 
     const wrapper = mountWithPlugins(WorkflowStepView)
     await flushPromises()
+
+    const issueCreatePanel = wrapper.findComponent({ name: 'IssueCreatePanel' })
+    expect(issueCreatePanel.props('phase')).toBe('final_review')
+    expect(issueCreatePanel.props('allowInternalVisibility')).toBe(false)
 
     const buttons = wrapper.findAll('button')
     expect(buttons.filter(button => button.text() === 'Approve').length).toBe(0)
@@ -1456,6 +1462,10 @@ describe('WorkflowStepView', () => {
 
     const wrapper = mountWithPlugins(WorkflowStepView)
     await flushPromises()
+
+    const issueCreatePanel = wrapper.findComponent({ name: 'IssueCreatePanel' })
+    expect(issueCreatePanel.props('phase')).toBe('producer')
+    expect(issueCreatePanel.props('allowInternalVisibility')).toBe(false)
 
     expect(wrapper.find('.decision-group').exists()).toBe(true)
     expect(wrapper.text()).toContain('Next Decision')

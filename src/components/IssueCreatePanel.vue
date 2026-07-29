@@ -37,6 +37,7 @@ function defaultIssueVisibility(): 'public' | 'internal' {
   return 'public'
 }
 
+const internalVisibilityAllowed = computed(() => props.allowInternalVisibility === true)
 const issueVisibility = ref<'public' | 'internal'>(defaultIssueVisibility())
 const issueVisibilityTouched = ref(false)
 const title = ref('')
@@ -484,7 +485,7 @@ function restoreDraft() {
       markers.value = []
       rangeAnchor.value = null
     }
-    if (props.allowInternalVisibility === false) {
+    if (!internalVisibilityAllowed.value) {
       issueVisibility.value = 'public'
       issueVisibilityTouched.value = false
     }
@@ -500,7 +501,7 @@ async function submitIssue() {
     description: description.value,
     severity: severity.value,
     phase: props.phase,
-    visibility: issueVisibility.value,
+    visibility: internalVisibilityAllowed.value ? issueVisibility.value : defaultIssueVisibility(),
     markers: issueMode.value === 'general' ? [] : markers.value.map(m => ({
       marker_type: m.marker_type,
       time_start: m.time_start,
@@ -583,8 +584,8 @@ watch(
   { deep: true },
 )
 
-watch(() => props.allowInternalVisibility, (allow) => {
-  if (allow === false) {
+watch(internalVisibilityAllowed, (allow) => {
+  if (!allow) {
     issueVisibility.value = 'public'
     issueVisibilityTouched.value = false
     return
@@ -891,7 +892,7 @@ defineExpose({
           <button @click="showForm = false; resetForm()" :disabled="submittingIssue" class="btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50">{{ t('common.cancel') }}</button>
         </div>
         <button
-          v-if="allowInternalVisibility !== false"
+          v-if="internalVisibilityAllowed"
           type="button"
           @click="toggleIssueVisibility"
           class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-mono transition-colors"
