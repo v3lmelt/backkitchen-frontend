@@ -1,0 +1,2318 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#111111">
+  <title>Back Kitchen 使用说明</title>
+  <style>
+    :root {
+      --background: #111111;
+      --card: #1A1A1A;
+      --border: #2E2E2E;
+      --foreground: #FFFFFF;
+      --muted: #B8B9B6;
+      --primary: #FF8400;
+      --primary-hover: #CC6A00;
+      --error: #FF5C33;
+      --error-bg: #24100B;
+      --success: #B6FFCE;
+      --success-bg: #222924;
+      --warning-bg: #291C0F;
+      --info: #B2B2FF;
+      --info-bg: #222229;
+      --sidebar: 304px;
+      --rail: 220px;
+      --mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --sans: Geist, "Segoe UI", "Noto Sans SC", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--background); color: var(--foreground); font-family: var(--sans); font-size: 14px; line-height: 1.72; }
+    button, input { font: inherit; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    a { color: inherit; }
+
+    .app-shell { min-height: 100vh; }
+    .sidebar { position: fixed; inset: 0 auto 0 0; width: var(--sidebar); background: var(--card); border-right: 1px solid var(--border); overflow-y: auto; z-index: 30; }
+    .brand { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 12px; min-height: 72px; padding: 16px 20px; background: var(--card); border-bottom: 1px solid var(--border); font: 700 15px/1 var(--mono); letter-spacing: .04em; }
+    .brand-mark { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--primary); color: var(--background); font-size: 13px; }
+    .brand small { display: block; margin-top: 7px; color: var(--muted); font: 400 11px/1 var(--sans); letter-spacing: 0; }
+    .search-wrap { padding: 16px 18px 8px; }
+    .search-wrap label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; }
+    .search-wrap input { width: 100%; height: 40px; padding: 10px 16px; color: var(--foreground); background: var(--background); border: 1px solid var(--border); border-radius: 999px; outline: none; }
+    .search-wrap input:focus { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+    .search-empty { display: none; margin: 12px 18px; padding: 12px; color: var(--muted); border: 1px solid var(--border); }
+    .nav { padding: 8px 12px 28px; }
+    .nav-group { margin-top: 18px; }
+    .nav-group h2 { margin: 0 8px 7px; color: var(--muted); font: 600 11px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .nav-item { display: grid; grid-template-columns: 30px 1fr; align-items: center; min-height: 38px; padding: 8px 10px; border: 1px solid transparent; text-decoration: none; font: 500 12px/1.45 var(--mono); }
+    .nav-item span { color: var(--muted); font-size: 10px; }
+    .nav-item:hover { color: var(--primary); background: var(--background); border-color: var(--border); }
+    .nav-item.active { color: var(--background); background: var(--primary); }
+    .nav-item.active span { color: var(--background); }
+    .nav-item[hidden], .nav-group[hidden] { display: none; }
+
+    .topbar { position: fixed; top: 0; right: 0; left: var(--sidebar); z-index: 20; display: flex; align-items: center; justify-content: space-between; height: 72px; padding: 0 28px; background: var(--background); border-bottom: 1px solid var(--border); }
+    .breadcrumb { color: var(--muted); font: 500 12px/1 var(--mono); }
+    .breadcrumb strong { color: var(--foreground); }
+    .top-actions { display: flex; align-items: center; gap: 10px; }
+    .chapter-count { min-width: 72px; color: var(--muted); font: 500 12px/1 var(--mono); text-align: right; }
+    .menu-button, .print-button { height: 40px; padding: 0 16px; color: var(--foreground); background: var(--card); border: 1px solid var(--border); border-radius: 999px; font: 500 12px/1 var(--mono); cursor: pointer; }
+    .menu-button { display: none; }
+    .menu-button:hover, .print-button:hover { border-color: var(--primary); color: var(--primary); }
+
+    .content-shell { margin-left: var(--sidebar); padding: 112px calc(var(--rail) + 48px) 64px 48px; }
+    .guide-page { width: min(900px, 100%); margin: 0 auto; animation: page-in .32s ease both; }
+    @keyframes page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .article-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+    .article-kicker { margin: 0 0 8px; color: var(--primary); font: 600 11px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .article-header h1 { margin: 0; font: 700 clamp(25px, 4vw, 38px)/1.22 var(--mono); letter-spacing: -.035em; }
+    .copy-link, .article-pagination button { flex: none; height: 40px; padding: 0 16px; color: var(--foreground); background: var(--card); border: 1px solid var(--border); border-radius: 999px; font: 500 12px/1 var(--mono); cursor: pointer; }
+    .copy-link:hover, .article-pagination button:hover { color: var(--primary); border-color: var(--primary); }
+    .copy-link.copied { color: var(--success); background: var(--success-bg); }
+
+    .article-body > :first-child { margin-top: 0; }
+    .article-body h2 { margin: 44px 0 14px; padding-top: 12px; font: 600 18px/1.35 var(--mono); scroll-margin-top: 92px; }
+    .article-body h2::before { content: ""; display: inline-block; width: 18px; height: 3px; margin: 0 10px 5px 0; background: var(--primary); }
+    .article-body h3 { margin: 28px 0 10px; font: 600 14px/1.45 var(--mono); }
+    .article-body p { margin: 0 0 14px; color: var(--foreground); }
+    .article-body ul, .article-body ol { margin: 0 0 18px; padding-left: 24px; }
+    .article-body li { margin: 6px 0; }
+    .article-body li::marker { color: var(--primary); font-family: var(--mono); }
+    .article-body strong { color: var(--foreground); }
+    .article-body a { color: var(--primary); text-underline-offset: 4px; }
+    .article-body blockquote { margin: 20px 0; padding: 14px 16px; color: var(--muted); background: var(--warning-bg); border-left: 3px solid var(--primary); }
+    .article-body blockquote p:last-child { margin-bottom: 0; }
+    .article-body pre { overflow-x: auto; margin: 18px 0; padding: 18px; background: var(--background); border: 1px solid var(--border); font: 12px/1.65 var(--mono); }
+    .article-body code { padding: 2px 5px; background: var(--card); border: 1px solid var(--border); font: 12px/1.4 var(--mono); }
+    .article-body pre code { padding: 0; background: none; border: 0; }
+    .article-body img { display: block; width: 100%; height: auto; margin: 24px 0 30px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 12px 40px rgba(0,0,0,.18); }
+    .table-scroll { overflow-x: auto; margin: 18px 0 24px; border: 1px solid var(--border); }
+    .article-body table { width: 100%; min-width: 580px; border-collapse: collapse; background: var(--card); }
+    .article-body th, .article-body td { padding: 12px 14px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    .article-body th { color: var(--foreground); background: var(--background); font: 600 12px/1.4 var(--mono); }
+    .article-body td { color: var(--foreground); }
+    .article-body tr:last-child td { border-bottom: 0; }
+
+    .article-pagination { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--border); }
+    .article-pagination span { color: var(--muted); font: 500 11px/1 var(--mono); }
+    .article-pagination button:disabled { opacity: .35; cursor: not-allowed; }
+
+    .toc { position: fixed; top: 104px; right: 24px; width: var(--rail); max-height: calc(100vh - 128px); overflow-y: auto; padding-left: 16px; border-left: 1px solid var(--border); }
+    .toc h2 { margin: 0 0 12px; color: var(--muted); font: 600 11px/1.4 var(--mono); letter-spacing: .08em; }
+    .toc a { display: block; padding: 5px 0; color: var(--muted); font-size: 12px; line-height: 1.45; text-decoration: none; }
+    .toc a:hover { color: var(--primary); }
+    .toc-empty { color: var(--muted); font-size: 12px; }
+
+    .overlay { display: none; position: fixed; inset: 0; z-index: 25; background: rgba(0,0,0,.65); }
+
+    @media (max-width: 1180px) {
+      :root { --rail: 0px; }
+      .toc { display: none; }
+      .content-shell { padding-right: 40px; }
+    }
+
+    @media (max-width: 820px) {
+      .sidebar { transform: translateX(-100%); transition: transform .22s ease; }
+      .sidebar.open { transform: translateX(0); }
+      .overlay.open { display: block; }
+      .topbar { left: 0; padding: 0 16px; }
+      .menu-button { display: inline-flex; align-items: center; }
+      .print-button { display: none; }
+      .content-shell { margin-left: 0; padding: 96px 18px 48px; }
+      .article-header { align-items: flex-start; }
+      .copy-link { padding-inline: 12px; }
+      .chapter-count { display: none; }
+    }
+
+    @media (max-width: 560px) {
+      .article-header { display: block; }
+      .copy-link { margin-top: 18px; }
+      .article-pagination button { padding-inline: 12px; }
+      .article-body img { margin-inline: -18px; width: calc(100% + 36px); border-left: 0; border-right: 0; }
+    }
+
+    @media print {
+      body { background: var(--background); color: var(--foreground); print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .sidebar, .topbar, .toc, .overlay, .article-pagination, .copy-link { display: none !important; }
+      .content-shell { margin: 0; padding: 0; }
+      .guide-page { display: block !important; width: 100%; break-after: page; animation: none; }
+      .article-body img { box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="使用说明目录">
+      <div class="brand"><span class="brand-mark">BK</span><span>BACK KITCHEN<small>USER GUIDE / 用户说明</small></span></div>
+      <div class="search-wrap">
+        <label for="guide-search">搜索章节</label>
+        <input id="guide-search" type="search" placeholder="输入关键词…" autocomplete="off">
+      </div>
+      <p class="search-empty" id="search-empty">没有匹配的章节。</p>
+      <nav class="nav"><section class="nav-group"><h2>开始使用</h2><a class="nav-item" href="#home" data-nav-page="home" data-search="使用说明首页 Back Kitchen 使用说明"><span>01</span>使用说明首页</a><a class="nav-item" href="#overview" data-nav-page="overview" data-search="平台与完整制作流程 平台与完整制作流程"><span>02</span>平台与完整制作流程</a><a class="nav-item" href="#getting-started" data-nav-page="getting-started" data-search="注册、验证与登录 注册、邮箱验证与登录"><span>03</span>注册、验证与登录</a><a class="nav-item" href="#roles" data-nav-page="roles" data-search="认识平台职责 认识社团、专辑和曲目职责"><span>04</span>认识平台职责</a><a class="nav-item" href="#notifications" data-nav-page="notifications" data-search="通知、待办与状态 通知、待办事项与曲目状态"><span>05</span>通知、待办与状态</a><a class="nav-item" href="#issues-and-versions" data-nav-page="issues-and-versions" data-search="问题、评论与版本 问题、评论、附件与版本"><span>06</span>问题、评论与版本</a></section><section class="nav-group"><h2>主催指南</h2><a class="nav-item" href="#producer-circles" data-nav-page="producer-circles" data-search="创建和管理社团 创建和管理社团"><span>07</span>创建和管理社团</a><a class="nav-item" href="#producer-albums" data-nav-page="producer-albums" data-search="创建专辑与团队 创建专辑并配置制作团队"><span>08</span>创建专辑与团队</a><a class="nav-item" href="#producer-workflow" data-nav-page="producer-workflow" data-search="设置同行评审规则 设置同行评审规则"><span>09</span>设置同行评审规则</a><a class="nav-item" href="#producer-intake" data-nav-page="producer-intake" data-search="接收投稿与分配评审 接收投稿与分配评审"><span>10</span>接收投稿与分配评审</a><a class="nav-item" href="#producer-approval" data-nav-page="producer-approval" data-search="主催审批与拒绝 主催审批、拒绝与重新投稿"><span>11</span>主催审批与拒绝</a><a class="nav-item" href="#producer-final-review" data-nav-page="producer-final-review" data-search="终审、完成与重新开启 最终审核、完成与重新开启"><span>12</span>终审、完成与重新开启</a></section><section class="nav-group"><h2>曲师指南</h2><a class="nav-item" href="#composer-submission" data-nav-page="composer-submission" data-search="提交自己的曲目 提交自己的曲目"><span>13</span>提交自己的曲目</a><a class="nav-item" href="#composer-peer-review" data-nav-page="composer-peer-review" data-search="进行同行评审 进行同行评审"><span>14</span>进行同行评审</a><a class="nav-item" href="#composer-revision" data-nav-page="composer-revision" data-search="处理反馈与修订 处理反馈、上传修订与确认母带"><span>15</span>处理反馈与修订</a></section><section class="nav-group"><h2>母带工程师</h2><a class="nav-item" href="#mastering" data-nav-page="mastering" data-search="母带沟通、交付与确认 母带沟通、交付、修改与确认"><span>16</span>母带沟通、交付与确认</a></section></nav>
+    </aside>
+
+    <div class="overlay" id="overlay"></div>
+
+    <header class="topbar">
+      <div class="top-actions">
+        <button class="menu-button" id="menu-button" type="button" aria-expanded="false">目录</button>
+        <p class="breadcrumb">HELP / <strong id="breadcrumb-title">Back Kitchen 使用说明</strong></p>
+      </div>
+      <div class="top-actions">
+        <span class="chapter-count" id="chapter-count">01 / 16</span>
+        <button class="print-button" type="button" onclick="window.print()">打印全部</button>
+      </div>
+    </header>
+
+    <main class="content-shell"><article class="guide-page" id="page-home" data-page="home" data-title="Back Kitchen 使用说明" data-index="1" hidden>
+          <header class="article-header">
+            <div>
+              <p class="article-kicker">开始使用 / 01</p>
+              <h1>Back Kitchen 使用说明</h1>
+            </div>
+            <button class="copy-link" type="button" data-copy-link>复制链接</button>
+          </header>
+          <div class="article-body">
+<p>本说明覆盖从账户注册、加入社团、提交曲目、同行评审、源文件修订、母带制作到最终确认的完整流程。</p>
+<h2>开始使用</h2>
+<ol>
+<li><a href="#overview">平台与完整制作流程</a></li>
+<li><a href="#getting-started">注册、邮箱验证与登录</a></li>
+<li><a href="#roles">认识社团、专辑和曲目职责</a></li>
+<li><a href="#notifications">通知、待办事项与曲目状态</a></li>
+<li><a href="#issues-and-versions">问题、评论、附件与版本</a></li>
+</ol>
+<h2>主催与副主催</h2>
+<p>建议按以下顺序阅读：</p>
+<ol>
+<li><a href="#producer-circles">创建和管理社团</a></li>
+<li><a href="#producer-albums">创建专辑并配置制作团队</a></li>
+<li><a href="#producer-workflow">设置同行评审规则</a></li>
+<li><a href="#producer-intake">接收投稿与分配评审</a></li>
+<li><a href="#producer-approval">主催审批、拒绝与重新投稿</a></li>
+<li><a href="#producer-final-review">最终审核、完成与重新开启</a></li>
+</ol>
+<p>需要创建社团的用户应先注册普通账户，再联系平台管理员开通主催权限。</p>
+<h2>曲师与同行评审人</h2>
+<p>建议先完成<a href="#getting-started">注册、邮箱验证与登录</a>，并通过邀请码加入社团，然后按实际职责阅读：</p>
+<ol>
+<li><a href="#composer-submission">提交自己的曲目</a></li>
+<li><a href="#composer-peer-review">进行同行评审</a></li>
+<li><a href="#composer-revision">处理反馈、上传修订与确认母带</a></li>
+</ol>
+<p>曲师可以投稿自己的曲目，同时评审同一专辑中的其他曲目，但不能评审自己参与创作的曲目。</p>
+<h2>母带工程师</h2>
+<p>建议先完成<a href="#getting-started">注册、邮箱验证与登录</a>，通过邀请码加入社团，并确认自己已被指定为目标专辑的母带工程师，然后阅读：</p>
+<ul>
+<li><a href="#mastering">母带沟通、交付、修改与确认</a></li>
+</ul>
+<p>社团中的母带工程师身份不会自动分配具体专辑任务。</p>
+<h2>关于工作流</h2>
+<p>正文以平台默认工作流为准。主催可以为专辑配置自定义工作流，因此实际阶段名称、负责人和可用操作可能不同。处理任务时，应以曲目页面显示的当前阶段和按钮为准。</p>
+<p>自定义工作流应保留系统预置的终审步骤；可以调整其显示名称和规则，但不要删除后另建同类终审步骤替代，否则最终批准操作可能不可用。</p></div>
+          <nav class="article-pagination" aria-label="章节导航">
+            <button type="button" data-prev>← 上一篇</button>
+            <span>01 / 16</span>
+            <button type="button" data-next>下一篇 →</button>
+          </nav>
+        </article><article class="guide-page" id="page-overview" data-page="overview" data-title="平台与完整制作流程" data-index="2" hidden>
+          <header class="article-header">
+            <div>
+              <p class="article-kicker">开始使用 / 02</p>
+              <h1>平台与完整制作流程</h1>
+            </div>
+            <button class="copy-link" type="button" data-copy-link>复制链接</button>
+          </header>
+          <div class="article-body">
+<p>适用对象：所有用户</p>
+<p>Back Kitchen 用于管理同人音乐专辑中从曲目投稿、同行评审、源文件修订、母带制作到最终确认的完整流程。平台会记录曲目当前阶段、负责人、问题、评论、文件版本和操作历史。</p>
+<h2>默认制作流程</h2>
+<p>新建专辑默认使用以下流程：</p>
+<pre><code class="language-text">曲师提交曲目
+  ↓
+主催接收审核
+  ├─ 送「同行评审」
+  ├─ 跳过同行评审
+  ├─ 最终拒绝
+  └─ 拒绝（可重新提交）
+  ↓
+同行评审 ↔ 曲师修订
+  ↓
+主催审批 ↔ 曲师再次修订
+  └─ 可退回同行评审
+  ↓
+母带制作 ↔ 源文件或分轨修订
+  ↓
+终审
+  ↓
+主催与投稿曲师分别批准
+  ↓
+已完成
+</code></pre>
+<p><img alt="默认工作流配置" decoding="async" loading="lazy" src="assets/producer-workflow-settings.png"/></p>
+<p>默认第一阶段在曲目页面显示为“接收审核”，在工作流编辑器的阶段类型中显示为“接收审批”；两者指同一阶段。本文描述曲目处理时使用“接收审核”，描述工作流配置项时使用“接收审批”。</p>
+<h2>各阶段由谁操作</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>主要操作人</th>
+<th>主要工作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>提交曲目</td>
+<td>投稿曲师</td>
+<td>上传音频并填写曲目信息</td>
+</tr>
+<tr>
+<td>接收审核</td>
+<td>主催、副主催</td>
+<td>决定送「同行评审」、直接审核或拒绝</td>
+</tr>
+<tr>
+<td>同行评审</td>
+<td>被分配的评审人</td>
+<td>审听、提出问题并提交评审结论</td>
+</tr>
+<tr>
+<td>同行修订</td>
+<td>投稿曲师</td>
+<td>处理问题并上传新的源文件版本</td>
+</tr>
+<tr>
+<td>主催审批</td>
+<td>主催、副主催</td>
+<td>检查评审和修订结果，决定是否送母带</td>
+</tr>
+<tr>
+<td>主催要求修订</td>
+<td>投稿曲师</td>
+<td>根据主催意见再次修改源文件</td>
+</tr>
+<tr>
+<td>母带制作</td>
+<td>专辑母带工程师</td>
+<td>沟通、审听并上传母带交付物</td>
+</tr>
+<tr>
+<td>母带阶段修订</td>
+<td>投稿曲师</td>
+<td>修改源文件或提交外部分轨链接</td>
+</tr>
+<tr>
+<td>终审</td>
+<td>主催与投稿曲师</td>
+<td>分别检查并批准当前母带</td>
+</tr>
+<tr>
+<td>已完成</td>
+<td>所有参与者</td>
+<td>查看最终文件和完整制作记录</td>
+</tr>
+</tbody>
+</table></div>
+<h2>认识自己的职责</h2>
+<p>同一用户在不同社团、专辑和曲目中可能承担不同职责：</p>
+<ul>
+<li>主催负责组织社团和管理专辑。</li>
+<li>副主催可以协助管理所属社团及其专辑。</li>
+<li>曲师可能是某首曲目的投稿者，也可能是其他曲目的同行评审人。</li>
+<li>母带工程师（界面简称“母带师”）只有在被指定到某张专辑后，才能处理该专辑的母带任务。</li>
+</ul>
+<p>曲师可以投稿自己的曲目，同时评审其他人的曲目，但不能评审自己参与创作的曲目。</p>
+<h2>查看当前需要处理的工作</h2>
+<p>登录后，可通过以下位置判断下一步操作：</p>
+<ol>
+<li>在仪表盘查看分配给自己的任务。</li>
+<li>打开通知中心查看新投稿、评审分配、修订请求和审批结果。</li>
+<li>进入曲目详情，查看工作流进度和当前阶段。</li>
+<li>只有当前负责人会看到对应的流程操作按钮。</li>
+</ol>
+<p>按钮不可见通常表示当前阶段不由该用户处理，或用户尚未被分配相应职责。</p>
+<h2>自定义工作流</h2>
+<p>主催可以在专辑设置中调整工作流，例如：</p>
+<ul>
+<li>改变评审分配方式；</li>
+<li>调整所需评审人数；</li>
+<li>允许主催跳过同行评审；</li>
+<li>设置修订回路和额外退回目标；</li>
+<li>要求母带上传后先由上传者确认。</li>
+</ul>
+<p>因此，实际专辑的阶段显示名称、负责人或可用操作可能与默认流程不同。处理任务时，应以曲目页面显示的当前阶段和操作按钮为准。</p>
+<p>自定义工作流时应保留系统预置的终审步骤；可以调整其显示名称和规则，但不要删除后再新建同类终审步骤替代，否则最终批准操作可能不可用。</p>
+<h2>数据保留概要</h2>
+<p>曲目完成后，非当前源版本的音频文件默认只继续保留 7 天；版本记录和关联问题可能继续显示。曲目或专辑归档后可在 14 天内恢复，超过期限后，归档对象及其关联记录和文件会被永久删除。需要长期保存时，应在完成或归档前及时下载。</p>
+<h2>相关说明</h2>
+<ul>
+<li><a href="#getting-started">注册、邮箱验证与登录</a></li>
+<li><a href="#roles">认识社团、专辑和曲目职责</a></li>
+<li><a href="#notifications">通知、待办事项与曲目状态</a></li>
+<li><a href="#issues-and-versions">问题、评论、附件与版本</a></li>
+</ul></div>
+          <nav class="article-pagination" aria-label="章节导航">
+            <button type="button" data-prev>← 上一篇</button>
+            <span>02 / 16</span>
+            <button type="button" data-next>下一篇 →</button>
+          </nav>
+        </article><article class="guide-page" id="page-getting-started" data-page="getting-started" data-title="注册、邮箱验证与登录" data-index="3" hidden>
+          <header class="article-header">
+            <div>
+              <p class="article-kicker">开始使用 / 03</p>
+              <h1>注册、邮箱验证与登录</h1>
+            </div>
+            <button class="copy-link" type="button" data-copy-link>复制链接</button>
+          </header>
+          <div class="article-body">
+<p>适用对象：所有用户</p>
+<p>所有公开注册的账户初始身份都是普通成员。需要创建社团和担任主催的用户，应在完成注册后联系平台管理员开通主催权限。</p>
+<h2>注册账户</h2>
+<ol>
+<li>打开登录页面。</li>
+<li>选择“创建账户”。</li>
+<li>填写用户名、邮箱、密码和确认密码。</li>
+<li>勾选同意服务条款和隐私政策。</li>
+<li>点击“创建账户”。</li>
+</ol>
+<p>用户名、邮箱、密码、确认密码和同意条款均为必填项。密码至少需要 8 个字符，用户名和邮箱不能与现有账户重复。</p>
+<p>当前注册页的服务条款和隐私政策链接未提供可阅读的正文。需要查阅时，请先向平台管理员索取现行文本，再决定是否勾选同意。</p>
+<p><img alt="注册页面" decoding="async" loading="lazy" src="assets/auth-register.png"/></p>
+<h2>验证邮箱</h2>
+<p>注册成功后，平台会向填写的邮箱发送验证邮件。</p>
+<ol>
+<li>打开验证邮件。</li>
+<li>点击邮件中的验证链接。</li>
+<li>返回平台登录页面。</li>
+</ol>
+<p>未完成邮箱验证时，账户不能正常登录。如果没有收到邮件，请先检查垃圾邮件目录，并确认注册时填写的邮箱地址正确。</p>
+<h2>登录平台</h2>
+<ol>
+<li>打开登录页面。</li>
+<li>输入注册邮箱和密码。</li>
+<li>点击“登录”。</li>
+</ol>
+<p>登录成功后将进入仪表盘。仪表盘显示当前用户能够访问的专辑、曲目和待处理任务。</p>
+<p><img alt="登录页面" decoding="async" loading="lazy" src="assets/auth-login.png"/></p>
+<h2>忘记密码</h2>
+<ol>
+<li>在登录页面选择“忘记密码”。</li>
+<li>输入注册邮箱并提交。</li>
+<li>打开密码重置邮件。</li>
+<li>通过邮件中的链接设置新密码。</li>
+<li>使用新密码重新登录。</li>
+</ol>
+<p>出于账户安全考虑，平台不会在页面中显示该邮箱是否已注册。没有收到邮件时，请检查邮箱地址和垃圾邮件目录。</p>
+<h2>通过邀请码加入社团</h2>
+<p>曲师、同行评审人和母带工程师通常需要先通过邀请码加入社团：</p>
+<ol>
+<li>向社团主催获取有效邀请码。</li>
+<li>登录平台。</li>
+<li>打开“社团管理”。</li>
+<li>点击“加入社团”。</li>
+<li>输入邀请码。</li>
+<li>点击“加入”。</li>
+</ol>
+<p>加入成功后，用户会出现在社团成员列表中。加入社团不会自动分配专辑或曲目任务；还需要由主催配置专辑团队，或分配具体投稿、评审和母带职责。</p>
+<p>邀请码可能具有普通成员或母带工程师等初始身份，并可能设置有效期。提示邀请码无效时，请联系社团主催获取新邀请码。</p>
+<p><img alt="社团管理页面" decoding="async" loading="lazy" src="assets/producer-circles.png"/></p>
+<h2>开通主催权限</h2>
+<p>公开注册页面不能选择主催身份。需要创建社团的用户应：</p>
+<ol>
+<li>完成普通账户注册和邮箱验证。</li>
+<li>将注册邮箱或用户 UID 提供给平台管理员。</li>
+<li>由平台管理员开通主催权限。</li>
+<li>退出并重新登录，然后检查是否可以看到“新建社团”入口。</li>
+</ol>
+<p>开通主催权限不会自动使用户成为现有社团或专辑的管理者。现有社团仍需由社团主催添加或调整成员身份。</p>
+<h2>常见问题</h2>
+<h3>提示邮箱或用户名已存在</h3>
+<p>请改用其他用户名，或使用已有账户登录。忘记已有账户密码时，应使用密码重置功能。</p>
+<h3>提示邮箱尚未验证</h3>
+<p>完成验证邮件中的操作后再登录。如果验证链接已经失效，请重新获取验证邮件或联系平台管理员。</p>
+<h3>登录后看不到任何专辑</h3>
+<p>注册账户不会自动加入社团或专辑。请通过邀请码加入社团，并等待主催将你加入制作团队或分配曲目任务。</p>
+<h3>已开通主催权限，但仍看不到主催功能</h3>
+<p>请退出后重新登录。如果仍未显示，请联系平台管理员确认账户角色是否已经更新。</p>
+<h2>相关说明</h2>
+<ul>
+<li><a href="#roles">认识社团、专辑和曲目职责</a></li>
+<li><a href="#producer-circles">主催：创建和管理社团</a></li>
+<li><a href="#notifications">通知、待办事项与曲目状态</a></li>
+</ul></div>
+          <nav class="article-pagination" aria-label="章节导航">
+            <button type="button" data-prev>← 上一篇</button>
+            <span>03 / 16</span>
+            <button type="button" data-next>下一篇 →</button>
+          </nav>
+        </article><article class="guide-page" id="page-roles" data-page="roles" data-title="认识社团、专辑和曲目职责" data-index="4" hidden>
+          <header class="article-header">
+            <div>
+              <p class="article-kicker">开始使用 / 04</p>
+              <h1>认识社团、专辑和曲目职责</h1>
+            </div>
+            <button class="copy-link" type="button" data-copy-link>复制链接</button>
+          </header>
+          <div class="article-body">
+<p>适用对象：所有用户</p>
+<p>Back Kitchen 的权限分为账户、社团、专辑和曲目四个层级。同一用户在不同层级可以承担不同职责。</p>
+<h2>账户身份</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>身份</th>
+<th>取得方式</th>
+<th>主要权限</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>普通成员</td>
+<td>公开注册后自动获得</td>
+<td>加入社团、参与专辑、投稿或接受评审任务</td>
+</tr>
+<tr>
+<td>主催</td>
+<td>注册后由平台管理员开通</td>
+<td>创建社团，并管理自己有权限的专辑</td>
+</tr>
+</tbody>
+</table></div>
+<p>账户主催身份只表示用户可以创建社团。它不会自动授予其他社团或专辑的管理权限。</p>
+<h2>社团身份</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>身份</th>
+<th>主要权限</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主催</td>
+<td>社团创建者；管理社团、成员、邀请码和社团内专辑</td>
+</tr>
+<tr>
+<td>副主催</td>
+<td>协助管理所属社团及其专辑</td>
+</tr>
+<tr>
+<td>普通成员</td>
+<td>参与投稿、同行评审或其他制作工作</td>
+</tr>
+<tr>
+<td>母带工程师（界面简称“母带师”）</td>
+<td>表示用户可以作为社团的母带人员候选</td>
+</tr>
+</tbody>
+</table></div>
+<p>只有社团主催可以调整成员身份和设置副主催。成员通过不同类型的邀请码加入后，主催仍可在社团成员设置中调整其身份。</p>
+<p><img alt="社团成员和身份设置" decoding="async" loading="lazy" src="assets/producer-circle-members.png"/></p>
+<h2>专辑职责</h2>
+<p>一张专辑具有自己的制作团队：</p>
+<ul>
+<li><strong>专辑主催</strong>：创建或主要负责该专辑的用户。</li>
+<li><strong>副主催</strong>：所属社团的副主催，可以协助管理专辑。</li>
+<li><strong>专辑母带工程师</strong>：在专辑设置中被明确指定的母带负责人。</li>
+<li><strong>专辑参与者</strong>：被添加到专辑团队中的社团成员。</li>
+</ul>
+<p>社团中的“母带工程师”身份不会自动将用户分配到所有专辑。只有在专辑设置中被指定后，用户才能执行该专辑的母带操作。</p>
+<p><img alt="专辑团队设置" decoding="async" loading="lazy" src="assets/producer-album-settings.png"/></p>
+<h2>投稿曲师</h2>
+<p>用户成为某首曲目的投稿曲师，需要在投稿表单的艺术家信息中通过平台用户 UID 进行绑定。</p>
+<p>投稿曲师可以：</p>
+<ul>
+<li>查看自己的曲目；</li>
+<li>阅读公开问题和评论；</li>
+<li>处理问题状态；</li>
+<li>上传源文件修订版本；</li>
+<li>在终审中批准当前母带；</li>
+<li>在允许的情况下重新投稿或申请重新开启。</li>
+</ul>
+<p>一首曲目可以绑定多名平台曲师，也可以包含外部曲师姓名。任意一名绑定的平台曲师都可以执行投稿侧修订等操作；终审只记录一次投稿侧批准，因此多人合作时应先约定由谁代表操作。</p>
+<h2>外部曲师与代投稿</h2>
+<p>没有平台账户的曲师可以作为外部曲师记录在曲目中。纯外部曲师的曲目需要由专辑主催或副主催代为投稿。</p>
+<p>实际代投稿人负责执行需要投稿侧完成的操作，例如：</p>
+<ul>
+<li>上传初始源文件；</li>
+<li>回复和处理问题；</li>
+<li>上传修订版本；</li>
+<li>代表投稿侧确认最终母带。</li>
+</ul>
+<p>外部曲师本人不会收到平台内任务或通知。</p>
+<h2>同行评审人</h2>
+<p>用户只有在被分配到某首曲目的同行评审阶段后，才是该曲目的评审人。</p>
+<p>评审人可以：</p>
+<ul>
+<li>审听被分配的曲目；</li>
+<li>创建时间点、时间范围或整体问题；</li>
+<li>填写同行评审清单；</li>
+<li>提交个人评审意见；</li>
+<li>在具有权限时提交评审组最终结论。</li>
+</ul>
+<p>同一用户可以投稿自己的曲目，同时评审同一专辑中的其他曲目，但不能评审自己参与创作的曲目。系统进行自动分配或固定评审分配时，会排除该曲目的平台曲师。</p>
+<h2>身份显示与匿名评审</h2>
+<p>在同行评审及其修订阶段，平台可能使用匿名编号隐藏曲师或评审人的真实身份。具体显示取决于当前工作流、查看者职责和页面区域：</p>
+<ul>
+<li>普通评审人通常看不到曲师的真实身份；</li>
+<li>曲师通常看不到其他评审人的真实身份；</li>
+<li>问题列表中的作者即使对作者本人、主催或母带工程师也可能继续显示匿名编号；</li>
+<li>主催或母带工程师可能在团队、评审分配等其他区域看到相应真实身份；</li>
+<li>自定义工作流中的匿名显示可能与默认同行评审阶段不同。</li>
+</ul>
+<p>匿名显示只改变界面中的身份呈现，不影响任务分配、问题记录和通知，也不应被视为严格的保密或权限边界。处理敏感信息时，仍应遵守团队的信息共享规则。</p>
+<h2>为什么看不到某个操作</h2>
+<p>常见原因包括：</p>
+<ul>
+<li>当前曲目阶段不由该身份操作；</li>
+<li>用户尚未被添加到所属社团；</li>
+<li>用户没有被指定为专辑母带工程师；</li>
+<li>用户没有被绑定为该曲目的平台曲师；</li>
+<li>用户尚未收到同行评审分配；</li>
+<li>当前操作只允许专辑主催或副主催执行。</li>
+</ul>
+<p>请先检查曲目当前阶段、专辑团队和自己的任务分配。</p>
+<h2>相关说明</h2>
+<ul>
+<li><a href="#overview">平台与完整制作流程</a></li>
+<li><a href="#producer-albums">主催：创建专辑并配置制作团队</a></li>
+<li><a href="#composer-submission">曲师：提交自己的曲目</a></li>
+<li><a href="#mastering">母带工程师指南</a></li>
+</ul></div>
+          <nav class="article-pagination" aria-label="章节导航">
+            <button type="button" data-prev>← 上一篇</button>
+            <span>04 / 16</span>
+            <button type="button" data-next>下一篇 →</button>
+          </nav>
+        </article><article class="guide-page" id="page-notifications" data-page="notifications" data-title="通知、待办事项与曲目状态" data-index="5" hidden>
+          <header class="article-header">
+            <div>
+              <p class="article-kicker">开始使用 / 05</p>
+              <h1>通知、待办事项与曲目状态</h1>
+            </div>
+            <button class="copy-link" type="button" data-copy-link>复制链接</button>
+          </header>
+          <div class="article-body">
+<p>适用对象：所有用户</p>
+<p>平台通过仪表盘、通知中心和曲目工作流进度提示当前需要处理的工作。</p>
+<h2>查看仪表盘</h2>
+<p>登录后首先进入仪表盘。根据当前身份和任务分配，仪表盘可能显示：</p>
+<ul>
+<li>自己投稿的曲目；</li>
+<li>被分配的同行评审；</li>
+<li>等待主催处理的新投稿或审批；</li>
+<li>等待母带工程师处理的曲目；</li>
+<li>等待终审确认的母带；</li>
+<li>最近更新的专辑和曲目。</li>
+</ul>
+<p>点击对应曲目后，可进入曲目详情或当前工作流阶段。</p>
+<p><img alt="主催仪表盘" decoding="async" loading="lazy" src="assets/producer-dashboard.png"/></p>
+<h2>使用通知中心</h2>
+<ol>
+<li>打开侧栏中的“通知中心”。</li>
+<li>选择“全部”“未读”或“已读”。</li>
+<li>根据需要按通知类型筛选。</li>
+<li>可以在搜索框中搜索通知标题或正文。</li>
+<li>点击通知中的“打开”，进入相关曲目、问题或专辑。</li>
+</ol>
+<p>处理单条通知后，可以点击“标记已读”。需要清空未读提醒时，可以使用“全部已读”。</p>
+<p><img alt="通知中心" decoding="async" loading="lazy" src="assets/notifications-center.png"/></p>
+<h2>常见通知</h2>
+<p>平台可能在以下情况发送通知：</p>
+<ul>
+<li>有新曲目提交；</li>
+<li>曲目阶段发生变化；</li>
+<li>需要主催手动分配评审人；</li>
+<li>用户被分配或重新分配同行评审；</li>
+<li>有新问题、评论或讨论；</li>
+<li>用户在评论或讨论中被提及；</li>
+<li>曲师需要上传修订版本；</li>
+<li>母带交付物等待上传者确认；</li>
+<li>终审退回、重新开启或源文件补交申请发生变化；</li>
+<li>专辑或曲目被归档或恢复。</li>
+</ul>
+<p>站内通知是主要提醒渠道，但并非每次阶段变化都会向下一负责人发送通知。不要只依赖通知判断任务，应同时检查仪表盘和曲目当前阶段。</p>
+<p>部分专辑还可以配置邮件或 Webhook：</p>
+<ul>
+<li>邮件只发送给已验证邮箱的平台曲师，并仅覆盖专辑启用的新公开问题、新评论和修订请求等选定事件；主催、评审人、母带工程师和纯外部曲师不会通过这套曲师邮件机制收信。</li>
+<li>Webhook 用于把专辑配置的事件推送到飞书等外部协作工具，其事件范围与邮件不同。</li>
+</ul>
+<p>是否收到站外通知取决于专辑设置、事件类型和用户邮箱状态。</p>
+<h2>查看曲目当前状态</h2>
+<p>进入曲目后，使用工作流进度判断当前阶段。默认阶段包括：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>状态</th>
+<th>含义</th>
+<th>通常由谁继续操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>接收审核</td>
+<td>曲目已经提交，等待主催决定下一步</td>
+<td>主催、副主催</td>
+</tr>
+<tr>
+<td>同行评审</td>
+<td>曲目正在接受同行检查</td>
+<td>被分配的评审人</td>
+</tr>
+<tr>
+<td>同行修订</td>
+<td>评审要求修改源文件</td>
+<td>投稿曲师</td>
+</tr>
+<tr>
+<td>主催审批</td>
+<td>主催检查评审和修订结果</td>
+<td>主催、副主催</td>
+</tr>
+<tr>
+<td>主催修订</td>
+<td>主催要求再次修改源文件</td>
+<td>投稿曲师</td>
+</tr>
+<tr>
+<td>母带制作</td>
+<td>等待母带沟通或交付</td>
+<td>专辑母带工程师</td>
+</tr>
+<tr>
+<td>母带修订</td>
+<td>母带阶段要求修改源文件或提交分轨</td>
+<td>投稿曲师</td>
+</tr>
+<tr>
+<td>终审</td>
+<td>等待主催和投稿曲师批准当前母带</td>
+<td>主催与投稿曲师</td>
+</tr>
+<tr>
+<td>已完成</td>
+<td>双方已经批准当前母带</td>
+<td>无必须操作</td>
+</tr>
+<tr>
+<td>已拒绝</td>
+<td>曲目被拒绝</td>
+<td>视是否允许重新投稿而定</td>
+</tr>
+</tbody>
+</table></div>
+<p>采用自定义工作流的专辑可能使用不同名称或顺序，应以页面显示为准。</p>
+<p><img alt="曲目工作流进度" decoding="async" loading="lazy" src="assets/producer-approval.png"/></p>
+<h2>判断自己是否需要操作</h2>
+<ol>
+<li>检查通知是否指向当前用户。</li>
+<li>打开曲目并确认当前阶段。</li>
+<li>查看页面底部或操作区域是否显示可用按钮。</li>
+<li>阅读按钮上方的前置条件或等待提示。</li>
+</ol>
+<p>没有操作按钮通常不表示系统出错。可能是当前阶段正在等待其他用户，或当前用户没有对应权限。</p>
+<h2>实时更新</h2>
+<p>通知中心会尝试通过实时连接接收更新，并定期重新获取通知。页面显示连接中断时，可以：</p>
+<ol>
+<li>检查网络连接；</li>
+<li>等待系统自动重连；</li>
+<li>重新打开通知页面；</li>
+<li>必要时刷新浏览器。</li>
+</ol>
+<p>通知已经打开但仍显示未读时，可以手动点击“标记已读”。</p>
+<h2>常见问题</h2>
+<h3>收到评审通知，但打不开曲目</h3>
+<p>评审任务可能已被重新分配，或专辑成员权限已经变化。返回通知中心刷新后仍无法访问时，请联系专辑主催。</p>
+<h3>曲目状态已经变化，但通知仍保留</h3>
+<p>通知记录不会在任务完成后自动删除。可将通知标记为已读，并以曲目页面的当前状态为准。</p>
+<h3>没有收到邮件通知</h3>
+<p>如果当前用户是平台曲师，请确认邮箱已经验证，并确认专辑启用了对应邮件事件。主催、评审人、母带工程师和外部曲师不会通过这套曲师邮件机制收信；请以站内通知、仪表盘或团队使用的 Webhook 为准。</p>
+<h2>相关说明</h2>
+<ul>
+<li><a href="#overview">平台与完整制作流程</a></li>
+<li><a href="#roles">认识社团、专辑和曲目职责</a></li>
+<li><a href="#issues-and-versions">问题、评论、附件与版本</a></li>
+</ul></div>
+          <nav class="article-pagination" aria-label="章节导航">
+            <button type="button" data-prev>← 上一篇</button>
+            <span>05 / 16</span>
+            <button type="button" data-next>下一篇 →</button>
+          </nav>
+        </article><article class="guide-page" id="page-issues-and-versions" data-page="issues-and-versions" data-title="问题、评论、附件与版本" data-index="6" hidden>
+          <header class="article-header">
+            <div>
+              <p class="article-kicker">开始使用 / 06</p>
+              <h1>问题、评论、附件与版本</h1>
+            </div>
+            <button class="copy-link" type="button" data-copy-link>复制链接</button>
+          </header>
+          <div class="article-body">
+<p>适用对象：主催、曲师、同行评审人、母带工程师</p>
+<p>问题用于记录需要确认或修改的具体事项。问题可以绑定到某个时间点、某段时间范围或整首曲目，并保留其创建时对应的音频版本。</p>
+<h2>创建问题</h2>
+<p>在允许提出问题的审听页面中：</p>
+<ol>
+<li>播放当前音频。</li>
+<li>选择问题标注方式：时间点、时间范围或整体问题。</li>
+<li>在波形上选择位置或范围；整体问题不需要选择时间。</li>
+<li>填写问题标题和描述。</li>
+<li>选择严重程度。</li>
+<li>根据需要添加图片或音频附件。</li>
+<li>在多人同行评审中，根据需要选择“公开”或“仅内部”。“仅内部”会将问题置为“待讨论”，对投稿曲师隐藏。</li>
+<li>确认并发布问题。</li>
+</ol>
+<p>问题的“公开 / 仅内部”与曲目页面的“所有成员可见 / 仅相关人员可见”是两项不同设置。后者控制整首曲目的访问范围。</p>
+<p>只有多人同行评审中的“仅内部”能够形成评审侧内部问题。单人评审、主催审批和终审只支持公开问题，不会显示“仅内部”；旧页面或其他客户端在这些阶段提交“仅内部”时，平台会拒绝请求且不会创建问题。即使在多人同行评审中，“仅内部”也主要保证问题对投稿曲师隐藏，不应理解为严格限制为指定评审人可见。</p>
+<p>比较历史版本时，旧版本通常处于只读状态，不能在旧版本上创建新问题。</p>
+<p><img alt="问题创建面板" decoding="async" loading="lazy" src="assets/reviewer-create-issue.png"/></p>
+<h2>选择严重程度</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>严重程度</th>
+<th>建议用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>严重</td>
+<td>应优先处理的阻断性事项，需在推进流程前确认解决</td>
+</tr>
+<tr>
+<td>重要</td>
+<td>明显影响作品质量或交付要求的问题</td>
+</tr>
+<tr>
+<td>轻微</td>
+<td>不影响整体方向，但建议修正的细节</td>
+</tr>
+<tr>
+<td>建议</td>
+<td>可选的改善意见或主观建议</td>
+</tr>
+</tbody>
+</table></div>
+<p>严重程度用于帮助参与者排序，不会自动决定曲目是否进入修订阶段。是否要求修订仍由当前阶段的评审结论或负责人操作决定。</p>
+<h2>问题状态</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>状态</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>待处理</td>
+<td>问题已经公开，等待曲师或负责人处理</td>
+</tr>
+<tr>
+<td>待讨论</td>
+<td>问题转入评审侧内部讨论，曲师不可见</td>
+</tr>
+<tr>
+<td>内部结案</td>
+<td>问题在内部处理完毕，不再要求曲师处理</td>
+</tr>
+<tr>
+<td>有异议</td>
+<td>曲师不同意该问题或认为无需修改</td>
+</tr>
+<tr>
+<td>已解决</td>
+<td>问题已经处理完成</td>
+</tr>
+</tbody>
+</table></div>
+<p>问题状态只能按照当前状态和用户职责进行转换：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>操作人</th>
+<th>可以执行的主要操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>投稿侧</td>
+<td>将非终审阶段的“待处理”问题标记为“已解决”或“有异议”</td>
+</tr>
+<tr>
+<td>当前阶段的处理人</td>
+<td>将“待处理”问题设为“已解决”或“待讨论”；将“待讨论”设为“内部结案”；将“已解决”或“有异议”重新打开</td>
+</tr>
+<tr>
+<td>问题创建者或当前阶段的处理人</td>
+<td>将“待讨论”或“内部结案”公开为“待处理”</td>
+</tr>
+<tr>
+<td>专辑母带工程师</td>
+<td>处理终审阶段的问题状态；投稿曲师不能直接修改终审问题状态</td>
+</tr>
+</tbody>
+</table></div>
+<p>“有异议”不能由投稿侧直接改为“已解决”，需要先由当前阶段的处理人重新打开。按钮没有显示时，应先确认问题当前状态和自己的处理职责。</p>
+<p><img alt="问题状态和可用操作" decoding="async" loading="lazy" src="assets/reviewer-issue-list.png"/></p>
+<h2>回复问题和发表评论</h2>
+<p>打开问题后，可在评论区：</p>
+<ul>
+<li>输入文字说明；</li>
+<li>引用音频时间；</li>
+<li>引用其他问题；</li>
+<li>提及相关用户；</li>
+<li>添加图片或音频附件。</li>
+</ul>
+<p>评论可以只有附件，不必同时填写文字。只有评论作者可以编辑或删除自己的普通评论。问题状态变更产生的状态说明不能编辑或删除。</p>
+<p>平台会保留评论的编辑历史。需要核对修改前内容时，可以打开对应的编辑历史记录。</p>
+<h2>附件限制</h2>
+<p>创建问题时，前端界面允许：</p>
+<ul>
+<li>最多添加 3 个音频附件；</li>
+<li>单个音频文件不超过 200 MB；</li>
+<li>使用 MP3、WAV、FLAC、AAC 或 OGG；</li>
+<li>最多添加 3 张图片；</li>
+<li>单张图片不超过 10 MB；</li>
+<li>使用 JPEG、PNG、GIF 或 WebP；</li>
+<li>直接粘贴剪贴板中的图片。</li>
+</ul>
+<p>上传前请确认附件中不包含无关或不应向当前参与者公开的信息。</p>
+<h2>公开问题与内部讨论</h2>
+<p>多人同行评审中，“仅内部”用于评审侧讨论，并会将问题置为“待讨论”。需要投稿曲师处理的问题应设为“公开”；决定要求曲师处理后，应及时将问题公开为“待处理”。</p>
+<p>“仅内部”主要表示对投稿曲师隐藏，不是严格限制为指定评审人可见。单人评审、主催审批和终审只支持公开问题；平台会拒绝在这些阶段提交“仅内部”的请求。</p>
+<h2>查看源文件版本</h2>
+<p>“制作周期”用于区分一次完整制作与重新进入流程后的新一轮制作。初始投稿和拒绝后的重新提交会建立新的周期；重新开启时是否增加周期取决于选择返回的阶段。</p>
+<p>每次初始投稿或上传修订版时，平台都会建立新的源文件版本记录。版本记录包含：</p>
+<ul>
+<li>当前制作周期；</li>
+<li>版本编号；</li>
+<li>文件或外部链接；</li>
+<li>修订说明；</li>
+<li>上传者；</li>
+<li>上传时间。</li>
+</ul>
+<p>在曲目页面选择历史源版本后，可以在文件仍处于保留期内时播放、下载或与当前版本比较。历史版本记录不会因上传新版本而被覆盖。</p>
+<p>曲目完成后，平台当前默认只继续保留非当前源版本的音频文件 7 天。保留期结束后，版本编号、上传者、修订说明和关联问题仍可能显示，但旧音频文件不能继续播放或下载。需要长期归档时，请在曲目完成后及时下载所需文件。</p>
+<p>问题会保留其创建时对应的源版本。查看旧问题时，应注意它可能针对较早的音频内容。</p>
+<p><img alt="源文件版本比较入口" decoding="async" loading="lazy" src="assets/reviewer-peer-review-v2.png"/></p>
+<h2>查看母带交付版本</h2>
+<p>母带工程师每次上传交付物时，平台都会建立母带交付记录。上传者完成确认后，交付物才会按工作流继续进入终审。</p>
+<p>在母带工作台中可以查看：</p>
+<ul>
+<li>当前母带交付物；</li>
+<li>历史交付版本；</li>
+<li>交付说明；</li>
+<li>上传和确认时间；</li>
+<li>主催及投稿侧的批准状态。</li>
+</ul>
+<p>重新开启时，返回首个交付阶段或更早阶段会增加制作周期；返回晚于首个交付阶段的阶段不会增加周期。旧交付物仍作为历史记录保留；当前母带的批准状态会被清除，需要重新终审。</p>
+<h2>归档与保留期</h2>
+<p>曲目或专辑归档后，会从活跃列表中隐藏，并可在 <strong>14 天内</strong>由有权限的主催恢复。超过 14 天后，归档对象及其曲目、问题、评论、源文件版本、母带交付物和附件会被永久删除，无法恢复。归档前应先下载需要长期保存的资料。</p>
+<p>归档保留期与旧源音频保留期是两项不同规则：曲目即使没有归档，完成后非当前源版本的音频文件也默认只继续保留 7 天；归档则会在 14 天后删除整个曲目或专辑及其关联内容。</p>
+<h2>常见问题</h2>
+<h3>无法在当前音频上创建问题</h3>
+<p>请确认当前页面允许提出问题，并检查是否正在查看历史版本。历史版本比较模式通常只允许查看现有问题。</p>
+<h3>曲师看不到评审人提到的问题</h3>
+<p>该问题可能仍处于“待讨论”或“内部结案”状态。需要曲师处理时，评审人应将问题公开。</p>
+<h3>上传修订版后，旧问题没有消失</h3>
+<p>问题和历史版本会保留用于追踪制作过程。请根据新版本内容更新问题状态，而不是删除旧记录。</p>
+<h2>相关说明</h2>
+<ul>
+<li><a href="#composer-peer-review">曲师：进行同行评审</a></li>
+<li><a href="#composer-revision">曲师：处理反馈、上传修订与确认母带</a></li>
+<li><a href="#mastering">母带沟通、交付、修改与确认</a></li>
+</ul></div>
+          <nav class="article-pagination" aria-label="章节导航">
+            <button type="button" data-prev>← 上一篇</button>
+            <span>06 / 16</span>
+            <button type="button" data-next>下一篇 →</button>
+          </nav>
+        </article><article class="guide-page" id="page-producer-circles" data-page="producer-circles" data-title="创建和管理社团" data-index="7" hidden>
+          <header class="article-header">
+            <div>
+              <p class="article-kicker">主催指南 / 07</p>
+              <h1>创建和管理社团</h1>
+            </div>
+            <button class="copy-link" type="button" data-copy-link>复制链接</button>
+          </header>
+          <div class="article-body">
+<p>适用对象：主催、副主催</p>
+<p>社团是专辑和制作成员的组织单位。创建专辑前，应先建立社团，并通过邀请码邀请曲师和母带工程师加入。</p>
+<h2>操作前确认</h2>
+<ul>
+<li>创建社团的账户已经由平台管理员开通主催权限。</li>
+<li>已经准备必填的社团名称；说明可以稍后补充。</li>
+<li>已经确定需要邀请的成员及其初始身份。</li>
+</ul>
+<h2>创建社团</h2>
+<ol>
+<li>打开“社团管理”。</li>
+<li>点击“新建社团”。</li>
+<li>填写必填的社团名称，并根据需要填写说明。</li>
+<li>点击“创建社团”。</li>
+</ol>
+<p>创建成功后，创建者自动成为该社团的主催，并可以管理成员、邀请码和社团内专辑。</p>
+<p><img alt="社团管理页面" decoding="async" loading="lazy" src="assets/producer-circles.png"/></p>
+<h2>通过邀请码邀请成员</h2>
+<ol>
+<li>进入社团详情。</li>
+<li>打开“邀请码”。</li>
+<li>选择邀请码对应的初始身份：普通成员或母带工程师。</li>
+<li>设置有效期。</li>
+<li>生成邀请码。</li>
+<li>将邀请码发送给需要加入的用户。</li>
+</ol>
+<p>邀请码只能用于加入指定社团。用户仍需先完成平台注册和邮箱验证。</p>
+<p><img alt="邀请码管理" decoding="async" loading="lazy" src="assets/producer-circle-invites.png"/></p>
+<h2>使用邀请码加入社团</h2>
+<p>被邀请的用户需要：</p>
+<ol>
+<li>登录平台。</li>
+<li>打开“社团管理”。</li>
+<li>点击“加入社团”。</li>
+<li>输入邀请码。</li>
+<li>点击“加入”。</li>
+</ol>
+<p>加入成功后，用户会出现在社团成员列表中。加入社团不会自动分配专辑或曲目任务。</p>
+<h2>撤销邀请码</h2>
+<p>邀请码不再使用时，应及时撤销：</p>
+<ol>
+<li>进入社团详情的“邀请码”。</li>
+<li>找到仍处于启用状态的邀请码。</li>
+<li>点击撤销操作并确认。</li>
+</ol>
+<p>已经过期、被撤销或失效的邀请码不能继续使用。撤销邀请码不会移除已经加入的成员。</p>
+<h2>查看和调整成员身份</h2>
+<p>在社团详情的成员列表中，可以查看每位成员的当前身份。</p>
+<p>社团主催可以根据实际分工将成员调整为：</p>
+<ul>
+<li>普通成员；</li>
+<li>母带工程师；</li>
+<li>副主催。</li>
+</ul>
+<p>只有社团主催可以调整成员身份。副主催可以协助管理社团和专辑，但不能代替社团主催修改成员身份。</p>
+<p><img alt="社团成员和身份设置" decoding="async" loading="lazy" src="assets/producer-circle-members.png"/></p>
+<h2>设置副主催</h2>
+<p>需要其他成员协助管理时：</p>
+<ol>
+<li>确认该用户已经加入社团。</li>
+<li>在成员列表中找到该用户。</li>
+<li>将其身份调整为“副主催”。</li>
+<li>确认修改。</li>
+</ol>
+<p>副主催可以管理所属社团中的专辑，并可以创建新专辑。副主催权限仅适用于当前社团，不会将其全局账户身份改为主催。</p>
+<h2>邀请母带工程师</h2>
+<p>使用“母带工程师”类型的邀请码，可以为成员添加社团层的母带身份。但这不会自动将其分配到所有专辑。</p>
+<p>创建或编辑专辑时，还需要在专辑团队设置中明确选择该专辑的母带工程师。</p>
+<h2>常见问题</h2>
+<h3>看不到“新建社团”</h3>
+<p>当前账户可能尚未开通主催权限。请联系平台管理员，并在权限更新后重新登录。</p>
+<h3>提示邀请码无效</h3>
+<p>邀请码可能输入错误、已经过期或已被撤销。请联系社团主催获取新的邀请码。</p>
+<h3>成员加入社团后看不到专辑</h3>
+<p>加入社团不会自动加入已有专辑。请由专辑主催将成员添加到制作团队，或为其分配曲目职责。</p>
+<h3>母带工程师加入后看不到母带任务</h3>
+<p>社团母带身份只表示组织层职责。请确认该用户已在目标专辑中被指定为“母带工程师”。</p>
+<h2>相关说明</h2>
+<ul>
+<li><a href="#producer-albums">创建专辑并配置制作团队</a></li>
+<li><a href="#roles">认识社团、专辑和曲目职责</a></li>
+<li><a href="#mastering">母带沟通、交付、修改与确认</a></li>
+</ul></div>
+          <nav class="article-pagination" aria-label="章节导航">
+            <button type="button" data-prev>← 上一篇</button>
+            <span>07 / 16</span>
+            <button type="button" data-next>下一篇 →</button>
+          </nav>
+        </article><article class="guide-page" id="page-producer-albums" data-page="producer-albums" data-title="创建专辑并配置制作团队" data-index="8" hidden>
+          <header class="article-header">
+            <div>
+              <p class="article-kicker">主催指南 / 08</p>
+              <h1>创建专辑并配置制作团队</h1>
+            </div>
+            <button class="copy-link" type="button" data-copy-link>复制链接</button>
+          </header>
+          <div class="article-body">
+<p>适用对象：主催、副主催</p>
+<p>专辑必须属于一个社团。创建时，专辑标题和所属社团为必填项；描述、封面、制作团队、截止日期和自定义工作流可以根据实际情况设置。未展开工作流编辑器时，平台会使用默认工作流。</p>
+<h2>操作前确认</h2>
+<ul>
+<li>已经创建社团，并邀请相关成员加入。</li>
+<li>已经确定专辑主催、母带工程师和参与者。</li>
+<li>已经确定投稿、同行评审、母带和终审的大致时间安排。</li>
+<li>如果需要自动分配或固定评审，已经准备评审候选名单。</li>
+</ul>
+<h2>创建专辑</h2>
+<ol>
+<li>打开“专辑管理”。</li>
+<li>点击“新建专辑”。</li>
+<li>填写必填的专辑标题，并根据需要填写描述。</li>
+<li>根据需要上传专辑封面。</li>
+<li>选择必填的所属社团。</li>
+<li>根据需要设置制作团队、截止日期和自定义工作流。</li>
+<li>点击“创建专辑”。</li>
+</ol>
+<p>只能选择当前用户有权管理的社团。新建专辑必须选择所属社团。</p>
+<p><img alt="新建专辑页面" decoding="async" loading="lazy" src="assets/producer-album-new.png"/></p>
+<h2>配置制作团队</h2>
+<h3>指定母带工程师</h3>
+<p>在制作团队中选择一位专辑母带工程师。可选用户必须已经加入专辑所属社团。</p>
+<p>社团中的“母带工程师”身份不会自动完成专辑分配。应在每张专辑中明确选择实际负责人。</p>
+<h3>添加参与者</h3>
+<p>从社团成员中选择需要参与该专辑的用户。参与者通常包括：</p>
+<ul>
+<li>计划投稿的曲师；</li>
+<li>可能参加同行评审的成员；</li>
+<li>需要查看专辑进度的制作人员。</li>
+</ul>
+<p>将用户添加为专辑参与者，不会自动把该用户设为某首曲目的投稿曲师或评审人：</p>
+<ul>
+<li>投稿曲师在提交曲目时通过平台用户 UID 绑定；</li>
+<li>评审人由工作流规则或主催手动分配。</li>
+</ul>
+<p><img alt="专辑设置" decoding="async" loading="lazy" src="assets/producer-album-settings.png"/></p>
+<h2>设置截止日期</h2>
+<p>可以设置：</p>
+<ul>
+<li>专辑总截止日期；</li>
+<li>同行评审截止日期；</li>
+<li>母带截止日期；</li>
+<li>终审截止日期。</li>
+</ul>
+<p>截止日期用于向参与者说明计划安排，不会自动替代主催推进工作流。到期后仍应由当前负责人完成对应操作。</p>
+<p>设置时应确保阶段日期按制作顺序排列，并为可能发生的修订留出时间。</p>
+<h2>设置默认审阅人分配方式</h2>
+<p>创建专辑时可以选择：</p>
+<ul>
+<li>手动指派；</li>
+<li>自动分配；</li>
+<li>固定评审。</li>
+</ul>
+<p>自动分配和固定评审还需要配置候选成员。仅保留默认“自动分配”但不选择“自动分配候选池”时，曲目进入同行评审后可能无法完成分配；应返回工作流设置补充候选池或调整人数后重试。</p>
+<p>完整设置方法参见<a href="#producer-workflow">设置同行评审规则</a>。</p>
+<h2>设置同行评审清单</h2>
+<ol>
+<li>进入专辑设置。</li>
+<li>打开“Checklist 模板”。</li>
+<li>选择使用社团默认设置、为当前专辑启用或为当前专辑停用，并保存清单模式。</li>
+<li>启用后，添加或调整检查项目并保存模板。</li>
+<li>确认评审人了解每个项目的检查标准。</li>
+</ol>
+<p>启用同行评审清单后，评审人必须先保存自己的当前清单，才能提交个人评审意见。清单用于统一检查内容，但不能替代问题描述；发现具体问题时，仍应在波形或问题面板中创建问题。</p>
+<h2>设置源音频补交</h2>
+<p>启用源音频补交后，投稿曲师可以在页面提供入口的非修订阶段提交新的源文件，不限于曲目完成后。</p>
+<p>申请提交后，曲目立即进入源音频补交待处理状态，正常工作流暂时停止。当前审批卡只显示申请原因和返回阶段，不能直接试听或下载暂存的新文件；批准前应通过团队认可的安全方式核对文件内容、文件名和版本。</p>
+<p>审批时需要选择批准后返回的阶段：</p>
+<ul>
+<li>不能选择修订阶段，也不能选择首个交付阶段之后的阶段；</li>
+<li>主催可以在符合上述条件的阶段中选择目标；</li>
+<li>母带工程师只能批准返回母带相关阶段；</li>
+<li>批准会建立新的制作周期，将补交文件设为当前源版本，并使旧的当前母带失效；</li>
+<li>拒绝后，曲目恢复申请前的阶段；</li>
+<li>投稿侧可以在审批前取消申请，取消后暂存文件会被删除，曲目恢复申请前的阶段。</li>
+</ul>
+<p>该功能会替换当前源文件并重新启动制作流程，不只是用于归档文件。仅在团队确实需要阶段外补交时启用；普通制作修订应通过现有修订阶段完成。</p>
+<h2>配置工作流</h2>
+<p>未展开工作流编辑器时，新专辑会使用平台默认工作流。需要调整阶段、负责人或退回规则时：</p>
+<ol>
+<li>展开工作流编辑器。</li>
+<li>选择需要修改的阶段。</li>
+<li>调整“基础信息”“负责人和分配”“流转规则”或“修订回路”。</li>
+<li>检查流程画布和配置提示。</li>
+<li>保存专辑或工作流。</li>
+</ol>
+<p>终审必须是最后一个主阶段，并且应保留发现问题后的退回路径。为保证最终批准操作可用，应保留系统预置的终审步骤；可以调整其显示名称和规则，但不要删除后再新建另一个终审步骤替代。</p>
+<h2>创建后检查</h2>
+<p>专辑创建成功后，建议立即检查：</p>
+<ol>
+<li>所属社团是否正确；</li>
+<li>母带工程师和参与者是否完整；</li>
+<li>截止日期是否正确；</li>
+<li>同行评审候选池和人数是否有效；</li>
+<li>工作流是否包含所需的修订和退回路径；</li>
+<li>曲师是否能够在投稿页面选择该专辑。</li>
+</ol>
+<h2>修改专辑设置</h2>
+<p>进入目标专辑后打开“专辑设置”，可以修改团队、截止日期、工作流和其他专辑配置。</p>
+<p>修改工作流可能影响已经进入流程的曲目。页面提示存在阶段迁移时，应先确认影响范围，再保存设置。</p>
+<h2>归档和恢复</h2>
+<p>曲目可以在曲目页面归档，并在专辑设置的“归档管理”中恢复；专辑可以在专辑设置中归档，并从“专辑管理”的已归档列表恢复。</p>
+<p>曲目和专辑归档后只有 <strong>14 天</strong>恢复期。超过期限后，归档对象及其关联的曲目、问题、评论、版本、母带和附件会被永久删除。归档前应先下载需要长期保存的文件，并确认没有尚未完成的制作任务。</p>
+<h2>常见问题</h2>
+<h3>无法选择某位成员</h3>
+<p>请确认该用户已经加入专辑所属社团。其他社团的成员不能直接加入当前专辑团队。</p>
+<h3>创建后没有自动分配评审人</h3>
+<p>请检查是否已经设置“自动分配候选池”和“所需审阅人数”。已经进入同行评审的曲目，应在调整设置后返回曲目重新执行分配并检查结果。</p>
+<h3>母带工程师能看到社团，但看不到专辑母带任务</h3>
+<p>请进入专辑设置，确认其已经被选为该专辑的母带工程师，而不只是社团中的母带工程师成员。</p>
+<h2>相关说明</h2>
+<ul>
+<li><a href="#producer-circles">创建和管理社团</a></li>
+<li><a href="#producer-workflow">设置同行评审规则</a></li>
+<li><a href="#producer-intake">接收投稿与分配评审</a></li>
+</ul></div>
+          <nav class="article-pagination" aria-label="章节导航">
+            <button type="button" data-prev>← 上一篇</button>
+            <span>08 / 16</span>
+            <button type="button" data-next>下一篇 →</button>
+          </nav>
+        </article><article class="guide-page" id="page-producer-workflow" data-page="producer-workflow" data-title="设置同行评审规则" data-index="9" hidden>
+          <header class="article-header">
+            <div>
+              <p class="article-kicker">主催指南 / 09</p>
+              <h1>设置同行评审规则</h1>
+            </div>
+            <button class="copy-link" type="button" data-copy-link>复制链接</button>
+          </header>
+          <div class="article-body">
+<p>适用对象：主催、副主催<br/>
+适用阶段：创建专辑时，或专辑开始接收投稿前</p>
+<p>专辑可以采用手动指派、自动分配或固定评审。设置评审规则后，系统会在曲目进入“同行评审”阶段时按照该规则分配评审人。</p>
+<blockquote>
+<p>本页介绍默认工作流。采用自定义工作流的专辑可能使用不同的阶段名称或评审设置。</p>
+</blockquote>
+<h2>操作前确认</h2>
+<p>开始设置前，请确认：</p>
+<ul>
+<li>需要参与评审的用户已经加入专辑所属社团。</li>
+<li>已经确定每首曲目至少需要几名评审人。</li>
+<li>已经确定由主催逐首分配，还是由系统从“自动分配候选池”中分配。</li>
+</ul>
+<p>曲师可以投稿自己的曲目，同时评审同一专辑中的其他曲目，但不能评审自己参与创作的曲目。系统分配评审人时会自动排除该曲目的平台曲师。</p>
+<h2>打开工作流设置</h2>
+<ol>
+<li>进入需要配置的专辑。</li>
+<li>打开“专辑设置”。</li>
+<li>选择“工作流”。</li>
+<li>在工作流编辑器中找到“同行评审”阶段。</li>
+<li>设置“审阅人分配方式”“自动分配候选池”或“固定评审人”，并确认“所需审阅人数”。</li>
+</ol>
+<p>创建专辑时，也可以在“新建专辑”页面中展开工作流设置并完成相同配置。</p>
+<p><img alt="专辑工作流编辑器" decoding="async" loading="lazy" src="assets/producer-workflow-settings.png"/></p>
+<h2>选择评审分配方式</h2>
+<h3>手动指派</h3>
+<p>选择“手动指派”后，曲目进入“同行评审”阶段时不会自动获得评审人。主催需要打开该曲目并选择实际评审人。</p>
+<p>适合以下情况：</p>
+<ul>
+<li>每首曲目需要由不同的专业人员评审。</li>
+<li>评审安排需要根据曲风、分工或成员时间决定。</li>
+<li>专辑规模较小，主催希望逐首确认。</li>
+</ul>
+<p>如果主催尚未完成指派，曲目会停留在等待评审分配的状态。</p>
+<h3>自动分配</h3>
+<p>选择“自动分配”后，系统会从“自动分配候选池”中选择当前待处理任务较少的合格成员。</p>
+<p>使用自动分配时，必须同时完成以下设置：</p>
+<ol>
+<li>选择“自动分配候选池”。</li>
+<li>设置“所需审阅人数”。</li>
+<li>确认候选池中有足够的成员可供分配。</li>
+</ol>
+<p>系统不会将曲目分配给该曲目的平台曲师。如果排除曲师后没有足够的合格成员，分配会失败；主催需要调整候选池或所需审阅人数，保存后再重新分配。</p>
+<blockquote>
+<p>仅选择“自动分配”而没有设置“自动分配候选池”，并不能完成自动分配。正式接收投稿前，请保存包含候选池的完整工作流设置。</p>
+</blockquote>
+<h3>固定评审</h3>
+<p>选择“固定评审”后，主催需要在“固定评审人”中预先指定一组成员。曲目进入“同行评审”阶段时，系统会将符合条件的固定成员分配给该曲目，并要求实际分配到的评审人全部完成评审。</p>
+<p>固定名单中的成员如果也是某首曲目的平台曲师，会在该曲目的评审中被自动排除。如果排除后无人可以评审，主催需要扩大固定名单、调整所需人数，或将分配方式改为手动指派后再重新分配。</p>
+<p>固定评审适合以下情况：</p>
+<ul>
+<li>所有曲目由同一组人员统一检查。</li>
+<li>专辑设有固定的音频、编曲或制作审核人员。</li>
+<li>需要保持不同曲目之间的评审标准一致。</li>
+</ul>
+<h2>设置评审人范围</h2>
+<p>“自动分配候选池”和“固定评审人”使用专辑所属社团的成员作为候选来源。成员是否被添加为专辑参与者，不会直接决定其是否成为评审人。</p>
+<p>选择成员时，应确认：</p>
+<ul>
+<li>成员已经加入专辑所属社团。</li>
+<li>成员具有查看和处理分配任务所需的有效账户。</li>
+<li>成员人数能够覆盖曲师排除和成员暂时无法参与等情况。</li>
+</ul>
+<p>保存前应人工确认候选成员能够正常登录并参与当前项目。平台当前不会在分配时自动排除所有已停用或已删除的账户；候选账户不可用时，可能导致分配人数不足。</p>
+<p>如果成员尚未加入社团，请先通过社团邀请码邀请其加入，再返回工作流设置。</p>
+<h2>设置所需审阅人数</h2>
+<p>“所需审阅人数”表示一首曲目需要完成多少份有效评审，才能继续提交评审结论。</p>
+<p>设置时应同时考虑：</p>
+<ul>
+<li>候选成员总数；</li>
+<li>每首曲目可能包含的曲师人数；</li>
+<li>曲师不能评审自己的曲目；</li>
+<li>是否需要不同专业方向的多名评审人。</li>
+</ul>
+<p>所需人数高于实际可分配人数时，曲目无法按预期完成分配。自动分配或固定评审模式应调整候选池、固定名单或所需人数后重新分配；如需指定具体成员，应先将分配方式改为“手动指派”并保存。</p>
+<h2>设置返修触发方式</h2>
+<p>启用同行评审的修订回路后，可以在“返修触发方式”中选择：</p>
+<ul>
+<li><strong>达到人数后统一决定</strong>：评审人先分别提交个人意见；达到所需审阅人数后，再由评审组提交最终结论。</li>
+<li><strong>任一评审打回即返修</strong>：评审人可以使用直接返修操作，让曲目立即进入修订阶段。</li>
+</ul>
+<p>两种方式下，评审人都可以先提交建议打回。只有执行对应的最终结论或直接返修操作，曲目才会进入修订阶段。</p>
+<h2>保存设置</h2>
+<ol>
+<li>检查“同行评审”阶段的分配方式。</li>
+<li>检查“自动分配候选池”或“固定评审人”，并确认所需审阅人数。</li>
+<li>点击“保存工作流”。</li>
+<li>确认页面没有显示未保存的修改或配置错误。</li>
+</ol>
+<p>保存后，新进入“同行评审”阶段的曲目会按照当前设置分配评审人。已经进入评审阶段的曲目可能仍需主催检查现有分配。</p>
+<h2>异常情况</h2>
+<h3>曲目进入同行评审后没有评审人</h3>
+<p>可能原因包括：</p>
+<ul>
+<li>使用了“手动指派”，但主催尚未选择评审人；</li>
+<li>使用了“自动分配”，但没有设置“自动分配候选池”；</li>
+<li>候选成员都是该曲目的曲师；</li>
+<li>排除不符合条件的成员后，剩余人数不足。</li>
+</ul>
+<p>请打开曲目查看分配提示。手动指派模式可以直接选择评审人；自动分配或固定评审模式应先返回工作流设置，调整“自动分配候选池”“固定评审人”或所需审阅人数，保存后再重新分配。</p>
+<h3>无法选择某位评审成员</h3>
+<p>请确认该用户已经加入专辑所属社团。仅注册平台账户或被添加为其他社团的成员，不会使其成为当前专辑的评审候选人。</p>
+<h3>固定评审名单中没有可用评审人</h3>
+<p>固定名单中的成员如果参与了该曲目的创作，会被自动排除。排除后无人可以评审时，请扩大固定评审人名单、调整所需人数，或先把分配方式改为手动指派并保存，再返回曲目重新分配。</p>
+<h3>修改设置后，进行中的曲目没有立即变化</h3>
+<p>工作流设置主要决定曲目进入相关阶段时的分配方式。对于已经进入同行评审的曲目，请同时检查该曲目的现有评审分配，并根据页面提示进行调整。</p>
+<h2>相关说明</h2>
+<ul>
+<li><a href="#producer-albums">创建专辑并配置制作团队</a></li>
+<li><a href="#producer-intake">接收投稿与分配评审</a></li>
+<li><a href="#composer-peer-review">曲师：进行同行评审</a></li>
+<li><a href="#roles">认识社团、专辑和曲目职责</a></li>
+</ul></div>
+          <nav class="article-pagination" aria-label="章节导航">
+            <button type="button" data-prev>← 上一篇</button>
+            <span>09 / 16</span>
+            <button type="button" data-next>下一篇 →</button>
+          </nav>
+        </article><article class="guide-page" id="page-producer-intake" data-page="producer-intake" data-title="接收投稿与分配评审" data-index="10" hidden>
+          <header class="article-header">
+            <div>
+              <p class="article-kicker">主催指南 / 10</p>
+              <h1>接收投稿与分配评审</h1>
+            </div>
+            <button class="copy-link" type="button" data-copy-link>复制链接</button>
+          </header>
+          <div class="article-body">
+<p>适用对象：主催、副主催<br/>
+适用阶段：接收审核、同行评审</p>
+<p>曲师提交新曲目后，曲目首先进入“接收审核”。主催需要检查投稿信息，并决定送「同行评审」、直接审核或拒绝。</p>
+<h2>操作前确认</h2>
+<ul>
+<li>投稿的专辑、曲目标题和艺术家信息正确。</li>
+<li>音频文件能够正常播放或下载。</li>
+<li>平台曲师 UID 与实际参与者一致。</li>
+<li>专辑同行评审规则已经配置完成。</li>
+</ul>
+<h2>检查新投稿</h2>
+<ol>
+<li>从仪表盘或通知中心打开新提交的曲目。</li>
+<li>查看曲目基本信息和提交说明。</li>
+<li>确认平台曲师及外部曲师信息。</li>
+<li>播放或下载当前源文件。</li>
+<li>查看曲目当前状态是否为“接收审核”。</li>
+</ol>
+<p>发现信息或文件不完整时，不要直接推进流程。应先通过评论或团队沟通确认，或者使用允许重新提交的拒绝方式。</p>
+<p><img alt="接收审核页面" decoding="async" loading="lazy" src="assets/producer-intake.png"/></p>
+<h2>选择接收审核操作</h2>
+<h3>送「同行评审」</h3>
+<p>点击“送「同行评审」”后，曲目进入“同行评审”阶段。系统会按照专辑工作流进行分配：</p>
+<ul>
+<li>手动指派：等待主催选择评审人；</li>
+<li>自动分配：从“自动分配候选池”中选择合格成员；</li>
+<li>固定评审：分配符合条件的固定评审人。</li>
+</ul>
+<h3>跳过同行评审</h3>
+<p>点击“跳过同行评审”后，曲目跳过同行评审，直接进入“主催审批”。</p>
+<p>该操作只在专辑工作流允许主催直接审核时显示。适合不需要同行评审，或已通过其他方式完成检查的曲目。</p>
+<h3>最终拒绝</h3>
+<p>点击“最终拒绝”后，曲目进入最终拒绝状态，不能通过普通重新投稿操作恢复。执行前应先下载需要保留的文件，不要依赖平台长期保留被拒绝曲目的音频。</p>
+<p>只应在确定该曲目不再参与当前专辑时使用。执行前应确认曲师已经了解原因。</p>
+<blockquote>
+<p>当前确认界面提示源音频文件将在 1 天后删除；具体保留期限以平台管理员说明为准。执行前请先下载需要保留的文件。</p>
+</blockquote>
+<h3>拒绝（可重新提交）</h3>
+<p>点击“拒绝（可重新提交）”后，曲目进入可重新投稿的拒绝状态。投稿曲师可以上传新的源文件，开始新的制作周期。</p>
+<p>适合以下情况：</p>
+<ul>
+<li>初始文件错误或损坏；</li>
+<li>曲目信息需要整体重填；</li>
+<li>当前投稿不满足基本要求，但允许修改后重新进入流程。</li>
+</ul>
+<h2>手动分配评审人</h2>
+<p>使用“手动指派”时：</p>
+<ol>
+<li>将曲目送入“同行评审”。</li>
+<li>打开曲目的评审分配区域。</li>
+<li>从可用成员中选择评审人。</li>
+<li>确认分配。</li>
+<li>检查评审人是否已收到任务通知。</li>
+</ol>
+<p>不能将曲目分配给该曲目的平台曲师。可选评审人通常来自专辑所属社团，并需要具有当前曲目的访问资格。</p>
+<h2>处理自动分配失败</h2>
+<p>曲目进入同行评审后没有评审人时，平台会通知主催进行处理。常见原因包括：</p>
+<ul>
+<li>没有设置“自动分配候选池”；</li>
+<li>候选池人数少于“所需审阅人数”；</li>
+<li>候选成员都是该曲目的曲师；</li>
+<li>固定评审人被曲师排除后无人可用；</li>
+<li>成员已经离开社团或无法访问曲目。</li>
+</ul>
+<p>处理方法：</p>
+<ol>
+<li>打开曲目并查看分配提示。</li>
+<li>如果工作流使用“手动指派”，在评审分配区域选择其他合格成员。</li>
+<li>如果使用“自动分配”或“固定评审”，返回专辑工作流设置，调整候选池、固定名单或所需人数并保存。</li>
+<li>返回曲目重新执行分配，并确认任务已经产生。</li>
+</ol>
+<p>自动分配和固定评审模式当前不会在失败后打开临时成员选择器，不能直接绕过已保存的分配规则。调整工作流后，还应检查已经进入同行评审的其他曲目是否需要重新分配。</p>
+<h2>调整现有评审分配</h2>
+<p>评审人无法继续处理任务时，主催可以在曲目评审分配区域进行重新分配。手动指派模式允许选择具体成员；自动分配和固定评审会按照当前已保存的候选池或固定名单重新计算，不提供临时成员选择。重新分配后：</p>
+<ul>
+<li>原评审人可能失去该任务的操作权限；</li>
+<li>新评审人会收到分配通知；</li>
+<li>已经创建的问题和评审记录仍会保留；</li>
+<li>应向参与者说明交接原因，避免重复工作。</li>
+</ul>
+<h2>常见问题</h2>
+<h3>“跳过同行评审”按钮没有显示</h3>
+<p>当前专辑工作流可能没有启用“允许主催直接审核”。请在工作流编辑器的“接收审批”阶段检查设置；该配置阶段对应曲目页面上的“接收审核”。</p>
+<h3>找不到需要分配的成员</h3>
+<p>请确认用户已经加入专辑所属社团，并且不是该曲目的平台曲师。</p>
+<h3>送「同行评审」后曲目没有继续推进</h3>
+<p>曲目需要先获得有效评审分配，并由评审人完成规定人数的评审。请检查分配状态和“所需审阅人数”。</p>
+<h3>误用了最终拒绝</h3>
+<p>最终拒绝不能通过普通重新投稿恢复。请谨慎使用；如确需处理，应联系平台管理员确认是否存在其他恢复方式。</p>
+<h2>相关说明</h2>
+<ul>
+<li><a href="#producer-workflow">设置同行评审规则</a></li>
+<li><a href="#producer-approval">主催审批、拒绝与重新投稿</a></li>
+<li><a href="#composer-peer-review">曲师：进行同行评审</a></li>
+</ul></div>
+          <nav class="article-pagination" aria-label="章节导航">
+            <button type="button" data-prev>← 上一篇</button>
+            <span>10 / 16</span>
+            <button type="button" data-next>下一篇 →</button>
+          </nav>
+        </article><article class="guide-page" id="page-producer-approval" data-page="producer-approval" data-title="主催审批、拒绝与重新投稿" data-index="11" hidden>
+          <header class="article-header">
+            <div>
+              <p class="article-kicker">主催指南 / 11</p>
+              <h1>主催审批、拒绝与重新投稿</h1>
+            </div>
+            <button class="copy-link" type="button" data-copy-link>复制链接</button>
+          </header>
+          <div class="article-body">
+<p>适用对象：主催、副主催<br/>
+适用阶段：主催审批、已拒绝</p>
+<p>同行评审通过，或主催在接收审核中选择“跳过同行评审”后，曲目进入“主催审批”。主催需要判断当前源文件是否可以进入母带制作。</p>
+<h2>操作前确认</h2>
+<ul>
+<li>已经审听当前源文件版本。</li>
+<li>已经查看同行评审结论和同行评审清单。</li>
+<li>已经检查公开问题及其处理状态。</li>
+<li>已经阅读曲师的修订说明。</li>
+<li>已经确认当前版本满足送母带的基本要求。</li>
+</ul>
+<h2>检查评审和修订结果</h2>
+<ol>
+<li>打开处于“主催审批”的曲目。</li>
+<li>确认当前播放的是最新源文件版本。</li>
+<li>查看同行评审提交的结论。</li>
+<li>检查仍处于“待处理”或“有异议”的问题。</li>
+<li>必要时打开历史版本比较修订前后的差异。</li>
+<li>阅读曲师填写的修订说明和问题处理说明。</li>
+</ol>
+<p>问题被标记为“已解决”不代表主催必须接受结果。仍有疑问时，可以通过评论继续确认，或要求再次修订。</p>
+<p>主催审批不是多人同行评审阶段，只支持公开问题，不会显示“仅内部”。旧页面或其他客户端尝试提交“仅内部”时，平台会拒绝请求且不会创建问题。</p>
+<p><img alt="主催审批页面" decoding="async" loading="lazy" src="assets/producer-approval.png"/></p>
+<h2>送「母带制作」</h2>
+<p>确认源文件可以交付后：</p>
+<ol>
+<li>点击“送「母带制作」”。</li>
+<li>确认流程推进。</li>
+<li>检查曲目状态是否变为“母带制作”。</li>
+<li>确认专辑母带工程师收到任务。</li>
+</ol>
+<p>如果专辑尚未指定母带工程师，应先返回专辑设置完成分配。</p>
+<h2>再次要求源版本修订</h2>
+<p>当前源文件仍需修改时：</p>
+<ol>
+<li>创建问题或发表评论，记录具体修订要求。</li>
+<li>点击“打回”。</li>
+<li>确认曲目进入主催修订阶段。</li>
+</ol>
+<p>“打回”操作没有单独填写原因的表单。应在点击前使用具体问题、时间标记或评论说明修改要求，不要只留下“继续修改”等无法判断完成标准的内容。</p>
+<p>投稿曲师上传新版本后，曲目会返回“主催审批”，由主催再次检查。</p>
+<h2>退回同行评审</h2>
+<p>默认工作流允许主催将曲目退回“同行评审”。适合以下情况：</p>
+<ul>
+<li>新版本改变较大，需要重新进行完整评审；</li>
+<li>原评审意见未覆盖关键问题；</li>
+<li>需要由其他评审人重新检查。</li>
+</ul>
+<p>点击“打回到「同行评审」”并确认。退回后，应检查现有评审分配是否仍然有效，并告知评审人需要重点复查的内容。</p>
+<h2>拒绝方式</h2>
+<p>默认流程主要在“接收审核”阶段提供两种拒绝方式：</p>
+<h3>最终拒绝</h3>
+<p>曲目不再参与当前专辑，且不能由曲师通过普通操作重新提交。执行前应先下载需要保留的文件，不要依赖平台长期保留被拒绝曲目的音频。当前确认界面提示文件将在 1 天后删除；具体保留期限以平台管理员说明为准。</p>
+<h3>拒绝（可重新提交）</h3>
+<p>曲师可以上传新的源文件，开启新的制作周期，并重新进入流程第一阶段。</p>
+<p>执行拒绝前，应通过评论或其他团队沟通说明原因。对于可能修正的问题，优先考虑允许重新提交。</p>
+<h2>曲师重新投稿后的处理</h2>
+<p>曲师点击“上传新源音频”并上传新文件后：</p>
+<ul>
+<li>曲目的制作周期增加；</li>
+<li>新文件成为当前源版本；</li>
+<li>旧周期的问题、版本和工作流记录继续保留；</li>
+<li>曲目返回当前工作流的第一阶段；</li>
+<li>主催需要重新进行接收审核。</li>
+</ul>
+<p>重新接收时，应确认原拒绝原因已经处理，并注意不要将旧周期问题误认为当前版本的新问题。</p>
+<h2>常见问题</h2>
+<h3>看不到“送「母带制作」”</h3>
+<p>请确认：</p>
+<ul>
+<li>当前阶段确实是“主催审批”；</li>
+<li>当前用户具有专辑管理权限；</li>
+<li>工作流中主催审批阶段存在通往母带阶段的通过路径。</li>
+</ul>
+<h3>曲师上传新版本后没有返回主催审批</h3>
+<p>实际返回阶段由专辑工作流决定。请查看曲目工作流进度，并检查自定义工作流中的修订回路设置。</p>
+<h3>仍有未解决问题，是否可以送「母带制作」</h3>
+<p>平台可能不会自动阻止所有未解决问题下的推进。主催应根据问题严重程度和团队结论自行判断，并在推进前确认关键问题已经处理。</p>
+<h3>已拒绝曲目没有“上传新源音频”</h3>
+<p>该曲目可能使用了“最终拒绝”，而不是“拒绝（可重新提交）”。最终拒绝不能通过普通流程重新投稿。</p>
+<h2>相关说明</h2>
+<ul>
+<li><a href="#producer-intake">接收投稿与分配评审</a></li>
+<li><a href="#composer-revision">曲师：处理反馈、上传修订与确认母带</a></li>
+<li><a href="#mastering">母带沟通、交付、修改与确认</a></li>
+</ul></div>
+          <nav class="article-pagination" aria-label="章节导航">
+            <button type="button" data-prev>← 上一篇</button>
+            <span>11 / 16</span>
+            <button type="button" data-next>下一篇 →</button>
+          </nav>
+        </article><article class="guide-page" id="page-producer-final-review" data-page="producer-final-review" data-title="最终审核、完成与重新开启" data-index="12" hidden>
+          <header class="article-header">
+            <div>
+              <p class="article-kicker">主催指南 / 12</p>
+              <h1>最终审核、完成与重新开启</h1>
+            </div>
+            <button class="copy-link" type="button" data-copy-link>复制链接</button>
+          </header>
+          <div class="article-body">
+<p>适用对象：主催、副主催<br/>
+适用阶段：终审、已完成</p>
+<p>母带交付物完成上传者确认后，曲目进入“终审”。默认流程要求主催和投稿曲师分别批准当前母带，双方都批准后曲目才会变为“已完成”。</p>
+<h2>操作前确认</h2>
+<ul>
+<li>当前母带已经由上传者确认无误。</li>
+<li>正在审听最新的母带交付版本。</li>
+<li>已经查看母带交付说明。</li>
+<li>已经检查母带阶段的问题和沟通记录。</li>
+<li>投稿曲师已经知道需要进行最终确认。</li>
+</ul>
+<h2>检查当前母带</h2>
+<ol>
+<li>打开处于“终审”的曲目。</li>
+<li>查看当前母带的交付编号、上传者和确认时间。</li>
+<li>完整播放或下载母带文件。</li>
+<li>检查母带问题及其处理状态。</li>
+<li>必要时与历史母带版本进行比较。</li>
+<li>查看主催和投稿曲师的批准状态。</li>
+</ol>
+<p>确认时应检查文件内容和交付信息，不应只根据文件名判断。终审问题的状态由专辑母带工程师处理；主催和投稿曲师可以补充评论，但不能代替母带工程师完成状态转换。</p>
+<p>终审不是多人同行评审阶段，只支持公开问题，不会显示“仅内部”。旧页面或其他客户端尝试提交“仅内部”时，平台会拒绝请求且不会创建问题。</p>
+<p><img alt="主催终审页面" decoding="async" loading="lazy" src="assets/producer-final-review.png"/></p>
+<h2>批准当前母带</h2>
+<p>确认母带可以作为最终版本后：</p>
+<ol>
+<li>点击“批准当前母带”。</li>
+<li>确认批准操作。</li>
+<li>查看主催批准状态是否已经更新。</li>
+<li>如果投稿曲师尚未批准，等待其完成确认。</li>
+</ol>
+<p>主催批准不会单独完成曲目。只有主催和投稿侧都批准后，曲目才进入“已完成”。多人合作曲目只记录一次投稿侧批准，不要求每位绑定曲师分别确认；团队应先确定由哪位曲师代表投稿侧操作。</p>
+<p>同一用户同时具有专辑管理权限和该曲目的投稿曲师身份时，一次批准可能同时完成双方确认。</p>
+<h2>打回到「母带制作」</h2>
+<p>发现母带问题时：</p>
+<ol>
+<li>创建问题或发表评论，记录具体退回原因。</li>
+<li>点击“打回到「母带制作」”。</li>
+<li>确认曲目返回“母带制作”。</li>
+<li>通知母带工程师查看问题并重新交付。</li>
+</ol>
+<p>该操作没有单独填写原因的表单，应在点击前完成问题或评论记录。</p>
+<p>新的母带交付完成后，曲目会再次进入终审。旧母带交付物仍保留在历史记录中。</p>
+<p><img alt="投稿曲师终审操作" decoding="async" loading="lazy" src="assets/composer-final-review.png"/></p>
+<h2>投稿曲师退回母带</h2>
+<p>当前终审界面可能同时向投稿曲师显示“打回到「母带制作」”和“请求退回”：</p>
+<ul>
+<li>“打回到「母带制作」”是工作流直接退回操作；执行前应先创建终审问题或发表评论。</li>
+<li>“请求退回”当前不可用，不应依赖该操作推进流程。</li>
+</ul>
+<p>发现问题时，投稿曲师应先创建问题或发表评论；页面允许直接打回时使用“打回到「母带制作」”，否则联系主催代为处理。</p>
+<h2>曲目完成后</h2>
+<p>双方批准后，曲目进入“已完成”。参与者仍可以：</p>
+<ul>
+<li>播放或下载最终母带；</li>
+<li>查看历史源版本和母带版本；</li>
+<li>查看问题、评论和工作流记录；</li>
+<li>在具有权限时申请或执行重新开启；</li>
+<li>在专辑允许时申请补交源音频。</li>
+</ul>
+<p>完成状态不会立即删除问题、评论和版本记录，但平台当前默认只继续保留非当前源版本的音频文件 7 天。需要长期保存时请及时下载；如果随后归档曲目，归档超过 14 天后整首曲目及其关联记录和文件会被永久删除。</p>
+<h2>重新开启曲目</h2>
+<p>确认已完成曲目需要再次进入制作流程时，专辑主催或专辑母带工程师可以执行重新开启：</p>
+<ol>
+<li>打开已完成曲目。</li>
+<li>选择重新开启操作。</li>
+<li>选择需要返回的工作流阶段。</li>
+<li>提交操作并检查新的当前阶段。</li>
+</ol>
+<p>直接重新开启时无需填写申请理由。选择母带相关阶段后，页面会显示“母带备注（可选）”；需要留下其他说明时，应在操作前通过问题或评论记录。</p>
+<p>重新开启后的结果取决于所选阶段：</p>
+<ul>
+<li>返回首个交付阶段或更早阶段时，平台会建立新的制作周期；</li>
+<li>返回晚于首个交付阶段的阶段时，不会增加制作周期；</li>
+<li>当前母带的主催和投稿侧批准状态会被清除，需要重新终审；</li>
+<li>新制作周期可能重置需要重新填写的同行评审清单；</li>
+<li>历史版本、问题和工作流事件仍保留用于追踪。</li>
+</ul>
+<p>当前界面允许母带工程师从可用的交付或修订阶段中选择返回目标，并未只限制为母带阶段。选择更早阶段前，应先与主催确认。重新开启会撤销当前完成结论，只应在确实需要继续正式制作时使用。</p>
+<h2>曲师的重新开启申请</h2>
+<p>投稿曲师可以对已完成曲目选择目标阶段、填写原因并提交重新开启申请。主催会收到通知。</p>
+<p>当前普通主催页面不会显示申请原因和目标阶段，也没有“批准 / 拒绝”控件，无法按正常前端流程完成审批。收到通知后，应先与曲师确认申请内容，再联系平台管理员从管理后台处理。申请获批时会使用曲师提交时选择的目标阶段，审批人不能另选阶段。</p>
+<p>不要另行使用主催的“直接重新开启”操作代替申请审批。直接重新开启不会将原申请标记为已处理，可能留下仍处于待处理状态的申请，并影响后续重新开启或源音频补交。</p>
+<h2>处理源音频补交申请</h2>
+<p>专辑启用源音频补交后，投稿曲师可以在页面提供入口的非修订阶段提交新的源文件，不限于已完成曲目。申请提交后，曲目立即进入源音频补交待处理状态，普通流程操作暂时停止。</p>
+<p>当前审批卡只显示申请原因和可选返回阶段，不能直接试听或下载暂存的新文件。主催收到申请后应：</p>
+<ol>
+<li>阅读补交原因，并向投稿侧确认文件名和版本；</li>
+<li>通过团队认可的安全方式取得可核对的文件，完整试听或下载检查；</li>
+<li>判断新文件会影响哪些已经完成的评审或母带工作；</li>
+<li>批准时选择首个交付阶段或之前的非修订阶段，或拒绝申请；</li>
+<li>无法核对新文件时不要批准。</li>
+</ol>
+<p>批准会建立新的制作周期，创建新的当前源版本，并使旧的当前母带失效。母带工程师也可以审批，但只能批准返回母带相关阶段。拒绝后，曲目恢复申请前的阶段；投稿侧也可以在审批前主动取消申请，取消后暂存文件会被删除。</p>
+<p>源音频补交会替换当前源文件并重新启动制作流程，不应作为单纯的文件归档功能。</p>
+<h2>常见问题</h2>
+<h3>主催已经批准，但曲目仍未完成</h3>
+<p>请检查投稿曲师是否也已经点击“批准当前母带”。默认流程需要双方确认。</p>
+<h3>看不到“打回到「母带制作」”</h3>
+<p>当前专辑的自定义工作流可能没有配置终审退回路径。请检查终审阶段的“额外打回目标”或修订设置。</p>
+<h3>已完成曲目为什么又出现在进行中</h3>
+<p>曲目可能已被重新开启，或正在处理源文件补交申请。打开工作流记录可以查看具体操作人和时间。</p>
+<h2>相关说明</h2>
+<ul>
+<li><a href="#mastering">母带沟通、交付、修改与确认</a></li>
+<li><a href="#composer-revision">曲师：处理反馈、上传修订与确认母带</a></li>
+<li><a href="#issues-and-versions">问题、评论、附件与版本</a></li>
+</ul></div>
+          <nav class="article-pagination" aria-label="章节导航">
+            <button type="button" data-prev>← 上一篇</button>
+            <span>12 / 16</span>
+            <button type="button" data-next>下一篇 →</button>
+          </nav>
+        </article><article class="guide-page" id="page-composer-submission" data-page="composer-submission" data-title="提交自己的曲目" data-index="13" hidden>
+          <header class="article-header">
+            <div>
+              <p class="article-kicker">曲师指南 / 13</p>
+              <h1>提交自己的曲目</h1>
+            </div>
+            <button class="copy-link" type="button" data-copy-link>复制链接</button>
+          </header>
+          <div class="article-body">
+<p>适用对象：投稿曲师；代外部曲师投稿的主催或副主催</p>
+<p>提交曲目时，需要选择专辑、上传源音频，并在艺术家信息中绑定实际参与创作的平台用户。</p>
+<h2>操作前确认</h2>
+<ul>
+<li>已经按照<a href="#getting-started">注册、邮箱验证与登录</a>中的步骤，通过邀请码加入专辑所属社团。</li>
+<li>能够在平台中看到目标专辑。</li>
+<li>已经准备正确的源音频文件。</li>
+<li>已经取得所有平台曲师的用户 UID。</li>
+<li>已经准备曲目标题、艺术家名义和必要的补充资料。</li>
+</ul>
+<h2>查找用户 UID</h2>
+<p>平台曲师需要通过用户 UID 与曲目绑定。“个人中心”页面显示的“用户 ID”就是投稿表单所称的 UID。点击页面左下角的头像可以进入“个人中心”。</p>
+<p>多人合作曲目应提前收集所有平台曲师的 UID。不要使用用户名、邮箱或社团昵称代替 UID。</p>
+<h2>打开投稿页面</h2>
+<ol>
+<li>登录平台。</li>
+<li>打开侧栏中的“提交”。</li>
+<li>选择目标专辑。</li>
+<li>选择需要上传的音频文件。</li>
+</ol>
+<p>如果目标专辑没有显示，请确认自己已经加入所属社团，并具有该专辑的访问权限。</p>
+<p><img alt="曲目投稿页面" decoding="async" loading="lazy" src="assets/composer-submission.png"/></p>
+<h2>填写曲目信息</h2>
+<p>投稿表单包括：</p>
+<ul>
+<li>曲目标题；</li>
+<li>艺术家名义；</li>
+<li>平台用户 UID；</li>
+<li>BPM；</li>
+<li>原曲；</li>
+<li>出处；</li>
+<li>提交说明；</li>
+<li>音频文件。</li>
+</ul>
+<p>提交时必须选择目标专辑和音频文件，填写曲目标题，并至少保留一行具有艺术家名义的艺术家信息。曲目还必须绑定至少一名平台曲师，或由主催、副主催为纯外部曲师代投。BPM、原曲、出处和提交说明可以根据专辑要求填写。</p>
+<h2>添加平台曲师</h2>
+<p>每一行艺术家信息可以填写显示在曲目上的艺术家名义，并使用平台用户 UID 绑定实际曲师。</p>
+<ol>
+<li>填写艺术家名义。</li>
+<li>输入对应平台用户 UID。</li>
+<li>多人合作时继续添加艺术家行。</li>
+<li>检查每个艺术家与 UID 是否对应。</li>
+</ol>
+<p>被绑定的用户必须属于专辑关联社团。提交成功后，这些用户将获得该曲目的投稿侧权限。</p>
+<p><img alt="个人资料中的用户 ID" decoding="async" loading="lazy" src="assets/profile-user-id.png"/></p>
+<h2>添加外部曲师</h2>
+<p>没有平台账户的参与者可以只填写外部曲师姓名，不填写平台用户 UID。</p>
+<p>需要注意：</p>
+<ul>
+<li>曲目至少需要一名平台曲师或外部曲师；</li>
+<li>普通成员不能提交完全由外部曲师组成的曲目；</li>
+<li>纯外部曲师的曲目必须由专辑主催或副主催代为投稿；</li>
+<li>实际代投稿人将负责后续投稿侧修订和最终确认。</li>
+</ul>
+<p>平台不会向外部曲师发送任务或通知。</p>
+<h2>上传并提交</h2>
+<ol>
+<li>再次检查目标专辑。</li>
+<li>确认音频文件选择正确。</li>
+<li>检查曲目标题和艺术家信息。</li>
+<li>根据需要填写 BPM、原曲、出处和提交说明。</li>
+<li>点击“提交曲目”。</li>
+<li>等待上传和提交完成，不要重复点击按钮或关闭页面。</li>
+</ol>
+<p>前端会拒绝超过 200 MB 的源音频文件。文件较大时，请在上传前确认网络稳定。</p>
+<h2>提交完成后</h2>
+<p>投稿成功后：</p>
+<ul>
+<li>平台创建源文件版本 1；</li>
+<li>曲目进入默认工作流的“接收审核”；</li>
+<li>主催收到新投稿通知；</li>
+<li>平台曲师可以查看该曲目的进度；</li>
+<li>后续修订不会覆盖初始版本。</li>
+</ul>
+<p>投稿曲师暂时不需要继续推进流程，应等待主催接收或退回。</p>
+<h2>提交说明建议</h2>
+<p>提交说明可以包括：</p>
+<ul>
+<li>当前版本的完成程度；</li>
+<li>希望评审重点检查的部分；</li>
+<li>已知但暂未处理的问题；</li>
+<li>特殊编曲、混音或音色说明；</li>
+<li>与外部分轨或母带制作有关的注意事项。</li>
+</ul>
+<p>说明应简洁具体，不要只填写“请检查”等缺少信息的内容。</p>
+<h2>常见问题</h2>
+<h3>提示 UID 无效</h3>
+<p>请确认输入的是正整数 UID，并检查该用户已经加入专辑所属社团。</p>
+<h3>无法选择目标专辑</h3>
+<p>当前用户可能尚未加入所属社团或专辑团队。请联系主催确认成员配置。</p>
+<h3>普通成员无法提交纯外部曲师曲目</h3>
+<p>这是平台权限限制。请由专辑主催或副主催代为投稿，并填写外部曲师姓名。</p>
+<h3>上传过程中失败</h3>
+<p>请检查文件大小、网络连接和登录状态。不要反复提交同一表单；先确认曲目列表中是否已经产生记录，再重新尝试。</p>
+<h3>提交后发现文件错误</h3>
+<p>在主催尚未处理前，应立即联系主催。主催可以选择“拒绝（可重新提交）”，由曲师上传正确文件并重新进入流程。</p>
+<h2>相关说明</h2>
+<ul>
+<li><a href="#roles">认识社团、专辑和曲目职责</a></li>
+<li><a href="#composer-revision">处理反馈、上传修订与确认母带</a></li>
+<li><a href="#producer-intake">主催：接收投稿与分配评审</a></li>
+</ul></div>
+          <nav class="article-pagination" aria-label="章节导航">
+            <button type="button" data-prev>← 上一篇</button>
+            <span>13 / 16</span>
+            <button type="button" data-next>下一篇 →</button>
+          </nav>
+        </article><article class="guide-page" id="page-composer-peer-review" data-page="composer-peer-review" data-title="进行同行评审" data-index="14" hidden>
+          <header class="article-header">
+            <div>
+              <p class="article-kicker">曲师指南 / 14</p>
+              <h1>进行同行评审</h1>
+            </div>
+            <button class="copy-link" type="button" data-copy-link>复制链接</button>
+          </header>
+          <div class="article-body">
+<p>适用对象：被分配同行评审任务的曲师或其他社团成员<br/>
+适用阶段：同行评审</p>
+<p>只有收到当前曲目评审分配的用户，才能执行同行评审操作。曲师可以评审同一专辑中的其他曲目，但不会被分配自己的曲目。</p>
+<h2>操作前确认</h2>
+<ul>
+<li>通知或仪表盘中已经显示该评审任务。</li>
+<li>曲目当前阶段为“同行评审”。</li>
+<li>当前用户出现在评审分配中。</li>
+<li>音频可以正常播放。</li>
+<li>已经了解专辑同行评审清单和评审截止日期。</li>
+</ul>
+<h2>打开评审任务</h2>
+<ol>
+<li>从仪表盘或通知中心打开被分配的曲目。</li>
+<li>确认当前工作流阶段为“同行评审”。</li>
+<li>查看评审任务状态和所需审阅人数。</li>
+<li>阅读曲目提交说明。</li>
+<li>完整审听当前源文件。</li>
+</ol>
+<p>同行评审阶段可能隐藏曲师和其他评审人的真实身份。匿名编号不影响创建问题或提交评审结论。</p>
+<p><img alt="同行评审页面" decoding="async" loading="lazy" src="assets/reviewer-peer-review.png"/></p>
+<h2>使用波形进行审听</h2>
+<p>在波形播放器中可以：</p>
+<ul>
+<li>播放或暂停；</li>
+<li>跳转到指定时间；</li>
+<li>查看已有问题标记；</li>
+<li>选择时间点或时间范围；</li>
+<li>打开对应问题详情；</li>
+<li>在允许时比较不同源文件版本。</li>
+</ul>
+<p>建议先完整审听一次，再进行细节检查。创建问题前，应确认当前播放的是最新源文件版本。</p>
+<h2>创建问题</h2>
+<h3>时间点问题</h3>
+<p>适用于爆音、错音、瞬时杂音或某个具体事件。</p>
+<ol>
+<li>将播放位置移动到问题发生处。</li>
+<li>选择时间点标记。</li>
+<li>填写标题、描述和严重程度。</li>
+<li>根据需要添加附件。</li>
+<li>发布问题。</li>
+</ol>
+<h3>时间范围问题</h3>
+<p>适用于一段持续存在的音量、节奏、音色或编排问题。</p>
+<ol>
+<li>在波形上选择开始和结束时间。</li>
+<li>创建时间范围问题。</li>
+<li>描述该范围内的问题和期望结果。</li>
+<li>发布问题。</li>
+</ol>
+<h3>整体问题</h3>
+<p>适用于响度、整体平衡、结构或全曲通用事项。创建时不需要选择时间位置。</p>
+<p><img alt="问题创建面板" decoding="async" loading="lazy" src="assets/reviewer-create-issue.png"/></p>
+<h2>公开问题与内部讨论</h2>
+<p>多人同行评审时，页面提供“公开”和“仅内部”的切换。需要投稿曲师处理的问题应设为“公开”；尚未确定是否需要曲师修改，或只需要评审侧确认的问题，可以暂时设为“仅内部”。</p>
+<p>投稿曲师看不到处于“待讨论”或“内部结案”状态的问题及其内部评论。决定要求曲师处理后，应将问题公开为“待处理”。“仅内部”主要保证对投稿曲师隐藏，不应理解为严格限制为指定评审人可见。</p>
+<p>“仅内部”只在多人同行评审中提供。单人评审、主催审批和终审只支持公开问题；旧页面或其他客户端在这些阶段提交“仅内部”时，平台会拒绝请求且不会创建问题。</p>
+<h2>填写同行评审清单</h2>
+<p>专辑启用同行评审清单时：</p>
+<ol>
+<li>找到评审页面中的“同行评审清单”。</li>
+<li>逐项检查并填写结果。</li>
+<li>点击“保存清单”。</li>
+<li>确认保存成功后再提交个人评审意见。</li>
+</ol>
+<p>未保存当前评审人的清单时，平台不允许提交个人评审意见。清单只记录统一检查项，具体问题仍应单独创建。</p>
+<h2>提交评审意见</h2>
+<p>完成审听、问题记录和同行评审清单后，根据检查结果选择：</p>
+<h3>提交个人意见：打回修订</h3>
+<p>当前版本存在需要曲师修改的问题时，点击“提交个人意见：打回修订”。提交前应确认需要处理的问题已经公开，并能够让曲师理解修改要求。</p>
+<h3>提交个人意见：通过</h3>
+<p>当前版本可以继续，或所有意见都不需要阻止流程时，点击“提交个人意见：通过”。</p>
+<h2>多人评审</h2>
+<p>多人评审时，流程取决于专辑的“返修触发方式”。</p>
+<h3>达到人数后统一决定</h3>
+<ol>
+<li>每位评审人先提交个人评审意见。</li>
+<li>达到“所需审阅人数”后，评审组进入最终决定状态。</li>
+<li>由评审组内成员点击“提交评审组最终结论：通过”或“提交评审组最终结论：打回修订”。</li>
+<li>曲目根据最终结论进入曲师修订或主催审批。</li>
+</ol>
+<h3>任一评审打回即返修</h3>
+<p>评审人可以先提交个人建议；问题已经明确时，也可以点击“要求曲师重新上传”，使曲目立即进入修订阶段。执行前应确保修改要求已经记录清楚。</p>
+<p>固定评审模式下，实际分配到的固定评审人需要全部完成评审。</p>
+<h2>评审完成后</h2>
+<p>提交成功后：</p>
+<ul>
+<li>当前评审任务被标记为完成；</li>
+<li>多人评审可能继续等待其他评审人；</li>
+<li>达到流程要求后，曲目进入修订或主催审批；</li>
+<li>后续阶段仍可查看本次问题和评审记录。</li>
+</ul>
+<p>不要通过重复提交尝试加快流程。曲目等待其他评审人时，应以页面提示为准。</p>
+<h2>常见问题</h2>
+<h3>收到通知，但页面没有评审操作</h3>
+<p>任务可能已经被重新分配，或当前阶段已经结束。刷新页面后仍无操作时，请联系主催确认分配状态。</p>
+<h3>无法提交评审结论</h3>
+<p>请检查：</p>
+<ul>
+<li>同行评审清单是否已经保存；</li>
+<li>必填项目是否完成；</li>
+<li>当前用户是否仍是有效评审人；</li>
+<li>曲目是否仍处于同行评审；</li>
+<li>是否正在等待达到多人评审的最终决定条件。</li>
+</ul>
+<h3>无法评审某首曲目</h3>
+<p>如果当前用户是该曲目的平台曲师，系统会将其排除，不能参与自己的曲目评审。</p>
+<h3>创建的问题没有显示给曲师</h3>
+<p>问题可能处于内部状态。需要曲师处理时，请将问题公开。</p>
+<h2>相关说明</h2>
+<ul>
+<li><a href="#issues-and-versions">问题、评论、附件与版本</a></li>
+<li><a href="#producer-workflow">主催：设置同行评审规则</a></li>
+<li><a href="#composer-revision">曲师：处理反馈、上传修订与确认母带</a></li>
+</ul></div>
+          <nav class="article-pagination" aria-label="章节导航">
+            <button type="button" data-prev>← 上一篇</button>
+            <span>14 / 16</span>
+            <button type="button" data-next>下一篇 →</button>
+          </nav>
+        </article><article class="guide-page" id="page-composer-revision" data-page="composer-revision" data-title="处理反馈、上传修订与确认母带" data-index="15" hidden>
+          <header class="article-header">
+            <div>
+              <p class="article-kicker">曲师指南 / 15</p>
+              <h1>处理反馈、上传修订与确认母带</h1>
+            </div>
+            <button class="copy-link" type="button" data-copy-link>复制链接</button>
+          </header>
+          <div class="article-body">
+<p>适用对象：投稿曲师；实际代外部曲师投稿的主催或副主催</p>
+<p>投稿后，曲师可能需要在同行修订、主催修订、母带修订和终审阶段继续操作。每次上传新源文件都会建立新的版本记录，不会覆盖旧版本。</p>
+<h2>查看需要处理的反馈</h2>
+<ol>
+<li>从通知或仪表盘打开需要修订的曲目。</li>
+<li>确认当前工作流阶段。</li>
+<li>查看公开问题和评论。</li>
+<li>使用严重程度和状态筛选需要优先处理的问题。</li>
+<li>注意每个问题对应的源文件版本和时间位置。</li>
+<li>在开始修改前确认所有要求已经理解。</li>
+</ol>
+<p>同行评审内部问题不会显示给投稿曲师。曲师只需处理当前可见的公开问题。</p>
+<p><img alt="曲师修订页面" decoding="async" loading="lazy" src="assets/composer-peer-revision.png"/></p>
+<h2>更新问题状态</h2>
+<h3>标记为已解决</h3>
+<p>已经按要求完成修改，或确认问题已经处理时，可将问题标记为“已解决”。建议同时填写处理说明，说明修改了什么。</p>
+<h3>标记为有异议</h3>
+<p>认为问题不需要修改、无法按建议修改或存在其他判断时，可选择“有异议”。应说明：</p>
+<ul>
+<li>不同意的具体原因；</li>
+<li>当前处理方式；</li>
+<li>可能产生的影响；</li>
+<li>是否需要主催或评审人进一步确认。</li>
+</ul>
+<p>“有异议”不是删除问题。评审人或负责人可以继续讨论或重新打开问题。</p>
+<h3>批量处理问题</h3>
+<p>多个问题采用相同处理结果时，可以使用批量操作。提交前应检查所选问题，避免将尚未处理的事项误标为已解决。</p>
+<h2>上传同行修订版</h2>
+<p>曲目处于同行修订阶段时：</p>
+<ol>
+<li>完成源音频修改。</li>
+<li>在问题列表中更新相关问题状态。</li>
+<li>选择新的修订音频。</li>
+<li>根据需要填写“修订说明”。</li>
+<li>根据页面选项关联本次处理的问题。</li>
+<li>点击“上传修订版”。</li>
+<li>等待上传完成。</li>
+</ol>
+<p>上传成功后：</p>
+<ul>
+<li>曲目版本号增加；</li>
+<li>新文件成为当前源版本；</li>
+<li>旧源文件继续保留；</li>
+<li>曲目返回同行评审；</li>
+<li>评审人收到新的处理任务。</li>
+</ul>
+<h2>处理主催要求的再次修订</h2>
+<p>主催在“主催审批”中要求再次修改时，曲目进入主催修订阶段。</p>
+<p>操作方法与同行修订相同：</p>
+<ol>
+<li>阅读主催问题和说明。</li>
+<li>更新相关问题状态。</li>
+<li>上传新的源文件版本。</li>
+<li>根据需要填写修订说明。</li>
+<li>提交后等待曲目返回“主催审批”。</li>
+</ol>
+<p>修订说明为可选项；如填写，应明确回应主催提出的内容，方便其判断是否可以送母带。</p>
+<h2>处理母带阶段修订</h2>
+<p>母带工程师提出修订时，会先指定需要提交的内容：</p>
+<ul>
+<li>修改并上传新的源音频；或</li>
+<li>提交外部分轨链接，即通过团队使用的外部存储服务共享分轨文件。</li>
+</ul>
+<p>曲师页面会直接显示母带工程师指定的表单，正常情况下无需自行选择提交方式。如果页面显示的要求与实际需要不一致，请先通过母带沟通联系母带工程师，由其重新确认修订要求。</p>
+<h3>上传新的源音频</h3>
+<ol>
+<li>确认页面要求提交源音频。</li>
+<li>选择新文件。</li>
+<li>根据需要填写修订说明。</li>
+<li>更新相关问题状态。</li>
+<li>点击“上传修订版”。</li>
+</ol>
+<h3>提交外部分轨链接</h3>
+<ol>
+<li>确认页面显示“提交分轨 / 多轨网盘链接”。</li>
+<li>在“网盘链接、提取码和说明”中填写共享链接、提取码及必要的文件和版本说明。</li>
+<li>自行确认链接权限允许母带工程师访问，并检查有效期。</li>
+<li>点击“提交分轨链接”。</li>
+</ol>
+<p>平台只检查该文本是否为空，不会自动验证链接格式、访问权限或有效期。需要补充多个文件时，应整理到同一个可访问的共享位置。</p>
+<p>修订完成后，曲目返回“母带制作”，由母带工程师继续处理。</p>
+<p><img alt="修订后的源版本比较" decoding="async" loading="lazy" src="assets/reviewer-peer-review-v2.png"/></p>
+<h2>查看和比较历史版本</h2>
+<p>打开版本选择器，可以查看不同源文件版本的记录。在历史音频文件仍处于保留期内时，可以：</p>
+<ul>
+<li>播放或下载旧版本；</li>
+<li>查看版本号、上传者和修订说明；</li>
+<li>查看绑定到该版本的问题；</li>
+<li>比较修订前后的音频。</li>
+</ul>
+<p>曲目完成后，平台当前默认只继续保留非当前源版本的音频文件 7 天。需要长期归档时，请及时下载。文件到期后，版本记录和关联问题仍可能保留，但旧音频不能继续播放或下载。</p>
+<p>旧版本处于只读模式，不能用于创建针对当前制作的新问题。</p>
+<h2>在终审中确认母带</h2>
+<p>母带交付进入终审后：</p>
+<ol>
+<li>打开当前母带交付物。</li>
+<li>完整播放或下载文件。</li>
+<li>查看交付说明和历史版本。</li>
+<li>检查是否仍有需要处理的问题。</li>
+<li>确认无误后点击“批准当前母带”。</li>
+</ol>
+<p>只有主催和投稿侧都批准后，曲目才会进入“已完成”。多人合作曲目只需要其中一位绑定的平台曲师完成投稿侧批准，不要求每位曲师分别操作；确认前应先在团队内统一意见。主催已经批准并不表示投稿侧可以省略确认。</p>
+<p><img alt="投稿曲师的终审页面" decoding="async" loading="lazy" src="assets/composer-final-review.png"/></p>
+<h2>退回有问题的母带</h2>
+<p>当前终审界面可能同时显示“打回到「母带制作」”和“请求退回”。发现问题时，应先创建终审问题或发表评论，写明具体原因、时间位置和期望结果。</p>
+<ul>
+<li>页面允许直接退回时，可以点击“打回到「母带制作」”。</li>
+<li>“请求退回”当前不可用，不应依赖该操作推进流程。</li>
+<li>无法直接退回时，请联系主催代为处理。</li>
+</ul>
+<p>不要在存在明确问题时先批准再退回。批准操作表示认可当前母带作为最终版本。</p>
+<h2>拒绝后重新提交</h2>
+<p>曲目处于允许重新提交的拒绝状态时：</p>
+<ol>
+<li>打开被拒绝的曲目。</li>
+<li>阅读拒绝原因。</li>
+<li>准备新的源音频。</li>
+<li>点击“上传新源音频”。</li>
+<li>选择文件并等待上传完成。</li>
+</ol>
+<p>重新提交会开启新的制作周期，并返回工作流第一阶段。旧周期记录不会被删除。</p>
+<p>最终拒绝的曲目不会显示普通重新提交操作。</p>
+<h2>已完成后申请重新开启</h2>
+<p>已完成曲目需要再次进入正式制作流程时，投稿曲师可以：</p>
+<ol>
+<li>选择申请重新开启；</li>
+<li>选择希望返回的工作流阶段；</li>
+<li>填写重新开启原因；</li>
+<li>提交申请。</li>
+</ol>
+<p>申请获批时会使用曲师提交时选择的目标阶段。返回首个交付阶段或更早阶段时，平台会建立新的制作周期；返回晚于首个交付阶段的阶段时，不会增加周期。重新开启会清除当前母带的双方批准状态，需要重新终审。</p>
+<p>提交申请后，主催会收到通知，但当前普通主催页面不会显示申请原因和目标阶段，也没有“批准 / 拒绝”控件。提交前应先与主催确认重新开启安排；提交后还需联系平台管理员从管理后台处理，否则申请会一直停留在待处理状态，并阻止再次申请重新开启或源音频补交。</p>
+<p>不要让主催另行使用“直接重新开启”替代申请审批。直接重新开启不会将原申请标记为已处理，可能留下仍处于待处理状态的申请。</p>
+<h2>提交源音频补交申请</h2>
+<p>专辑启用源音频补交后，页面会在符合条件的非修订阶段提供补交入口，不限于已完成曲目。</p>
+<p>提交前应确认这不是当前修订阶段可以正常处理的文件更新。申请提交后：</p>
+<ul>
+<li>曲目立即进入源音频补交待处理状态，普通工作流操作暂时停止；</li>
+<li>当前审批卡不能让审批人直接试听或下载暂存文件，应通过团队认可的安全方式另行提供可核对的文件；</li>
+<li>批准目标不能是修订阶段，也不能晚于首个交付阶段；</li>
+<li>批准会建立新的制作周期，使新文件成为当前源版本，并使旧的当前母带失效；</li>
+<li>拒绝后，曲目恢复申请前的阶段；</li>
+<li>投稿侧可以在审批前点击取消，取消后暂存文件会被删除，曲目恢复申请前的阶段。</li>
+</ul>
+<p>源音频补交会使已经完成的评审或母带工作需要重新进行。申请说明中应写明补交原因、文件版本和影响范围，并在提交后与主催确认核对方式。</p>
+<h2>常见问题</h2>
+<h3>上传新版本后旧文件还在</h3>
+<p>这是正常行为。平台保留不可变的历史版本，用于比较和追踪制作过程。</p>
+<h3>问题标记为已解决后又被重新打开</h3>
+<p>评审人或负责人检查新版本后仍认为问题存在，可以重新打开。请查看新增评论并继续处理。</p>
+<h3>外部分轨链接无法提交或无法访问</h3>
+<p>请确认页面要求的是外部分轨链接，并自行检查共享链接、提取码、分享权限和有效期。平台不会自动验证链接格式或可访问性，建议使用不需要额外申请权限的团队共享链接。</p>
+<h3>主催已经批准，但曲目仍处于终审</h3>
+<p>投稿侧还需要点击“批准当前母带”。双方都批准后曲目才会完成。</p>
+<h2>相关说明</h2>
+<ul>
+<li><a href="#composer-submission">提交自己的曲目</a></li>
+<li><a href="#composer-peer-review">进行同行评审</a></li>
+<li><a href="#issues-and-versions">问题、评论、附件与版本</a></li>
+<li><a href="#mastering">母带沟通、交付、修改与确认</a></li>
+</ul></div>
+          <nav class="article-pagination" aria-label="章节导航">
+            <button type="button" data-prev>← 上一篇</button>
+            <span>15 / 16</span>
+            <button type="button" data-next>下一篇 →</button>
+          </nav>
+        </article><article class="guide-page" id="page-mastering" data-page="mastering" data-title="母带沟通、交付、修改与确认" data-index="16" hidden>
+          <header class="article-header">
+            <div>
+              <p class="article-kicker">母带工程师 / 16</p>
+              <h1>母带沟通、交付、修改与确认</h1>
+            </div>
+            <button class="copy-link" type="button" data-copy-link>复制链接</button>
+          </header>
+          <div class="article-body">
+<p>适用对象：被指定为当前专辑母带工程师的用户<br/>
+适用阶段：母带制作</p>
+<p>社团中的“母带工程师”身份不会自动分配具体任务。只有在专辑设置中被指定为该专辑的母带工程师后，用户才能执行母带操作。</p>
+<h2>操作前确认</h2>
+<ul>
+<li>已经按照<a href="#getting-started">注册、邮箱验证与登录</a>中的步骤加入专辑所属社团，并被指定为该专辑的母带工程师。</li>
+<li>曲目当前处于“母带制作”。</li>
+<li>可以正常播放或下载当前源文件。</li>
+<li>已经阅读主催、曲师和同行评审留下的问题与说明。</li>
+<li>已经确认交付格式、命名和截止日期。</li>
+</ul>
+<h2>打开母带任务</h2>
+<p>从仪表盘、通知或曲目详情打开母带任务，页面可能进入“母带制作”阶段页，或进入标题为“母带沟通”的母带工作台。两种入口都围绕以下功能组织，具体布局可能不同：</p>
+<ul>
+<li><strong>沟通</strong>：与曲师和主催讨论制作事项；</li>
+<li><strong>审听</strong>：播放和检查当前源文件或母带；</li>
+<li><strong>问题反馈</strong>：创建和处理母带阶段问题；</li>
+<li><strong>交付管理</strong>：上传、确认和查看母带交付记录。</li>
+</ul>
+<p><img alt="母带工作台" decoding="async" loading="lazy" src="assets/mastering-workspace.png"/></p>
+<h2>下载和检查源文件</h2>
+<ol>
+<li>打开“审听”。</li>
+<li>确认当前源文件版本号和上传时间。</li>
+<li>完整播放或下载文件。</li>
+<li>查看修订说明和历史版本。</li>
+<li>检查是否有尚未处理的公开问题。</li>
+</ol>
+<p>母带制作应基于当前源版本。发现平台中的当前版本与团队约定不一致时，应先确认，不要直接上传交付物。</p>
+<h2>使用母带沟通</h2>
+<p>“沟通”用于记录与当前曲目母带制作有关的信息。可以发送：</p>
+<ul>
+<li>文字消息；</li>
+<li>图片；</li>
+<li>音频附件；</li>
+<li>时间引用；</li>
+<li>问题引用；</li>
+<li>用户提及。</li>
+</ul>
+<p>母带沟通只向该曲目的曲师、专辑主催和专辑母带工程师开放。重要决定应记录在平台中，避免只保留在外部聊天工具里。</p>
+<p>只有消息作者可以编辑自己的消息，平台会保留编辑历史。</p>
+<h2>创建母带问题</h2>
+<p>在“问题反馈”或审听区域中，可以创建时间点、时间范围或整体问题。发现源文件不适合继续制作时，应：</p>
+<ol>
+<li>标记具体时间位置或范围。</li>
+<li>填写问题标题和说明。</li>
+<li>选择严重程度。</li>
+<li>根据需要添加音频或图片附件。</li>
+<li>发布问题。</li>
+</ol>
+<p>问题应明确说明需要修改源文件，还是只需要提供额外分轨或说明。</p>
+<h2>请求修订</h2>
+<p>当前源文件需要曲师处理时：</p>
+<ol>
+<li>创建问题或发表评论，记录具体修订要求。</li>
+<li>点击“请求修订”。</li>
+<li>选择需要曲师提交新源音频还是外部分轨链接。</li>
+<li>确认曲目进入母带修订阶段。</li>
+</ol>
+<p>“请求修订”没有单独填写原因的表单。必须在点击前通过问题或评论说明修改内容。</p>
+<p>曲师完成提交后，曲目会返回“母带制作”。此时应检查新的源版本或外部链接，再继续母带工作。</p>
+<h2>上传母带交付物</h2>
+<p>母带文件准备完成后：</p>
+<ol>
+<li>在阶段页找到交付上传区域，或在母带工作台打开“交付管理”。</li>
+<li>点击“上传母带交付物”。</li>
+<li>选择母带音频文件。</li>
+<li>根据需要填写交付说明。</li>
+<li>点击“确认上传交付物”。</li>
+<li>等待上传完成。</li>
+</ol>
+<p>交付说明可以记录：</p>
+<ul>
+<li>版本变化；</li>
+<li>处理过的主要问题；</li>
+<li>响度或格式信息；</li>
+<li>需要主催和曲师重点检查的内容。</li>
+</ul>
+<p><img alt="母带审听页面" decoding="async" loading="lazy" src="assets/mastering-listen.png"/></p>
+<h2>确认自己上传的文件</h2>
+<p>默认工作流要求上传者在上传完成后再次确认。上传后应：</p>
+<ol>
+<li>播放或下载当前最新的母带交付物。</li>
+<li>检查文件是否完整、可播放且版本正确。</li>
+<li>核对交付说明。</li>
+<li>在阶段页点击“确认交付”；旧母带工作台中该按钮可能显示为“确认上传无误”。</li>
+</ol>
+<p>完成确认后，曲目才会进入“终审”。如果发现上传错误，不要确认，应重新处理并上传正确的交付物。</p>
+<p><img alt="母带交付历史" decoding="async" loading="lazy" src="assets/mastering-delivery-history.png"/></p>
+<h2>查看交付历史</h2>
+<p>“交付管理”会保留当前制作周期中的母带交付记录。可以查看：</p>
+<ul>
+<li>交付编号；</li>
+<li>文件或交付内容；</li>
+<li>上传者和上传时间；</li>
+<li>交付说明；</li>
+<li>上传者确认状态；</li>
+<li>主催和投稿侧批准状态。</li>
+</ul>
+<p>终审退回后上传的新母带会形成新的交付记录，旧文件不会被覆盖。曲目进入新的制作周期后，交付编号重新计算，旧周期记录继续保留。</p>
+<h2>终审退回后的处理</h2>
+<p>主催将曲目退回母带阶段时：</p>
+<ol>
+<li>查看终审问题和退回说明。</li>
+<li>确认需要调整的是母带还是源文件。</li>
+<li>如果需要源文件修改，使用“请求修订”。</li>
+<li>如果只需调整母带，完成修改后上传新的交付物。</li>
+<li>再次检查当前最新交付物并执行“确认交付”，送入终审。</li>
+</ol>
+<p>不要覆盖或删除旧交付记录。新交付物应通过新的交付编号体现修订。</p>
+<h2>处理源音频补交申请</h2>
+<p>专辑启用源音频补交后，投稿曲师的申请可能由专辑母带工程师审批。申请提交后，曲目的正常流程会暂时停止。</p>
+<p>当前审批卡只显示申请原因和返回阶段，不能直接试听或下载暂存的新文件。批准前，应通过团队认可的安全方式取得可核对的文件，并确认文件名、版本和内容。母带工程师只能选择母带相关的非修订阶段，且目标不能晚于首个交付阶段；无法判断是否需要重新进行更早阶段评审时，应交由主催处理。</p>
+<p>批准会建立新的制作周期，将补交文件设为当前源版本，并使旧的当前母带失效。拒绝后曲目恢复申请前的阶段；投稿侧也可以在审批前取消申请。</p>
+<h2>重新开启已完成曲目</h2>
+<p>专辑母带工程师可以重新开启已完成曲目：</p>
+<ol>
+<li>打开已完成曲目；</li>
+<li>选择重新开启操作；</li>
+<li>从页面列出的交付或修订阶段中选择返回目标；</li>
+<li>如果选择母带相关阶段，可按需填写“母带备注（可选）”；</li>
+<li>确认操作。</li>
+</ol>
+<p>母带工程师直接重新开启时，无需填写申请理由。选择母带相关阶段后，页面会显示“母带备注（可选）”，可用于说明本次重新制作的要求，也可以留空直接确认。只有曲师提交重新开启申请时，“申请理由”才是必填项。</p>
+<p>当前界面并未将母带工程师的目标严格限制为母带阶段。选择同行修订、主催修订等更早阶段前，应先与主催确认。重新开启会清除当前母带的主催和投稿侧批准状态，需要重新完成交付或终审。返回首个交付阶段或更早阶段会增加制作周期；返回晚于首个交付阶段的阶段不会增加周期。</p>
+<h2>常见问题</h2>
+<h3>具有社团母带身份，但看不到母带任务</h3>
+<p>请确认自己已经在目标专辑设置中被指定为专辑母带工程师。社团身份本身不会自动分配专辑。</p>
+<h3>上传后曲目没有进入终审</h3>
+<p>请检查是否还需要点击“确认交付”（旧母带工作台中可能显示为“确认上传无误”）。默认工作流要求上传者确认后才推进。</p>
+<h3>曲师提交的外部分轨链接无法访问</h3>
+<p>请在母带沟通中要求曲师检查分享权限、有效期和文件完整性。链接可访问前不要继续制作。</p>
+<h3>终审退回后找不到旧母带</h3>
+<p>打开“交付管理”的历史记录。旧交付物会保留，但当前播放内容可能已切换到最新交付版本。</p>
+<h2>相关说明</h2>
+<ul>
+<li><a href="#issues-and-versions">问题、评论、附件与版本</a></li>
+<li><a href="#composer-revision">曲师：处理反馈、上传修订与确认母带</a></li>
+<li><a href="#producer-final-review">主催：最终审核、完成与重新开启</a></li>
+</ul></div>
+          <nav class="article-pagination" aria-label="章节导航">
+            <button type="button" data-prev>← 上一篇</button>
+            <span>16 / 16</span>
+            <button type="button" data-next>下一篇 →</button>
+          </nav>
+        </article></main>
+
+    <aside class="toc" aria-label="本页目录">
+      <h2>本页目录</h2>
+      <div id="toc-links"></div>
+    </aside>
+  </div>
+
+  <script>
+    const PAGE_ORDER = ['home', 'overview', 'getting-started', 'roles', 'notifications', 'issues-and-versions', 'producer-circles', 'producer-albums', 'producer-workflow', 'producer-intake', 'producer-approval', 'producer-final-review', 'composer-submission', 'composer-peer-review', 'composer-revision', 'mastering'];
+    const pages = [...document.querySelectorAll('[data-page]')];
+    const navItems = [...document.querySelectorAll('[data-nav-page]')];
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+    const menuButton = document.getElementById('menu-button');
+    const breadcrumbTitle = document.getElementById('breadcrumb-title');
+    const chapterCount = document.getElementById('chapter-count');
+    const tocLinks = document.getElementById('toc-links');
+    const search = document.getElementById('guide-search');
+    const searchEmpty = document.getElementById('search-empty');
+
+    function currentId() {
+      const id = location.hash.slice(1).split('/')[0];
+      return PAGE_ORDER.includes(id) ? id : PAGE_ORDER[0];
+    }
+
+    function slugify(value, index) {
+      return `section-${index + 1}-${value.toLowerCase().replace(/[^a-z0-9一-鿿]+/g, '-').replace(/^-|-$/g, '')}`;
+    }
+
+    function buildToc(page) {
+      const headings = [...page.querySelectorAll('.article-body h2')];
+      tocLinks.innerHTML = '';
+      if (!headings.length) {
+        tocLinks.innerHTML = '<p class="toc-empty">本页没有二级标题。</p>';
+        return;
+      }
+      headings.forEach((heading, index) => {
+        if (!heading.id) heading.id = slugify(heading.textContent, index);
+        const link = document.createElement('a');
+        link.href = `#${currentId()}/${heading.id}`;
+        link.textContent = heading.textContent;
+        link.addEventListener('click', event => {
+          event.preventDefault();
+          heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          history.replaceState(null, '', `#${currentId()}/${heading.id}`);
+        });
+        tocLinks.appendChild(link);
+      });
+    }
+
+    function closeSidebar() {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+      menuButton.setAttribute('aria-expanded', 'false');
+    }
+
+    function render() {
+      const requestedId = location.hash.slice(1).split('/')[0];
+      const id = currentId();
+      if (requestedId !== id) history.replaceState(null, '', `#${id}`);
+      const pageIndex = PAGE_ORDER.indexOf(id);
+      const page = pages.find(item => item.dataset.page === id);
+      pages.forEach(item => item.hidden = item !== page);
+      navItems.forEach(item => item.classList.toggle('active', item.dataset.navPage === id));
+      breadcrumbTitle.textContent = page.dataset.title;
+      chapterCount.textContent = `${String(pageIndex + 1).padStart(2, '0')} / ${String(PAGE_ORDER.length).padStart(2, '0')}`;
+      page.querySelector('[data-prev]').disabled = pageIndex === 0;
+      page.querySelector('[data-next]').disabled = pageIndex === PAGE_ORDER.length - 1;
+      page.querySelector('[data-prev]').onclick = () => { location.hash = PAGE_ORDER[pageIndex - 1]; };
+      page.querySelector('[data-next]').onclick = () => { location.hash = PAGE_ORDER[pageIndex + 1]; };
+      buildToc(page);
+      closeSidebar();
+      const sectionId = location.hash.slice(1).split('/')[1];
+      if (sectionId) {
+        requestAnimationFrame(() => document.getElementById(sectionId)?.scrollIntoView({ block: 'start' }));
+      } else {
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      }
+      document.title = `${page.dataset.title} · Back Kitchen 使用说明`;
+    }
+
+    document.addEventListener('click', event => {
+      const copyButton = event.target.closest('[data-copy-link]');
+      if (!copyButton) return;
+      navigator.clipboard?.writeText(location.href).then(() => {
+        copyButton.textContent = '已复制';
+        copyButton.classList.add('copied');
+        setTimeout(() => { copyButton.textContent = '复制链接'; copyButton.classList.remove('copied'); }, 1400);
+      });
+    });
+
+    search.addEventListener('input', () => {
+      const term = search.value.trim().toLowerCase();
+      let visibleCount = 0;
+      document.querySelectorAll('.nav-group').forEach(group => {
+        let groupVisible = 0;
+        group.querySelectorAll('.nav-item').forEach(item => {
+          const visible = !term || item.dataset.search.toLowerCase().includes(term);
+          item.hidden = !visible;
+          if (visible) groupVisible += 1;
+        });
+        group.hidden = groupVisible === 0;
+        visibleCount += groupVisible;
+      });
+      searchEmpty.style.display = visibleCount ? 'none' : 'block';
+    });
+
+    menuButton.addEventListener('click', () => {
+      const open = !sidebar.classList.contains('open');
+      sidebar.classList.toggle('open', open);
+      overlay.classList.toggle('open', open);
+      menuButton.setAttribute('aria-expanded', String(open));
+    });
+    overlay.addEventListener('click', closeSidebar);
+    window.addEventListener('hashchange', render);
+
+    if (!location.hash || !PAGE_ORDER.includes(location.hash.slice(1).split('/')[0])) {
+      history.replaceState(null, '', `#${PAGE_ORDER[0]}`);
+    }
+    render();
+  </script>
+</body>
+</html>
