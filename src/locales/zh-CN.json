@@ -1953,7 +1953,7 @@
   "export": {
     "title": "导出专辑",
     "preparing": "正在准备导出…",
-    "downloading": "正���下载曲目 ({index}/{total})：{title}",
+    "downloading": "正在下载曲目 ({index}/{total})：{title}",
     "reading": "正在读取曲目 ({index}/{total})：{title}",
     "metadata": "正在写入元数据 ({index}/{total})：{title}",
     "skipped": "已跳过：{title}",
