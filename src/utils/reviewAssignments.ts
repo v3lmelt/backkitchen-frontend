@@ -169,3 +169,28 @@ export function canUserSubmitIssueStatus(
   if (!userId || !track) return false
   return issue.phase !== 'final_review' && isComposerActor(track, userId)
 }
+
+export function availableBatchActionsForIssue(
+  issue: Issue,
+  canSubmit: boolean,
+  canChange: boolean,
+): Issue['status'][] {
+  if (canSubmit && issue.status === 'open') return ['resolved', 'disagreed']
+  if (canChange && issue.status === 'open') return ['resolved', 'pending_discussion']
+  if (canChange && issue.status === 'pending_discussion') return ['open', 'internal_resolved']
+  if (canChange && issue.status === 'internal_resolved') return ['open']
+  if (canChange && issue.status === 'resolved') return ['open']
+  if (canChange && issue.status === 'disagreed') return ['open']
+  return []
+}
+
+export function intersectBatchActions(
+  selectedIssues: Issue[],
+  availableFor: (issue: Issue) => Issue['status'][],
+): Issue['status'][] {
+  if (!selectedIssues.length) return []
+  const [firstIssue, ...rest] = selectedIssues
+  return availableFor(firstIssue).filter(status =>
+    rest.every(issue => availableFor(issue).includes(status)),
+  )
+}

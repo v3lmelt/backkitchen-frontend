@@ -4,9 +4,11 @@ import type { Issue, StageAssignment, Track } from '@/types'
 
 import {
   activeAssignmentsForStep,
+  availableBatchActionsForIssue,
   canUserChangeIssueStatus,
   canUserReviewIssue,
   canUserSubmitIssueStatus,
+  intersectBatchActions,
 } from './reviewAssignments'
 
 function makeTrack(overrides: Partial<Track> = {}): Track {
@@ -304,5 +306,48 @@ describe('reviewAssignments', () => {
     ]
 
     expect(canUserChangeIssueStatus(41, track, issue, assignments)).toBe(true)
+  })
+})
+
+
+describe('availableBatchActionsForIssue', () => {
+  it('allows submitters to resolve or disagree on open issues', () => {
+    const issue = makeIssue({ status: 'open' })
+    expect(availableBatchActionsForIssue(issue, true, false)).toEqual(['resolved', 'disagreed'])
+  })
+
+  it('allows status handlers to resolve or mark pending discussion on open issues', () => {
+    const issue = makeIssue({ status: 'open' })
+    expect(availableBatchActionsForIssue(issue, false, true)).toEqual(['resolved', 'pending_discussion'])
+  })
+
+  it('allows reopening from terminal statuses when the user can change status', () => {
+    for (const status of ['internal_resolved', 'resolved', 'disagreed'] as const) {
+      expect(availableBatchActionsForIssue(makeIssue({ status }), false, true)).toEqual(['open'])
+    }
+    expect(availableBatchActionsForIssue(makeIssue({ status: 'pending_discussion' }), false, true))
+      .toEqual(['open', 'internal_resolved'])
+  })
+
+  it('returns no actions without permissions', () => {
+    expect(availableBatchActionsForIssue(makeIssue({ status: 'open' }), false, false)).toEqual([])
+  })
+})
+
+describe('intersectBatchActions', () => {
+  const openIssue = makeIssue({ id: 1, status: 'open' })
+
+  it('returns an empty list for an empty selection', () => {
+    expect(intersectBatchActions([], () => ['resolved'])).toEqual([])
+  })
+
+  it('keeps only actions available for every selected issue', () => {
+    const resolvedIssue = makeIssue({ id: 2, status: 'resolved' })
+    const availableFor = (issue: Issue) =>
+      availableBatchActionsForIssue(issue, false, true)
+    const anotherOpenIssue = makeIssue({ id: 3, status: 'open' })
+    expect(intersectBatchActions([openIssue, anotherOpenIssue], availableFor)).toEqual(['resolved', 'pending_discussion'])
+    expect(intersectBatchActions([openIssue, resolvedIssue], availableFor)).toEqual([])
+    expect(intersectBatchActions([resolvedIssue], availableFor)).toEqual(['open'])
   })
 })

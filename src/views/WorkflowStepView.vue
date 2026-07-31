@@ -45,6 +45,7 @@ import { translateStepLabel } from '@/utils/workflow'
 import { formatMasterDeliveryOptionLabel, formatSourceVersionOptionLabel, historicalDeliveryDownloadSuffix } from '@/utils/sourceVersions'
 import { useWaveformHotkeys } from '@/composables/useWaveformHotkeys'
 import { useIssueDrawer } from '@/composables/useIssueDrawer'
+import { useBatchIssueActions } from '@/composables/useBatchIssueActions'
 import { hashId } from '@/utils/hash'
 import { externalComposerDisplayText, isComposerActor, trackComposerDisplayText, trackComposerIds } from '@/utils/trackComposers'
 import { extractAudioDuration } from '@/utils/audio'
@@ -138,7 +139,6 @@ const selectedRevisionIssueIds = ref<number[]>([])
 const stageBatchNote = ref('')
 const producerBatchNote = ref('')
 const revisionBatchNote = ref('')
-const batchUpdatingIssues = ref(false)
 const isIssueFormOpen = ref(false)
 const waveformMode = computed<'seek' | 'annotate'>(() => (isIssueFormOpen.value ? 'annotate' : 'seek'))
 const showSourceCompare = ref(false)
@@ -946,23 +946,17 @@ function canCurrentUserSubmitIssueStatus(issue: Issue): boolean {
   return canUserSubmitIssueStatus(appStore.currentUser?.id, track.value, issue)
 }
 
-function availableBatchActionsForIssue(issue: Issue): Issue['status'][] {
-  if (canCurrentUserSubmitIssueStatus(issue) && issue.status === 'open') return ['resolved', 'disagreed']
-  if (canCurrentUserChangeIssueStatus(issue) && issue.status === 'open') return ['resolved', 'pending_discussion']
-  if (canCurrentUserChangeIssueStatus(issue) && issue.status === 'pending_discussion') return ['open', 'internal_resolved']
-  if (canCurrentUserChangeIssueStatus(issue) && issue.status === 'internal_resolved') return ['open']
-  if (canCurrentUserChangeIssueStatus(issue) && issue.status === 'resolved') return ['open']
-  if (canCurrentUserChangeIssueStatus(issue) && issue.status === 'disagreed') return ['open']
-  return []
-}
-
-function intersectBatchActions(selectedIssues: Issue[]): Issue['status'][] {
-  if (!selectedIssues.length) return []
-  const [firstIssue, ...rest] = selectedIssues
-  return availableBatchActionsForIssue(firstIssue).filter(status =>
-    rest.every(issue => availableBatchActionsForIssue(issue).includes(status)),
-  )
-}
+const {
+  batchUpdatingIssues,
+  intersectBatchActions,
+  applyBatchIssueStatusChange,
+} = useBatchIssueActions({
+  trackId,
+  issues,
+  selectedIssue,
+  canSubmitStatus: canCurrentUserSubmitIssueStatus,
+  canChangeStatus: canCurrentUserChangeIssueStatus,
+})
 
 const selectedProducerIssues = computed(() =>
   producerSnapshotIssues.value.filter(issue => selectedProducerIssueIds.value.includes(issue.id)),
@@ -1004,37 +998,6 @@ watch(revisionSnapshotIssues, (issuesList) => {
   selectedRevisionIssueIds.value = selectedRevisionIssueIds.value.filter(id => validIds.has(id))
   if (selectedRevisionIssueIds.value.length === 0) revisionBatchNote.value = ''
 })
-
-async function applyBatchIssueStatusChange(
-  selectedIssues: Issue[],
-  selectedIds: typeof selectedProducerIssueIds,
-  note: typeof producerBatchNote,
-  status: Issue['status'],
-) {
-  if (!track.value || !selectedIssues.length) return
-  batchUpdatingIssues.value = true
-  try {
-    const updatedIssues = await issueApi.batchUpdate(trackId.value, {
-      issue_ids: selectedIssues.map(issue => issue.id),
-      status,
-      status_note: note.value.trim() || undefined,
-    })
-    const updatedById = new Map(updatedIssues.map(issue => [issue.id, issue]))
-    issues.value = issues.value.map(issue => {
-      const updated = updatedById.get(issue.id)
-      return updated ? { ...issue, ...updated } : issue
-    })
-    if (selectedIssue.value && updatedById.has(selectedIssue.value.id)) {
-      selectedIssue.value = { ...selectedIssue.value, ...updatedById.get(selectedIssue.value.id)! }
-    }
-    selectedIds.value = []
-    note.value = ''
-  } catch (err: any) {
-    toastError(err.message || t('workflowStep.transitionFailed'))
-  } finally {
-    batchUpdatingIssues.value = false
-  }
-}
 
 function applyProducerBatchStatus(status: Issue['status']) {
   return applyBatchIssueStatusChange(selectedProducerIssues.value, selectedProducerIssueIds, producerBatchNote, status)

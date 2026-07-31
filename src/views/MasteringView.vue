@@ -16,6 +16,7 @@ import { translateStepLabel } from '@/utils/workflow'
 import { formatMasterDeliveryOptionLabel, formatSourceVersionOptionLabel, historicalDeliveryDownloadSuffix } from '@/utils/sourceVersions'
 import { useWaveformHotkeys } from '@/composables/useWaveformHotkeys'
 import { useIssueDrawer } from '@/composables/useIssueDrawer'
+import { useBatchIssueActions } from '@/composables/useBatchIssueActions'
 import { activeAssignmentsForStep, canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
@@ -106,7 +107,6 @@ const hoveredIssueId = ref<number | null>(null)
 const selectedIssue = ref<Issue | null>(null)
 const selectedStageIssueIds = ref<number[]>([])
 const stageBatchNote = ref('')
-const batchUpdatingIssues = ref(false)
 const isIssueFormOpen = ref(false)
 const waveformMode = computed<'seek' | 'annotate'>(() =>
   activeTab.value === 'issues' && isIssueFormOpen.value ? 'annotate' : 'seek',
@@ -447,23 +447,17 @@ function canCurrentUserSubmitIssueStatus(issue: Issue): boolean {
   return canUserSubmitIssueStatus(appStore.currentUser?.id, track.value, issue)
 }
 
-function availableBatchActionsForIssue(issue: Issue): Issue['status'][] {
-  if (canCurrentUserSubmitIssueStatus(issue) && issue.status === 'open') return ['resolved', 'disagreed']
-  if (canCurrentUserChangeIssueStatus(issue) && issue.status === 'open') return ['resolved', 'pending_discussion']
-  if (canCurrentUserChangeIssueStatus(issue) && issue.status === 'pending_discussion') return ['open', 'internal_resolved']
-  if (canCurrentUserChangeIssueStatus(issue) && issue.status === 'internal_resolved') return ['open']
-  if (canCurrentUserChangeIssueStatus(issue) && issue.status === 'resolved') return ['open']
-  if (canCurrentUserChangeIssueStatus(issue) && issue.status === 'disagreed') return ['open']
-  return []
-}
-
-function intersectBatchActions(selectedIssues: Issue[]): Issue['status'][] {
-  if (!selectedIssues.length) return []
-  const [firstIssue, ...rest] = selectedIssues
-  return availableBatchActionsForIssue(firstIssue).filter(status =>
-    rest.every(issue => availableBatchActionsForIssue(issue).includes(status)),
-  )
-}
+const {
+  batchUpdatingIssues,
+  intersectBatchActions,
+  applyBatchIssueStatusChange: applyBatchStatusChange,
+} = useBatchIssueActions({
+  trackId,
+  issues,
+  selectedIssue,
+  canSubmitStatus: canCurrentUserSubmitIssueStatus,
+  canChangeStatus: canCurrentUserChangeIssueStatus,
+})
 
 const selectedStageIssues = computed(() =>
   stageBatchIssueList.value.filter(issue => selectedStageIssueIds.value.includes(issue.id)),
@@ -917,27 +911,8 @@ function onRequestWaveformMode(next: 'seek' | 'annotate') {
 }
 
 // Batch issue actions
-async function applyBatchIssueStatusChange(status: Issue['status']) {
-  if (!track.value || !selectedStageIssues.value.length) return
-  batchUpdatingIssues.value = true
-  try {
-    const updatedIssues = await issueApi.batchUpdate(trackId.value, {
-      issue_ids: selectedStageIssues.value.map(issue => issue.id),
-      status,
-      status_note: stageBatchNote.value.trim() || undefined,
-    })
-    const updatedById = new Map(updatedIssues.map(issue => [issue.id, issue]))
-    issues.value = issues.value.map(issue => {
-      const updated = updatedById.get(issue.id)
-      return updated ? { ...issue, ...updated } : issue
-    })
-    selectedStageIssueIds.value = []
-    stageBatchNote.value = ''
-  } catch (err: any) {
-    toastError(err.message || t('workflowStep.transitionFailed'))
-  } finally {
-    batchUpdatingIssues.value = false
-  }
+function applyBatchIssueStatusChange(status: Issue['status']) {
+  return applyBatchStatusChange(selectedStageIssues.value, selectedStageIssueIds, stageBatchNote, status)
 }
 
 // Source compare
