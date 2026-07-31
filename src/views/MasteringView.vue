@@ -15,6 +15,7 @@ import { externalComposerDisplayText, isComposerActor, trackComposerDisplayText 
 import { translateStepLabel } from '@/utils/workflow'
 import { formatMasterDeliveryOptionLabel, formatSourceVersionOptionLabel, historicalDeliveryDownloadSuffix } from '@/utils/sourceVersions'
 import { useWaveformHotkeys } from '@/composables/useWaveformHotkeys'
+import { useIssueDrawer } from '@/composables/useIssueDrawer'
 import { activeAssignmentsForStep, canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
@@ -780,46 +781,11 @@ async function confirmRevisionType() {
 }
 
 // Issue handlers
-function parseIssueQuery(value: unknown): number | null {
-  const raw = Array.isArray(value) ? value[0] : value
-  const issueId = Number(raw)
-  return Number.isInteger(issueId) && issueId > 0 ? issueId : null
-}
-
-function buildRouteQueryWithoutIssue(): Record<string, string> {
-  const query: Record<string, string> = {}
-  for (const [key, value] of Object.entries(route.query)) {
-    if (key === 'issue') continue
-    if (typeof value === 'string' && value.length > 0) query[key] = value
-    else if (Array.isArray(value) && typeof value[0] === 'string' && value[0].length > 0) query[key] = value[0]
-  }
-  return query
-}
-
-function replaceIssueDrawerQuery(issueId: number | null) {
-  const query = buildRouteQueryWithoutIssue()
-  if (issueId != null) query.issue = String(issueId)
-  void router.replace({
-    path: route.path,
-    query: Object.keys(query).length > 0 ? query : undefined,
-  })
-}
-
-function syncIssueDrawerFromRoute() {
-  const issueId = parseIssueQuery(route.query.issue)
-  if (issueId == null) {
-    selectedIssue.value = null
-    return
-  }
-  selectedIssue.value = issues.value.find(issue => issue.id === issueId) ?? null
-}
-
-function onIssueSelect(issue: Issue) {
-  selectedIssue.value = issue
-  if (parseIssueQuery(route.query.issue) !== issue.id) {
-    replaceIssueDrawerQuery(issue.id)
-  }
-}
+const {
+  syncIssueDrawerFromRoute,
+  onIssueSelect,
+  closeIssueDrawer,
+} = useIssueDrawer({ issues, selectedIssue })
 
 function openLinkedIssue(issueId: number) {
   const localIssue = issues.value.find(issue => issue.id === issueId)
@@ -829,13 +795,6 @@ function openLinkedIssue(issueId: number) {
   }
 
   void router.push(`/issues/${issueId}`)
-}
-
-function closeIssueDrawer() {
-  selectedIssue.value = null
-  if (parseIssueQuery(route.query.issue) != null) {
-    replaceIssueDrawerQuery(null)
-  }
 }
 
 function onSourceWaveformReady(nextDuration: number) {

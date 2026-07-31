@@ -28,6 +28,7 @@ import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useDiscussions } from '@/composables/useDiscussions'
 import { useToast } from '@/composables/useToast'
+import { useIssueDrawer } from '@/composables/useIssueDrawer'
 import { buildTrackWorkspaceRoute, translateStepLabel, translateWorkflowStatusLabel } from '@/utils/workflow'
 import { formatSourceVersionOptionLabel } from '@/utils/sourceVersions'
 import { activeAssignmentsForStep } from '@/utils/reviewAssignments'
@@ -464,31 +465,6 @@ const customWorkflowActionLabel = computed(() => {
   return t('trackDetail.openWorkflowStep', { step: translateStepLabel(step, t) })
 })
 
-function parseIssueQuery(value: unknown): number | null {
-  const raw = Array.isArray(value) ? value[0] : value
-  const issueId = Number(raw)
-  return Number.isInteger(issueId) && issueId > 0 ? issueId : null
-}
-
-function buildRouteQueryWithoutIssue(): Record<string, string> {
-  const query: Record<string, string> = {}
-  for (const [key, value] of Object.entries(route.query)) {
-    if (key === 'issue') continue
-    if (typeof value === 'string' && value.length > 0) query[key] = value
-    else if (Array.isArray(value) && typeof value[0] === 'string' && value[0].length > 0) query[key] = value[0]
-  }
-  return query
-}
-
-function replaceIssueDrawerQuery(issueId: number | null) {
-  const query = buildRouteQueryWithoutIssue()
-  if (issueId != null) query.issue = String(issueId)
-  void router.replace({
-    path: route.path,
-    query: Object.keys(query).length > 0 ? query : undefined,
-  })
-}
-
 function legacyIssueQuery(): Record<string, string> | undefined {
   const returnTo = Array.isArray(route.query.returnTo) ? route.query.returnTo[0] : route.query.returnTo
   return typeof returnTo === 'string' && returnTo.length > 0 ? { returnTo } : undefined
@@ -501,43 +477,19 @@ function openLegacyIssuePage(issueId: number) {
   })
 }
 
-function syncIssueDrawerFromRoute() {
-  const issueId = parseIssueQuery(route.query.issue)
-  if (issueId == null) {
-    selectedIssue.value = null
-    return
-  }
-
-  if (issueDetailMode.value === 'legacy') {
-    selectedIssue.value = null
-    openLegacyIssuePage(issueId)
-    return
-  }
-
-  selectedIssue.value = issues.value.find(issue => issue.id === issueId) ?? null
-}
-
-function openIssueDrawer(issue: Issue) {
-  selectedIssue.value = issue
-  if (parseIssueQuery(route.query.issue) !== issue.id) {
-    replaceIssueDrawerQuery(issue.id)
-  }
-}
-
-function closeIssueDrawer() {
-  selectedIssue.value = null
-  if (parseIssueQuery(route.query.issue) != null) {
-    replaceIssueDrawerQuery(null)
-  }
-}
-
-function onIssueSelect(issue: Issue) {
-  if (issueDetailMode.value === 'legacy') {
-    openLegacyIssuePage(issue.id)
-    return
-  }
-  openIssueDrawer(issue)
-}
+const {
+  parseIssueQuery,
+  replaceIssueDrawerQuery,
+  syncIssueDrawerFromRoute,
+  openIssueDrawer,
+  closeIssueDrawer,
+  onIssueSelect,
+} = useIssueDrawer({
+  issues,
+  selectedIssue,
+  shouldUseLegacyPage: () => issueDetailMode.value === 'legacy',
+  openLegacyPage: openLegacyIssuePage,
+})
 
 function openIssueReference(issueId: number) {
   const localIssue = issues.value.find(issue => issue.id === issueId)
