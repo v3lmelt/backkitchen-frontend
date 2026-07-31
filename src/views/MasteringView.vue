@@ -13,6 +13,8 @@ import { formatLocaleDate } from '@/utils/time'
 import { extractAudioDuration } from '@/utils/audio'
 import { externalComposerDisplayText, isComposerActor, trackComposerDisplayText } from '@/utils/trackComposers'
 import { translateStepLabel } from '@/utils/workflow'
+import { formatMasterDeliveryOptionLabel, formatSourceVersionOptionLabel, historicalDeliveryDownloadSuffix } from '@/utils/sourceVersions'
+import { useWaveformHotkeys } from '@/composables/useWaveformHotkeys'
 import { activeAssignmentsForStep, canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
@@ -347,12 +349,7 @@ async function copyExternalSourceNotes() {
   }
 }
 
-function sourceVersionOptionLabel(version: TrackSourceVersion): string {
-  const prefix = version.source_kind === 'external_link'
-    ? t('workflowStep.externalSourceVersionLabel')
-    : `v${version.version_number}`
-  return `${prefix} · ${fmtDate(version.created_at)}`
-}
+const sourceVersionOptionLabel = (version: TrackSourceVersion) => formatSourceVersionOptionLabel(version, t, fmtDate)
 
 const olderPlayableSourceVersions = computed(() =>
   olderSourceVersions.value.filter(version => version.source_kind !== 'external_link' && version.file_path !== null),
@@ -991,42 +988,7 @@ function toggleSourceCompare() {
 }
 
 // Waveform hotkeys
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  if (target.isContentEditable) return true
-  return !!target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]')
-}
-
-function handleWaveformHotkeys(event: KeyboardEvent) {
-  if (isEditableTarget(event.target)) return
-  if (!issueFormRef.value || !waveformRef.value) return
-
-  if (event.key === ' ') {
-    event.preventDefault()
-    waveformRef.value.togglePlay?.()
-    return
-  }
-  if (event.key === '[') {
-    event.preventDefault()
-    const time = waveformRef.value.getCurrentTime?.() ?? 0
-    issueFormRef.value.setRangeAnchorAt?.(time)
-    return
-  }
-  if (event.key === ']') {
-    event.preventDefault()
-    const time = waveformRef.value.getCurrentTime?.() ?? 0
-    issueFormRef.value.commitRangeFromAnchorTo?.(time)
-    return
-  }
-  if (event.key === 'Backspace') {
-    event.preventDefault()
-    issueFormRef.value.removeLastMarker?.()
-    return
-  }
-  if (event.key === 'Escape') {
-    issueFormRef.value.clearRangeAnchor?.()
-  }
-}
+const { handleWaveformHotkeys } = useWaveformHotkeys({ issueFormRef, waveformRef })
 
 // Watchers for source compare
 watch(olderPlayableSourceVersions, (versions) => {
@@ -1058,16 +1020,7 @@ function toggleMasterCompare() {
   if (!showMasterCompare.value) selectedCompareMasterDeliveryId.value = null
 }
 
-function masterDeliveryOptionLabel(delivery: MasterDelivery): string {
-  const version = `v${delivery.delivery_number}`
-  return `${version} · ${fmtDate(delivery.created_at)}`
-}
-
-function historicalDeliveryDownloadSuffix(delivery: MasterDelivery): string {
-  if (!track.value || delivery.workflow_cycle === track.value.workflow_cycle) return ''
-  const timestamp = delivery.created_at.replace(/\D/g, '').slice(0, 12)
-  return timestamp ? `_history_${timestamp}` : '_history'
-}
+const masterDeliveryOptionLabel = (delivery: MasterDelivery) => formatMasterDeliveryOptionLabel(delivery, fmtDate)
 
 function compareWithMasterDelivery(deliveryId: number) {
   const delivery = olderMasterDeliveries.value.find(item => item.id === deliveryId)
@@ -1079,7 +1032,7 @@ function compareWithMasterDelivery(deliveryId: number) {
 function handleMasterVersionDownload(delivery: MasterDelivery) {
   if (!delivery.file_path) return
   const url = `${API_ORIGIN}/api/tracks/${trackId.value}/master-deliveries/${delivery.id}/audio?v=${delivery.delivery_number}&c=${delivery.workflow_cycle}`
-  const historySuffix = historicalDeliveryDownloadSuffix(delivery)
+  const historySuffix = historicalDeliveryDownloadSuffix(delivery, track.value?.workflow_cycle)
   downloadAudioAsset(url, `${track.value?.title ?? 'track'}_master_v${delivery.delivery_number}${historySuffix}`, delivery.file_path)
 }
 

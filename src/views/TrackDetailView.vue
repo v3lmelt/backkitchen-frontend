@@ -29,6 +29,7 @@ import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useDiscussions } from '@/composables/useDiscussions'
 import { useToast } from '@/composables/useToast'
 import { buildTrackWorkspaceRoute, translateStepLabel, translateWorkflowStatusLabel } from '@/utils/workflow'
+import { formatSourceVersionOptionLabel } from '@/utils/sourceVersions'
 import { activeAssignmentsForStep } from '@/utils/reviewAssignments'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { useIssuePreviewPlayback, type PreviewAction } from '@/composables/useIssuePreviewPlayback'
@@ -671,12 +672,7 @@ const olderVersions = computed(() =>
     .sort((a, b) => b.version_number - a.version_number)
 )
 
-function sourceVersionOptionLabel(version: TrackSourceVersion): string {
-  const prefix = version.source_kind === 'external_link'
-    ? t('workflowStep.externalSourceVersionLabel')
-    : `V${version.version_number}`
-  return `${prefix} · ${fmtDate(version.created_at)}`
-}
+const sourceVersionOptionLabel = (version: TrackSourceVersion) => formatSourceVersionOptionLabel(version, t, fmtDate)
 
 const olderPlayableVersions = computed(() =>
   olderVersions.value.filter(version => version.source_kind !== 'external_link' && version.file_path !== null),
