@@ -145,6 +145,7 @@ vi.mock('lucide-vue-next', () => ({
 }))
 
 import AlbumSettingsView from './AlbumSettingsView.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 function makeUser(id: number, displayName: string) {
   return {
@@ -417,6 +418,9 @@ describe('AlbumSettingsView', () => {
     await wrapper.find('input[placeholder="Record why this progress change is needed…"]').setValue('Need another review')
 
     await findButtonByText(wrapper, 'Update progress')!.trigger('click')
+    expect(mocks.trackForceStatusMock).not.toHaveBeenCalled()
+    expect(wrapper.getComponent(ConfirmModal).props('title')).toBe('Confirm manual stage change?')
+    wrapper.getComponent(ConfirmModal).vm.$emit('confirm')
     await flushPromises()
 
     expect(mocks.trackForceStatusMock).toHaveBeenCalledWith(11, {
@@ -447,6 +451,19 @@ describe('AlbumSettingsView', () => {
     expect(mocks.trackForceStatusMock).not.toHaveBeenCalled()
   })
 
+  it('does not save workflow changes when the migration warning is cancelled', async () => {
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'Workflow')!.trigger('click')
+    await wrapper.find('button.workflow-editor-save').trigger('click')
+    wrapper.getComponent(ConfirmModal).vm.$emit('cancel')
+    await wrapper.vm.$nextTick()
+
+    expect(mocks.albumUpdateWorkflowMock).not.toHaveBeenCalled()
+    expect(wrapper.findComponent(ConfirmModal).exists()).toBe(false)
+  })
+
   it('saves workflow changes and renders migration details', async () => {
     mocks.albumUpdateWorkflowMock.mockResolvedValue({
       ok: true,
@@ -465,6 +482,9 @@ describe('AlbumSettingsView', () => {
 
     await findButtonByText(wrapper, 'Workflow')!.trigger('click')
     await wrapper.find('button.workflow-editor-save').trigger('click')
+    expect(mocks.albumUpdateWorkflowMock).not.toHaveBeenCalled()
+    expect(wrapper.getComponent(ConfirmModal).props('title')).toBe('Save workflow changes?')
+    wrapper.getComponent(ConfirmModal).vm.$emit('confirm')
     await flushPromises()
 
     expect(mocks.albumUpdateWorkflowMock).toHaveBeenCalledWith(

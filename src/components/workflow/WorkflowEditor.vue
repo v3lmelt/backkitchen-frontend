@@ -13,6 +13,7 @@ import {
   UserRound,
 } from 'lucide-vue-next'
 import type { WorkflowConfig, WorkflowStepDef, WorkflowUiVariant } from '@/types'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 interface MemberOption {
   value: number
@@ -22,6 +23,10 @@ interface MemberOption {
 type StageKind = 'intake' | 'peer_review' | 'producer_gate' | 'mastering' | 'final_review'
 type MainStepType = 'review' | 'approval' | 'delivery'
 type RevisionDecisionPolicy = 'quorum_final' | 'first_revision_request'
+type PendingConfirmation =
+  | { type: 'load-default' }
+  | { type: 'remove-stage'; stageId: string; stageLabel: string }
+  | { type: 'change-kind'; stageId: string; stageLabel: string; kind: StageKind }
 
 interface EditorStage {
   id: string
@@ -289,6 +294,7 @@ const stages = ref<EditorStage[]>([])
 const selectedStageId = ref<string | null>(null)
 const addingStage = ref(false)
 const hasChanges = ref(false)
+const pendingConfirmation = ref<PendingConfirmation | null>(null)
 const lastEmittedConfigSignature = ref<string | null>(null)
 const inspectorRef = ref<HTMLElement | null>(null)
 
@@ -701,7 +707,7 @@ function markChanged() {
   }
 }
 
-function loadDefaultWorkflow() {
+function applyDefaultWorkflow() {
   const created: EditorStage[] = []
   for (const kind of STAGE_KINDS) {
     created.push(createStage(kind, created.map(item => item.id)))
@@ -712,6 +718,14 @@ function loadDefaultWorkflow() {
   stages.value = created
   selectedStageId.value = stages.value[0]?.id ?? null
   markChanged()
+}
+
+function loadDefaultWorkflow() {
+  if (stages.value.length === 0) {
+    applyDefaultWorkflow()
+    return
+  }
+  pendingConfirmation.value = { type: 'load-default' }
 }
 
 watch(
@@ -746,7 +760,15 @@ function addStage(kind: StageKind) {
   markChanged()
 }
 
-function removeStage(stageId: string) {
+function requestRemoveStage(stage: EditorStage) {
+  pendingConfirmation.value = {
+    type: 'remove-stage',
+    stageId: stage.id,
+    stageLabel: stage.label,
+  }
+}
+
+function applyRemoveStage(stageId: string) {
   const index = stages.value.findIndex(stage => stage.id === stageId)
   if (index < 0) return
   stages.value.splice(index, 1)
@@ -816,8 +838,19 @@ function handleRejectTargetChange(index: number, event: Event) {
   markChanged()
 }
 
-function updateSelectedKind(kind: StageKind) {
+function requestSelectedKindUpdate(kind: StageKind) {
   const stage = selectedStage.value
+  if (!stage || stage.kind === kind) return
+  pendingConfirmation.value = {
+    type: 'change-kind',
+    stageId: stage.id,
+    stageLabel: stage.label,
+    kind,
+  }
+}
+
+function applyStageKindUpdate(stageId: string, kind: StageKind) {
+  const stage = stages.value.find(item => item.id === stageId)
   if (!stage || stage.kind === kind) return
   const meta = STAGE_META[kind]
   stage.kind = kind
@@ -841,6 +874,49 @@ function updateSelectedKind(kind: StageKind) {
     stage.extra_reject_targets = []
   }
   markChanged()
+}
+
+const pendingConfirmationCopy = computed(() => {
+  const pending = pendingConfirmation.value
+  if (!pending) return null
+  if (pending.type === 'load-default') {
+    return {
+      title: t('workflowEditor.confirmations.loadDefaultTitle'),
+      message: t('workflowEditor.confirmations.loadDefaultMessage'),
+      confirmText: t('workflowBuilder.loadDefault'),
+      destructive: false,
+    }
+  }
+  if (pending.type === 'remove-stage') {
+    return {
+      title: t('workflowEditor.confirmations.removeStageTitle'),
+      message: t('workflowEditor.confirmations.removeStageMessage', { stage: pending.stageLabel }),
+      confirmText: t('workflowEditor.confirmations.removeStageConfirm'),
+      destructive: true,
+    }
+  }
+  return {
+    title: t('workflowEditor.confirmations.changeTypeTitle'),
+    message: t('workflowEditor.confirmations.changeTypeMessage', {
+      stage: pending.stageLabel,
+      type: stageKindLabel(pending.kind),
+    }),
+    confirmText: t('workflowEditor.confirmations.changeTypeConfirm'),
+    destructive: false,
+  }
+})
+
+function confirmPendingAction() {
+  const pending = pendingConfirmation.value
+  pendingConfirmation.value = null
+  if (!pending) return
+  if (pending.type === 'load-default') {
+    applyDefaultWorkflow()
+  } else if (pending.type === 'remove-stage') {
+    applyRemoveStage(pending.stageId)
+  } else {
+    applyStageKindUpdate(pending.stageId, pending.kind)
+  }
 }
 
 function saveConfig() {
@@ -985,7 +1061,7 @@ function saveConfig() {
                     </button>
                     <button
                       type="button"
-                      @click.stop="removeStage(stage.id)"
+                      @click.stop="requestRemoveStage(stage)"
                       :title="t('common.delete')"
                       :aria-label="t('common.delete')"
                       class="p-2 text-muted-foreground hover:text-error transition-colors"
@@ -1054,7 +1130,7 @@ function saveConfig() {
               <button
                 v-for="kind in STAGE_KINDS"
                 :key="kind"
-                @click="updateSelectedKind(kind)"
+                @click="requestSelectedKindUpdate(kind)"
                 :class="[
                   'h-10 rounded-full border font-mono text-xs transition-colors',
                   selectedStage.kind === kind
@@ -1335,5 +1411,14 @@ function saveConfig() {
         {{ props.saving ? t('common.loading') : t('workflowEditor.saveWorkflow') }}
       </button>
     </div>
+    <ConfirmModal
+      v-if="pendingConfirmationCopy"
+      :title="pendingConfirmationCopy.title"
+      :message="pendingConfirmationCopy.message"
+      :confirm-text="pendingConfirmationCopy.confirmText"
+      :destructive="pendingConfirmationCopy.destructive"
+      @confirm="confirmPendingAction"
+      @cancel="pendingConfirmation = null"
+    />
   </div>
 </template>

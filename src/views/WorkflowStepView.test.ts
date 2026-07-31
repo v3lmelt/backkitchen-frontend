@@ -494,7 +494,7 @@ describe('WorkflowStepView', () => {
     const wrapper = mountWithPlugins(WorkflowStepView)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Master delivery requires a playable mastered audio file')
+    expect(wrapper.text()).toContain('A reference link does not replace the required playable master audio file')
     await wrapper.find('textarea').setValue('https://cloud.example/stems\ncode: bk24')
     const submitButton = wrapper.findAll('button').find(button => button.text() === 'Confirm Upload')!
 
@@ -1152,7 +1152,7 @@ describe('WorkflowStepView', () => {
     await wrapper.find('.compare-select').trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('workflowStep.sourceCompareReadonlyHint')
+    expect(wrapper.text()).toContain('Older source-version compare is read-only. Switch back to the current version before adding new issues.')
     expect(wrapper.find('.waveform').text()).toContain('compare:201')
     expect(wrapper.find('.issue-list').text()).toBe('1')
   })

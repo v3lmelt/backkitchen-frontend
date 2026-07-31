@@ -5,6 +5,118 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.44",
+    "date": "2026-07-31",
+    "headline": {
+      "zh-CN": "专辑设置页宽度统一",
+      "en": "Unified album settings width"
+    },
+    "summary": {
+      "zh-CN": "专辑设置页各标签页的宽度已统一，切换标签时页面不再左右跳动。",
+      "en": "All tabs on the album settings page now share the same width, so the page no longer jumps when switching tabs."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "界面调整",
+          "en": "UI adjustments"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "专辑设置页宽度统一",
+              "en": "Unified album settings width"
+            },
+            "description": {
+              "zh-CN": "专辑信息、团队成员、工作流等各标签页现在使用一致的页面宽度，切换标签时内容宽度保持不变。",
+              "en": "Album info, team members, workflow, and other tabs now use a consistent page width, so the content stays in place when switching tabs."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.43",
+    "date": "2026-07-30",
+    "headline": {
+      "zh-CN": "危险操作增加二次确认",
+      "en": "Confirmation dialogs for destructive actions"
+    },
+    "summary": {
+      "zh-CN": "管理员操作、工作流编辑、问题草稿和模板套用等不可逆或影响较大的动作现在会先弹出确认提示；同时补充了多处表单说明文案，并修复了部分界面显示原始文案键值的问题。",
+      "en": "Irreversible or high-impact actions such as admin operations, workflow editing, issue drafts, and template application now ask for confirmation first. Several form hints were added, and places that showed raw message keys were fixed."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "操作确认",
+          "en": "Action confirmations"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "管理员操作需要确认",
+              "en": "Admin actions require confirmation"
+            },
+            "description": {
+              "zh-CN": "调整成员角色、验证状态、停权、吊销会话、转让主催身份和归档专辑前，会先显示操作影响的确认提示。",
+              "en": "Changing member roles, verification states, suspending users, revoking sessions, transferring producer ownership, and archiving albums now show a confirmation describing the impact first."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "工作流编辑防误触",
+              "en": "Workflow editor guards against mistakes"
+            },
+            "description": {
+              "zh-CN": "加载默认流程、删除阶段或修改阶段类型前会要求确认，避免覆盖已有的自定义配置。",
+              "en": "Loading the default workflow, removing a stage, or changing a stage type now asks for confirmation to avoid overwriting existing customizations."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "问题草稿与模板套用确认",
+              "en": "Issue draft and template confirmations"
+            },
+            "description": {
+              "zh-CN": "放弃已填写的问题草稿、切换到一般问题清除时间标记、以及用模板覆盖已自定义的流程配置前，都会先提示确认。",
+              "en": "Discarding a filled issue draft, switching to a general issue which clears timed markers, and applying a template over a customized workflow now ask for confirmation first."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "文案与提示",
+          "en": "Copy and hints"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "补充表单说明",
+              "en": "Added form hints"
+            },
+            "description": {
+              "zh-CN": "问题创建补充了草稿保存、严重程度和附件限制的说明；问题状态操作会显示对应后果提示。",
+              "en": "Issue creation now explains draft saving, severity levels, and attachment limits, and issue status actions show hints about their effects."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "修复原始键值显示",
+              "en": "Fixed raw message keys"
+            },
+            "description": {
+              "zh-CN": "工作流步骤页的源版本对比提示不再显示原始文案键值；面包屑、无障碍标签等残留硬编码文案已接入多语言。",
+              "en": "The source-compare hint on workflow step pages no longer shows a raw message key, and remaining hardcoded strings such as breadcrumbs and accessibility labels were localized."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.42",
     "date": "2026-07-28",
     "headline": {

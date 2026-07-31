@@ -511,6 +511,7 @@ function formatFileSize(bytes: number): string {
 <template>
   <div class="max-w-2xl mx-auto space-y-6">
     <h1 class="text-2xl font-mono font-bold text-foreground">{{ t('upload.heading') }}</h1>
+    <p class="text-xs text-muted-foreground">{{ t('upload.draftScopeHint') }}</p>
 
     <div v-if="albumLoadError" class="card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <p class="text-sm text-error">{{ albumLoadError }}</p>
@@ -542,6 +543,7 @@ function formatFileSize(bytes: number): string {
       <p v-if="!selectedFile" class="text-muted-foreground">
         {{ t('upload.dropHint') }} <span class="text-primary">{{ t('upload.browse') }}</span>
       </p>
+      <p v-if="!selectedFile" class="mt-2 text-xs text-muted-foreground">{{ t('upload.fileRequirements') }}</p>
       <div v-else class="text-foreground">
         <p class="font-medium">{{ selectedFile.name }}</p>
         <div class="flex items-center justify-center gap-3 text-sm text-muted-foreground mt-1">

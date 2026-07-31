@@ -18,6 +18,7 @@ import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import AlbumCoverImage from '@/components/common/AlbumCoverImage.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import {
   buildDefaultWorkflowConfig,
   getFirstPeerReviewAssignmentMode,
@@ -87,6 +88,19 @@ const saveTemplateName = ref('')
 const saveTemplateDesc = ref('')
 const savingTemplate = ref(false)
 const selectedTemplateId = ref<number | null>(null)
+const pendingTemplate = ref<WorkflowTemplate | null>(null)
+
+const selectedTemplate = computed(() =>
+  templates.value.find(template => template.id === selectedTemplateId.value) ?? null,
+)
+const workflowSummary = computed(() => {
+  if (selectedTemplate.value) {
+    return t('workflowTemplate.basedOnTemplate', { name: selectedTemplate.value.name })
+  }
+  return workflowConfig.value
+    ? t('albumNew.workflowCustomized')
+    : t('albumNew.workflowUsingDefault')
+})
 
 const assignableUsers = computed<User[]>(() =>
   selectedCircleId.value ? circleMemberUsers.value : allUsers.value
@@ -297,11 +311,25 @@ async function loadTemplates() {
   }
 }
 
-async function loadFromTemplate(template: WorkflowTemplate) {
+function applyTemplate(template: WorkflowTemplate) {
   workflowConfig.value = JSON.parse(JSON.stringify(template.workflow_config))
   sanitizeWorkflowConfigForMembers()
   selectedTemplateId.value = template.id
   showTemplateList.value = false
+}
+
+function loadFromTemplate(template: WorkflowTemplate) {
+  if (workflowConfig.value) {
+    pendingTemplate.value = template
+    return
+  }
+  applyTemplate(template)
+}
+
+function confirmTemplateLoad() {
+  const template = pendingTemplate.value
+  pendingTemplate.value = null
+  if (template) applyTemplate(template)
 }
 
 async function openTemplateList() {
@@ -680,7 +708,7 @@ async function create() {
         >
           <component :is="showWorkflowBuilder ? ChevronDown : ChevronRight" class="w-4 h-4 text-muted-foreground" />
           <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('albumNew.workflowSection') }}</h2>
-          <span v-if="!showWorkflowBuilder" class="text-xs text-muted-foreground ml-auto">{{ t('albumNew.workflowUsingDefault') }}</span>
+          <span v-if="!showWorkflowBuilder" class="text-xs text-muted-foreground ml-auto">{{ workflowSummary }}</span>
         </button>
         <template v-if="showWorkflowBuilder">
           <p class="text-xs text-muted-foreground">
@@ -829,5 +857,14 @@ async function create() {
       <p v-if="createError" class="text-sm text-error">{{ createError }}</p>
       </template>
     </template>
+
+    <ConfirmModal
+      v-if="pendingTemplate"
+      :title="t('workflowTemplate.loadConfirmTitle')"
+      :message="t('workflowTemplate.loadConfirmMessage', { name: pendingTemplate.name })"
+      :confirm-text="t('workflowTemplate.loadFromTemplate')"
+      @confirm="confirmTemplateLoad"
+      @cancel="pendingTemplate = null"
+    />
   </div>
 </template>

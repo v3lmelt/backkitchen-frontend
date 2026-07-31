@@ -215,6 +215,7 @@ describe('DashboardView', () => {
     expect(mocks.declineInvitationMock).toHaveBeenCalledWith(31)
 
     const exportButton = wrapper.findAll('button').find(button => button.text().startsWith('Export'))
+    expect(exportButton?.text()).toBe('Export completed tracks (1/5)')
     expect(exportButton).toBeDefined()
     if (!exportButton) throw new Error('Expected album export button')
     await exportButton.trigger('click')

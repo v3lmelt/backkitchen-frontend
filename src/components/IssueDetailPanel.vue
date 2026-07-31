@@ -91,7 +91,7 @@ function statusActionLabel(status: IssueStatus): string {
   }
   switch (status) {
     case 'resolved':
-      return t('issueDetail.markFixed')
+      return t('issueDetail.markResolved')
     case 'internal_resolved':
       return t('issueDetail.markInternalResolved')
     case 'disagreed':
@@ -101,6 +101,14 @@ function statusActionLabel(status: IssueStatus): string {
     case 'pending_discussion':
       return t('issueDetail.markPendingDiscussion')
   }
+}
+
+function statusActionHint(status: IssueStatus): string {
+  if (status === 'pending_discussion') return t('issueDetail.pendingDiscussionHint')
+  if (status === 'internal_resolved') return t('issueDetail.internalResolvedHint')
+  if (status === 'open' && isInternalIssueStatus(fullIssue.value?.status)) return t('issueDetail.publishHint')
+  if (status === 'resolved') return t('issueDetail.resolvedHint')
+  return ''
 }
 
 function statusTransitionLabel(oldStatus: string | null | undefined, newStatus: string | null | undefined): string | null {
@@ -461,7 +469,7 @@ async function confirmDeleteComment() {
           <button
             @click="emit('close')"
             class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors mt-0.5"
-            aria-label="Close"
+            :aria-label="t('common.close')"
           >
             <X class="w-5 h-5" :stroke-width="2" />
           </button>
@@ -530,6 +538,9 @@ async function confirmDeleteComment() {
               >{{ statusActionLabel(status) }}</button>
             </div>
             <div v-if="pendingStatus" class="space-y-2">
+              <p v-if="statusActionHint(pendingStatus)" class="text-xs text-muted-foreground">
+                {{ statusActionHint(pendingStatus) }}
+              </p>
               <div class="relative">
                 <textarea
                   ref="statusNoteRef"
@@ -552,7 +563,7 @@ async function confirmDeleteComment() {
                 />
               </div>
               <div class="flex gap-2">
-                <button @click="confirmStatusChange" class="btn-primary text-xs">{{ t('common.confirm') }}</button>
+                <button @click="confirmStatusChange" class="btn-primary text-xs">{{ statusActionLabel(pendingStatus) }}</button>
                 <button @click="pendingStatus = null" class="btn-secondary text-xs">{{ t('common.cancel') }}</button>
               </div>
             </div>
@@ -610,7 +621,7 @@ async function confirmDeleteComment() {
                     <img
                       :src="resolveAssetUrl(img.image_url)"
                       class="h-16 w-16 object-cover rounded border border-border cursor-pointer hover:opacity-80 transition-opacity"
-                      alt="attachment"
+                      :alt="t('issueDetail.attachmentImageAlt')"
                     />
                   </a>
                 </div>
@@ -689,7 +700,7 @@ async function confirmDeleteComment() {
                     v-for="img in comment.images" :key="img.id"
                     :href="resolveAssetUrl(img.image_url)" target="_blank" rel="noopener noreferrer"
                   >
-                    <img :src="resolveAssetUrl(img.image_url)" class="h-16 w-16 object-cover rounded border border-border hover:opacity-80 transition-opacity" alt="attachment" />
+                    <img :src="resolveAssetUrl(img.image_url)" class="h-16 w-16 object-cover rounded border border-border hover:opacity-80 transition-opacity" :alt="t('issueDetail.attachmentImageAlt')" />
                   </a>
                 </div>
                 <div v-if="comment.audios?.length" class="flex flex-col gap-2 mt-2">

@@ -102,6 +102,7 @@ vi.mock('@/components/workflow/WorkflowEditor.vue', () => ({
 }))
 
 import AlbumNewView from './AlbumNewView.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 async function selectBackKitchenCircle(wrapper: ReturnType<typeof mount>) {
   await wrapper.findAll('button.custom-select-option').find(button => button.text() === 'Back Kitchen')!.trigger('click')
@@ -401,6 +402,50 @@ describe('AlbumNewView', () => {
     })
     expect(mocks.updateTeamMock).not.toHaveBeenCalled()
     expect(mocks.updateDeadlinesMock).not.toHaveBeenCalled()
+  })
+
+  it('confirms before a template replaces an existing workflow draft', async () => {
+    mocks.listWorkflowTemplatesMock.mockResolvedValue([
+      {
+        id: 41,
+        circle_id: 9,
+        name: 'Template Flow',
+        description: 'A reusable flow',
+        workflow_config: {
+          version: 2,
+          steps: [
+            { id: 'template_intake', label: 'Template Intake', type: 'approval', assignee_role: 'producer', order: 0, transitions: {} },
+          ],
+        },
+        created_by: 1,
+        album_count: 2,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ])
+
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+    await selectBackKitchenCircle(wrapper)
+    await wrapper.findAll('button').find(button => button.text().includes('Workflow'))!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text().includes('Manual'))!.trigger('click')
+    expect(wrapper.find('.workflow-editor-stub').text()).not.toContain('Template Intake')
+
+    await wrapper.findAll('button').find(button => button.text().includes('Load from Template'))!.trigger('click')
+    await flushPromises()
+    await wrapper.find('div.cursor-pointer').trigger('click')
+    expect(wrapper.getComponent(ConfirmModal).props('title')).toBe('Replace the current workflow?')
+
+    wrapper.getComponent(ConfirmModal).vm.$emit('cancel')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.workflow-editor-stub').text()).not.toContain('Template Intake')
+
+    await wrapper.find('div.cursor-pointer').trigger('click')
+    wrapper.getComponent(ConfirmModal).vm.$emit('confirm')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.workflow-editor-stub').text()).toContain('Template Intake')
+    await wrapper.findAll('button').find(button => button.text().includes('Workflow'))!.trigger('click')
+    expect(wrapper.text()).toContain('Based on template: Template Flow')
   })
 
   it('shows a retryable workflow template load error', async () => {

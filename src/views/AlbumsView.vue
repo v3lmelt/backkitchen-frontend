@@ -21,6 +21,8 @@ const activeTab = ref<'active' | 'archived'>('active')
 const searchQuery = ref('')
 const sortMode = ref<'attention' | 'recent' | 'title'>('attention')
 const canCreateAlbum = ref(false)
+const hasCircles = ref(false)
+const createAccessLoading = ref(true)
 
 let albumLoadSerial = 0
 let searchTimer: ReturnType<typeof setTimeout> | null = null
@@ -70,21 +72,32 @@ onBeforeUnmount(() => {
 })
 
 async function loadCreateAccess() {
+  createAccessLoading.value = true
   if (!appStore.currentUser) {
     canCreateAlbum.value = false
-    return
-  }
-  if (appStore.currentUser.role === 'producer') {
-    canCreateAlbum.value = true
+    hasCircles.value = false
+    createAccessLoading.value = false
     return
   }
   try {
     const circles = await circleApi.list()
+    hasCircles.value = circles.length > 0
     canCreateAlbum.value = circles.some(circle => circle.viewer_can_create_album === true)
   } catch {
     canCreateAlbum.value = false
+    hasCircles.value = false
+  } finally {
+    createAccessLoading.value = false
   }
 }
+
+const emptyAlbumHint = computed(() => {
+  if (activeTab.value !== 'active' || searchQuery.value.trim()) return undefined
+  if (createAccessLoading.value) return t('albums.checkingCreateAccess')
+  if (canCreateAlbum.value) return t('albums.noAlbumsCanCreateHint')
+  if (!hasCircles.value) return t('albums.noAlbumsNoCircleHint')
+  return t('albums.noAlbumsMemberHint')
+})
 
 function deadlineInfo(album: Album): { text: string; overdue: boolean } | null {
   if (!album.deadline) return null
@@ -138,14 +151,14 @@ function roleBadgeClass(album: Album): string {
           <input
             v-model="searchQuery"
             type="text"
-            :placeholder="t('admin.searchAlbums')"
+            :placeholder="t('albums.searchPlaceholder')"
             class="input-field w-full pl-9 text-sm"
           />
         </div>
         <select v-model="sortMode" class="select-field min-w-[10rem] text-sm">
-          <option value="attention">{{ t('dashboard.attentionAlbums') }}</option>
-          <option value="recent">{{ t('dashboard.recentUpdates') }}</option>
-          <option value="title">{{ t('albumNew.albumTitle') }}</option>
+          <option value="attention">{{ t('albums.sortAttention') }}</option>
+          <option value="recent">{{ t('albums.sortRecent') }}</option>
+          <option value="title">{{ t('albums.sortTitle') }}</option>
         </select>
         <RouterLink v-if="canCreateAlbum" to="/albums/new" class="btn-primary text-sm">
           {{ t('albums.newAlbum') }}
@@ -192,8 +205,8 @@ function roleBadgeClass(album: Album): string {
     <EmptyState
       v-else-if="displayedAlbums.length === 0"
       :icon="activeTab === 'archived' ? Archive : Music"
-      :title="searchQuery.trim() ? t('admin.noAlbums') : (activeTab === 'archived' ? t('albums.archivedEmpty') : t('albums.noAlbums'))"
-      :hint="searchQuery.trim() ? undefined : (activeTab === 'active' ? t('albums.noAlbumsHint') : undefined)"
+      :title="searchQuery.trim() ? t('albums.searchEmpty') : (activeTab === 'archived' ? t('albums.archivedEmpty') : t('albums.noAlbums'))"
+      :hint="emptyAlbumHint"
     />
 
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

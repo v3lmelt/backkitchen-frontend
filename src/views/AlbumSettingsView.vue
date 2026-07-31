@@ -157,6 +157,7 @@ const progressTrackId = ref<number | null>(null)
 const progressStatus = ref('')
 const progressReason = ref('')
 const progressSubmitting = ref(false)
+const showProgressConfirm = ref(false)
 const progressMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 
 // Archived tracks state
@@ -200,6 +201,7 @@ const COMPOSER_EMAIL_EVENT_TYPES = ['new_issue', 'new_comment', 'revision_reques
 
 // Workflow state
 const savingWorkflow = ref(false)
+const pendingWorkflowConfig = ref<WorkflowConfig | null>(null)
 const workflowMigrations = ref<Array<{ track_id: number; track_title: string; from_step: string; to_step: string }>>([])
 const tabDataLoaded = reactive({
   assignableUsers: false,
@@ -212,8 +214,14 @@ const tabDataLoaded = reactive({
   activity: false,
 })
 
-async function saveWorkflow(config: WorkflowConfig) {
-  if (!album.value) return
+function requestWorkflowSave(config: WorkflowConfig) {
+  pendingWorkflowConfig.value = config
+}
+
+async function confirmWorkflowSave() {
+  if (!album.value || !pendingWorkflowConfig.value) return
+  const config = pendingWorkflowConfig.value
+  pendingWorkflowConfig.value = null
   savingWorkflow.value = true
   workflowMigrations.value = []
   try {
@@ -310,11 +318,34 @@ const progressStatusOptions = computed<SelectOption[]>(() => {
   return options
 })
 
+const progressRequiresReason = computed(() => {
+  if (!progressTrack.value || !progressStatus.value) return false
+  const stepIds = (album.value?.workflow_config?.steps ?? []).map(step => step.id)
+  const currentIndex = progressTrack.value.status === 'completed'
+    ? stepIds.length
+    : stepIds.indexOf(progressTrack.value.status)
+  const targetIndex = progressStatus.value === 'completed'
+    ? stepIds.length
+    : stepIds.indexOf(progressStatus.value)
+  return currentIndex >= 0 && targetIndex >= 0 && Math.abs(targetIndex - currentIndex) > 1
+})
+
+const progressTargetLabel = computed(() =>
+  progressStatusOptions.value.find(option => option.value === progressStatus.value)?.label ?? progressStatus.value,
+)
+
+const progressCurrentLabel = computed(() =>
+  progressTrack.value
+    ? translateWorkflowStatusLabel(progressTrack.value.status, album.value?.workflow_config ?? null, t, te)
+    : '',
+)
+
 const canSubmitProgressChange = computed(() =>
   Boolean(
     progressTrack.value &&
     progressStatus.value &&
     progressStatus.value !== progressTrack.value.status &&
+    (!progressRequiresReason.value || progressReason.value.trim()) &&
     !progressSubmitting.value,
   ),
 )
@@ -1035,8 +1066,14 @@ function progressTrackOptionLabel(track: Track): string {
   return `${prefix}${track.title} · ${statusLabel}`
 }
 
-async function submitProgressChange() {
+function requestProgressChange() {
+  if (!canSubmitProgressChange.value) return
+  showProgressConfirm.value = true
+}
+
+async function confirmProgressChange() {
   if (!progressTrack.value || !progressStatus.value) return
+  showProgressConfirm.value = false
   progressSubmitting.value = true
   progressMessage.value = null
   try {
@@ -1168,9 +1205,9 @@ async function refreshDeliveries() {
 </script>
 
 <template>
-  <div v-if="loading" class="max-w-4xl mx-auto"><SkeletonLoader :rows="5" :card="true" /></div>
+  <div v-if="loading" class="max-w-6xl mx-auto"><SkeletonLoader :rows="5" :card="true" /></div>
 
-  <div v-else-if="album" :class="['mx-auto space-y-6', activeTab === 'workflow' ? 'max-w-7xl' : 'max-w-4xl']">
+  <div v-else-if="album" class="max-w-6xl mx-auto space-y-6">
     <!-- Album header -->
     <div class="flex items-center gap-4">
       <div class="w-10 h-10 flex-shrink-0 overflow-hidden border border-border">
@@ -1871,6 +1908,9 @@ async function refreshDeliveries() {
               class="input-field w-full"
               :placeholder="t('albumSettings.progress.reasonPlaceholder')"
             />
+            <span v-if="progressRequiresReason" class="block text-xs text-warning">
+              {{ t('albumSettings.progress.reasonRequiredHint') }}
+            </span>
           </label>
           <p v-if="progressTrack && progressStatus === progressTrack.status" class="text-xs text-muted-foreground">
             {{ t('albumSettings.progress.sameStatusHint') }}
@@ -1880,7 +1920,7 @@ async function refreshDeliveries() {
               type="button"
               class="btn-primary text-sm"
               :disabled="!canSubmitProgressChange"
-              @click="submitProgressChange"
+              @click="requestProgressChange"
             >
               {{ progressSubmitting ? t('albumSettings.progress.saving') : t('albumSettings.progress.save') }}
             </button>
@@ -1963,7 +2003,7 @@ async function refreshDeliveries() {
           :member-options="userOptions"
           :saving="savingWorkflow"
           :saveable="true"
-          @save="saveWorkflow"
+          @save="requestWorkflowSave"
         />
       </div>
 
@@ -2245,5 +2285,27 @@ async function refreshDeliveries() {
     :destructive="true"
     @confirm="showResetTemplateConfirm = false; resetTemplate()"
     @cancel="showResetTemplateConfirm = false"
+  />
+
+  <ConfirmModal
+    v-if="pendingWorkflowConfig"
+    :title="t('workflowEditor.confirmations.saveTitle')"
+    :message="t('workflowEditor.confirmations.saveMessage')"
+    :confirm-text="t('workflowEditor.saveWorkflow')"
+    @confirm="confirmWorkflowSave"
+    @cancel="pendingWorkflowConfig = null"
+  />
+
+  <ConfirmModal
+    v-if="showProgressConfirm && progressTrack"
+    :title="t('albumSettings.progress.confirmTitle')"
+    :message="t('albumSettings.progress.confirmMessage', {
+      track: progressTrack.title,
+      from: progressCurrentLabel,
+      to: progressTargetLabel,
+    })"
+    :confirm-text="t('albumSettings.progress.confirmAction')"
+    @confirm="confirmProgressChange"
+    @cancel="showProgressConfirm = false"
   />
 </template>

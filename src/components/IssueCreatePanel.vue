@@ -6,6 +6,7 @@ import { issueApi } from '@/api'
 import type { Issue, User } from '@/types'
 import { useToast } from '@/composables/useToast'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import { extractClipboardImageFiles } from '@/utils/clipboardImages'
 import { formatTimestamp, roundToMilliseconds } from '@/utils/time'
@@ -32,6 +33,7 @@ const { error: toastError } = useToast()
 
 const showForm = ref(false)
 const issueMode = ref<'timed' | 'general'>('timed')
+const pendingConfirmation = ref<'discard' | 'general' | null>(null)
 
 function defaultIssueVisibility(): 'public' | 'internal' {
   return 'public'
@@ -112,6 +114,16 @@ const selectedImages = ref<File[]>([])
 const imageInputRef = ref<HTMLInputElement | null>(null)
 const submittingIssue = ref(false)
 const issueUploadProgress = ref(0)
+const hasMeaningfulDraft = computed(() =>
+  Boolean(
+    title.value.trim() ||
+    description.value.trim() ||
+    markers.value.length ||
+    selectedAudios.value.length ||
+    selectedImages.value.length ||
+    issueMode.value === 'general',
+  ),
+)
 
 function clearMarkerHintTimer() {
   if (!markerHintTimer) return
@@ -530,12 +542,44 @@ async function submitIssue() {
   }
 }
 
-function switchMode(mode: 'timed' | 'general') {
-  if (mode === issueMode.value) return
+function applyMode(mode: 'timed' | 'general') {
   issueMode.value = mode
   if (mode === 'general') {
     markers.value = []
     rangeAnchor.value = null
+  }
+}
+
+function switchMode(mode: 'timed' | 'general') {
+  if (mode === issueMode.value) return
+  if (mode === 'general' && markers.value.length > 0) {
+    pendingConfirmation.value = 'general'
+    return
+  }
+  applyMode(mode)
+}
+
+function discardDraft() {
+  showForm.value = false
+  resetForm()
+  clearDraftStorage()
+}
+
+function requestCloseForm() {
+  if (!hasMeaningfulDraft.value) {
+    discardDraft()
+    return
+  }
+  pendingConfirmation.value = 'discard'
+}
+
+function confirmPendingAction() {
+  const pending = pendingConfirmation.value
+  pendingConfirmation.value = null
+  if (pending === 'discard') {
+    discardDraft()
+  } else if (pending === 'general') {
+    applyMode('general')
   }
 }
 
@@ -655,6 +699,9 @@ defineExpose({
           :class="issueMode === 'general' ? 'bg-button-primary text-button-primary-foreground' : 'text-muted-foreground hover:text-foreground'"
         >{{ t('issue.generalIssue') }}</button>
       </div>
+      <p class="text-[11px] text-muted-foreground leading-relaxed">
+        {{ t('issue.draftHint') }}
+      </p>
 
       <!-- Marker list (timed mode) -->
       <div v-if="issueMode === 'timed' && markers.length > 0" class="space-y-2">
@@ -764,11 +811,13 @@ defineExpose({
         />
       </div>
       <CustomSelect v-model="severity" :options="severityOptions" />
+      <p class="text-[11px] text-muted-foreground leading-relaxed">{{ t('issue.severityHint') }}</p>
       <div class="space-y-2">
         <div class="flex items-center justify-between gap-2">
           <span class="text-xs font-mono text-muted-foreground">{{ t('issue.audioAttachments') }}</span>
           <span class="text-[11px] text-muted-foreground">{{ selectedAudios.length }}/{{ MAX_AUDIOS }}</span>
         </div>
+        <p class="text-[11px] text-muted-foreground">{{ t('issue.audioAttachmentHint') }}</p>
         <input ref="audioInputRef" type="file" :accept="AUDIO_ACCEPT" multiple class="hidden" @change="onAudioSelect" />
         <div v-if="selectedAudios.length" class="flex flex-wrap gap-2">
           <div
@@ -782,6 +831,7 @@ defineExpose({
               type="button"
               @click="removeAudio(index)"
               :disabled="submittingIssue"
+              :aria-label="t('issue.removeAudioAttachment', { name: file.name })"
               class="text-xs leading-none text-muted-foreground transition-colors hover:text-error disabled:cursor-not-allowed disabled:opacity-50"
             >×</button>
           </div>
@@ -790,6 +840,7 @@ defineExpose({
           <span class="text-xs font-mono text-muted-foreground">{{ t('issue.imageAttachments') }}</span>
           <span class="text-[11px] text-muted-foreground">{{ selectedImages.length }}/{{ MAX_IMAGES }}</span>
         </div>
+        <p class="text-[11px] text-muted-foreground">{{ t('issue.imageAttachmentHint') }}</p>
         <input ref="imageInputRef" type="file" :accept="IMAGE_ACCEPT" multiple class="hidden" @change="onImageSelect" />
         <div v-if="selectedImages.length" class="flex flex-wrap gap-2">
           <div
@@ -803,6 +854,7 @@ defineExpose({
               type="button"
               @click="removeImage(index)"
               :disabled="submittingIssue"
+              :aria-label="t('issue.removeImageAttachment', { name: file.name })"
               class="text-xs leading-none text-muted-foreground transition-colors hover:text-error disabled:cursor-not-allowed disabled:opacity-50"
             >×</button>
           </div>
@@ -845,6 +897,9 @@ defineExpose({
           <span v-else class="text-muted-foreground">{{ t('issue.generalIssue') }}</span>
           <span v-if="selectedAudios.length" class="text-muted-foreground">{{ t('issue.audioAttachments') }} {{ selectedAudios.length }}</span>
           <span v-if="selectedImages.length" class="text-muted-foreground">{{ t('issue.imageAttachments') }} {{ selectedImages.length }}</span>
+          <span class="text-muted-foreground">
+            {{ issueVisibility === 'internal' ? t('issue.visibilityInternal') : t('issue.visibilityPublic') }}
+          </span>
         </div>
 
         <div v-if="issueMode === 'timed' && markers.length" class="flex flex-wrap gap-1.5">
@@ -889,23 +944,38 @@ defineExpose({
       <div class="flex items-center justify-between gap-2">
         <div class="flex gap-2">
           <button @click="submitIssue" :disabled="!canSubmit" class="btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-50">{{ submittingIssue ? t('common.loading') : t('common.submitIssue') }}</button>
-          <button @click="showForm = false; resetForm()" :disabled="submittingIssue" class="btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50">{{ t('common.cancel') }}</button>
+          <button @click="requestCloseForm" :disabled="submittingIssue" class="btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50">{{ hasMeaningfulDraft ? t('issue.discardDraft') : t('common.cancel') }}</button>
         </div>
-        <button
-          v-if="internalVisibilityAllowed"
-          type="button"
-          @click="toggleIssueVisibility"
-          class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-mono transition-colors"
-          :class="issueVisibility === 'internal'
-            ? 'border-info/40 bg-info-bg text-info'
-            : 'border-border bg-background text-muted-foreground hover:text-foreground'"
-          :title="issueVisibility === 'internal' ? t('issue.visibilityInternalHint') : t('issue.visibilityPublicHint')"
-        >
-          <EyeOff v-if="issueVisibility === 'internal'" class="w-3 h-3" :stroke-width="2" />
-          <Eye v-else class="w-3 h-3" :stroke-width="2" />
-          {{ issueVisibility === 'internal' ? t('issue.visibilityInternal') : t('issue.visibilityPublic') }}
-        </button>
+        <div v-if="internalVisibilityAllowed" class="max-w-xs text-right space-y-1">
+          <button
+            type="button"
+            @click="toggleIssueVisibility"
+            class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-mono transition-colors"
+            :class="issueVisibility === 'internal'
+              ? 'border-info/40 bg-info-bg text-info'
+              : 'border-border bg-background text-muted-foreground hover:text-foreground'"
+          >
+            <EyeOff v-if="issueVisibility === 'internal'" class="w-3 h-3" :stroke-width="2" />
+            <Eye v-else class="w-3 h-3" :stroke-width="2" />
+            {{ issueVisibility === 'internal' ? t('issue.visibilityInternal') : t('issue.visibilityPublic') }}
+          </button>
+          <p class="text-[11px] text-muted-foreground leading-relaxed">
+            {{ issueVisibility === 'internal' ? t('issue.visibilityInternalHint') : t('issue.visibilityPublicHint') }}
+          </p>
+        </div>
       </div>
     </div>
+
+    <ConfirmModal
+      v-if="pendingConfirmation"
+      :title="pendingConfirmation === 'discard' ? t('issue.discardDraftTitle') : t('issue.clearMarkersTitle')"
+      :message="pendingConfirmation === 'discard'
+        ? t('issue.discardDraftMessage')
+        : t('issue.clearMarkersMessage', { count: markers.length })"
+      :confirm-text="pendingConfirmation === 'discard' ? t('issue.discardDraft') : t('issue.switchToGeneral')"
+      :destructive="pendingConfirmation === 'discard'"
+      @confirm="confirmPendingAction"
+      @cancel="pendingConfirmation = null"
+    />
   </div>
 </template>

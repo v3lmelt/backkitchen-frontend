@@ -105,7 +105,7 @@ const currentIssueTrack = computed(() => {
 const currentTrackLabel = computed(() => {
   const title = currentTrack.value?.title?.trim()
   if (title) return title
-  if (route.params.id) return `Track #${route.params.id}`
+  if (route.params.id) return t('header.trackFallback', { id: route.params.id })
   return t('header.pages.trackDetail')
 })
 
@@ -171,11 +171,11 @@ const breadcrumbs = computed(() => {
   } else if (route.name === 'issue-detail') {
     if (currentIssueTrack.value) {
       crumbs.push({
-        label: currentIssueTrack.value.title || `Track #${currentIssueTrack.value.id}`,
+        label: currentIssueTrack.value.title || t('header.trackFallback', { id: currentIssueTrack.value.id }),
         path: `/tracks/${currentIssueTrack.value.id}`,
       })
     }
-    crumbs.push({ label: `Issue #${route.params.id}`, path: route.path })
+    crumbs.push({ label: t('header.issueFallback', { id: route.params.id }), path: route.path })
   } else {
     crumbs.push({ label: pageTitle.value, path: route.path })
   }
@@ -234,7 +234,7 @@ function handleMenuToggle() {
             <button
               @click="breadcrumbExpanded = true"
               class="text-muted-foreground hover:text-foreground font-mono px-1"
-              title="Show full path"
+              :title="t('header.showFullPath')"
             >…</button>
           </div>
           <!-- Expanded middle crumbs (hidden on mobile by default) -->

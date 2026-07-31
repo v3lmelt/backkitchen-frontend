@@ -64,7 +64,7 @@ async function setArtistUid(wrapper: any, rowIndex: number, uid: string) {
 }
 
 async function addArtistEntry(wrapper: any) {
-  await wrapper.findAll('button').find((button: any) => button.text().includes('Add artist'))!.trigger('click')
+  await wrapper.findAll('button').find((button: any) => button.text().includes('Add composer'))!.trigger('click')
   await flushPromises()
 }
 
@@ -83,6 +83,15 @@ describe('UploadTrackView', () => {
       { id: 1, title: 'Album A' },
       { id: 2, title: 'Album B' },
     ])
+  })
+
+  it('explains draft scope and audio file requirements', async () => {
+    const wrapper = mountWithPlugins(UploadTrackView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Text fields are saved in this browser')
+    expect(wrapper.text()).toContain('Audio files are not saved')
+    expect(wrapper.text()).toContain('up to 200 MB per file')
   })
 
   it('loads albums on mount', async () => {
@@ -140,7 +149,7 @@ describe('UploadTrackView', () => {
 
     const inputs = wrapper.findAll('input')
     await inputs[1].setValue('My Track')
-    await wrapper.find('input[placeholder="Artist alias"]').setValue('Artist Name')
+    await wrapper.find('input[placeholder="Composer alias"]').setValue('Artist Name')
     await setArtistUid(wrapper, 0, '99')
 
     await wrapper.findAll('button').find(button => button.text().includes('Submit Track'))!.trigger('click')
@@ -197,12 +206,12 @@ describe('UploadTrackView', () => {
     await fileInput.trigger('change')
 
     await wrapper.find('input[placeholder="Enter track title"]').setValue('Collab Track')
-    await wrapper.find('input[placeholder="Artist alias"]').setValue('Kira Alias')
+    await wrapper.find('input[placeholder="Composer alias"]').setValue('Kira Alias')
     await addArtistEntry(wrapper)
-    await wrapper.findAll('input[placeholder="Artist alias"]')[1].setValue('Nova Alias')
+    await wrapper.findAll('input[placeholder="Composer alias"]')[1].setValue('Nova Alias')
     await setArtistUid(wrapper, 1, '2')
     await addArtistEntry(wrapper)
-    await wrapper.findAll('input[placeholder="Artist alias"]')[2].setValue('Offline Guest')
+    await wrapper.findAll('input[placeholder="Composer alias"]')[2].setValue('Offline Guest')
 
     await wrapper.findAll('button').find(button => button.text().includes('Submit Track'))!.trigger('click')
     await flushPromises()
@@ -232,7 +241,7 @@ describe('UploadTrackView', () => {
     Object.defineProperty(fileInput.element, 'files', { value: [file] })
     await fileInput.trigger('change')
     await wrapper.find('input[placeholder="Enter track title"]').setValue('Member Track')
-    await wrapper.find('input[placeholder="Artist alias"]').setValue('Kira Alias')
+    await wrapper.find('input[placeholder="Composer alias"]').setValue('Kira Alias')
     await setArtistUid(wrapper, 0, '')
 
     const submitBtn = wrapper.findAll('button').find(button => button.text().includes('Submit Track'))!
@@ -265,7 +274,7 @@ describe('UploadTrackView', () => {
     await fileInput.trigger('change')
 
     await wrapper.find('input[placeholder="Enter track title"]').setValue('Proxy Track')
-    await wrapper.find('input[placeholder="Artist alias"]').setValue('Offline Composer')
+    await wrapper.find('input[placeholder="Composer alias"]').setValue('Offline Composer')
     await setArtistUid(wrapper, 0, '')
 
     const submitBtn = wrapper.findAll('button').find(button => button.text().includes('Submit Track'))!
@@ -304,7 +313,7 @@ describe('UploadTrackView', () => {
     const wrapper = mountWithPlugins(UploadTrackView)
     await flushPromises()
 
-    await wrapper.find('input[placeholder="Artist alias"]').setValue('Nova Alias')
+    await wrapper.find('input[placeholder="Composer alias"]').setValue('Nova Alias')
     await setArtistUid(wrapper, 0, '2')
 
     await selectCustomOption(wrapper, 0, 'Other Album')
@@ -324,7 +333,7 @@ describe('UploadTrackView', () => {
     await flushPromises()
 
     expect((wrapper.find('input[placeholder="Enter track title"]').element as HTMLInputElement).value).toBe('Draft Track')
-    expect((wrapper.find('input[placeholder="Artist alias"]').element as HTMLInputElement).value).toBe('Legacy Alias')
+    expect((wrapper.find('input[placeholder="Composer alias"]').element as HTMLInputElement).value).toBe('Legacy Alias')
     expect((wrapper.find('input[placeholder="UID optional"]').element as HTMLInputElement).value).toBe('7')
   })
 
@@ -339,7 +348,7 @@ describe('UploadTrackView', () => {
     Object.defineProperty(fileInput.element, 'files', { value: [file] })
     await fileInput.trigger('change')
     await wrapper.find('input[placeholder="Enter track title"]').setValue('Invalid UID Track')
-    await wrapper.find('input[placeholder="Artist alias"]').setValue('UID Alias')
+    await wrapper.find('input[placeholder="Composer alias"]').setValue('UID Alias')
     await setArtistUid(wrapper, 0, 'abc')
     await wrapper.find('input[placeholder="UID optional"]').trigger('blur')
 
@@ -372,7 +381,7 @@ describe('UploadTrackView', () => {
     await fileInput.trigger('change')
 
     await wrapper.find('input[placeholder="Enter track title"]').setValue('R2 Track')
-    await wrapper.find('input[placeholder="Artist alias"]').setValue('R2 Alias')
+    await wrapper.find('input[placeholder="Composer alias"]').setValue('R2 Alias')
     await setArtistUid(wrapper, 0, '99')
 
     await wrapper.findAll('button').find(button => button.text().includes('Submit Track'))!.trigger('click')
@@ -404,7 +413,7 @@ describe('UploadTrackView', () => {
     await fileInput.trigger('change')
 
     await wrapper.find('input[placeholder="Enter track title"]').setValue('Proxy Track')
-    await wrapper.find('input[placeholder="Artist alias"]').setValue('Offline Composer')
+    await wrapper.find('input[placeholder="Composer alias"]').setValue('Offline Composer')
     await setArtistUid(wrapper, 0, '')
 
     await wrapper.findAll('button').find(button => button.text().includes('Submit Track'))!.trigger('click')
@@ -438,7 +447,7 @@ describe('UploadTrackView', () => {
     await fileInput.trigger('change')
 
     await wrapper.find('input[placeholder="Enter track title"]').setValue('Proxy Track')
-    await wrapper.find('input[placeholder="Artist alias"]').setValue('Offline Composer')
+    await wrapper.find('input[placeholder="Composer alias"]').setValue('Offline Composer')
     await setArtistUid(wrapper, 0, '')
 
     await wrapper.findAll('button').find(button => button.text().includes('Submit Track'))!.trigger('click')

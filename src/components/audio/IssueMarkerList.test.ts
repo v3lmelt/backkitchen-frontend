@@ -158,7 +158,7 @@ describe('IssueMarkerList', () => {
       },
     })
 
-    const resolvedButton = wrapper.findAll('button').find(button => button.text() === 'Resolved')
+    const resolvedButton = wrapper.findAll('button').find(button => button.text() === 'Mark Resolved')
     expect(resolvedButton).toBeTruthy()
     await resolvedButton!.trigger('click')
 

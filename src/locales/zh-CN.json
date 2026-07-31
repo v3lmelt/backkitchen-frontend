@@ -128,7 +128,10 @@
     "actions": "操作",
     "delete": "删除",
     "moveUp": "上移",
-    "moveDown": "下移"
+    "moveDown": "下移",
+    "uploadFailed": "上传失败",
+    "unknown": "未知用户",
+    "close": "关闭"
   },
   "discussionPanel": {
     "deleteTitle": "删除讨论",
@@ -186,7 +189,10 @@
       "circleDetail": "社团详情",
       "profile": "个人中心",
       "default": "BACK KITCHEN"
-    }
+    },
+    "trackFallback": "曲目 #{id}",
+    "issueFallback": "问题 #{id}",
+    "showFullPath": "显示完整路径"
   },
   "status": {
     "submitted": "已提交",
@@ -276,7 +282,7 @@
     "guide": {
       "title": "配置指南",
       "basicsTitle": "基本用法",
-      "basicsDesc": "流程画布里的阶段会按自上而下的顺序执行。点击任意卡片即可在右侧 Inspector 面板编辑该阶段的名称、负责角色与行为开关；卡片右上角的 ↑ / ↓ 图标用于调整顺序，🗑 图标用于删除阶段。",
+      "basicsDesc": "流程画布里的阶段会按自上而下的顺序执行。点击任意卡片即可在右侧编辑面板修改该阶段的名称、负责角色与行为开关；卡片右上角的 ↑ / ↓ 图标用于调整顺序，删除图标用于移除阶段。",
       "stageTypesTitle": "阶段类型",
       "stageIntake": "接收审批 — 主催确认是否接受这次投稿。可选是否允许永久拒绝，以及是否跳过同行评审直接进入主催审核。",
       "stagePeerReview": "同行评审 — 同行评审人聆听曲目并标记问题，完成评审后决定通过或要求修订。支持手动指定或自动从评审池中分配。",
@@ -284,7 +290,7 @@
       "stageMastering": "母带制作 — 母带师上传母带成品；可选是否要求交付后确认。",
       "stageFinalReview": "终审 — 主催对母带成品做最终验收。支持永久拒绝与回退到早前阶段。",
       "rolesTitle": "角色分配",
-      "rolesDesc": "每个阶段都有默认角色（主催、母带师、同行评审人、曲师）。主催审批、母带制作、终审阶段支持在 Inspector 面板里把负责人指定为具体成员，覆盖默认角色。",
+      "rolesDesc": "每个阶段都有默认角色（主催、母带师、同行评审人、曲师）。主催审批、母带制作、终审阶段支持在右侧编辑面板里把负责人指定为具体成员，覆盖默认角色。",
       "revisionTitle": "修订回路",
       "revisionDesc": "在阶段设置里勾选「启用修订回路」后，该阶段会挂载一个修订阶段：当评审人要求修订时，曲师上传新版本，完成后自动回到当前阶段重新处理。可单独命名修订阶段并指定其负责角色。",
       "reviewSettingsTitle": "评审设置（同行评审）",
@@ -299,24 +305,24 @@
   },
   "workflowEditor": {
     "visualTitle": "可视化工作流编辑器",
-    "visualDesc": "拖拽阶段卡片来调整顺序，选中卡片后在右侧编辑规则。主路径与修订回路会自动生成。",
+    "visualDesc": "使用阶段卡片右侧的上下箭头调整顺序；选中卡片后在右侧编辑规则。主路径与修订回路会自动生成。",
     "canvasTitle": "流程画布",
     "canvasDesc": "主阶段按执行顺序展示；修订阶段会作为回路附着在对应主阶段上。",
-    "dragHint": "拖拽卡片可排序",
+    "dragHint": "使用上下箭头调整顺序",
     "inspectorDesc": "修改当前阶段的名称、角色与流转规则。",
-    "chooseType": "选择要添加的阶段类型：",
+    "chooseType": "更改当前阶段类型：",
     "assigneeOverride": "指定操作人（可选）",
     "useRoleDefault": "使用默认角色",
-    "assignmentMode": "审阅人分配方式",
+    "assignmentMode": "评审人分配方式",
     "manual": "手动指派",
     "auto": "自动分配",
     "fixed": "固定评审",
-    "requiredReviewers": "所需审阅人数",
+    "requiredReviewers": "所需评审人数",
     "reviewerPool": "自动分配候选池",
     "fixedReviewers": "固定评审人",
     "poolSelected": "已选 {count} 人",
-    "fixedAllRequiredHint": "固定模式会要求实际分配到的 {count} 位评审人全部完成评审；投稿者本人会在对应曲目中自动排除。",
-    "fixedSubmitterExcludedHint": "如果固定名单里包含投稿者本人，该曲目会跳过投稿者；排除后无人可审时，系统会通知主催手动指派。",
+    "fixedAllRequiredHint": "固定模式会要求实际分配到的 {count} 位评审人全部完成评审；曲师本人会在对应曲目中自动排除。",
+    "fixedSubmitterExcludedHint": "如果固定名单里包含曲师本人，该曲目会跳过该曲师；排除后无人可审时，系统会通知主催手动指派。",
     "noMembersHint": "先在团队里添加可参与该工作流的成员，才能设置指定操作人、自动候选池或固定评审名单。",
     "allowPermanentReject": "允许永久拒绝曲目",
     "permanentRejectHint": "启用后，此阶段可永久拒绝曲目。被永久拒绝的曲目无法恢复，也无法重新提交。",
@@ -349,7 +355,7 @@
     "saved": "工作流已保存",
     "saveFailed": "工作流保存失败",
     "migrationWarning": "以下曲目因阶段变更已被迁移：",
-    "reviewerCountTag": "{count} 人审阅",
+    "reviewerCountTag": "{count} 人评审",
     "assigneePinned": "指定到个人",
     "confirmationTag": "需确认",
     "permanentRejectTag": "可永久拒绝",
@@ -402,13 +408,25 @@
       "completed": "已完成"
     },
     "validation": {
-      "reviewerPoolRequired": "阶段「{label}」设置了自动分配，但未选择任何候选审核人。",
+      "reviewerPoolRequired": "阶段「{label}」设置了自动分配，但未选择任何候选评审人。",
       "fixedReviewerRequired": "阶段「{label}」设置了固定评审，但未选择任何固定评审人。",
-      "reviewerPoolTooSmall": "阶段「{label}」的自动分配候选人数少于所需审阅人数。",
+      "reviewerPoolTooSmall": "阶段「{label}」的自动分配候选人数少于所需评审人数。",
       "rejectTargetMustBeEarlier": "阶段「{label}」存在无效打回目标：只能打回到当前阶段之前的阶段。",
       "directProducerTargetMissing": "阶段「{label}」启用了主催直接审核，但后面没有可跳转的主催审批阶段。",
       "finalReviewMustBeLast": "阶段「{label}」（终审）必须是最后一个主阶段，否则后续阶段将无法执行。",
       "finalReviewNoRollback": "阶段「{label}」（终审）没有退回路径。请添加打回目标或修订步骤，以便发现问题时可以退回。"
+    },
+    "confirmations": {
+      "loadDefaultTitle": "覆盖当前工作流？",
+      "loadDefaultMessage": "加载默认工作流会覆盖当前未保存的阶段与流转设置。",
+      "removeStageTitle": "删除阶段？",
+      "removeStageMessage": "删除「{stage}」会同时移除它的修订回路，并清理其他阶段指向这里的退回路径。",
+      "removeStageConfirm": "删除阶段",
+      "changeTypeTitle": "更改阶段类型？",
+      "changeTypeMessage": "将「{stage}」更改为「{type}」会重置该阶段的负责人、评审、修订和流转设置。",
+      "changeTypeConfirm": "更改类型",
+      "saveTitle": "保存工作流变更？",
+      "saveMessage": "保存后立即生效。删除、改名、改类型或重排阶段可能迁移正在处理的曲目；具体迁移结果会在保存后显示。"
     }
   },
   "workflowTemplate": {
@@ -438,7 +456,9 @@
     "basedOnTemplate": "基于模板：{name}",
     "createdBy": "创建者：{name}",
     "lastUpdated": "最近更新",
-    "stepCount": "{count} 个步骤"
+    "stepCount": "{count} 个步骤",
+    "loadConfirmTitle": "覆盖当前工作流？",
+    "loadConfirmMessage": "加载模板「{name}」会覆盖当前未保存的工作流设置。"
   },
   "workflowStep": {
     "uploadRevisedSource": "上传修订版源文件",
@@ -450,7 +470,8 @@
     "externalStemLinkDesc": "仅在母带师要求补充分轨或多轨工程时使用，提交后流程返回母带阶段。",
     "externalStemLinkLabel": "网盘链接、提取码和说明",
     "externalStemLinkPlaceholder": "粘贴分轨/多轨包的网盘链接、提取码/密码、文件说明和注意事项…",
-    "externalStemLinkHint": "此内容会作为新的源版本历史记录保存，但不会替换当前可播放的源音频文件。",
+    "externalStemLinkHint": "此内容会作为新的源版本历史记录保存，但不会替换当前可播放的源音频文件。曲师、指定母带师和专辑管理者可以查看链接、提取码及说明。",
+    "sourceCompareReadonlyHint": "对旧版源文件的对比仅供查看；如需添加新问题，请先切回当前版本。",
     "externalStemLinkExampleHeading": "格式示例",
     "externalStemLinkExample": "链接：https://pan.baidu.com/s/...\n提取码：a1b2\n说明：Logic Pro X 工程 + 全分轨 WAV",
     "submitExternalStemLink": "提交分轨链接",
@@ -521,27 +542,28 @@
     "reviewWaitingForQuorum": "已收到 {completed}/{required} 份评审意见，等待更多评审人提交。",
     "reviewWaitingForQuorumEarlyRevision": "你已提交建议打回；如问题已经明确，可直接要求曲师重新上传，内部待讨论项会继续保留。",
     "reviewWaitingForAssignment": "当前阶段尚未指派评审人，需等待主催手动安排。",
-    "assignReviewer": "分配审稿人",
+    "assignReviewer": "分配评审人",
     "reassignReviewer": "重新分配",
-    "assignReviewerTitle": "分配审稿人",
-    "reassignReviewerTitle": "重新分配审稿人",
-    "reviewerAssignmentManual": "为该阶段选择一位或多位审稿人：",
-    "reviewerAssignmentSelectionSummary": "已选择 {selected}/{limit} 位审稿人",
+    "assignReviewerTitle": "分配评审人",
+    "reassignReviewerTitle": "重新分配评审人",
+    "reviewerAssignmentManual": "为该阶段选择一位或多位评审人：",
+    "reviewerAssignmentSelectionSummary": "已选择 {selected}/{limit} 位评审人",
     "reviewerAssignmentWorking": "分配中…",
-    "reviewerAssignmentDone": "已分配审稿人",
-    "reviewerAssignmentNoPool": "自动分配失败：当前阶段无可用审稿人",
+    "reviewerAssignmentDone": "已分配评审人",
+    "reviewerAssignmentNoPool": "自动分配失败：当前阶段无可用评审人",
     "reviewerAssignmentNoMembers": "该专辑暂无可分配的成员。",
     "deliveryPendingConfirmation": "待母带师确认提交",
     "deliveryConfirmed": "母带师已确认提交",
     "deliveryFileLabel": "母带音频文件",
     "fileDeliveryLabel": "音频交付",
     "textDeliveryLabel": "文字交付",
-    "deliveryMessageLabel": "交付备注 / 外部链接",
-    "deliveryMessagePlaceholder": "填写交付备注、外部链接或交接说明",
-    "deliveryMessageHint": "母带交付需要上传可播放的母带音频文件",
+    "deliveryMessageLabel": "交付备注或参考链接（可选）",
+    "deliveryMessagePlaceholder": "填写交付备注、参考链接或交接说明",
+    "deliveryMessageHint": "参考链接不能替代必需上传的可播放母带音频文件。",
     "textDeliveryNoAudio": "该交付记录没有可播放的音频文件",
     "masterVersionHistory": "母带版本历史",
-    "leaveUploadConfirm": "当前已选择待上传文件，离开后需要重新选择。确认离开吗？"
+    "leaveUploadConfirm": "当前已选择待上传文件，离开后需要重新选择。确认离开吗？",
+    "fileTooLarge": "文件过大，最大允许 {max}"
   },
   "workflowSteps": {
     "intake": "接收审核",
@@ -614,7 +636,7 @@
     "deadlineDaysLeft": "还剩 {days} 天",
     "overdueCount": "{count} 首逾期",
     "colTitle": "标题",
-    "colArtist": "艺术家",
+    "colArtist": "曲师",
     "colDuration": "时长",
     "colStatus": "状态",
     "colOpenIssues": "未解决问题",
@@ -673,7 +695,10 @@
       "issueReopened": "{name} 重新打开了问题 #{num}",
       "issuePendingDiscussion": "{name} 将问题 #{num} 标记为待讨论",
       "issueDisagreed": "{name} 对问题 #{num} 提出异议"
-    }
+    },
+    "exportCompleted": "导出已完成曲目（{completed}/{total}）",
+    "albumFallback": "专辑 #{id}",
+    "exportFilenameFallback": "专辑导出"
   },
   "trackDetail": {
     "visibilitySetPublic": "曲目已设为所有成员可见",
@@ -704,14 +729,14 @@
     "reviewDone": "已完成",
     "reviewPending": "待审",
     "reassignReviewer": "重新分配",
-    "reassignReviewerTitle": "重新分配审稿人",
+    "reassignReviewerTitle": "重新分配评审人",
     "reassignReviewerAuto": "将从评审人池中自动重新分配。",
-    "reassignReviewerManual": "为该阶段选择一位或多位审稿人：",
-    "reassignSelectionSummary": "已选择 {selected}/{limit} 位审稿人",
+    "reassignReviewerManual": "为该阶段选择一位或多位评审人：",
+    "reassignSelectionSummary": "已选择 {selected}/{limit} 位评审人",
     "reassigning": "分配中…",
-    "reassignDone": "已重新分配审稿人",
-    "reassignNoPool": "自动分配失败：当前阶段无可用审核人",
-    "reassignRefreshFailed": "已重新分配审核人，但未能刷新最新分配列表。",
+    "reassignDone": "已重新分配评审人",
+    "reassignNoPool": "自动分配失败：当前阶段无可用评审人",
+    "reassignRefreshFailed": "已重新分配评审人，但未能刷新最新分配列表。",
     "openIssues": "未解决问题",
     "currentMaster": "当前母带",
     "finalApprovals": "终审批准",
@@ -839,7 +864,8 @@
       "confirm_delivery": "确认交付",
       "reject_final": "最终拒绝",
       "reject_resubmittable": "拒绝（可重新提交）"
-    }
+    },
+    "externalSourceLinkLabel": "外部分轨链接 v{version}"
   },
   "peerReview": {
     "heading": "同行评审：{title}",
@@ -886,7 +912,7 @@
     "staleIssuesHeading": "旧版本问题（仅供参考）",
     "actionHint": "上传修订后的源文件以回到审核流程",
     "returnedBy": "由 {name} 发起修订",
-    "openIssuesReminder": "还有 {count} 个待处理问题需要逐项确认并处理",
+    "openIssuesReminder": "仍有 {count} 个未处理问题；建议逐项确认后再上传新版本。",
     "allIssuesHandled": "当前问题已全部处理，可以直接上传新版本。"
   },
   "mastering": {
@@ -1023,7 +1049,7 @@
     "deleteCommentConfirm": "确认删除这条评论？此操作不可撤销。",
     "back": "返回",
     "created": "创建于 {date}",
-    "markFixed": "已解决",
+    "markFixed": "标记为已解决",
     "markPendingDiscussion": "标记为待讨论",
     "markInternalResolved": "内部结案",
     "disagree": "有异议",
@@ -1041,7 +1067,7 @@
     "audioMaxReached": "每条评论最多附加 {max} 个音频文件",
     "addComment": "添加评论",
     "internalCommentBadge": "仅评审可见",
-    "internalCommentHint": "当前 issue 处于内部讨论状态，此处的评论曲师不可见。",
+    "internalCommentHint": "当前问题处于内部讨论状态，此处的评论曲师不可见。",
     "audioContext": "音频定位",
     "noDescription": "暂无描述",
     "previewHeading": "波形预览",
@@ -1066,35 +1092,40 @@
     "statusUpdateFailed": "更新问题状态失败。",
     "commentUpdated": "评论已更新。",
     "commentDeleted": "评论已删除。",
-    "deleteCommentMessage": "这条评论将被永久删除。"
+    "deleteCommentMessage": "这条评论将被永久删除。",
+    "attachmentImageAlt": "问题附件图片",
+    "pendingDiscussionHint": "状态将改为待讨论；后续内部评论仅评审组和管理者可见，对曲师隐藏。",
+    "internalResolvedHint": "问题将在内部结案，对曲师保持隐藏。",
+    "publishHint": "问题将重新公开给曲师，并恢复为待处理状态。",
+    "resolvedHint": "问题将标记为已解决，并保留在历史记录中。"
   },
   "upload": {
     "heading": "提交曲目",
     "draftRestored": "已恢复上次未完成的提交草稿。",
     "reselectFile": "上次选择的文件“{file}”无法自动恢复，请重新选择后再提交。",
-    "leaveConfirm": "当前提交内容尚未完成，确认离开吗？",
+    "leaveConfirm": "文字内容已保存为草稿，但浏览器无法保留所选音频；离开后需重新选择文件。仍要离开吗？",
     "dropHint": "将音频文件拖放到此处或",
     "browse": "浏览",
     "trackTitle": "曲目标题 *",
-    "artist": "艺术家 *",
+    "artist": "曲师 *",
     "album": "专辑",
     "bpm": "BPM",
-    "artistHint": "每行填写一个显示名义，每行都可以填写 UID 绑定平台账号；同一 UID 可以绑定多个名义。",
+    "artistHint": "每行填写一个曲师名义；可填写 UID 绑定平台账号，同一 UID 可以绑定多个名义。",
     "artistBindingHint": "填写 UID 的平台曲师会拥有曲目并处理曲师侧流程；未填写 UID 的行仅作为外部姓名记录。",
-    "autoProxySubmissionHint": "当前所选专辑由本人主催，且所有艺术家行都未填写 UID，提交后由主催代办后续曲师侧流程。",
+    "autoProxySubmissionHint": "当前所选专辑由本人主催，且所有曲师行都未填写 UID；提交后由主催代办后续曲师侧流程。",
     "noLinkedAccount": "不绑定账号",
     "currentAccount": "当前账号",
-    "artistNamePlaceholder": "艺术家名义",
+    "artistNamePlaceholder": "曲师名义",
     "artistUidLabel": "平台用户 UID",
     "artistUidPlaceholder": "UID 可选",
-    "addArtist": "添加艺术家",
+    "addArtist": "添加曲师",
     "externalSubmitterName": "外部曲师名称",
     "externalSubmitterPlaceholder": "向主催和母带师显示的曲师名",
     "proxyNameRequired": "请输入外部曲师名称",
     "originalTitle": "原曲",
     "originalArtist": "原曲出处",
     "titlePlaceholder": "输入曲目标题",
-    "artistPlaceholder": "艺术家名称",
+    "artistPlaceholder": "曲师名称",
     "noAlbum": "无专辑",
     "bpmPlaceholder": "例如 128 或 120-160",
     "originalTitlePlaceholder": "原曲名称（如适用）",
@@ -1107,14 +1138,16 @@
     "uploadSuccess": "曲目提交成功",
     "albumRequired": "请先选择专辑再提交",
     "titleRequired": "请输入曲目标题",
-    "artistRequired": "请输入艺术家名称",
-    "artistNameRequiredForAccount": "填写 UID 的艺术家行需要填写名义",
+    "artistRequired": "请输入曲师名称",
+    "artistNameRequiredForAccount": "填写 UID 的曲师行需要填写名义",
     "artistUidInvalid": "UID 必须是正整数",
-    "artistAccountRequired": "仅主催可以提交未绑定平台账号的艺术家；请至少填写一个 UID",
-    "artistNameTooLong": "单个艺术家名义不能超过 100 个字符",
-    "artistDisplayTooLong": "合并后的艺术家显示名称不能超过 100 个字符",
+    "artistAccountRequired": "仅主催可以提交未绑定平台账号的曲师；请至少填写一个 UID",
+    "artistNameTooLong": "单个曲师名义不能超过 100 个字符",
+    "artistDisplayTooLong": "合并后的曲师显示名称不能超过 100 个字符",
     "fileTooLarge": "文件过大，最大允许 {max}",
-    "unsupportedImageType": "仅支持 JPEG、PNG、WebP 和 GIF 图片"
+    "unsupportedImageType": "仅支持 JPEG、PNG、WebP 和 GIF 图片",
+    "draftScopeHint": "文字内容会保存在当前浏览器；音频文件不会保存，恢复草稿后需要重新选择。提交成功后草稿会自动清除。",
+    "fileRequirements": "支持常见音频格式，单个文件最大 200 MB。"
   },
   "settings": {
     "heading": "专辑设置",
@@ -1122,7 +1155,7 @@
     "albumTitle": "专辑标题",
     "coverColor": "封面颜色",
     "description": "描述",
-    "albumTitlePlaceholder": "专辑标题",
+    "albumTitlePlaceholder": "例如：Midnight Compilation 2026",
     "descriptionPlaceholder": "专辑描述",
     "createButton": "创建专辑",
     "albumTeams": "专辑团队",
@@ -1134,7 +1167,7 @@
     "participants": "专辑参与者",
     "saving": "保存中…",
     "saveTeam": "保存团队",
-    "readOnlyNotice": "团队配置只能由专辑主催编辑。",
+    "readOnlyNotice": "仅专辑管理者（主催或副主催）及获授权管理员可以编辑团队配置。",
     "masteringEngineerInfo": "母带师：{name}",
     "participantsInfo": "参与者：{list}",
     "noneParticipants": "无",
@@ -1259,14 +1292,17 @@
     "danger": {
       "title": "危险区域",
       "desc": "永久注销你的账户。账户将被匿名化，登录凭证立即失效。如果你是任何社团的创建者或未归档专辑的主催，需要先处理这些资源。",
-      "deleteButton": "注销账户",
+      "deleteButton": "注销并匿名化账户",
       "confirmMessage": "此操作不可撤销。请输入密码确认。",
       "passwordLabel": "当前密码",
       "passwordPlaceholder": "输入当前密码确认",
-      "confirmButton": "确认注销",
+      "confirmButton": "确认注销并匿名化",
       "errorPasswordRequired": "请输入当前密码。",
       "errorGeneric": "注销失败，请重试。"
-    }
+    },
+    "avatarAlt": "{name} 的头像",
+    "uploadAvatar": "上传头像",
+    "removeAvatar": "移除头像"
   },
   "invitations": {
     "title": "专辑邀请",
@@ -1389,16 +1425,28 @@
     "shortcutSetRangeStart": "[ 设置范围起点",
     "shortcutSetRangeEnd": "] 结束范围",
     "shortcutRemoveLast": "Backspace 撤销",
-    "visibilityPublic": "公开",
-    "visibilityInternal": "仅内部",
-    "visibilityPublicHint": "此问题将对曲师可见",
-    "visibilityInternalHint": "此问题仅评审人可见，可后续公开或内部结案",
+    "visibilityPublic": "评审与曲师可见",
+    "visibilityInternal": "仅评审组可见",
+    "visibilityPublicHint": "此问题对评审参与者、专辑管理者和曲师可见。",
+    "visibilityInternalHint": "此问题仅内部评审参与者和管理者可见，对曲师隐藏；之后可公开或内部结案。",
     "status": {
       "resolved": "已解决",
       "internal_resolved": "内部结案",
       "pending_discussion": "待讨论",
       "disagreed": "有异议"
-    }
+    },
+    "draftHint": "草稿会自动保存在当前浏览器；文字、严重程度、可见性和时间标记可恢复，附件需要重新选择。",
+    "severityHint": "严重：阻止通过或交付；重要：需要修订；轻微：不阻止推进；建议：可选改进。",
+    "audioAttachmentHint": "音频最多 3 个，每个不超过 200 MB；支持 MP3、WAV、FLAC、AAC、OGG。",
+    "imageAttachmentHint": "图片最多 3 张，每张不超过 10 MB；支持 JPEG、PNG、GIF、WebP。",
+    "removeAudioAttachment": "移除音频附件 {name}",
+    "removeImageAttachment": "移除图片附件 {name}",
+    "discardDraft": "放弃草稿",
+    "discardDraftTitle": "放弃问题草稿？",
+    "discardDraftMessage": "已填写的文字、时间标记和附件选择都会被清除。",
+    "clearMarkersTitle": "移除时间标记？",
+    "clearMarkersMessage": "切换到整体问题会移除当前的 {count} 个时间标记。",
+    "switchToGeneral": "切换到整体问题"
   },
   "albums": {
     "heading": "专辑管理",
@@ -1409,17 +1457,26 @@
     "pinDashboard": "固定到仪表盘",
     "unpinDashboard": "从仪表盘移除",
     "pinHint": "点击图钉图标可将专辑固定到仪表盘",
-    "pinHintActive": "已固定的专辑将显示在仪表盘",
+    "pinHintActive": "固定的专辑会优先显示，并可通过“仅显示已固定”筛选。",
     "tabActive": "活跃",
     "tabArchived": "已归档",
     "archivedEmpty": "没有已归档的专辑",
-    "archivedBadge": "已归档"
+    "archivedBadge": "已归档",
+    "searchPlaceholder": "搜索专辑…",
+    "searchEmpty": "没有匹配的专辑",
+    "sortAttention": "需要关注",
+    "sortRecent": "最近更新",
+    "sortTitle": "按标题",
+    "checkingCreateAccess": "正在检查专辑创建权限…",
+    "noAlbumsCanCreateHint": "还没有专辑。你可以新建专辑，或等待加入现有专辑。",
+    "noAlbumsNoCircleHint": "还没有可访问的专辑。请先创建或加入社团。",
+    "noAlbumsMemberHint": "还没有可访问的专辑。请等待专辑管理者邀请。"
   },
   "albumNew": {
     "heading": "新建专辑",
     "basicInfo": "基本信息",
     "albumTitle": "专辑标题 *",
-    "albumTitlePlaceholder": "专辑标题",
+    "albumTitlePlaceholder": "例如：Midnight Compilation 2026",
     "coverColor": "封面颜色",
     "coverButtonLabel": "上传专辑封面",
     "coverImageHint": "点击上传封面图（JPEG/PNG/WebP/GIF，≤ 20 MB）",
@@ -1436,9 +1493,9 @@
     "teamSection": "团队（可选）",
     "deadlinesSection": "截止日期（可选）",
     "reviewDefaults": "评审默认设置",
-    "reviewerAssignmentMode": "默认审稿人分配",
+    "reviewerAssignmentMode": "默认评审人分配",
     "reviewerAssignmentHint": "这个快捷设置会同步修改第一个同行评审阶段，并与工作流编辑器保持一致。",
-    "fixedReviewerHint": "请在下方工作流编辑器中为第一个同行评审阶段选择固定评审人；投稿者本人会在对应曲目中自动排除。",
+    "fixedReviewerHint": "请在下方工作流编辑器中为第一个同行评审阶段选择固定评审人；曲师本人会在对应曲目中自动排除。",
     "checklistMode": "同行评审清单",
     "checklistModeCircleDefault": "沿用社团默认",
     "checklistModeEnabled": "启用",
@@ -1453,7 +1510,8 @@
     "workflowValid": "工作流配置有效。",
     "createButton": "创建专辑",
     "creating": "创建中…",
-    "titleRequired": "请输入专辑标题"
+    "titleRequired": "请输入专辑标题",
+    "workflowCustomized": "已自定义工作流"
   },
   "albumSettings": {
     "tabs": {
@@ -1486,7 +1544,7 @@
       "members": "成员",
       "unassigned": "未分配",
       "noMembers": "暂无成员",
-      "readOnlyNotice": "团队配置只能由主催编辑",
+      "readOnlyNotice": "仅专辑管理者（主催或副主催）及获授权管理员可以编辑。",
       "addMember": "添加成员",
       "selectUserPlaceholder": "选择用户…",
       "allAdded": "所有可选用户已添加",
@@ -1497,11 +1555,11 @@
       "leaveFailed": "退出失败"
     },
     "deadlines": {
-      "readOnlyNotice": "截止日期由主催设置",
+      "readOnlyNotice": "仅专辑管理者（主催或副主催）及获授权管理员可以设置截止日期。",
       "notSet": "未设置"
     },
     "checklist": {
-      "readOnlyNotice": "Checklist 模板由主催设置",
+      "readOnlyNotice": "仅专辑管理者（主催或副主催）及获授权管理员可以设置 Checklist 模板。",
       "noItems": "暂无检查项",
       "modeTitle": "Checklist 策略",
       "modeCircleHint": "选择此专辑沿用社团默认，还是单独覆盖社团默认值。",
@@ -1515,8 +1573,8 @@
     },
     "workflow": {
       "customWorkflow": "自定义工作流",
-      "locked": "工作流规则由主催维护。修改后会自动迁移不再匹配当前阶段的曲目。",
-      "viewOnly": "只有主催可以修改工作流配置。",
+      "locked": "工作流规则由专辑管理者维护。修改后可能迁移不再匹配当前阶段的曲目。",
+      "viewOnly": "仅专辑管理者（主催或副主催）及获授权管理员可以修改工作流配置。",
       "defaultWorkflow": "该专辑使用默认工作流。",
       "defaultDesc": "已提交 → 同行评审 → 主催审批 → 母带制作 → 终审 → 已完成",
       "returnTo": "返回到"
@@ -1564,7 +1622,11 @@
       "saved": "曲目进度已变更",
       "failed": "进度变更失败",
       "noTracks": "该专辑暂无可调整的曲目",
-      "sameStatusHint": "请选择不同于当前阶段的目标。"
+      "sameStatusHint": "请选择不同于当前阶段的目标。",
+      "reasonRequiredHint": "跨越多个阶段时必须填写原因。",
+      "confirmTitle": "确认手动调整阶段？",
+      "confirmMessage": "将《{track}》从「{from}」手动调整为「{to}」？这不是拒绝操作。",
+      "confirmAction": "确认变更进度"
     }
   },
   "circles": {
@@ -1596,7 +1658,9 @@
     "websitePlaceholder": "https://…",
     "create": "创建社团",
     "nameRequired": "请输入社团名称",
-    "logoUploadPartialFailure": "社团已创建，但 Logo 上传失败：{message}。请稍后在社团页面重新上传。"
+    "logoUploadPartialFailure": "社团已创建，但 Logo 上传失败：{message}。请稍后在社团页面重新上传。",
+    "defaultChecklistHeading": "默认同行评审清单",
+    "defaultChecklistHint": "新建专辑默认沿用此设置，可在专辑设置中覆盖。"
   },
   "circleDetail": {
     "tabs": {
@@ -1652,7 +1716,9 @@
       "leaveConfirm": "确认退出「{name}」？",
       "left": "已退出社团",
       "leaveFailed": "退出失败"
-    }
+    },
+    "defaultChecklistHeading": "默认同行评审清单",
+    "defaultChecklistHint": "新建专辑默认沿用此设置，可在专辑设置中覆盖。"
   },
   "trackStatus": {
     "submitted": "已提交",
@@ -1801,7 +1867,7 @@
     "loadMore": "加载更多",
     "selectTrack": "选择要操作的曲目",
     "forceStatus": "强制变更状态",
-    "reassign": "重新分配审稿人",
+    "reassign": "重新分配评审人",
     "newStatus": "目标状态",
     "selectStatus": "选择状态",
     "currentStatus": "当前状态",
@@ -1922,6 +1988,47 @@
       "restoredTrackFromAdminConsole": "由管理员控制台恢复",
       "deletedFromAdminConsole": "由管理员控制台删除",
       "reviewedFromAdminConsole": "由管理员控制台审核"
+    },
+    "adminRoleDescriptions": {
+      "none": "无权访问管理后台。",
+      "viewer": "可只读查看后台数据和审计记录。",
+      "operator": "可执行日常恢复和流程管理操作。",
+      "superadmin": "可管理后台权限并执行最高影响操作。"
+    },
+    "confirmations": {
+      "roleTitle": "更改账户角色？",
+      "roleMessage": "将 {name} 的账户角色从「{from}」改为「{to}」。此操作会立即影响其全局权限。",
+      "changeRole": "确认更改角色",
+      "adminRoleTitle": "更改后台权限？",
+      "adminRoleMessage": "将 {name} 的后台权限从「{from}」改为「{to}」。",
+      "changeAdminRole": "确认更改后台权限",
+      "verificationTitle": "覆盖邮箱验证状态？",
+      "verificationMessage": "将 {name} 手动标记为「{state}」。",
+      "suspendTitle": "停用用户？",
+      "suspendMessage": "停用 {name} 后，对方将无法继续使用账户，直到管理员恢复。",
+      "revokeSessionsTitle": "撤销全部登录会话？",
+      "revokeSessionsMessage": "{name} 将在所有设备上退出登录，需要重新验证身份。",
+      "transferTitle": "转移用户资产？",
+      "transferMessage": "将 {from} 拥有的可转移资源交给 {to}。",
+      "archiveAlbumTitle": "归档专辑？",
+      "archiveAlbumMessage": "归档「{name}」后，专辑会从活跃列表隐藏，并进入保留期。",
+      "reopenRequestApproveTitle": "批准重开申请？",
+      "reopenRequestRejectTitle": "拒绝重开申请？",
+      "reopenRequestMessage": "曲目《{track}》申请重开到「{stage}」。",
+      "workflow": {
+        "forceTitle": "强制变更曲目状态？",
+        "forceMessage": "将《{track}》从「{current}」强制调整为「{target}」。这会绕过正常工作流入口。",
+        "forceConfirm": "确认强制变更",
+        "reopenTitle": "重新开启曲目？",
+        "reopenMessage": "将《{track}》从「{current}」重新开启到「{target}」，相关进度可能被重置。",
+        "reopenConfirm": "确认重新开启",
+        "archiveTitle": "归档曲目？",
+        "archiveMessage": "归档《{track}》后，曲目会从正常工作流中隐藏。",
+        "archiveConfirm": "确认归档曲目",
+        "deleteTitle": "删除曲目？",
+        "deleteMessage": "删除《{track}》会移除其记录与文件。此操作不可撤销。",
+        "deleteConfirm": "确认删除曲目"
+      }
     }
   },
   "shortcuts": {
@@ -1956,7 +2063,7 @@
     "downloading": "正在下载曲目 ({index}/{total})：{title}",
     "reading": "正在读取曲目 ({index}/{total})：{title}",
     "metadata": "正在写入元数据 ({index}/{total})：{title}",
-    "skipped": "已跳过：{title}",
+    "skipped": "未导出：{title}",
     "zipping": "正在打包 ZIP…",
     "downloadingZip": "正在下载导出文件…",
     "done": "导出完成！",

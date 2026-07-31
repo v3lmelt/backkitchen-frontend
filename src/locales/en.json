@@ -128,7 +128,10 @@
     "actions": "Actions",
     "delete": "Delete",
     "moveUp": "Move up",
-    "moveDown": "Move down"
+    "moveDown": "Move down",
+    "uploadFailed": "Upload failed",
+    "unknown": "Unknown user",
+    "close": "Close"
   },
   "discussionPanel": {
     "deleteTitle": "Delete Discussion",
@@ -186,7 +189,10 @@
       "circleDetail": "Circle Detail",
       "profile": "Profile",
       "default": "BACK KITCHEN"
-    }
+    },
+    "trackFallback": "Track #{id}",
+    "issueFallback": "Issue #{id}",
+    "showFullPath": "Show full path"
   },
   "status": {
     "submitted": "Submitted",
@@ -242,7 +248,7 @@
       "producer": "Producer",
       "mastering_engineer": "Mastering Engineer",
       "peer_reviewer": "Peer Reviewer",
-      "submitter": "Submitter"
+      "submitter": "Composer"
     },
     "targets": {
       "completed": "Completed (terminal)",
@@ -284,9 +290,9 @@
       "stageMastering": "Mastering — The mastering engineer uploads the mastered output. Optionally requires confirmation after delivery.",
       "stageFinalReview": "Final Review — The producer signs off on the mastered result. Supports permanent rejection and bouncing back to earlier stages.",
       "rolesTitle": "Role Assignment",
-      "rolesDesc": "Each stage has a default role (Producer, Mastering Engineer, Peer Reviewer, Submitter). Producer Gate, Mastering, and Final Review support pinning a specific member via the Inspector panel to override the default role.",
+      "rolesDesc": "Each stage has a default role (Producer, Mastering Engineer, Peer Reviewer, Composer). Producer Gate, Mastering, and Final Review support assigning a specific member in the panel on the right to override the default role.",
       "revisionTitle": "Revision Loops",
-      "revisionDesc": "Checking \"Enable revision loop\" attaches a revision step to the stage: when reviewers request changes, the submitter uploads a new version and the track automatically returns to this stage. You can independently name the revision step and assign it a role.",
+      "revisionDesc": "Enabling a revision loop attaches a revision step to the stage: when reviewers request changes, the composer uploads a new version and the track automatically returns to this stage.",
       "reviewSettingsTitle": "Review Settings (Peer Review)",
       "reviewSettingsDesc": "Peer review supports manual and automatic assignment. In automatic mode you can pick members to form a reviewer pool and specify the minimum number of reviews required before the track can advance.",
       "rejectTargetsTitle": "Reject Targets",
@@ -299,12 +305,12 @@
   },
   "workflowEditor": {
     "visualTitle": "Visual Workflow Editor",
-    "visualDesc": "Drag stage cards to reorder the flow, then edit the selected stage in the inspector. Main flow and revision loops are generated automatically.",
+    "visualDesc": "Use the up and down arrows on each stage card to reorder the flow, then edit the selected stage in the panel on the right. The main flow and revision loops are generated automatically.",
     "canvasTitle": "Workflow Canvas",
     "canvasDesc": "Main stages are shown in execution order, with revision stages attached as loops to their parent stage.",
-    "dragHint": "Drag cards to reorder",
+    "dragHint": "Use the arrows to reorder",
     "inspectorDesc": "Edit the selected stage's label, role, and routing rules.",
-    "chooseType": "Choose stage type to add:",
+    "chooseType": "Change the current stage type:",
     "assigneeOverride": "Assignee override (optional)",
     "useRoleDefault": "Use default role",
     "assignmentMode": "Reviewer assignment mode",
@@ -315,8 +321,8 @@
     "reviewerPool": "Auto-assignment pool",
     "fixedReviewers": "Fixed reviewers",
     "poolSelected": "{count} selected",
-    "fixedAllRequiredHint": "Fixed mode requires all {count} actually assigned reviewer(s) to finish. The submitter is excluded from their own track.",
-    "fixedSubmitterExcludedHint": "If the fixed list contains the submitter, that person is skipped for the track. If nobody remains, the producer is notified to assign reviewers manually.",
+    "fixedAllRequiredHint": "Fixed mode requires all {count} assigned reviewer(s) to finish. The composer is excluded from reviewing their own track.",
+    "fixedSubmitterExcludedHint": "If the fixed list contains the composer, that person is skipped for the track. If nobody remains, the producer is notified to assign reviewers manually.",
     "noMembersHint": "Add eligible team members first to configure assignee overrides, auto-assignment pools, or fixed reviewer lists.",
     "allowPermanentReject": "Allow permanently rejecting track",
     "permanentRejectHint": "When enabled, tracks can be permanently rejected at this stage. Permanently rejected tracks cannot be recovered or resubmitted.",
@@ -409,6 +415,18 @@
       "directProducerTargetMissing": "Stage \"{label}\" has direct producer review enabled, but there is no later producer review stage to jump to.",
       "finalReviewMustBeLast": "Stage \"{label}\" (final review) must be the last main stage — any stages after it will be unreachable.",
       "finalReviewNoRollback": "Stage \"{label}\" (final review) has no rollback path. Add a reject target or revision step so reviewers can return the track when issues are found."
+    },
+    "confirmations": {
+      "loadDefaultTitle": "Replace the current workflow?",
+      "loadDefaultMessage": "Loading the default workflow replaces the current unsaved stages and routing settings.",
+      "removeStageTitle": "Delete stage?",
+      "removeStageMessage": "Deleting “{stage}” also removes its revision loop and clears return paths from other stages that point here.",
+      "removeStageConfirm": "Delete Stage",
+      "changeTypeTitle": "Change stage type?",
+      "changeTypeMessage": "Changing “{stage}” to “{type}” resets its assignee, review, revision, and routing settings.",
+      "changeTypeConfirm": "Change Type",
+      "saveTitle": "Save workflow changes?",
+      "saveMessage": "Changes take effect immediately. Removing, renaming, changing, or reordering stages may migrate in-flight tracks; migration details appear after saving."
     }
   },
   "workflowTemplate": {
@@ -438,7 +456,9 @@
     "basedOnTemplate": "Based on template: {name}",
     "createdBy": "Created by {name}",
     "lastUpdated": "Last updated",
-    "stepCount": "{count} steps"
+    "stepCount": "{count} steps",
+    "loadConfirmTitle": "Replace the current workflow?",
+    "loadConfirmMessage": "Loading the “{name}” template replaces the current unsaved workflow settings."
   },
   "workflowStep": {
     "uploadRevisedSource": "Upload Revised Source",
@@ -450,7 +470,8 @@
     "externalStemLinkDesc": "Use only when mastering engineer requests stems or multitracks. Submitting returns the track to mastering.",
     "externalStemLinkLabel": "Cloud link, access code, and notes",
     "externalStemLinkPlaceholder": "Paste the stems/multitrack cloud link, extraction code/password, file notes, and handling instructions…",
-    "externalStemLinkHint": "This is recorded as a new source-version history entry, but it does not replace the current playable source audio file.",
+    "externalStemLinkHint": "This is recorded as a new source-version history entry but does not replace the current playable source audio. The composer, assigned mastering engineer, and album managers can view the link, access code, and notes.",
+    "sourceCompareReadonlyHint": "Older source-version compare is read-only. Switch back to the current version before adding new issues.",
     "externalStemLinkExampleHeading": "Format Example",
     "externalStemLinkExample": "Link: https://drive.google.com/...\nCode: a1b2\nNotes: Logic Pro X project + full stem WAVs",
     "submitExternalStemLink": "Submit Stem Link",
@@ -526,9 +547,9 @@
     "deliveryFileLabel": "Master audio file",
     "fileDeliveryLabel": "Audio delivery",
     "textDeliveryLabel": "Text delivery",
-    "deliveryMessageLabel": "Delivery notes / external link",
-    "deliveryMessagePlaceholder": "Delivery notes, external link, or handoff details",
-    "deliveryMessageHint": "Master delivery requires a playable mastered audio file",
+    "deliveryMessageLabel": "Delivery notes or reference link (optional)",
+    "deliveryMessagePlaceholder": "Delivery notes, reference link, or handoff details",
+    "deliveryMessageHint": "A reference link does not replace the required playable master audio file.",
     "textDeliveryNoAudio": "This historical delivery has no playable audio file",
     "masterVersionHistory": "Master Delivery History",
     "leaveUploadConfirm": "A file is selected for upload. If you leave now, you'll need to choose it again. Leave this page?",
@@ -541,7 +562,8 @@
     "revisionTypeRequestedSourceAudio": "Mastering engineer requested: Re-upload source audio file",
     "revisionTypeRequestedStemFiles": "Mastering engineer requested: Provide stem files via cloud link",
     "revisionTypeHintSourceAudio": "Please upload a single remixed audio file.",
-    "revisionTypeHintStemFiles": "Please provide a cloud storage link, access code, and handling notes in the text area below."
+    "revisionTypeHintStemFiles": "Please provide a cloud storage link, access code, and handling notes in the text area below.",
+    "fileTooLarge": "File too large. Maximum allowed: {max}"
   },
   "workflowSteps": {
     "intake": "Intake",
@@ -590,7 +612,7 @@
     "tracksCount": "{n} tracks",
     "tracks": "tracks",
     "tracksHeading": "Tracks",
-    "searchPlaceholder": "Search tracks, albums, authors…",
+    "searchPlaceholder": "Search tracks, albums, composers…",
     "matchingAlbums": "Matching Albums",
     "filtered": "filtered: {status}",
     "clearFilter": "clear",
@@ -608,14 +630,13 @@
     "batchSuccess": "Action applied to {count} track(s)",
     "noTracks": "No tracks found.",
     "colNumber": "Track No.",
-    "trackNumberLabel": "Track No. {number}",
     "exportAlbum": "Export",
     "deadlineOverdue": "{days}d overdue",
     "deadlineToday": "Due today",
     "deadlineDaysLeft": "{days}d left",
     "overdueCount": "{count} overdue",
     "colTitle": "Title",
-    "colArtist": "Artist",
+    "colArtist": "Composer",
     "colDuration": "Duration",
     "colStatus": "Status",
     "colOpenIssues": "Open Issues",
@@ -644,7 +665,7 @@
       "mastering_revision_requested": "{name} requested source revision",
       "master_delivery_uploaded": "{name} uploaded a master delivery",
       "final_review_approved_by_producer": "{name} approved the final review (producer)",
-      "final_review_approved_by_submitter": "{name} approved the final review (submitter)",
+      "final_review_approved_by_submitter": "{name} approved the final review (composer)",
       "returned_to_mastering": "{name} returned the track to mastering",
       "issue_created": "{name} created an issue",
       "issue_updated": "{name} updated an issue",
@@ -674,7 +695,10 @@
       "issueReopened": "{name} reopened issue #{num}",
       "issuePendingDiscussion": "{name} marked issue #{num} pending discussion",
       "issueDisagreed": "{name} disputed issue #{num}"
-    }
+    },
+    "exportCompleted": "Export completed tracks ({completed}/{total})",
+    "albumFallback": "Album #{id}",
+    "exportFilenameFallback": "album-export"
   },
   "trackDetail": {
     "visibilitySetPublic": "Track is now visible to all members",
@@ -692,7 +716,7 @@
     "metadataSaveFailed": "Failed to save",
     "trackNumberLabel": "Track No. {number}",
     "trackSummary": "Track Summary",
-    "submitter": "Submitter",
+    "submitter": "Composer",
     "externalSubmitter": "External Composer",
     "composers": "Composers",
     "platformComposers": "Platform composers",
@@ -723,12 +747,12 @@
     "noDiscussions": "No discussions yet.",
     "discussionPlaceholder": "Write a discussion message…",
     "postDiscussion": "Post",
-    "authorNotes": "Author Notes",
-    "authorNotesPlaceholder": "Describe your creative intent, mixing approach, or what feedback you're looking for...",
-    "noAuthorNotes": "No author notes added yet",
+    "authorNotes": "Composer Notes",
+    "authorNotesPlaceholder": "Describe your creative intent, mixing approach, or what feedback you are looking for…",
+    "noAuthorNotes": "No composer notes added yet",
     "masteringNotes": "Mastering Notes",
     "masteringNotesPlaceholder": "Instructions for the mastering engineer, e.g. \"keep the dynamics\", \"reference track is X\"...",
-    "noMasteringNotes": "No mastering notes added yet",
+    "noMasteringNotes": "No composer mastering notes added yet",
     "notesSaved": "Notes saved",
     "revisionNotesLabel": "V{version} revision notes",
     "timeline": "Timeline",
@@ -840,7 +864,8 @@
       "confirm_delivery": "Confirm Delivery",
       "reject_final": "Reject (Final)",
       "reject_resubmittable": "Reject (Resubmittable)"
-    }
+    },
+    "externalSourceLinkLabel": "External stem link v{version}"
   },
   "peerReview": {
     "heading": "Peer Review: {title}",
@@ -887,13 +912,13 @@
     "staleIssuesHeading": "Prior Version Issues (reference only)",
     "actionHint": "Upload a revised source file to return to the review workflow",
     "returnedBy": "Revision requested by {name}",
-    "openIssuesReminder": "{count} open issue(s) still need to be reviewed and addressed",
+    "openIssuesReminder": "{count} issue(s) remain open; review them one by one before uploading a new version.",
     "allIssuesHandled": "All current issues are handled. You can upload the next source version."
   },
   "mastering": {
     "heading": "Mastering: {title}",
     "subheading": "Check the current source audio, request a source revision when needed, then upload the mastered delivery.",
-    "waveformHint": "Annotating the pre-mastering source audio. Clicks move the play head; switch to Annotate mode to mark issues. Request a revision to have the author fix the source.",
+    "waveformHint": "This is the pre-mastering source audio. Clicks move the play head; switch to Annotate mode to mark issues. Request a revision if the composer needs to change the source.",
     "listenOnlyHint": "Listen-only preview of the source audio. Switch to the Issues tab to annotate.",
     "issuesHeading": "Source Issues ({count})",
     "finalReviewIssuesHeading": "Final Review Issues ({count})",
@@ -902,9 +927,9 @@
     "uploadReady": "Upload mastered delivery when ready.",
     "uploading": "Uploading...",
     "uploadMaster": "Upload Master Delivery",
-    "actionHint": "Upload the mastered delivery, or request the author to revise the source",
+    "actionHint": "Upload the mastered delivery, or ask the composer to revise the source",
     "discussionHeading": "Mastering Discussion ({count})",
-    "noDiscussions": "No mastering discussions yet. Authors and mastering engineers can discuss mastering requirements here.",
+    "noDiscussions": "No mastering discussions yet. Composers and mastering engineers can discuss mastering requirements here.",
     "discussionPlaceholder": "Type your mastering discussion…",
     "postDiscussion": "Send"
   },
@@ -948,7 +973,7 @@
     "approvalEmpty": "Shows after delivery",
     "none": "None yet",
     "latestDiscussion": "Latest communication",
-    "masteringNotes": "Submitter mastering notes",
+    "masteringNotes": "Composer mastering notes",
     "getStarted": "Suggested starting point",
     "emptyPreview": "No communication yet. Start by clarifying the reference track, target loudness, and what dynamics should remain.",
     "audioAttachment": "Shared an audio preview",
@@ -1005,17 +1030,17 @@
   },
   "finalReview": {
     "heading": "Final Review: {title}",
-    "subheading": "Producer and submitter both need to approve the current master delivery. The producer may return the track if unsatisfied.",
+    "subheading": "Producer and composer both need to approve the current master delivery. The producer may return the track if unsatisfied.",
     "waveformHint": "Annotating the master delivery audio. Clicks move the play head; switch to Annotate mode to add final-review issues.",
     "issuesHeading": "Final Review Issues ({count})",
     "approvalStatus": "Approval Status",
     "producer": "Producer",
-    "submitter": "Submitter",
+    "submitter": "Composer",
     "externalSubmitterProxy": "External composer (producer proxy)",
     "approveMaster": "Approve Current Master",
     "returnToMastering": "Redo Mastering",
     "requestRemastering": "Revise Source & Re-master",
-    "actionHint": "Both producer and submitter must approve to complete the final review",
+    "actionHint": "Both producer and composer must approve to complete the final review",
     "requestReturn": "Request Return",
     "returnRequested": "Return request sent to producer"
   },
@@ -1024,7 +1049,7 @@
     "deleteCommentConfirm": "Delete this comment? This action cannot be undone.",
     "back": "Back",
     "created": "Created {date}",
-    "markFixed": "Resolved",
+    "markFixed": "Mark Resolved",
     "markPendingDiscussion": "Mark Pending Discussion",
     "markInternalResolved": "Mark Internally Resolved",
     "disagree": "Disagree",
@@ -1042,7 +1067,7 @@
     "audioMaxReached": "At most {max} audio files per comment",
     "addComment": "Add Comment",
     "internalCommentBadge": "Reviewers Only",
-    "internalCommentHint": "This issue is under internal discussion. Comments here are hidden from the submitter.",
+    "internalCommentHint": "This issue is under internal discussion. Comments here are hidden from the composer.",
     "audioContext": "Audio Location",
     "noDescription": "No description",
     "previewHeading": "Waveform Preview",
@@ -1067,35 +1092,40 @@
     "statusUpdateFailed": "Failed to update issue status.",
     "commentUpdated": "Comment updated.",
     "commentDeleted": "Comment deleted.",
-    "deleteCommentMessage": "This comment will be permanently removed."
+    "deleteCommentMessage": "This comment will be permanently removed.",
+    "attachmentImageAlt": "Issue attachment image",
+    "pendingDiscussionHint": "The issue becomes an internal discussion. New internal comments are visible only to reviewers and managers, not the composer.",
+    "internalResolvedHint": "The issue is closed internally and remains hidden from the composer.",
+    "publishHint": "The issue is published to the composer again and returns to Open.",
+    "resolvedHint": "The issue is marked resolved and remains in the history."
   },
   "upload": {
     "heading": "Submit Track",
     "draftRestored": "Restored your unfinished submission draft.",
     "reselectFile": "The previously selected file \"{file}\" cannot be restored automatically. Please choose it again before submitting.",
-    "leaveConfirm": "Your submission draft is not finished yet. Leave this page?",
+    "leaveConfirm": "Text fields are saved as a draft, but the selected audio cannot be restored. You will need to choose it again. Leave this page?",
     "dropHint": "Drop audio file here or",
     "browse": "browse",
     "trackTitle": "Track Title *",
-    "artist": "Artist *",
+    "artist": "Composer *",
     "album": "Album",
     "bpm": "BPM",
-    "artistHint": "Add one display alias per row. Each row can include a UID to bind a platform account; the same UID can use multiple aliases.",
+    "artistHint": "Add one composer alias per row. Each row can include a UID to bind a platform account; the same UID can use multiple aliases.",
     "artistBindingHint": "Platform composers with a UID will own the track and handle composer-side workflow; rows without a UID are kept as external name records.",
-    "autoProxySubmissionHint": "The selected album is produced by you, and every artist row has no UID. After submission, the producer will proxy the later composer-side workflow.",
+    "autoProxySubmissionHint": "You produce the selected album and no composer row has a UID. After submission, the producer will handle later composer-side actions by proxy.",
     "noLinkedAccount": "No linked account",
     "currentAccount": "Current account",
-    "artistNamePlaceholder": "Artist alias",
+    "artistNamePlaceholder": "Composer alias",
     "artistUidLabel": "Platform user UID",
     "artistUidPlaceholder": "UID optional",
-    "addArtist": "Add artist",
+    "addArtist": "Add composer",
     "externalSubmitterName": "External composer name",
     "externalSubmitterPlaceholder": "Name shown to the producer and mastering engineer",
     "proxyNameRequired": "Please enter the external composer name",
     "originalTitle": "Original Song",
     "originalArtist": "Original Source",
     "titlePlaceholder": "Enter track title",
-    "artistPlaceholder": "Artist name",
+    "artistPlaceholder": "Composer name",
     "noAlbum": "No album",
     "bpmPlaceholder": "e.g. 128 or 120-160",
     "originalTitlePlaceholder": "Original song name (if applicable)",
@@ -1108,14 +1138,16 @@
     "uploadSuccess": "Track submitted successfully",
     "albumRequired": "Please select an album before submitting",
     "titleRequired": "Please enter a track title",
-    "artistRequired": "Please enter an artist name",
-    "artistNameRequiredForAccount": "Artist rows with a UID need an alias",
+    "artistRequired": "Please enter a composer name",
+    "artistNameRequiredForAccount": "Composer rows with a UID need an alias",
     "artistUidInvalid": "UID must be a positive whole number",
-    "artistAccountRequired": "Only the producer can submit artists without linked platform accounts; please enter at least one UID",
-    "artistNameTooLong": "Each artist alias must be at most 100 characters",
-    "artistDisplayTooLong": "The combined artist display name must be at most 100 characters",
+    "artistAccountRequired": "Only the producer can submit composers without linked platform accounts; enter at least one UID",
+    "artistNameTooLong": "Each composer alias must be at most 100 characters",
+    "artistDisplayTooLong": "The combined composer display name must be at most 100 characters",
     "fileTooLarge": "File too large, maximum allowed is {max}",
-    "unsupportedImageType": "Only JPEG, PNG, WebP, and GIF images are supported"
+    "unsupportedImageType": "Only JPEG, PNG, WebP, and GIF images are supported",
+    "draftScopeHint": "Text fields are saved in this browser. Audio files are not saved and must be selected again after restoring a draft. Successful submission clears the draft.",
+    "fileRequirements": "Supports common audio formats, up to 200 MB per file."
   },
   "settings": {
     "heading": "Album Settings",
@@ -1123,7 +1155,7 @@
     "albumTitle": "Album Title",
     "coverColor": "Cover Color",
     "description": "Description",
-    "albumTitlePlaceholder": "Album title",
+    "albumTitlePlaceholder": "e.g. Midnight Compilation 2026",
     "descriptionPlaceholder": "Album description",
     "createButton": "Create Album",
     "albumTeams": "Album Teams",
@@ -1135,7 +1167,7 @@
     "participants": "Album Participants",
     "saving": "Saving...",
     "saveTeam": "Save Team",
-    "readOnlyNotice": "Team configuration can only be edited by the album producer.",
+    "readOnlyNotice": "Only album managers (producer or co-producer) and authorized administrators can edit team settings.",
     "masteringEngineerInfo": "Mastering Engineer: {name}",
     "participantsInfo": "Participants: {list}",
     "noneParticipants": "None",
@@ -1342,16 +1374,28 @@
     "shortcutSetRangeStart": "[ Set range start",
     "shortcutSetRangeEnd": "] End range",
     "shortcutRemoveLast": "Backspace Undo",
-    "visibilityPublic": "Public",
-    "visibilityInternal": "Internal",
-    "visibilityPublicHint": "This issue will be visible to the submitter",
-    "visibilityInternalHint": "This issue is reviewer-only and can later be published or closed internally",
+    "visibilityPublic": "Reviewers and composer",
+    "visibilityInternal": "Reviewers only",
+    "visibilityPublicHint": "Visible to review participants, album managers, and the composer.",
+    "visibilityInternalHint": "Visible only to internal review participants and managers, and hidden from the composer. It can be published or closed internally later.",
     "status": {
       "resolved": "Resolved",
       "internal_resolved": "Internally Resolved",
       "pending_discussion": "Pending Discussion",
       "disagreed": "Disagreed"
-    }
+    },
+    "draftHint": "The draft is saved in this browser. Text, severity, visibility, and markers can be restored; attachments must be selected again.",
+    "severityHint": "Critical: blocks approval or delivery; Major: requires revision; Minor: does not block progress; Suggestion: optional improvement.",
+    "audioAttachmentHint": "Up to 3 audio files, 200 MB each. MP3, WAV, FLAC, AAC, and OGG are supported.",
+    "imageAttachmentHint": "Up to 3 images, 10 MB each. JPEG, PNG, GIF, and WebP are supported.",
+    "removeAudioAttachment": "Remove audio attachment {name}",
+    "removeImageAttachment": "Remove image attachment {name}",
+    "discardDraft": "Discard draft",
+    "discardDraftTitle": "Discard issue draft?",
+    "discardDraftMessage": "Entered text, timed markers, and selected attachments will be cleared.",
+    "clearMarkersTitle": "Remove timed markers?",
+    "clearMarkersMessage": "Switching to a general issue removes the current {count} timed marker(s).",
+    "switchToGeneral": "Switch to General Issue"
   },
   "albums": {
     "heading": "Albums",
@@ -1362,17 +1406,26 @@
     "pinDashboard": "Pin to Dashboard",
     "unpinDashboard": "Unpin from Dashboard",
     "pinHint": "Click the pin icon to show an album on the dashboard",
-    "pinHintActive": "Only pinned albums are shown on the dashboard",
+    "pinHintActive": "Pinned albums are prioritized and can be filtered with “Pinned only”.",
     "tabActive": "Active",
     "tabArchived": "Archived",
     "archivedEmpty": "No archived albums",
-    "archivedBadge": "Archived"
+    "archivedBadge": "Archived",
+    "searchPlaceholder": "Search albums…",
+    "searchEmpty": "No matching albums",
+    "sortAttention": "Needs attention",
+    "sortRecent": "Recently updated",
+    "sortTitle": "Title",
+    "checkingCreateAccess": "Checking album creation access…",
+    "noAlbumsCanCreateHint": "No albums yet. Create one or wait to join an existing album.",
+    "noAlbumsNoCircleHint": "No accessible albums yet. Create or join a circle first.",
+    "noAlbumsMemberHint": "No accessible albums yet. Wait for an album manager to invite you."
   },
   "albumNew": {
     "heading": "New Album",
     "basicInfo": "Basic Info",
     "albumTitle": "Album Title *",
-    "albumTitlePlaceholder": "Album title",
+    "albumTitlePlaceholder": "e.g. Midnight Compilation 2026",
     "coverColor": "Cover Color",
     "coverButtonLabel": "Upload album cover",
     "coverImageHint": "Click to upload cover (JPEG/PNG/WebP/GIF, ≤ 20 MB)",
@@ -1391,7 +1444,7 @@
     "reviewDefaults": "Review Defaults",
     "reviewerAssignmentMode": "Default reviewer assignment",
     "reviewerAssignmentHint": "This quick control updates the first peer review step and stays synced with the workflow editor.",
-    "fixedReviewerHint": "Choose fixed reviewers for the first peer review step in the workflow editor below. Submitters are excluded from reviewing their own tracks.",
+    "fixedReviewerHint": "Choose fixed reviewers for the first peer review stage below. The composer is excluded from reviewing their own track.",
     "checklistMode": "Peer review checklist",
     "checklistModeCircleDefault": "Circle Default",
     "checklistModeEnabled": "Enabled",
@@ -1406,7 +1459,8 @@
     "workflowValid": "Workflow configuration is valid.",
     "createButton": "Create Album",
     "creating": "Creating...",
-    "titleRequired": "Please enter an album title"
+    "titleRequired": "Please enter an album title",
+    "workflowCustomized": "Custom workflow configured"
   },
   "albumSettings": {
     "tabs": {
@@ -1439,7 +1493,7 @@
       "members": "Members",
       "unassigned": "Unassigned",
       "noMembers": "No members",
-      "readOnlyNotice": "Team configuration can only be edited by the producer",
+      "readOnlyNotice": "Only album managers (producer or co-producer) and authorized administrators can edit this setting.",
       "addMember": "Add Member",
       "selectUserPlaceholder": "Select a user…",
       "allAdded": "All eligible users have been added",
@@ -1450,11 +1504,11 @@
       "leaveFailed": "Failed to leave"
     },
     "deadlines": {
-      "readOnlyNotice": "Deadlines are set by the producer",
+      "readOnlyNotice": "Only album managers (producer or co-producer) and authorized administrators can set deadlines.",
       "notSet": "Not set"
     },
     "checklist": {
-      "readOnlyNotice": "Checklist template is set by the producer",
+      "readOnlyNotice": "Only album managers (producer or co-producer) and authorized administrators can edit the checklist template.",
       "noItems": "No checklist items",
       "modeTitle": "Checklist Policy",
       "modeCircleHint": "Choose whether this album follows the circle default or overrides it.",
@@ -1468,8 +1522,8 @@
     },
     "workflow": {
       "customWorkflow": "Custom Workflow",
-      "locked": "Workflow rules are maintained by the producer. Changes automatically migrate tracks that no longer match an existing stage.",
-      "viewOnly": "Only the producer can modify workflow configuration.",
+      "locked": "Workflow rules are maintained by album managers. Changes may migrate tracks that no longer match an existing stage.",
+      "viewOnly": "Only album managers (producer or co-producer) and authorized administrators can modify the workflow.",
       "defaultWorkflow": "This album uses the default workflow.",
       "defaultDesc": "Submitted → Peer Review → Producer Gate → Mastering → Final Review → Completed",
       "returnTo": "return_to"
@@ -1517,7 +1571,11 @@
       "saved": "Track progress updated",
       "failed": "Failed to update progress",
       "noTracks": "No adjustable tracks in this album",
-      "sameStatusHint": "Choose a target stage different from the current stage."
+      "sameStatusHint": "Choose a target stage different from the current stage.",
+      "reasonRequiredHint": "A reason is required when skipping across multiple stages.",
+      "confirmTitle": "Confirm manual stage change?",
+      "confirmMessage": "Move “{track}” manually from “{from}” to “{to}”? This is not a rejection action.",
+      "confirmAction": "Confirm Progress Change"
     }
   },
   "circles": {
@@ -1549,7 +1607,9 @@
     "websitePlaceholder": "https://...",
     "create": "Create Circle",
     "nameRequired": "Please enter a circle name",
-    "logoUploadPartialFailure": "The circle was created, but the logo upload failed: {message}. Please re-upload it from the circle page."
+    "logoUploadPartialFailure": "The circle was created, but the logo upload failed: {message}. Please re-upload it from the circle page.",
+    "defaultChecklistHeading": "Default peer review checklist",
+    "defaultChecklistHint": "New albums inherit this setting by default and can override it in album settings."
   },
   "circleDetail": {
     "tabs": {
@@ -1605,7 +1665,9 @@
       "leaveConfirm": "Leave \"{name}\"?",
       "left": "Left the circle",
       "leaveFailed": "Leave failed"
-    }
+    },
+    "defaultChecklistHeading": "Default peer review checklist",
+    "defaultChecklistHint": "New albums inherit this setting by default and can override it in album settings."
   },
   "trackStatus": {
     "submitted": "Submitted",
@@ -1657,14 +1719,17 @@
     "danger": {
       "title": "Danger Zone",
       "desc": "Permanently close your account. Your account will be anonymized and your session invalidated immediately. If you own any circles or produce any non-archived albums, you must handle those resources first.",
-      "deleteButton": "Delete account",
+      "deleteButton": "Close and anonymize account",
       "confirmMessage": "This action cannot be undone. Please enter your password to confirm.",
       "passwordLabel": "Current password",
       "passwordPlaceholder": "Enter your current password",
-      "confirmButton": "Confirm deletion",
+      "confirmButton": "Confirm closure and anonymization",
       "errorPasswordRequired": "Please enter your current password.",
-      "errorGeneric": "Failed to delete account. Please try again."
-    }
+      "errorGeneric": "Failed to close the account. Please try again."
+    },
+    "avatarAlt": "{name} avatar",
+    "uploadAvatar": "Upload avatar",
+    "removeAvatar": "Remove avatar"
   },
   "admin": {
     "title": "Admin Console",
@@ -1802,7 +1867,7 @@
     "loadMore": "Load more",
     "selectTrack": "Select a track to manage",
     "forceStatus": "Force Status Change",
-    "reassign": "Reassign Reviewer",
+    "reassign": "Reassign Reviewers",
     "newStatus": "Target Status",
     "selectStatus": "Select a status",
     "currentStatus": "Current status",
@@ -1860,7 +1925,7 @@
       "mastering_revision_requested": "Mastering revision requested",
       "master_delivery_uploaded": "Master delivery uploaded",
       "final_review_approved_by_producer": "Final review approved by producer",
-      "final_review_approved_by_submitter": "Final review approved by submitter",
+      "final_review_approved_by_submitter": "Final review approved by composer",
       "returned_to_mastering": "Returned to mastering",
       "issue_created": "Issue created",
       "issue_updated": "Issue updated",
@@ -1877,7 +1942,11 @@
       "track_deleted": "Track deleted",
       "admin_force_status": "Admin forced status",
       "admin_reassign": "Admin reassigned members",
-      "track_force_status": "Track progress manually adjusted"
+      "track_force_status": "Track progress manually adjusted",
+      "source_followup_requested": "Source follow-up requested",
+      "source_followup_applied": "Source follow-up approved",
+      "source_followup_rejected": "Source follow-up rejected",
+      "source_followup_cancelled": "Source follow-up cancelled"
     },
     "auditActions": {
       "user_updated": "User updated",
@@ -1892,14 +1961,19 @@
       "reopen_request_decided": "Reopen request decided",
       "track_archived": "Track archived",
       "track_restored": "Track restored",
-      "track_deleted": "Track deleted"
+      "track_deleted": "Track deleted",
+      "source_followup_requested": "Source follow-up requested",
+      "source_followup_applied": "Source follow-up approved",
+      "source_followup_rejected": "Source follow-up rejected",
+      "source_followup_cancelled": "Source follow-up cancelled"
     },
     "entityTypes": {
       "user": "User",
       "track": "Track",
       "album": "Album",
       "circle": "Circle",
-      "reopen_request": "Reopen request"
+      "reopen_request": "Reopen request",
+      "source_followup_request": "Source follow-up request"
     },
     "reasons": {
       "suspendedFromAdminConsole": "Suspended from admin console",
@@ -1914,6 +1988,47 @@
       "restoredTrackFromAdminConsole": "Restored from admin console",
       "deletedFromAdminConsole": "Deleted from admin console",
       "reviewedFromAdminConsole": "Reviewed from admin console"
+    },
+    "adminRoleDescriptions": {
+      "none": "Cannot access the admin console.",
+      "viewer": "Read-only access to admin data and audit logs.",
+      "operator": "Can perform routine recovery and workflow management actions.",
+      "superadmin": "Can manage admin access and perform the highest-impact actions."
+    },
+    "confirmations": {
+      "roleTitle": "Change account role?",
+      "roleMessage": "Change {name} from “{from}” to “{to}”. This immediately changes their global permissions.",
+      "changeRole": "Confirm Role Change",
+      "adminRoleTitle": "Change admin access?",
+      "adminRoleMessage": "Change {name} admin access from “{from}” to “{to}”.",
+      "changeAdminRole": "Confirm Admin Access Change",
+      "verificationTitle": "Override email verification?",
+      "verificationMessage": "Manually mark {name} as “{state}”.",
+      "suspendTitle": "Suspend user?",
+      "suspendMessage": "{name} will be unable to use the account until an administrator restores it.",
+      "revokeSessionsTitle": "Revoke all login sessions?",
+      "revokeSessionsMessage": "{name} will be signed out on every device and must authenticate again.",
+      "transferTitle": "Transfer user assets?",
+      "transferMessage": "Transfer eligible resources owned by {from} to {to}.",
+      "archiveAlbumTitle": "Archive album?",
+      "archiveAlbumMessage": "Archiving “{name}” hides it from active lists and starts its retention period.",
+      "reopenRequestApproveTitle": "Approve reopen request?",
+      "reopenRequestRejectTitle": "Reject reopen request?",
+      "reopenRequestMessage": "“{track}” requests reopening at “{stage}”.",
+      "workflow": {
+        "forceTitle": "Force track status?",
+        "forceMessage": "Force “{track}” from “{current}” to “{target}”. This bypasses the normal workflow entry point.",
+        "forceConfirm": "Confirm Forced Change",
+        "reopenTitle": "Reopen track?",
+        "reopenMessage": "Reopen “{track}” from “{current}” at “{target}”. Related progress may be reset.",
+        "reopenConfirm": "Confirm Reopen",
+        "archiveTitle": "Archive track?",
+        "archiveMessage": "Archiving “{track}” removes it from the active workflow.",
+        "archiveConfirm": "Confirm Archive",
+        "deleteTitle": "Delete track?",
+        "deleteMessage": "Deleting “{track}” removes its records and files. This cannot be undone.",
+        "deleteConfirm": "Confirm Track Deletion"
+      }
     }
   },
   "shortcuts": {
@@ -1948,7 +2063,7 @@
     "downloading": "Downloading track ({index}/{total}): {title}",
     "reading": "Reading track ({index}/{total}): {title}",
     "metadata": "Embedding metadata ({index}/{total}): {title}",
-    "skipped": "Skipped: {title}",
+    "skipped": "Not exported: {title}",
     "zipping": "Creating ZIP…",
     "downloadingZip": "Downloading export file…",
     "done": "Export complete!",
@@ -1970,7 +2085,7 @@
     "unreadCount": "{count} unread",
     "placeholder": "Type a message…",
     "send": "Send",
-    "empty": "No messages yet. Submitter, mastering engineer, and producer can discuss mastering details here.",
+    "empty": "No messages yet. Composer, mastering engineer, and producer can discuss mastering details here.",
     "loadOlder": "Load older messages",
     "archived": "Track completed — chat is archived"
   }

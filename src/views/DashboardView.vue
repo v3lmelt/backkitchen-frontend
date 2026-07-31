@@ -299,7 +299,7 @@ const groupedTracks = computed(() => {
       seen.add(track.album_id)
       result.push({
         albumId: track.album_id,
-        albumTitle: albumMap.value.get(track.album_id)?.title ?? `Album #${track.album_id}`,
+        albumTitle: albumMap.value.get(track.album_id)?.title ?? t('dashboard.albumFallback', { id: track.album_id }),
         tracks: groups.get(track.album_id)!,
       })
     }
@@ -383,14 +383,14 @@ function handleExport(albumId: number) {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `${albums.value.find(al => al.id === albumId)?.title ?? 'album'}.zip`
+        a.download = `${albums.value.find(al => al.id === albumId)?.title ?? t('dashboard.exportFilenameFallback')}.zip`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
         exportProgress.value = { ...exportProgress.value!, done: true }
       } catch {
-        exportProgress.value = { ...exportProgress.value!, error: 'Download failed' }
+        exportProgress.value = { ...exportProgress.value!, error: t('common.downloadFailed') }
       }
       setTimeout(() => {
         exportingAlbum.value = null
@@ -444,7 +444,7 @@ function openTrack(track: Track) {
             <div>
               <div class="text-sm font-medium text-foreground">{{ inv.album?.title }}</div>
               <div class="text-xs text-muted-foreground">
-                {{ t('invitations.from', { name: inv.invited_by_user?.display_name || 'Unknown' }) }}
+                {{ t('invitations.from', { name: inv.invited_by_user?.display_name || t('common.unknown') }) }}
               </div>
             </div>
           </div>
@@ -661,7 +661,7 @@ function openTrack(track: Track) {
                   v-for="[statusKey, count] in albumNonZeroStatuses[album.id]"
                   :key="statusKey"
                   :style="{ width: (count / albumStatsMap[album.id].total_tracks * 100) + '%', backgroundColor: statusColor(statusKey) }"
-                  :title="`${statusKey}: ${count}`"
+                  :title="`${statusLabel(statusKey, album)}: ${count}`"
                 ></div>
               </div>
               <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground mb-4">
@@ -679,7 +679,7 @@ function openTrack(track: Track) {
                   class="btn-secondary text-xs px-3 py-1"
                 >
                   <template v-if="exportingAlbum === album.id">{{ t('common.loading') }}</template>
-                  <template v-else>{{ t('dashboard.exportAlbum') }} ({{ completedCount(album.id) }}/{{ albumStatsMap[album.id].total_tracks }})</template>
+                  <template v-else>{{ t('dashboard.exportCompleted', { completed: completedCount(album.id), total: albumStatsMap[album.id].total_tracks }) }}</template>
                 </button>
               </div>
               <div v-if="albumStatsMap[album.id].recent_events.length > 0" class="space-y-1">

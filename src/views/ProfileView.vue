@@ -180,7 +180,7 @@ async function changePassword() {
         <img
           v-if="avatarUrl"
           :src="avatarUrl"
-          alt="avatar"
+          :alt="t('profile.avatarAlt', { name: appStore.currentUser?.display_name ?? '' })"
           class="w-16 h-16 rounded-full object-cover"
         />
         <div
@@ -193,6 +193,7 @@ async function changePassword() {
         <button
           @click="triggerAvatarUpload"
           :disabled="avatarUploading"
+          :aria-label="t('profile.uploadAvatar')"
           class="absolute inset-0 rounded-full bg-overlay/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
         >
           <Camera class="w-5 h-5 text-white" :stroke-width="2" />
@@ -201,6 +202,7 @@ async function changePassword() {
           v-if="avatarUrl"
           @click="removeAvatar"
           :disabled="avatarUploading"
+          :aria-label="t('profile.removeAvatar')"
           class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-error flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
         >
           <Trash2 class="w-3 h-3 text-white" :stroke-width="2" />
@@ -289,12 +291,6 @@ async function changePassword() {
           </div>
           <div class="space-y-3 text-sm">
             <div class="flex items-center justify-between">
-              <span class="text-muted-foreground">{{ t('profile.currentRole') }}</span>
-              <span class="text-xs px-2 py-0.5 rounded-full bg-warning-bg text-warning font-mono">
-                {{ roleLabel }}
-              </span>
-            </div>
-            <div class="flex items-center justify-between border-t border-border pt-3">
               <span class="text-muted-foreground">{{ t('profile.userId') }}</span>
               <span class="font-mono text-foreground">#{{ appStore.currentUser?.id }}</span>
             </div>

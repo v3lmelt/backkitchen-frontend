@@ -170,6 +170,35 @@ describe('AlbumsView', () => {
     expect(mocks.circleListMock).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('New Album')
     expect(wrapper.text()).toContain('No Albums')
+    expect(wrapper.text()).toContain('Create one or wait to join an existing album')
+  })
+
+  it('distinguishes missing-circle and invitation-only empty states', async () => {
+    mocks.currentUser = { id: 42, role: 'member' }
+    mocks.listMock.mockResolvedValue([])
+    mocks.circleListMock.mockResolvedValue([])
+
+    const withoutCircle = mountWithPlugins(AlbumsView)
+    await flushPromises()
+    expect(withoutCircle.text()).toContain('Create or join a circle first')
+    withoutCircle.unmount()
+
+    mocks.circleListMock.mockResolvedValue([
+      {
+        id: 9,
+        name: 'Back Kitchen',
+        description: null,
+        logo_url: null,
+        default_checklist_enabled: true,
+        created_by: 1,
+        member_count: 2,
+        viewer_can_create_album: false,
+      },
+    ])
+    const regularMember = mountWithPlugins(AlbumsView)
+    await flushPromises()
+    expect(regularMember.text()).toContain('Wait for an album manager to invite you')
+    expect(regularMember.text()).not.toContain('New Album')
   })
 
   it('debounces album search requests', async () => {
