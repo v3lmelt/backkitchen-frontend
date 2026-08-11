@@ -1,0 +1,32 @@
+{
+  "version": "0.1.47",
+  "date": "2026-08-11",
+  "headline": {
+    "zh-CN": "修正专辑页面的身份徽章显示",
+    "en": "Corrected role badges on album pages"
+  },
+  "summary": {
+    "zh-CN": "专辑列表和专辑设置页的身份徽章现在会正确区分社团主催、副主催和管理员；此前管理员和社团主催可能被错误显示为副主催。",
+    "en": "Role badges on the album list and album settings pages now correctly distinguish circle owners, co-producers, and admins; admins and circle owners could previously appear as co-producers."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "问题修复",
+        "en": "Fixes"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "身份徽章不再混淆角色",
+            "en": "Role badges no longer mix up roles"
+          },
+          "description": {
+            "zh-CN": "查看社团专辑时，社团主催会显示为“社团主催”，副主催显示为“副主催”，未加入社团的管理员显示为“管理员”，徽章配色同步调整。",
+            "en": "When viewing a circle album, circle owners now appear as “Circle Owner”, co-producers as “Co-producer”, and admins outside the circle as “Admin”, with matching badge colors."
+          }
+        }
+      ]
+    }
+  ]
+}

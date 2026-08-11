@@ -254,7 +254,6 @@ async function changePassword() {
         <section class="card space-y-5 lg:col-span-2">
           <div>
             <h2 class="text-base font-mono font-semibold text-foreground">{{ t('profile.basicInfo') }}</h2>
-            <p class="text-xs text-muted-foreground mt-0.5">{{ t('profile.basicInfoDesc') }}</p>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -287,7 +286,6 @@ async function changePassword() {
         <section class="card space-y-4">
           <div>
             <h2 class="text-base font-mono font-semibold text-foreground">{{ t('profile.roleInfo') }}</h2>
-            <p class="text-xs text-muted-foreground mt-0.5">{{ t('profile.roleInfoDesc') }}</p>
           </div>
           <div class="space-y-3 text-sm">
             <div class="flex items-center justify-between">
@@ -308,7 +306,6 @@ async function changePassword() {
       <section class="card max-w-lg space-y-5">
         <div>
           <h2 class="text-base font-mono font-semibold text-foreground">{{ t('profile.changePassword') }}</h2>
-          <p class="text-xs text-muted-foreground mt-0.5">{{ t('profile.changePasswordDesc') }}</p>
         </div>
 
         <div>
@@ -387,7 +384,6 @@ async function changePassword() {
       <section class="card max-w-lg space-y-5">
         <div>
           <h2 class="text-base font-mono font-semibold text-foreground">{{ t('profile.preferences') }}</h2>
-          <p class="text-xs text-muted-foreground mt-0.5">{{ t('profile.preferencesDesc') }}</p>
         </div>
         <div class="text-sm text-muted-foreground">{{ t('profile.preferencesComingSoon') }}</div>
       </section>

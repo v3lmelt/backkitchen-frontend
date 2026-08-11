@@ -89,8 +89,8 @@ describe('UploadTrackView', () => {
     const wrapper = mountWithPlugins(UploadTrackView)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Text fields are saved in this browser')
-    expect(wrapper.text()).toContain('Audio files are not saved')
+    expect(wrapper.text()).toContain('Text is saved as a draft')
+    expect(wrapper.text()).toContain('choose the audio file again')
     expect(wrapper.text()).toContain('up to 200 MB per file')
   })
 

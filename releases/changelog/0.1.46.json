@@ -1,0 +1,32 @@
+{
+  "version": "0.1.46",
+  "date": "2026-08-06",
+  "headline": {
+    "zh-CN": "修正文档中的流程与权限说明",
+    "en": "Corrected workflow and permission guidance"
+  },
+  "summary": {
+    "zh-CN": "更新用户指南以匹配当前认证跳转、专辑权限、工作流退回路径、终审退回、重新打开、通知搜索范围和保留期限说明；未更改应用行为。",
+    "en": "Updated the user guide to match current authentication redirects, album permissions, workflow return paths, final-review returns, reopen permissions, notification search scope, and retention guidance; no application behavior changed."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "用户指南",
+        "en": "User guide"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "同步当前流程说明",
+            "en": "Aligned current workflow guidance"
+          },
+          "description": {
+            "zh-CN": "修正认证后跳转、专辑权限、可配置的工作流退回路径、终审退回请求、重新打开权限、通知搜索仅限已加载内容，以及最终拒绝保留期限等说明。",
+            "en": "Corrected guidance for post-authentication redirects, album permissions, configurable workflow return paths, final-review return requests, reopen permissions, loaded-only notification search, and final-rejection retention."
+          }
+        }
+      ]
+    }
+  ]
+}

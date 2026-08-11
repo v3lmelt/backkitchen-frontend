@@ -1568,9 +1568,9 @@ const genericApprovalActions = computed<WorkflowAction[]>(() =>
   })),
 )
 
-const peerReviewActionHint = computed(() => {
+const peerReviewActionHint = computed((): string | undefined => {
   if (reviewWaitingForAssignment.value) return t('workflowStep.reviewWaitingForAssignment')
-  if (isPeerReviewChecklistEnabled.value && !checklistSaved.value) return t('peerReview.checklistRequiredHint')
+  if (isPeerReviewChecklistEnabled.value && !checklistSaved.value) return undefined
   if (currentUserCanFinalizeReview.value) return t('workflowStep.reviewFinalizeHint')
   if (reviewRequiresGroupFinalization.value && currentUserAssignment.value?.status === 'completed' && !reviewQuorumReached.value) {
     if (reviewUsesFirstRevisionRequest.value && currentUserHasRevisionSuggestion.value) {
@@ -1583,7 +1583,7 @@ const peerReviewActionHint = computed(() => {
       ? t('workflowStep.reviewSubmitHintEarlyRevision')
       : t('workflowStep.reviewSubmitHint')
   }
-  return t('peerReview.actionHint')
+  return undefined
 })
 
 const { handleWaveformHotkeys } = useWaveformHotkeys({
@@ -1702,7 +1702,6 @@ function handleIssueLeave() {
       <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div class="min-w-0">
           <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('producer.heading', { title: track.title }) }}</h1>
-          <p class="text-sm sm:text-base text-muted-foreground">{{ t('producer.subheading') }}</p>
         </div>
         <button @click="goBack" class="btn-secondary !px-3 !py-2 flex-shrink-0 self-start" :aria-label="t('common.backToTrack')" :title="t('common.backToTrack')">
           <ChevronLeft class="w-4 h-4" />
@@ -1746,7 +1745,6 @@ function handleIssueLeave() {
 
       <div class="card space-y-4 border-primary/50">
         <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('producer.intakeHeading') }}</h3>
-        <p class="text-sm text-muted-foreground">{{ t('producer.intakeDesc') }}</p>
       </div>
 
       <div v-if="audioUrl">
@@ -1768,7 +1766,7 @@ function handleIssueLeave() {
       </div>
     </div>
 
-    <WorkflowActionBar :actions="classicActions" :hint="t('producer.intakeHint')" />
+    <WorkflowActionBar :actions="classicActions" />
   </div>
 
   <div v-else-if="activeVariant === 'peer_review'" class="max-w-4xl mx-auto min-h-full flex flex-col">
@@ -1776,7 +1774,6 @@ function handleIssueLeave() {
       <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div class="min-w-0">
           <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('peerReview.heading', { title: track.title }) }}</h1>
-          <p class="text-sm sm:text-base text-muted-foreground">{{ t('peerReview.subheading', { version: track.version }) }}</p>
         </div>
         <button @click="goBack" class="btn-secondary !px-3 !py-2 flex-shrink-0 self-start" :aria-label="t('common.backToTrack')" :title="t('common.backToTrack')">
           <ChevronLeft class="w-4 h-4" />
@@ -2045,7 +2042,6 @@ function handleIssueLeave() {
       <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div class="min-w-0">
           <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('producer.heading', { title: track.title }) }}</h1>
-          <p class="text-sm sm:text-base text-muted-foreground">{{ t('producer.subheading') }}</p>
         </div>
         <button @click="goBack" class="btn-secondary !px-3 !py-2 flex-shrink-0 self-start" :aria-label="t('common.backToTrack')" :title="t('common.backToTrack')">
           <ChevronLeft class="w-4 h-4" />
@@ -2203,7 +2199,6 @@ function handleIssueLeave() {
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div class="space-y-1">
             <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('producer.peerIssueSummaryHeading') }}</h3>
-            <p class="text-xs text-muted-foreground">{{ t('producer.peerIssueSummaryHint') }}</p>
           </div>
           <div class="grid grid-cols-2 gap-2 text-xs sm:min-w-[220px]">
             <div class="border border-border bg-background px-3 py-2 space-y-1">
@@ -2263,7 +2258,6 @@ function handleIssueLeave() {
           </button>
         </div>
 
-        <div v-else class="text-sm text-muted-foreground">{{ t('producer.noPeerIssues') }}</div>
 
       </div>
 
@@ -2271,7 +2265,6 @@ function handleIssueLeave() {
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div class="space-y-1">
             <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('producer.producerFollowupHeading') }}</h3>
-            <p class="text-xs text-muted-foreground">{{ t('producer.producerFollowupHint') }}</p>
           </div>
           <div class="grid grid-cols-3 gap-2 text-xs sm:min-w-[220px]">
             <div class="border border-border bg-background px-3 py-2 space-y-1">
@@ -2321,7 +2314,6 @@ function handleIssueLeave() {
 
     <WorkflowActionBar
       :actions="classicActions"
-      :hint="t('producer.gateHint')"
       layout="grouped"
       :group-label="t('producer.decisionGroupLabel')"
     />
@@ -2332,7 +2324,6 @@ function handleIssueLeave() {
       <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div class="min-w-0">
           <h1 class="text-xl sm:text-2xl font-sans font-bold text-foreground">{{ t('mastering.heading', { title: track.title }) }}</h1>
-          <p class="text-sm sm:text-base text-muted-foreground">{{ t('mastering.subheading') }}</p>
         </div>
         <button @click="goBack" class="btn-secondary !px-3 !py-2 flex-shrink-0 self-start" :aria-label="t('common.backToTrack')" :title="t('common.backToTrack')">
           <ChevronLeft class="w-4 h-4" />
@@ -2454,7 +2445,6 @@ function handleIssueLeave() {
 
         <div class="card space-y-4">
           <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('mastering.actionsHeading') }}</h3>
-          <div class="text-sm text-muted-foreground">{{ t('mastering.uploadReady') }}</div>
           <div class="space-y-2">
             <label class="block text-xs text-muted-foreground">{{ t('workflowStep.deliveryFileLabel') }}</label>
             <input type="file" accept="audio/*" @change="onFileChange" class="input-field w-full" />
@@ -2472,7 +2462,6 @@ function handleIssueLeave() {
           <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
             <div class="space-y-1">
               <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.deliveryPreviewHeading') }}</h4>
-              <p class="text-sm text-muted-foreground">{{ t('workflowStep.deliveryPreviewNotice') }}</p>
             </div>
             <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" :compact="true" :height="96" />
           </div>
@@ -2599,7 +2588,6 @@ function handleIssueLeave() {
         :issues="issues"
         :mention-users="mentionCandidates.mastering"
         :heading="t('mastering.discussionHeading', { count: masteringDiscussion.discussions.value.length })"
-        :empty-text="t('mastering.noDiscussions')"
         :placeholder="t('mastering.discussionPlaceholder')"
         :submit-label="t('mastering.postDiscussion')"
         :posting="masteringDiscussion.posting.value"
@@ -2628,7 +2616,7 @@ function handleIssueLeave() {
       />
     </div>
 
-    <WorkflowActionBar :actions="deliveryActions" :hint="t('mastering.actionHint')" />
+    <WorkflowActionBar :actions="deliveryActions" />
   </div>
 
   <div v-else-if="activeVariant === 'final_review'" class="max-w-4xl mx-auto min-h-full flex flex-col">
@@ -2842,7 +2830,7 @@ function handleIssueLeave() {
       </div>
     </div>
 
-    <WorkflowActionBar :actions="finalReviewActions" :hint="t('finalReview.actionHint')" />
+    <WorkflowActionBar :actions="finalReviewActions" />
   </div>
 
   <div v-else class="max-w-4xl mx-auto space-y-6">
@@ -3131,15 +3119,11 @@ function handleIssueLeave() {
           @leave="handleIssueLeave"
           @status-change="onQuickIssueStatusChange"
         />
-        <div v-else class="border border-success/20 bg-success-bg px-4 py-3 text-sm text-success">
-          {{ t('producer.noIssues') }}
-        </div>
       </div>
 
       <!-- 3a. Upload card (assignee only, at bottom) -->
       <div v-if="isRevisionAssignee" class="card space-y-4">
         <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.uploadRevisedSource') }}</h3>
-        <p class="text-sm text-muted-foreground">{{ t('workflowStep.uploadRevisedSourceDesc') }}</p>
 
         <div
           v-if="isMasteringRevisionStep && requestedRevisionType"
@@ -3180,7 +3164,6 @@ function handleIssueLeave() {
           <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
             <div class="space-y-1">
               <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.revisedPreviewHeading') }}</h4>
-              <p class="text-sm text-muted-foreground">{{ t('workflowStep.revisedPreviewNotice') }}</p>
             </div>
             <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" />
             <div>
@@ -3351,7 +3334,6 @@ function handleIssueLeave() {
         <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
           <div class="space-y-1">
             <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.deliveryPreviewHeading') }}</h4>
-            <p class="text-sm text-muted-foreground">{{ t('workflowStep.deliveryPreviewNotice') }}</p>
           </div>
           <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" />
         </div>

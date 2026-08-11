@@ -681,11 +681,7 @@ function openVersionCompare() {
               :height="120"
               @ready="onWaveformReady"
             />
-            <div class="border-t border-border px-4 py-2 flex items-center justify-between gap-4">
-              <div v-if="issueIsOutdated" class="text-xs text-muted-foreground">
-                {{ t(canOpenIssueSourceAudio ? 'issueDetail.outdatedWaveformHint' : 'issueDetail.outdatedWaveformUnavailable') }}
-              </div>
-              <div v-else class="flex-1" />
+            <div class="border-t border-border px-4 py-2 flex items-center justify-end gap-4">
               <span class="text-[11px] font-mono text-muted-foreground/50 whitespace-nowrap hidden sm:block select-none">{{ t('issueDetail.keyboardHint') }}</span>
             </div>
           </div>
@@ -777,9 +773,6 @@ function openVersionCompare() {
             </button>
           </div>
 
-          <p v-if="!visibleComments.length" class="text-sm text-muted-foreground italic">
-            {{ t('issueDetail.commentsEmptyHint') }}
-          </p>
 
           <template v-for="comment in visibleComments" :key="comment.id">
             <div v-if="comment.is_status_note" class="rounded-lg bg-warning-bg border border-warning/20 px-3 py-2">
@@ -939,10 +932,6 @@ function openVersionCompare() {
           </template>
 
           <!-- New Comment -->
-          <p
-            v-if="issue?.status === 'pending_discussion' || issue?.status === 'internal_resolved'"
-            class="rounded-none border border-info/30 bg-info-bg px-3 py-2 text-xs text-info"
-          >{{ t('issueDetail.internalCommentHint') }}</p>
           <CommentInput
             ref="commentInputRef"
             :placeholder="t('issueDetail.addCommentPlaceholder')"

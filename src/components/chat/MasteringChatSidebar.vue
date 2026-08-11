@@ -37,12 +37,6 @@ const messageListRef = ref<HTMLElement | null>(null)
 const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
 const pendingDeleteDiscussion = ref<Discussion | null>(null)
 
-const launcherMeta = computed(() => (
-  unreadCount.value > 0
-    ? t('chat.unreadCount', { count: unreadCount.value > 99 ? '99+' : unreadCount.value })
-    : t('chat.launchHint')
-))
-
 function openPanel() {
   if (open.value) return
   open.value = true
@@ -136,7 +130,7 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
     </div>
     <div class="min-w-0 pr-1">
       <div class="text-xs font-mono text-primary">{{ t('chat.title') }}</div>
-      <div class="mt-0.5 text-[11px] leading-4 text-muted-foreground">{{ launcherMeta }}</div>
+      <div v-if="unreadCount > 0" class="mt-0.5 text-[11px] leading-4 text-muted-foreground">{{ t('chat.unreadCount', { count: unreadCount > 99 ? '99+' : unreadCount }) }}</div>
     </div>
   </button>
 

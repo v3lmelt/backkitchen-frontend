@@ -780,7 +780,6 @@ onMounted(() => {
   <div class="max-w-6xl mx-auto space-y-6">
     <div class="space-y-2">
       <h1 class="text-2xl font-mono font-bold text-foreground">{{ t('admin.title') }}</h1>
-      <p class="text-sm text-muted-foreground">{{ t('admin.subtitle') }}</p>
     </div>
 
     <div class="flex gap-2 border-b border-border overflow-x-auto">
@@ -853,7 +852,6 @@ onMounted(() => {
         <div class="grid lg:grid-cols-2 gap-6">
           <div class="card space-y-3">
             <h2 class="text-sm font-mono font-semibold">{{ t('admin.recentWorkflowEvents') }}</h2>
-            <div v-if="dashboardStats.recent_events.length === 0" class="text-sm text-muted-foreground">{{ t('admin.noRecentWorkflowEvents') }}</div>
             <div
               v-for="entry in dashboardStats.recent_events"
               :key="entry.id"
@@ -868,7 +866,6 @@ onMounted(() => {
           </div>
           <div class="card space-y-3">
             <h2 class="text-sm font-mono font-semibold">{{ t('admin.recentAdminAudits') }}</h2>
-            <div v-if="dashboardStats.recent_audits.length === 0" class="text-sm text-muted-foreground">{{ t('admin.noRecentAdminActions') }}</div>
             <div
               v-for="entry in dashboardStats.recent_audits"
               :key="entry.id"
@@ -986,8 +983,7 @@ onMounted(() => {
           </div>
           <div v-if="expandedAlbumId === album.id" class="border-t border-border px-4 py-3">
             <div v-if="albumTracksLoading === album.id"><SkeletonLoader :rows="3" /></div>
-            <div v-else-if="!albumTracks[album.id]?.length" class="text-sm text-muted-foreground">{{ t('admin.noTracks') }}</div>
-            <div v-else class="space-y-2">
+            <div v-else-if="albumTracks[album.id]?.length" class="space-y-2">
               <div
                 v-for="track in albumTracks[album.id]"
                 :key="track.id"
@@ -1136,9 +1132,7 @@ onMounted(() => {
             </select>
           </div>
           <div v-if="workflowTracksLoading"><SkeletonLoader :rows="5" /></div>
-          <div v-else-if="!workflowAlbumId" class="text-sm text-muted-foreground">{{ t('admin.selectAlbumPrompt') }}</div>
-          <div v-else-if="workflowTracks.length === 0" class="text-sm text-muted-foreground">{{ t('admin.noTracks') }}</div>
-          <div v-else class="space-y-2 max-h-[500px] overflow-y-auto">
+          <div v-else-if="workflowAlbumId && workflowTracks.length > 0" class="space-y-2 max-h-[500px] overflow-y-auto">
             <button
               v-for="track in workflowTracks"
               :key="track.id"
@@ -1228,8 +1222,7 @@ onMounted(() => {
               <input v-model="reopenDecisionReason" class="input-field max-w-xs" :placeholder="t('admin.decisionReason')" />
             </div>
             <div v-if="reopenRequestsLoading"><SkeletonLoader :rows="4" /></div>
-            <div v-else-if="reopenRequests.length === 0" class="text-sm text-muted-foreground">{{ t('admin.noPendingReopenRequests') }}</div>
-            <div v-else class="space-y-3">
+            <div v-else-if="reopenRequests.length > 0" class="space-y-3">
               <div v-for="entry in reopenRequests" :key="entry.id" class="border border-border p-3 space-y-2">
                 <div class="flex items-center justify-between gap-3">
                   <div>

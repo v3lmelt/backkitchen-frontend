@@ -170,7 +170,7 @@ describe('AlbumsView', () => {
     expect(mocks.circleListMock).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('New Album')
     expect(wrapper.text()).toContain('No Albums')
-    expect(wrapper.text()).toContain('Create one or wait to join an existing album')
+    expect(wrapper.text()).toContain('Create an album or wait to join an existing one')
   })
 
   it('distinguishes missing-circle and invitation-only empty states', async () => {

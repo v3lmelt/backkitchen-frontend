@@ -14,7 +14,7 @@ import { Music, Pencil, Trash2 } from 'lucide-vue-next'
 const props = withDefaults(defineProps<{
   discussions: Discussion[]
   heading: string
-  emptyText: string
+  emptyText?: string
   placeholder: string
   submitLabel: string
   posting: boolean
@@ -96,7 +96,7 @@ function confirmDelete() {
         <button class="btn-secondary text-sm" @click="emit('retry')">{{ $t('common.retry') }}</button>
       </div>
     </div>
-    <div v-else-if="discussions.length === 0" class="text-sm text-muted-foreground">
+    <div v-else-if="discussions.length === 0 && emptyText" class="text-sm text-muted-foreground">
       {{ emptyText }}
     </div>
     <div v-else class="space-y-3">

@@ -4,7 +4,6 @@
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8">
       <div>
         <h1 class="text-2xl font-semibold font-mono text-foreground">{{ t('circles.heading') }}</h1>
-        <p class="text-sm text-muted-foreground mt-1">{{ t('circles.subheading') }}</p>
       </div>
       <div class="flex items-center gap-3 shrink-0">
         <button class="btn-secondary flex items-center gap-2" @click="showJoinModal = true">
@@ -32,7 +31,6 @@
     <div v-else-if="circles.length === 0" class="flex flex-col items-center justify-center py-24 gap-4">
       <Smile class="w-10 h-10 text-muted-foreground" :stroke-width="1.5" />
       <p class="text-muted-foreground font-mono text-sm">{{ t('circles.noCircles') }}</p>
-      <p class="text-muted-foreground text-xs">{{ t('circles.noCirclesHint') }}</p>
     </div>
 
     <!-- grid -->

@@ -1,0 +1,42 @@
+{
+  "version": "0.1.45",
+  "date": "2026-08-06",
+  "headline": {
+    "zh-CN": "精简页面说明文案",
+    "en": "Streamlined on-page copy"
+  },
+  "summary": {
+    "zh-CN": "移除了各页面中与标题、状态或按钮重复的说明文字，并精简了部分冗长提示，页面信息更聚焦。",
+    "en": "Removed explanatory text that duplicated page titles, statuses, or buttons, and shortened verbose hints so pages stay focused."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "界面调整",
+        "en": "UI adjustments"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "移除重复说明文字",
+            "en": "Removed redundant explanations"
+          },
+          "description": {
+            "zh-CN": "工作流步骤页、仪表盘、专辑与社团页面、登录注册页和个人资料页中，与页面标题、状态徽章或操作按钮重复的副标题、提示语和空状态说明已移除。",
+            "en": "Subtitles, hints, and empty-state blurbs that restated page titles, status badges, or action buttons were removed across workflow step pages, the dashboard, album and circle pages, auth pages, and the profile page."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "精简冗长提示",
+            "en": "Shortened verbose hints"
+          },
+          "description": {
+            "zh-CN": "上传草稿保存、曲师 UID 绑定、修订素材类型、评审人指派等提示在不丢失关键信息的前提下精简为一句话。",
+            "en": "Hints for draft saving, artist UID binding, revision material types, and reviewer assignment were shortened to a single sentence without losing key information."
+          }
+        }
+      ]
+    }
+  ]
+}

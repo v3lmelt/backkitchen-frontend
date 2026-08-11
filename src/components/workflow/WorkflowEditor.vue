@@ -982,7 +982,6 @@ function saveConfig() {
     </div>
 
     <div v-if="stages.length === 0" class="border border-border bg-card rounded-none p-8 text-center space-y-4">
-      <p class="text-sm text-muted-foreground">{{ t('workflowBuilder.emptyHint') }}</p>
       <div class="flex items-center justify-center gap-2 flex-wrap">
         <button @click="loadDefaultWorkflow" class="btn-primary text-sm">{{ t('workflowBuilder.loadDefault') }}</button>
         <button @click="addingStage = true" class="btn-secondary text-sm">{{ t('workflowBuilder.addStep') }}</button>
@@ -1110,8 +1109,8 @@ function saveConfig() {
         </div>
       </div>
 
-      <div ref="inspectorRef" class="border border-border bg-card rounded-none p-4 sm:p-5 space-y-4 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto overscroll-contain scroll-mt-6">
-        <div v-if="selectedStage" class="space-y-4 pb-1">
+      <div v-if="selectedStage" ref="inspectorRef" class="border border-border bg-card rounded-none p-4 sm:p-5 space-y-4 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto overscroll-contain scroll-mt-6">
+        <div class="space-y-4 pb-1">
           <div class="flex items-start justify-between gap-3">
             <div>
               <div class="flex items-center gap-2">
@@ -1305,7 +1304,6 @@ function saveConfig() {
               </div>
             </div>
 
-            <p v-else class="text-xs text-muted-foreground">{{ t('workflowEditor.noRejectTargets') }}</p>
           </div>
 
           <div v-if="STAGE_META[selectedStage.kind].supports_confirmation" class="border border-border bg-background rounded-none p-4">
@@ -1391,7 +1389,6 @@ function saveConfig() {
           </div>
         </div>
 
-        <div v-else class="text-sm text-muted-foreground">{{ t('workflowEditor.selectStageHint') }}</div>
       </div>
     </div>
 

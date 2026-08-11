@@ -5,6 +5,112 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.47",
+    "date": "2026-08-11",
+    "headline": {
+      "zh-CN": "修正专辑页面的身份徽章显示",
+      "en": "Corrected role badges on album pages"
+    },
+    "summary": {
+      "zh-CN": "专辑列表和专辑设置页的身份徽章现在会正确区分社团主催、副主催和管理员；此前管理员和社团主催可能被错误显示为副主催。",
+      "en": "Role badges on the album list and album settings pages now correctly distinguish circle owners, co-producers, and admins; admins and circle owners could previously appear as co-producers."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "问题修复",
+          "en": "Fixes"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "身份徽章不再混淆角色",
+              "en": "Role badges no longer mix up roles"
+            },
+            "description": {
+              "zh-CN": "查看社团专辑时，社团主催会显示为“社团主催”，副主催显示为“副主催”，未加入社团的管理员显示为“管理员”，徽章配色同步调整。",
+              "en": "When viewing a circle album, circle owners now appear as “Circle Owner”, co-producers as “Co-producer”, and admins outside the circle as “Admin”, with matching badge colors."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.46",
+    "date": "2026-08-06",
+    "headline": {
+      "zh-CN": "修正文档中的流程与权限说明",
+      "en": "Corrected workflow and permission guidance"
+    },
+    "summary": {
+      "zh-CN": "更新用户指南以匹配当前认证跳转、专辑权限、工作流退回路径、终审退回、重新打开、通知搜索范围和保留期限说明；未更改应用行为。",
+      "en": "Updated the user guide to match current authentication redirects, album permissions, workflow return paths, final-review returns, reopen permissions, notification search scope, and retention guidance; no application behavior changed."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "用户指南",
+          "en": "User guide"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "同步当前流程说明",
+              "en": "Aligned current workflow guidance"
+            },
+            "description": {
+              "zh-CN": "修正认证后跳转、专辑权限、可配置的工作流退回路径、终审退回请求、重新打开权限、通知搜索仅限已加载内容，以及最终拒绝保留期限等说明。",
+              "en": "Corrected guidance for post-authentication redirects, album permissions, configurable workflow return paths, final-review return requests, reopen permissions, loaded-only notification search, and final-rejection retention."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.45",
+    "date": "2026-08-06",
+    "headline": {
+      "zh-CN": "精简页面说明文案",
+      "en": "Streamlined on-page copy"
+    },
+    "summary": {
+      "zh-CN": "移除了各页面中与标题、状态或按钮重复的说明文字，并精简了部分冗长提示，页面信息更聚焦。",
+      "en": "Removed explanatory text that duplicated page titles, statuses, or buttons, and shortened verbose hints so pages stay focused."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "界面调整",
+          "en": "UI adjustments"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "移除重复说明文字",
+              "en": "Removed redundant explanations"
+            },
+            "description": {
+              "zh-CN": "工作流步骤页、仪表盘、专辑与社团页面、登录注册页和个人资料页中，与页面标题、状态徽章或操作按钮重复的副标题、提示语和空状态说明已移除。",
+              "en": "Subtitles, hints, and empty-state blurbs that restated page titles, status badges, or action buttons were removed across workflow step pages, the dashboard, album and circle pages, auth pages, and the profile page."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "精简冗长提示",
+              "en": "Shortened verbose hints"
+            },
+            "description": {
+              "zh-CN": "上传草稿保存、曲师 UID 绑定、修订素材类型、评审人指派等提示在不丢失关键信息的前提下精简为一句话。",
+              "en": "Hints for draft saving, artist UID binding, revision material types, and reviewer assignment were shortened to a single sentence without losing key information."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.44",
     "date": "2026-07-31",
     "headline": {

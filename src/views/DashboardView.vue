@@ -502,7 +502,6 @@ function openTrack(track: Track) {
             </div>
           </button>
         </div>
-        <p v-else class="text-sm text-muted-foreground">{{ t('dashboard.noPendingActions') }}</p>
       </div>
 
       <div class="card space-y-3">
@@ -531,7 +530,6 @@ function openTrack(track: Track) {
             </div>
           </button>
         </div>
-        <p v-else class="text-sm text-muted-foreground">{{ t('dashboard.noAttentionTracks') }}</p>
       </div>
 
       <div class="card space-y-3">
@@ -555,7 +553,6 @@ function openTrack(track: Track) {
             </div>
           </button>
         </div>
-        <p v-else class="text-sm text-muted-foreground">{{ t('dashboard.noRecentUpdates') }}</p>
       </div>
     </div>
 
@@ -697,9 +694,6 @@ function openTrack(track: Track) {
             </template>
           </div>
         </div>
-      </div>
-      <div v-if="showPinnedOnly && displayedAlbums.length === 0" class="card text-sm text-muted-foreground">
-        {{ t('dashboard.noPinnedAlbums') }}
       </div>
     </div>
 

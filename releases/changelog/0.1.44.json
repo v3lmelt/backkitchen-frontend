@@ -1,0 +1,32 @@
+{
+  "version": "0.1.44",
+  "date": "2026-07-31",
+  "headline": {
+    "zh-CN": "专辑设置页宽度统一",
+    "en": "Unified album settings width"
+  },
+  "summary": {
+    "zh-CN": "专辑设置页各标签页的宽度已统一，切换标签时页面不再左右跳动。",
+    "en": "All tabs on the album settings page now share the same width, so the page no longer jumps when switching tabs."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "界面调整",
+        "en": "UI adjustments"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "专辑设置页宽度统一",
+            "en": "Unified album settings width"
+          },
+          "description": {
+            "zh-CN": "专辑信息、团队成员、工作流等各标签页现在使用一致的页面宽度，切换标签时内容宽度保持不变。",
+            "en": "Album info, team members, workflow, and other tabs now use a consistent page width, so the content stays in place when switching tabs."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1418,7 +1418,6 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
             :issues="issues"
             :mention-users="mentionCandidates.general"
             :heading="t('trackDetail.discussionsHeading', { count: generalDiscussion.discussions.value.length })"
-            :empty-text="t('trackDetail.noDiscussions')"
             :placeholder="t('trackDetail.discussionPlaceholder')"
             :submit-label="t('trackDetail.postDiscussion')"
             :posting="generalDiscussion.posting.value"
@@ -1702,7 +1701,6 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
             </div>
           </template>
           <p v-else-if="track.author_notes" class="text-sm text-muted-foreground whitespace-pre-wrap">{{ track.author_notes }}</p>
-          <p v-else class="text-xs text-muted-foreground italic">{{ t('trackDetail.noAuthorNotes') }}</p>
         </div>
 
         <div class="card space-y-3 lg:flex-1 lg:flex lg:flex-col">

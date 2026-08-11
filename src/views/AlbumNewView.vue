@@ -768,24 +768,20 @@ async function create() {
           </div>
 
           <!-- Template load/save buttons -->
-          <div class="flex items-center gap-2 flex-wrap">
+          <div v-if="selectedCircleId" class="flex items-center gap-2 flex-wrap">
             <button
-              v-if="selectedCircleId"
               @click="openTemplateList"
               class="btn-secondary text-xs"
             >
               <BookTemplate class="w-3.5 h-3.5 mr-1" /> {{ t('workflowTemplate.loadFromTemplate') }}
             </button>
             <button
-              v-if="selectedCircleId && workflowConfig"
+              v-if="workflowConfig"
               @click="showSaveTemplate = true"
               class="btn-secondary text-xs"
             >
               <Save class="w-3.5 h-3.5 mr-1" /> {{ t('workflowTemplate.saveAsTemplate') }}
             </button>
-            <span v-if="!selectedCircleId" class="text-xs text-muted-foreground">
-              {{ t('workflowTemplate.noCircleHint') }}
-            </span>
           </div>
 
           <!-- Template list modal -->

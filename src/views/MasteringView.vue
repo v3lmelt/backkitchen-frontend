@@ -1054,7 +1054,6 @@ watch(olderMasterDeliveries, (deliveries) => {
         </template>
         <template v-else>
           <p v-if="track.mastering_notes" class="text-sm text-muted-foreground whitespace-pre-wrap">{{ track.mastering_notes }}</p>
-          <p v-else class="text-xs text-muted-foreground italic">{{ t('trackDetail.noMasteringNotes') }}</p>
           <button v-if="isSubmitter" @click="startEditMasteringNotes" class="text-xs text-primary hover:text-primary-hover font-mono">
             {{ t('common.edit') }}
           </button>
@@ -1371,7 +1370,6 @@ watch(olderMasterDeliveries, (deliveries) => {
       <!-- Upload delivery (mastering engineer only) -->
       <div v-if="canUploadDelivery" class="card space-y-4">
         <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('masteringPage.uploadDelivery') }}</h3>
-        <p class="text-sm text-muted-foreground">{{ t('masteringPage.uploadHint') }}</p>
         <div class="space-y-2">
           <label class="block text-xs text-muted-foreground">{{ t('workflowStep.deliveryFileLabel') }}</label>
           <input type="file" accept="audio/*" @change="onFileChange" class="input-field w-full" />
@@ -1389,7 +1387,6 @@ watch(olderMasterDeliveries, (deliveries) => {
         <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
           <div class="space-y-1">
             <h4 class="text-sm font-mono font-semibold text-foreground">{{ t('workflowStep.deliveryPreviewHeading') }}</h4>
-            <p class="text-sm text-muted-foreground">{{ t('workflowStep.deliveryPreviewNotice') }}</p>
           </div>
           <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" :compact="true" :height="96" />
         </div>
@@ -1492,7 +1489,7 @@ watch(olderMasterDeliveries, (deliveries) => {
     </template>
   </div>
 
-  <WorkflowActionBar v-if="deliveryActions.length" :actions="deliveryActions" :hint="t('mastering.actionHint')" />
+  <WorkflowActionBar v-if="deliveryActions.length" :actions="deliveryActions" />
   </div>
 
   <IssueDetailPanel

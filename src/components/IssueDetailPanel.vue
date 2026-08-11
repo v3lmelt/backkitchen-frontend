@@ -489,7 +489,6 @@ async function confirmDeleteComment() {
             @activate="(reference, target) => handleIssueDescriptionReference(reference, target)"
             @issueActivate="handleIssueReference"
           />
-          <p v-else class="text-sm text-muted-foreground italic">{{ t('issueDetail.noDescription') }}</p>
 
           <IssuePlaybackPreview
             v-if="hasPlaybackPreview && previewIssue && preview"

@@ -6,6 +6,8 @@
   "scripts": {
     "changelog:build": "node scripts/changelog.mjs --write",
     "changelog:check": "node scripts/changelog.mjs --check",
+    "user-guide:build": "node scripts/user-guide.mjs --write",
+    "user-guide:check": "node scripts/user-guide.mjs --check",
     "dev": "vite",
     "build": "npm run changelog:check && vue-tsc -b && vite build && node -e \"require('node:fs').copyFileSync('dist/index.html','dist/404.html')\"",
     "preview": "npm run build && wrangler dev",

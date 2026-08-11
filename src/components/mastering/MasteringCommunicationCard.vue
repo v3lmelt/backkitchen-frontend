@@ -106,8 +106,8 @@ const approvalLabel = computed(() => (
 
 const previewLabel = computed(() => {
   if (latestDiscussion.value) return t('masteringCommunication.latestDiscussion')
-  if (props.track.mastering_notes) return t('masteringCommunication.masteringNotes')
-  return t('masteringCommunication.getStarted')
+  if (props.track.mastering_notes?.trim()) return t('masteringCommunication.masteringNotes')
+  return ''
 })
 
 const previewMeta = computed(() => {
@@ -133,7 +133,7 @@ const previewText = computed(() => {
   return t('masteringCommunication.emptyPreview')
 })
 
-const introText = computed(() => props.intro || t('masteringCommunication.subtitle'))
+const introText = computed(() => props.intro?.trim() || '')
 </script>
 
 <template>
@@ -146,14 +146,11 @@ const introText = computed(() => props.intro || t('masteringCommunication.subtit
         </div>
         <div class="space-y-2">
           <div class="flex flex-wrap items-center gap-2">
-            <h3 class="text-lg font-sans font-semibold text-foreground">{{ introText }}</h3>
+            <h3 v-if="introText" class="text-lg font-sans font-semibold text-foreground">{{ introText }}</h3>
             <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-mono" :class="state.className">
               {{ state.label }}
             </span>
           </div>
-          <p class="text-sm text-muted-foreground">
-            {{ t('masteringCommunication.description') }}
-          </p>
         </div>
       </div>
 
@@ -191,8 +188,8 @@ const introText = computed(() => props.intro || t('masteringCommunication.subtit
     </div>
 
     <div class="rounded-none border border-primary/20 bg-background/80 px-4 py-3">
-      <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <div class="text-[11px] font-mono uppercase tracking-wide text-muted-foreground">
+      <div v-if="previewLabel || previewMeta" class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div v-if="previewLabel" class="text-[11px] font-mono uppercase tracking-wide text-muted-foreground">
           {{ previewLabel }}
         </div>
         <div v-if="previewMeta" class="text-xs text-muted-foreground">

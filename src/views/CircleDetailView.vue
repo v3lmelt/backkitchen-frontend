@@ -101,7 +101,6 @@
                 {{ t('circleDetail.defaultChecklistDisabled') }}
               </button>
             </div>
-            <p class="text-xs text-muted-foreground">{{ t('circleDetail.defaultChecklistHint') }}</p>
           </div>
           <div v-if="canManageCircle" class="flex justify-end">
             <button class="btn-primary" :disabled="savingInfo" @click="saveInfo">
@@ -258,7 +257,6 @@
 
           <div v-else-if="templates.length === 0" class="text-center py-8">
             <p class="text-sm text-muted-foreground">{{ t('workflowTemplate.noTemplates') }}</p>
-            <p class="text-xs text-muted-foreground mt-1">{{ t('workflowTemplate.noTemplatesHint') }}</p>
           </div>
 
           <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
