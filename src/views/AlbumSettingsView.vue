@@ -14,7 +14,7 @@ import {
 } from '@/utils/albumCover'
 import type { Album, ChecklistTemplateItem, Invitation, Track, User, WebhookConfig, WebhookDelivery, WorkflowConfig, WorkflowEvent } from '@/types'
 import { Archive, RotateCcw, Upload } from 'lucide-vue-next'
-import { albumViewerRoleLabel, viewerCanAccessAlbum, viewerCanForceTrackStatus, viewerCanManageAlbum } from '@/utils/albumPermissions'
+import { albumViewerRoleBadgeClass, albumViewerRoleLabel, viewerCanAccessAlbum, viewerCanForceTrackStatus, viewerCanManageAlbum } from '@/utils/albumPermissions'
 import { formatRelativeTime } from '@/utils/time'
 import { formatWorkflowEvent, translateStepLabel, translateWorkflowStatusLabel, workflowEventDotColor } from '@/utils/workflow'
 import { sanitizeWorkflowUserReferences } from '@/utils/workflowConfig'
@@ -243,23 +243,17 @@ async function confirmWorkflowSave() {
   }
 }
 
-const isProducerOfAlbum = computed(() => album.value?.producer_id === appStore.currentUser?.id)
 const canManageAlbum = computed(() => album.value ? viewerCanManageAlbum(album.value, appStore.currentUser) : false)
 const canManageProgress = computed(() => album.value ? viewerCanForceTrackStatus(album.value, appStore.currentUser) : false)
-const isMasteringEngineerOfAlbum = computed(() => album.value?.mastering_engineer_id === appStore.currentUser?.id)
 const isMemberOfAlbum = computed(() => album.value?.members.some(m => m.user_id === appStore.currentUser?.id) ?? false)
 
 const userRoleInAlbum = computed(() =>
   album.value ? albumViewerRoleLabel(album.value, appStore.currentUser, t) : '',
 )
 
-const roleBadgeClass = computed(() => {
-  if (isProducerOfAlbum.value) return 'bg-warning-bg text-warning'
-  if (isMasteringEngineerOfAlbum.value) return 'bg-info-bg text-info'
-  if (album.value?.viewer_is_album_manager === true) return 'bg-success-bg text-success'
-  if (canManageAlbum.value) return 'bg-info-bg text-info'
-  return 'bg-border text-foreground'
-})
+const roleBadgeClass = computed(() =>
+  album.value ? albumViewerRoleBadgeClass(album.value, appStore.currentUser) : 'bg-border text-foreground',
+)
 
 const checklistEnabledResolved = computed(() =>
   checklistMode.value === 'circle_default'
@@ -1354,7 +1348,6 @@ async function refreshDeliveries() {
                 <input v-model="metadataState.quick_followup_enabled" type="checkbox" class="checkbox mt-0.5" />
                 <span class="space-y-1">
                   <span class="block text-sm font-mono font-semibold text-foreground">{{ t('albumSettings.info.quickFollowupTitle') }}</span>
-                  <span class="block text-xs text-muted-foreground">{{ t('albumSettings.info.quickFollowupDesc') }}</span>
                 </span>
               </label>
               <p v-if="metadataError" class="text-xs text-error">{{ metadataError }}</p>

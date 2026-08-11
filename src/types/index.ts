@@ -134,6 +134,7 @@ export interface Album {
   mastering_engineer_id: number | null
   viewer_is_album_manager?: boolean
   viewer_can_force_track_status?: boolean
+  viewer_circle_role?: CircleRole | null
   deadline?: string | null
   phase_deadlines?: Record<string, string> | null
   workflow_config?: WorkflowConfig | null

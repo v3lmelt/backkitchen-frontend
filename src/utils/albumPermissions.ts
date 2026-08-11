@@ -28,11 +28,40 @@ export function viewerCanAccessAlbum(album: Album, user: User | null | undefined
   )
 }
 
+export type AlbumViewerRole =
+  | 'producer'
+  | 'masteringEngineer'
+  | 'circleOwner'
+  | 'coProducer'
+  | 'admin'
+  | 'member'
+
+const ALBUM_VIEWER_ROLE_BADGE_CLASSES: Record<AlbumViewerRole, string> = {
+  producer: 'bg-warning-bg text-warning',
+  masteringEngineer: 'bg-info-bg text-info',
+  circleOwner: 'bg-warning-bg text-warning',
+  coProducer: 'bg-success-bg text-success',
+  admin: 'bg-info-bg text-info',
+  member: 'bg-border text-foreground',
+}
+
+export function albumViewerRole(album: Album, user: User | null | undefined): AlbumViewerRole | null {
+  if (!user) return null
+  if (album.producer_id === user.id) return 'producer'
+  if (album.mastering_engineer_id === user.id) return 'masteringEngineer'
+  if (album.viewer_circle_role === 'owner') return 'circleOwner'
+  if (album.viewer_circle_role === 'co_producer') return 'coProducer'
+  if (hasAdminRole(user, 'operator')) return 'admin'
+  if (album.viewer_is_album_manager === true) return 'coProducer'
+  return 'member'
+}
+
 export function albumViewerRoleLabel(album: Album, user: User | null | undefined, t: TranslationFn): string {
-  if (!user) return ''
-  if (album.producer_id === user.id) return t('roles.producer')
-  if (album.mastering_engineer_id === user.id) return t('roles.masteringEngineer')
-  if (album.viewer_is_album_manager === true) return t('roles.coProducer')
-  if (hasAdminRole(user, 'operator')) return t('roles.admin')
-  return t('roles.member')
+  const role = albumViewerRole(album, user)
+  return role ? t(`roles.${role}`) : ''
+}
+
+export function albumViewerRoleBadgeClass(album: Album, user: User | null | undefined): string {
+  const role = albumViewerRole(album, user)
+  return role ? ALBUM_VIEWER_ROLE_BADGE_CLASSES[role] : 'bg-border text-foreground'
 }

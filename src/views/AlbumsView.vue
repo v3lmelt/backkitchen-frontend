@@ -9,7 +9,7 @@ import { Music, Archive, Search } from 'lucide-vue-next'
 import EmptyState from '@/components/common/EmptyState.vue'
 import AlbumCoverImage from '@/components/common/AlbumCoverImage.vue'
 import { parseUTC } from '@/utils/time'
-import { albumViewerRoleLabel } from '@/utils/albumPermissions'
+import { albumViewerRoleBadgeClass, albumViewerRoleLabel } from '@/utils/albumPermissions'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -133,11 +133,7 @@ function userRoleInAlbum(album: Album): string {
 }
 
 function roleBadgeClass(album: Album): string {
-  const userId = appStore.currentUser?.id
-  if (album.producer_id === userId) return 'bg-warning-bg text-warning'
-  if (album.mastering_engineer_id === userId) return 'bg-info-bg text-info'
-  if (album.viewer_is_album_manager === true) return 'bg-success-bg text-success'
-  return 'bg-border text-foreground'
+  return albumViewerRoleBadgeClass(album, appStore.currentUser)
 }
 </script>
 
