@@ -56,6 +56,8 @@ export interface WorkflowStepDef {
   require_confirmation?: boolean | null
   // Additional roles that may act on this step
   actor_roles?: string[] | null
+  /** Server-computed: step belongs to the mastering flow. Absent on older backends. */
+  is_mastering_related?: boolean | null
 }
 
 export interface WorkflowConfig {
@@ -66,6 +68,10 @@ export interface WorkflowConfig {
 export interface WorkflowTransitionOption {
   decision: string
   label: string
+  /** Semantic classification sent by newer backends; absent on older ones. */
+  kind?: 'approve' | 'reject' | 'revision' | 'neutral'
+  /** Whether the backend wants a confirmation dialog before executing. */
+  requires_confirmation?: boolean
 }
 
 export interface User {
@@ -83,6 +89,8 @@ export interface User {
   suspension_reason?: string | null
   deleted_at?: string | null
   created_at: string
+  /** Server-computed anonymous display token (`#<anon_token>`); fall back to `hashId` when absent. */
+  anon_token?: string
 }
 
 export interface MentionCandidates {
@@ -230,6 +238,11 @@ export interface StageAssignment {
   assigned_at: string
   completed_at: string | null
   user?: User | null
+}
+
+export interface ReviewerCandidate {
+  user_id: number
+  user: User
 }
 
 export interface ReopenRequest {
@@ -389,6 +402,17 @@ export interface TrackExternalComposer {
   created_at: string
 }
 
+/** Server-computed review progress for the track's current review step. */
+export interface TrackReviewState {
+  step_id: string
+  assignment_mode: string
+  required_review_count: number
+  active_assignment_count: number
+  completed_review_count: number
+  quorum_reached: boolean
+  requires_group_finalization: boolean
+}
+
 export interface Track {
   id: number
   title: string
@@ -415,6 +439,12 @@ export interface Track {
   producer_id: number | null
   mastering_engineer_id: number | null
   viewer_is_album_manager?: boolean
+  /** Server-computed viewer-context flags; client-side derivation is the fallback. */
+  viewer_is_composer_actor?: boolean
+  viewer_is_mastering_participant?: boolean
+  viewer_is_step_assignee?: boolean | null
+  /** Present when the current workflow step is a review step. */
+  review_state?: TrackReviewState | null
   external_submitter_name?: string | null
   is_proxy_submission?: boolean
   author_notes: string | null

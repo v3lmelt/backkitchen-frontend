@@ -15,14 +15,14 @@
           :aria-label="uploadLogoLabel"
           @click="logoInputRef?.click()"
         >
-          <img v-if="circle.logo_url" :src="`${API_ORIGIN}/uploads/${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
+          <img v-if="circle.logo_url" :src="resolveUploadUrl(circle.logo_url)" alt="" class="w-full h-full object-cover" />
           <Smile v-else class="w-6 h-6 text-muted-foreground" :stroke-width="1.5" />
           <div v-if="canManageCircle" class="absolute inset-0 bg-overlay/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <Upload class="w-3.5 h-3.5 text-white" :stroke-width="2" />
           </div>
         </button>
         <div v-else class="w-16 h-16 rounded-full overflow-hidden border border-border bg-border flex items-center justify-center shrink-0 relative">
-          <img v-if="circle.logo_url" :src="`${API_ORIGIN}/uploads/${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
+          <img v-if="circle.logo_url" :src="resolveUploadUrl(circle.logo_url)" alt="" class="w-full h-full object-cover" />
           <Smile v-else class="w-6 h-6 text-muted-foreground" :stroke-width="1.5" />
         </div>
         <input v-if="canManageCircle" ref="logoInputRef" type="file" accept="image/*" class="hidden" @change="uploadLogo" />
@@ -402,7 +402,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { circleApi, API_ORIGIN } from '@/api'
+import { circleApi, resolveUploadUrl } from '@/api'
 import type { Circle, CircleMember, CircleRole, InviteCode, WorkflowConfig, WorkflowTemplate } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { parseUTC } from '@/utils/time'

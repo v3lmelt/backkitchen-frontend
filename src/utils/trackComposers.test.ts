@@ -157,4 +157,17 @@ describe('trackComposers', () => {
     expect(isComposerActor(track, 10)).toBe(true)
     expect(isComposerActor(track, 30)).toBe(false)
   })
+
+  it('prefers the server-computed viewer flag over local derivation', () => {
+    const track = makeTrack({
+      composer_ids: [],
+      composers: [],
+      external_composer_names: [],
+      submitter_id: 10,
+    })
+
+    // Local derivation would say true for the submitter, false for user 30.
+    expect(isComposerActor({ ...track, viewer_is_composer_actor: false }, 10)).toBe(false)
+    expect(isComposerActor({ ...track, viewer_is_composer_actor: true }, 30)).toBe(true)
+  })
 })

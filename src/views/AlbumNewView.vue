@@ -20,8 +20,8 @@ import AlbumCoverImage from '@/components/common/AlbumCoverImage.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import {
-  buildDefaultWorkflowConfig,
   getFirstPeerReviewAssignmentMode,
+  loadDefaultWorkflowConfig,
   sanitizeWorkflowUserReferences,
   type ReviewAssignmentMode,
   setFirstPeerReviewAssignmentMode,
@@ -68,6 +68,10 @@ const deadlineEnabled = reactive({ peer_review: false, mastering: false, final_r
 const showWorkflowBuilder = ref(false)
 const showWorkflowGuide = ref(false)
 const workflowConfig = ref<WorkflowConfig | null>(null)
+// Backend-served default workflow config (GET /api/workflow/default-config),
+// loaded on mount; used when the user customizes the workflow without a
+// template.
+const defaultWorkflowConfig = ref<WorkflowConfig | null>(null)
 const selectedCircleId = ref<number | null>(null)
 const circles = ref<CircleSummary[]>([])
 const selectedCircleDefaultChecklistEnabled = ref<boolean | null>(null)
@@ -164,9 +168,10 @@ function sanitizeWorkflowConfigForMembers() {
 }
 
 const reviewerAssignmentMode = computed<ReviewAssignmentMode>({
-  get: () => getFirstPeerReviewAssignmentMode(workflowConfig.value),
+  get: () => getFirstPeerReviewAssignmentMode(workflowConfig.value ?? defaultWorkflowConfig.value),
   set: (mode) => {
-    const next = workflowConfig.value ?? buildDefaultWorkflowConfig((key, fallback) => t(key, fallback))
+    const next = workflowConfig.value ?? defaultWorkflowConfig.value
+    if (!next) return
     workflowConfig.value = setFirstPeerReviewAssignmentMode(next, mode)
   },
 })
@@ -214,6 +219,14 @@ async function loadInitialOptions() {
 }
 
 onMounted(loadInitialOptions)
+onMounted(async () => {
+  try {
+    defaultWorkflowConfig.value = await loadDefaultWorkflowConfig((key, fallback) => t(key, fallback))
+  } catch {
+    // Older backends lack the endpoint; the workflow quick controls stay
+    // inert until a template provides a config.
+  }
+})
 
 function sanitizeTeamState(allowedUsers: User[]) {
   const allowedIds = new Set(allowedUsers.map(user => user.id))

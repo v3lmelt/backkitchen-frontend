@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   updateDeadlinesMock: vi.fn(),
   listWorkflowTemplatesMock: vi.fn(),
   createWorkflowTemplateMock: vi.fn(),
+  getDefaultWorkflowConfigMock: vi.fn(),
   toastErrorMock: vi.fn(),
   toastWarningMock: vi.fn(),
   toastSuccessMock: vi.fn(),
@@ -49,6 +50,9 @@ vi.mock('@/api', () => ({
   },
   userApi: {
     list: mocks.userListMock,
+  },
+  workflowApi: {
+    getDefaultConfig: mocks.getDefaultWorkflowConfigMock,
   },
 }))
 
@@ -103,6 +107,24 @@ vi.mock('@/components/workflow/WorkflowEditor.vue', () => ({
 
 import AlbumNewView from './AlbumNewView.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import { resetDefaultWorkflowConfigCache } from '@/utils/workflowConfig'
+
+// Mirrors the backend's built-in default workflow (GET /api/workflow/default-config).
+function defaultWorkflowConfigFixture() {
+  return {
+    version: 2,
+    steps: [
+      { id: 'intake', label: 'Intake', type: 'approval', ui_variant: 'intake', assignee_role: 'producer', order: 0, transitions: { accept: 'peer_review' }, allow_permanent_reject: true },
+      { id: 'peer_review', label: 'Peer Review', type: 'review', ui_variant: 'peer_review', assignee_role: 'peer_reviewer', order: 1, transitions: { pass: 'producer_gate', needs_revision: 'peer_revision' }, revision_step: 'peer_revision', assignment_mode: 'auto', required_reviewer_count: 1 },
+      { id: 'peer_revision', label: 'Peer Revision', type: 'revision', assignee_role: 'submitter', order: 2, return_to: 'peer_review', transitions: {} },
+      { id: 'producer_gate', label: 'Producer Review', type: 'approval', ui_variant: 'producer_gate', assignee_role: 'producer', order: 3, transitions: { approve: 'mastering' }, allow_permanent_reject: false },
+      { id: 'producer_revision', label: 'Producer Revision', type: 'revision', assignee_role: 'submitter', order: 4, return_to: 'producer_gate', transitions: {} },
+      { id: 'mastering', label: 'Mastering', type: 'delivery', ui_variant: 'mastering', assignee_role: 'mastering_engineer', order: 5, transitions: { deliver: 'final_review' }, revision_step: 'mastering_revision', require_confirmation: true },
+      { id: 'mastering_revision', label: 'Mastering Revision', type: 'revision', assignee_role: 'submitter', order: 6, return_to: 'mastering', transitions: {} },
+      { id: 'final_review', label: 'Final Review', type: 'approval', ui_variant: 'final_review', assignee_role: 'producer', actor_roles: ['submitter'], order: 7, transitions: {}, allow_permanent_reject: false },
+    ],
+  }
+}
 
 async function selectBackKitchenCircle(wrapper: ReturnType<typeof mount>) {
   await wrapper.findAll('button.custom-select-option').find(button => button.text() === 'Back Kitchen')!.trigger('click')
@@ -162,6 +184,8 @@ describe('AlbumNewView', () => {
     mocks.updateDeadlinesMock.mockReset()
     mocks.listWorkflowTemplatesMock.mockReset()
     mocks.createWorkflowTemplateMock.mockReset()
+    mocks.getDefaultWorkflowConfigMock.mockReset()
+    resetDefaultWorkflowConfigCache()
     mocks.toastErrorMock.mockReset()
     mocks.toastWarningMock.mockReset()
     mocks.toastSuccessMock.mockReset()
@@ -179,6 +203,7 @@ describe('AlbumNewView', () => {
     ])
     mocks.listWorkflowTemplatesMock.mockResolvedValue([])
     mocks.createWorkflowTemplateMock.mockResolvedValue({})
+    mocks.getDefaultWorkflowConfigMock.mockResolvedValue(defaultWorkflowConfigFixture())
     mocks.circleGetMock.mockResolvedValue({
       id: 9,
       default_checklist_enabled: true,

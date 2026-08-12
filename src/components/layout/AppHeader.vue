@@ -30,6 +30,11 @@ function toggleLocale() {
   localStorage.setItem(LOCALE_KEY, locale.value)
 }
 
+function handleLogout() {
+  appStore.logout()
+  router.push('/login')
+}
+
 function handleOutsideClick(event: MouseEvent) {
   const target = event.target as HTMLElement
   if (!target.closest('[data-notification-panel]')) {
@@ -337,7 +342,7 @@ function handleMenuToggle() {
           <div class="text-sm text-foreground font-medium">{{ appStore.currentUser.display_name }}</div>
           <div class="text-xs text-muted-foreground">{{ roleLabel }}</div>
         </RouterLink>
-        <button @click="appStore.logout()" class="btn-secondary text-xs px-3 py-1.5">
+        <button @click="handleLogout" class="btn-secondary text-xs px-3 py-1.5">
           {{ t('header.logout') }}
         </button>
       </template>

@@ -88,10 +88,11 @@ describe('IssueCreatePanel', () => {
       title: 'Clicks at 1:30',
       description: 'Audible clicking artifacts',
       severity: 'major',
-      phase: 'mastering',
       visibility: 'public',
       markers: [{ marker_type: 'point', time_start: 1.5, time_end: null }],
     })
+    // The backend infers the phase from the current workflow step.
+    expect(payload.phase).toBeUndefined()
     expect(typeof onProgress).toBe('function')
   })
 

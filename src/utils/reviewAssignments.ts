@@ -1,5 +1,6 @@
 import type { Issue, StageAssignment, Track } from '@/types'
 import { isComposerActor } from '@/utils/trackComposers'
+import { availableIssueStatusActions } from '@/utils/issueStatus'
 
 const REVISION_REQUESTED_CANCEL_REASON = 'revision_requested'
 
@@ -175,13 +176,7 @@ export function availableBatchActionsForIssue(
   canSubmit: boolean,
   canChange: boolean,
 ): Issue['status'][] {
-  if (canSubmit && issue.status === 'open') return ['resolved', 'disagreed']
-  if (canChange && issue.status === 'open') return ['resolved', 'pending_discussion']
-  if (canChange && issue.status === 'pending_discussion') return ['open', 'internal_resolved']
-  if (canChange && issue.status === 'internal_resolved') return ['open']
-  if (canChange && issue.status === 'resolved') return ['open']
-  if (canChange && issue.status === 'disagreed') return ['open']
-  return []
+  return availableIssueStatusActions(issue.status, { canSubmit, canChange })
 }
 
 export function intersectBatchActions(

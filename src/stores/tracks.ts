@@ -8,7 +8,6 @@ export const useTrackStore = defineStore('tracks', () => {
   const currentTrack = ref<Track | null>(null)
   const loading = ref(false)
   let listRequestSerial = 0
-  let detailRequestSerial = 0
 
   function setCurrentTrack(track: Track | null) {
     currentTrack.value = track
@@ -29,20 +28,5 @@ export const useTrackStore = defineStore('tracks', () => {
     }
   }
 
-  async function loadTrack(id: number) {
-    const serial = ++detailRequestSerial
-    loading.value = true
-    try {
-      const loaded = (await trackApi.get(id)).track
-      if (serial === detailRequestSerial) {
-        currentTrack.value = loaded
-      }
-    } finally {
-      if (serial === detailRequestSerial) {
-        loading.value = false
-      }
-    }
-  }
-
-  return { tracks, currentTrack, loading, setCurrentTrack, loadTracks, loadTrack }
+  return { tracks, currentTrack, loading, setCurrentTrack, loadTracks }
 })

@@ -29,6 +29,9 @@ vi.mock('@/router', () => ({
 }))
 
 vi.mock('@/api', () => ({
+  AUTH_TOKEN_KEY: 'backkitchen_token',
+  AUTH_USER_KEY: 'backkitchen_user',
+  getAuthToken: () => localStorage.getItem('backkitchen_token'),
   authApi: { me: vi.fn() },
   configApi: { get: vi.fn() },
   invitationApi: { listMine: vi.fn(), accept: vi.fn(), decline: vi.fn() },

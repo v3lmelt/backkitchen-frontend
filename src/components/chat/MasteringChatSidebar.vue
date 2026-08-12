@@ -6,6 +6,7 @@ import { useAppStore } from '@/stores/app'
 import type { Discussion, Issue, User } from '@/types'
 import { formatLocaleDate, formatDuration } from '@/utils/time'
 import { useDiscussions } from '@/composables/useDiscussions'
+import { useDiscussionRealtime } from '@/composables/useDiscussionRealtime'
 import CommentInput from '@/components/common/CommentInput.vue'
 import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
@@ -108,7 +109,12 @@ onMounted(loadDiscussions)
 
 watch(() => props.trackId, loadDiscussions)
 
-defineExpose({ handleDiscussionEvent, openPanel, closePanel })
+// Realtime discussion events arrive via the shared bus (dispatched by the
+// track workspace's WebSocket) — no imperative handler exposed to parents.
+const { subscribe } = useDiscussionRealtime()
+subscribe((event, discussionId) => {
+  void handleDiscussionEvent(event, discussionId)
+})
 </script>
 
 <template>

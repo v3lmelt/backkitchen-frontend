@@ -2,17 +2,17 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, albumApi, circleApi, r2Api, uploadToR2, API_ORIGIN, issueApi } from '@/api'
+import { trackApi, r2Api, uploadToR2, masterAudioUrl as buildMasterAudioUrl, trackAudioUrl, issueApi } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Track, Issue, WorkflowEvent, TrackSourceVersion, WorkflowConfig, WorkflowStepDef, StageAssignment, User } from '@/types'
+import type { Track, Issue, WorkflowEvent, TrackSourceVersion, WorkflowStepDef, ReviewerCandidate } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
-import { hashId } from '@/utils/hash'
+import { anonTokenFor } from '@/utils/hash'
 import {
   externalComposerDisplayText,
   isComposerActor,
   platformComposerDisplayText,
-  trackComposerDisplayText,
-  trackComposerIds,
+  trackArtistDisplay as trackArtistDisplayFor,
+  trackArtistUsesHash as trackArtistUsesHashFor,
 } from '@/utils/trackComposers'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
@@ -27,17 +27,22 @@ import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useDiscussions } from '@/composables/useDiscussions'
+import { useDiscussionRealtime } from '@/composables/useDiscussionRealtime'
 import { useToast } from '@/composables/useToast'
 import { useIssueDrawer } from '@/composables/useIssueDrawer'
-import { buildTrackWorkspaceRoute, translateStepLabel, translateWorkflowStatusLabel } from '@/utils/workflow'
+import { buildTrackWorkspaceRoute, stepIsMasteringRelated, translateStepLabel, translateWorkflowDecision, translateWorkflowStatusLabel, workflowEventDotColor } from '@/utils/workflow'
 import { formatSourceVersionOptionLabel } from '@/utils/sourceVersions'
 import { activeAssignmentsForStep } from '@/utils/reviewAssignments'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { useDualWaveformPreview } from '@/composables/useDualWaveformPreview'
 import { useTrackStore } from '@/stores/tracks'
-import { emptyMentionCandidates } from '@/utils/mentionCandidates'
+import { useTrackDetail } from '@/composables/useTrackDetail'
 import { extractAudioDuration } from '@/utils/audio'
-import { viewerCanManageAlbum } from '@/utils/albumPermissions'
+import {
+  canViewerSeeMastering,
+  requiredReviewerCount,
+  viewerCanManageTrackAlbum as viewerCanManageTrackAlbumOf,
+} from '@/utils/trackPermissions'
 
 const route = useRoute()
 const router = useRouter()
@@ -49,7 +54,6 @@ const { success: toastSuccess, error: toastError } = useToast()
 
 
 type IssueDetailMode = 'inline' | 'legacy'
-type ReviewerCandidate = { user_id: number; user: User }
 
 const ISSUE_DETAIL_MODE_STORAGE_PREFIX = 'backkitchen_issue_detail_mode'
 
@@ -92,17 +96,6 @@ watch(issueDetailModeStorageKey, (key) => {
   issueDetailMode.value = readIssueDetailMode(key)
   syncIssueDrawerFromRoute()
 })
-/** Map event_type to a dot color class for visual categorisation */
-function timelineDotColor(event: WorkflowEvent): string {
-  const type = event.event_type
-  if (type.includes('reject') || type.includes('reject')) return 'bg-error'
-  if (type.includes('completed') || type.includes('approved') || type.includes('accepted')) return 'bg-success'
-  if (type.includes('issue')) return 'bg-warning'
-  if (type.includes('revision') || type.includes('returned')) return 'bg-warning'
-  if (type.includes('upload') || type.includes('deliver')) return 'bg-info'
-  return 'bg-border'
-}
-
 /** For transition events, return a short "A → B" status change label */
 function transitionLabel(event: WorkflowEvent): string | null {
   if (!event.from_status || !event.to_status) return null
@@ -116,21 +109,11 @@ function translateWorkflowStatus(status: string): string {
   return translateWorkflowStatusLabel(status, workflowConfig.value, t, te)
 }
 
-function translateWorkflowDecision(decision: string): string {
-  if (decision.startsWith('reject_to_')) {
-    const target = decision.slice('reject_to_'.length)
-    return t('workflowStep.rejectToStep', { step: translateWorkflowStatus(target) })
-  }
-  const actionKey = `trackDetail.actions.${decision}`
-  if (te(actionKey)) return t(actionKey)
-  return decision.replaceAll('_', ' ')
-}
-
 function inferTrackWorkflowVariant(trackData: Track | null): 'generic' | 'mastering' | 'final_review' {
   const step = trackData?.workflow_step
   if (!step) return 'generic'
   if (step.ui_variant === 'mastering' || step.ui_variant === 'final_review') return step.ui_variant
-  if (step.id === 'mastering' || step.id === 'mastering_revision') return 'mastering'
+  if (stepIsMasteringRelated(step)) return 'mastering'
   if (step.id === 'final_review') return 'final_review'
   return 'generic'
 }
@@ -143,11 +126,13 @@ const shouldAnonymizePeer = computed(() => {
   return isComposer && peerPhases.includes(track.value.status)
 })
 
-// Single pass over issues — builds both number and peer-phase lookup
+// Single pass over all issues (including previous workflow cycles, so timeline
+// events referencing older-cycle issues keep their #n label) — builds both
+// number and peer-phase lookup
 const issueMetadata = computed(() => {
   const numberMap = new Map<number, number>()
   const peerMap = new Map<number, boolean>()
-  issues.value.forEach((issue, idx) => {
+  allIssues.value.forEach((issue, idx) => {
     numberMap.set(issue.id, idx + 1)
     peerMap.set(issue.id, issue.phase === 'peer')
   })
@@ -167,7 +152,7 @@ function formatTimelineEvent(event: WorkflowEvent): string {
   const name = !rawName
     ? t('trackDetail.system')
     : isPeer && shouldAnonymizePeer.value && event.actor
-      ? `#${hashId(event.actor.id)}`
+      ? `#${anonTokenFor(event.actor)}`
       : rawName
 
   const num = issueId != null ? (numberMap.get(issueId) ?? null) : null
@@ -207,7 +192,7 @@ function formatTimelineEvent(event: WorkflowEvent): string {
         const decision = event.event_type.slice('workflow_transition_'.length)
         return t('dashboard.events.workflow_transition', {
           name,
-          action: translateWorkflowDecision(decision),
+          action: translateWorkflowDecision(decision, workflowConfig.value, t, te),
         })
       }
 
@@ -228,8 +213,6 @@ function formatTimelineEvent(event: WorkflowEvent): string {
 }
 const trackId = computed(() => Number(route.params.id))
 
-const track = ref<Track | null>(null)
-const issues = ref<Issue[]>([])
 const selectedIssue = ref<Issue | null>(null)
 const sourceWaveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
 const masterWaveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
@@ -253,13 +236,32 @@ const {
   handleIssuePreviewPlayAt,
   handleIssuePreviewAction,
 } = useDualWaveformPreview({ selectedIssue, sourceWaveformRef, masterWaveformRef })
-const mentionCandidates = ref(emptyMentionCandidates())
 const events = ref<WorkflowEvent[]>([])
-const sourceVersions = ref<TrackSourceVersion[]>([])
-const reviewAssignments = ref<StageAssignment[]>([])
-const workflowConfig = ref<WorkflowConfig | null>(null)
-const loading = ref(true)
-const loadError = ref(false)
+const {
+  track,
+  issues,
+  allIssues,
+  mentionCandidates,
+  sourceVersions,
+  reviewAssignments,
+  workflowConfig,
+  loading,
+  loadError,
+  load: loadTrack,
+} = useTrackDetail(trackId, {
+  onDetailApplied: (detail) => {
+    events.value = detail.events
+    syncIssueDrawerFromRoute()
+  },
+  onTrackIdChange: () => {
+    selectedIssue.value = null
+    resetDualWaveformState()
+    if (parseIssueQuery(route.query.issue) != null) {
+      replaceIssueDrawerQuery(null)
+    }
+    events.value = []
+  },
+})
 const timelineExpanded = ref(false)
 const timelineFilter = ref<'all' | 'transitions' | 'issues' | 'uploads'>('all')
 const TIMELINE_PREVIEW_COUNT = 5
@@ -297,7 +299,10 @@ const filteredEvents = computed(() => {
   return sorted
 })
 const generalDiscussion = useDiscussions(trackId, 'general', { paginated: true })
-const chatSidebarRef = ref<InstanceType<typeof MasteringChatSidebar> | null>(null)
+const { subscribe: subscribeDiscussionRealtime, dispatch: dispatchDiscussionEvent } = useDiscussionRealtime()
+subscribeDiscussionRealtime((event, discussionId) => {
+  void generalDiscussion.applyRealtimeEvent(event, discussionId)
+})
 const showVersionCompare = ref(false)
 const selectedCompareVersionId = ref<number | null>(null)
 
@@ -326,10 +331,7 @@ const { connected: wsConnected, reconnectAttempts: wsReconnectAttempts, retry: w
   await loadTrack()
   wsReloading.value = false
 }, {
-  onDiscussionEvent: (event, discussionId) => {
-    chatSidebarRef.value?.handleDiscussionEvent(event, discussionId)
-    generalDiscussion.applyRealtimeEvent(event, discussionId)
-  },
+  onDiscussionEvent: dispatchDiscussionEvent,
 })
 
 watch(wsConnected, (val) => {
@@ -342,57 +344,6 @@ function applyTrack(updated: Track) {
 }
 
 let reviewAssignmentsLoadCount = 0
-let trackLoadSerial = 0
-
-async function loadTrack() {
-  const serial = ++trackLoadSerial
-  const requestedTrackId = trackId.value
-  if (!track.value) loading.value = true
-  loadError.value = false
-  try {
-    const detail = await trackApi.get(requestedTrackId)
-    if (serial !== trackLoadSerial || requestedTrackId !== trackId.value) return
-    applyTrack(detail.track)
-    issues.value = detail.issues
-    syncIssueDrawerFromRoute()
-    mentionCandidates.value = detail.mention_candidates ?? emptyMentionCandidates()
-    events.value = detail.events
-    sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
-    workflowConfig.value = detail.workflow_config ?? null
-    try {
-      const assignments = await trackApi.listAssignments(requestedTrackId)
-      if (serial !== trackLoadSerial || requestedTrackId !== trackId.value) return
-      reviewAssignments.value = assignments
-    } catch {
-      if (serial !== trackLoadSerial || requestedTrackId !== trackId.value) return
-      reviewAssignments.value = []
-    }
-  } catch {
-    if (serial !== trackLoadSerial || requestedTrackId !== trackId.value) return
-    trackStore.setCurrentTrack(null)
-    loadError.value = true
-  } finally {
-    if (serial === trackLoadSerial && requestedTrackId === trackId.value) {
-      loading.value = false
-    }
-  }
-}
-
-watch(trackId, () => {
-  track.value = null
-  issues.value = []
-  mentionCandidates.value = emptyMentionCandidates()
-  selectedIssue.value = null
-  resetDualWaveformState()
-  if (parseIssueQuery(route.query.issue) != null) {
-    replaceIssueDrawerQuery(null)
-  }
-  events.value = []
-  sourceVersions.value = []
-  reviewAssignments.value = []
-  workflowConfig.value = null
-  void loadTrack()
-})
 
 watch(() => route.query.issue, () => {
   syncIssueDrawerFromRoute()
@@ -401,7 +352,7 @@ watch(() => route.query.issue, () => {
 const audioUrl = computed(() => {
   const t = track.value
   if (!t?.file_path) return ''
-  return `${API_ORIGIN}/api/tracks/${trackId.value}/audio?v=${t.version ?? 0}`
+  return trackAudioUrl(trackId.value, t.version ?? 0)
 })
 const { downloading, downloadProgress, downloadTrackAudio } = useAudioDownload()
 const handleDownload = () => downloadTrackAudio(audioUrl, track)
@@ -409,7 +360,7 @@ const handleDownload = () => downloadTrackAudio(audioUrl, track)
 const masterAudioUrl = computed(() => {
   const d = track.value?.current_master_delivery
   if (!d?.file_path) return ''
-  return `${API_ORIGIN}/api/tracks/${trackId.value}/master-audio?v=${d.delivery_number}&c=${d.workflow_cycle ?? 1}`
+  return buildMasterAudioUrl(trackId.value, d.delivery_number, d.workflow_cycle)
 })
 const { downloading: masterDownloading, downloadProgress: masterDownloadProgress, downloadTrackAudio: downloadMasterAudio } = useAudioDownload()
 const handleMasterDownload = () => downloadMasterAudio(masterAudioUrl, track, '_master')
@@ -452,16 +403,17 @@ const currentStepAssignments = computed(() => {
 })
 
 const hasMultipleReviewers = computed(() => currentStepAssignments.value.length > 0)
-const completedReviewCount = computed(() => currentStepAssignments.value.filter(a => a.status === 'completed').length)
+// Server-computed review progress wins when present; otherwise derive from
+// the raw assignments (fallback for older backends and test fixtures).
+const reviewState = computed(() => track.value?.review_state ?? null)
+const completedReviewCount = computed(() =>
+  reviewState.value?.completed_review_count
+  ?? currentStepAssignments.value.filter(a => a.status === 'completed').length,
+)
 const totalReviewCount = computed(() => {
+  if (reviewState.value) return reviewState.value.required_review_count
   const step = track.value?.workflow_step
-  if (step?.assignment_mode === 'fixed') {
-    return Math.max(1, currentStepAssignments.value.length)
-  }
-  if (step?.required_reviewer_count != null && step.required_reviewer_count > 0) {
-    return step.required_reviewer_count
-  }
-  return currentStepAssignments.value.length
+  return requiredReviewerCount(step, currentStepAssignments.value.length, { fallbackToAssignmentCount: true })
 })
 
 const customWorkflowActionLabel = computed(() => {
@@ -582,15 +534,11 @@ const selectedCompareVersionNotes = computed(() => {
 })
 
 const viewerCanManageTrackAlbum = computed(() =>
-  track.value ? viewerCanManageAlbum(track.value, appStore.currentUser) : false,
+  viewerCanManageTrackAlbumOf(track.value, appStore.currentUser),
 )
-const canSeeMastering = computed(() => {
-  const userId = appStore.currentUser?.id
-  if (!userId || !track.value) return false
-  return isComposerActor(track.value, userId)
-    || viewerCanManageTrackAlbum.value
-    || userId === track.value.mastering_engineer_id
-})
+const canSeeMastering = computed(() =>
+  canViewerSeeMastering(track.value, appStore.currentUser?.id, viewerCanManageTrackAlbum.value),
+)
 const hasMasteringHistory = computed(() => Boolean(track.value?.current_master_delivery))
 const isActiveMasteringFlow = computed(() => {
   if (!track.value) return false
@@ -751,29 +699,7 @@ async function openReassignModal() {
   if (track.value) {
     reassigning.value = true
     try {
-      const album = await albumApi.get(track.value.album_id)
-      const composerIds = new Set(trackComposerIds(track.value))
-      const byId = new Map<number, ReviewerCandidate>()
-      if (album.circle_id) {
-        const circle = await circleApi.get(album.circle_id)
-        for (const member of circle.members) {
-          byId.set(member.user_id, { user_id: member.user_id, user: member.user })
-        }
-        if (album.producer) {
-          byId.set(album.producer.id, { user_id: album.producer.id, user: album.producer })
-        }
-      } else {
-        for (const member of album.members) {
-          byId.set(member.user_id, { user_id: member.user_id, user: member.user })
-        }
-        if (album.producer) {
-          byId.set(album.producer.id, { user_id: album.producer.id, user: album.producer })
-        }
-        if (album.mastering_engineer) {
-          byId.set(album.mastering_engineer.id, { user_id: album.mastering_engineer.id, user: album.mastering_engineer })
-        }
-      }
-      reassignMembers.value = Array.from(byId.values()).filter(m => !composerIds.has(m.user_id))
+      reassignMembers.value = await trackApi.listReviewerCandidates(track.value.id)
     } catch (e: any) {
       toastError(e?.message || t('common.requestFailed'))
       return
@@ -887,10 +813,7 @@ const sourceFollowupTargetStage = ref('')
 const sourceFollowupDeciding = ref(false)
 
 function sourceFollowupTargetIsMasteringRelated(step: WorkflowStepDef): boolean {
-  return step.type === 'delivery'
-    || step.ui_variant === 'mastering'
-    || step.id.includes('master')
-    || step.id.includes('mastering')
+  return stepIsMasteringRelated(step)
 }
 
 const sourceFollowupTargetStages = computed<WorkflowStepDef[]>(() => {
@@ -1027,20 +950,12 @@ watch(() => primaryActions.value.length, async () => {
 // Reopen logic
 const isMasteringEngineer = computed(() => track.value?.mastering_engineer_id === appStore.currentUser?.id)
 const isSubmitter = computed(() => isComposerActor(track.value, appStore.currentUser?.id))
-const composerSummary = computed(() => trackComposerDisplayText(track.value))
 const platformComposerSummary = computed(() => platformComposerDisplayText(track.value))
 const externalComposerSummary = computed(() => externalComposerDisplayText(track.value))
 const hasPlatformComposers = computed(() => platformComposerSummary.value !== '--')
 const hasExternalComposers = computed(() => externalComposerSummary.value !== '--')
-const trackArtistDisplay = computed(() => {
-  if (!track.value) return '--'
-  if (track.value.artist) return track.value.artist
-  if (composerSummary.value !== '--') return composerSummary.value
-  return track.value.submitter_id ? `#${hashId(track.value.submitter_id)}` : '--'
-})
-const trackArtistUsesHash = computed(() => Boolean(
-  track.value && !track.value.artist && composerSummary.value === '--' && track.value.submitter_id,
-))
+const trackArtistDisplay = computed(() => trackArtistDisplayFor(track.value))
+const trackArtistUsesHash = computed(() => trackArtistUsesHashFor(track.value))
 const isProxySubmission = computed(() => Boolean(track.value?.is_proxy_submission && track.value.external_submitter_name))
 const composerApprovalLabel = computed(() =>
   isProxySubmission.value ? t('trackDetail.externalSubmitterProxy') : t('trackDetail.composers')
@@ -1049,8 +964,16 @@ const composerProxyActorDisplay = computed(() => {
   if (!track.value || hasPlatformComposers.value || !hasExternalComposers.value) return ''
   return track.value.proxy_uploader?.display_name ?? track.value.submitter?.display_name ?? '--'
 })
-const canDirectReopen = computed(() => track.value?.status === 'completed' && (viewerCanManageTrackAlbum.value || isMasteringEngineer.value))
-const canRequestReopen = computed(() => track.value?.status === 'completed' && isSubmitter.value && !viewerCanManageTrackAlbum.value && !isMasteringEngineer.value)
+const canDirectReopen = computed(() => {
+  const allowedActions = track.value?.allowed_actions
+  if (allowedActions) return allowedActions.includes('direct_reopen')
+  return track.value?.status === 'completed' && (viewerCanManageTrackAlbum.value || isMasteringEngineer.value)
+})
+const canRequestReopen = computed(() => {
+  const allowedActions = track.value?.allowed_actions
+  if (allowedActions) return allowedActions.includes('request_reopen')
+  return track.value?.status === 'completed' && isSubmitter.value && !viewerCanManageTrackAlbum.value && !isMasteringEngineer.value
+})
 const completedProcessMode = ref<'reopen' | 'source_followup'>('reopen')
 const completedProcessButtonLabel = computed(() => {
   if (track.value?.status === 'completed' && canRequestSourceFollowup.value) return t('trackDetail.processCompleted')
@@ -1580,7 +1503,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
           <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('trackDetail.trackSummary') }}</h3>
           <div class="flex justify-between gap-4">
             <span class="text-muted-foreground">{{ t('trackDetail.submitter') }}</span>
-            <span class="text-foreground text-right" :class="{ 'font-mono': !track.submitter && track.submitter_id }">{{ track.submitter?.display_name ?? (track.submitter_id ? '#' + hashId(track.submitter_id) : '--') }}</span>
+            <span class="text-foreground text-right" :class="{ 'font-mono': !track.submitter && track.submitter_id }">{{ track.submitter?.display_name ?? (track.submitter_id ? '#' + anonTokenFor(track.submitter, track.submitter_id) : '--') }}</span>
           </div>
           <div v-if="hasPlatformComposers" class="flex justify-between gap-4">
             <span class="text-muted-foreground">{{ t('trackDetail.platformComposers') }}</span>
@@ -1610,7 +1533,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
                   class="flex items-center justify-between gap-2 text-xs"
                 >
                   <span class="truncate" :class="shouldAnonymizePeer ? 'font-mono text-foreground' : 'text-foreground'">
-                    {{ shouldAnonymizePeer ? `#${hashId(assignment.user_id)}` : (assignment.user?.display_name ?? `#${hashId(assignment.user_id)}`) }}
+                    {{ shouldAnonymizePeer ? `#${anonTokenFor(assignment.user, assignment.user_id)}` : (assignment.user?.display_name ?? `#${anonTokenFor(assignment.user, assignment.user_id)}`) }}
                   </span>
                   <span
                     class="shrink-0 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-mono"
@@ -1635,7 +1558,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
           <div v-else class="flex justify-between items-center gap-2">
             <span class="text-muted-foreground shrink-0">{{ t('trackDetail.peerReviewer') }}</span>
             <div class="flex items-center gap-2 min-w-0">
-              <span class="text-foreground truncate" :class="{ 'font-mono': shouldAnonymizePeer }">{{ track.peer_reviewer ? (shouldAnonymizePeer ? `#${hashId(track.peer_reviewer.id)}` : track.peer_reviewer.display_name) : '--' }}</span>
+              <span class="text-foreground truncate" :class="{ 'font-mono': shouldAnonymizePeer }">{{ track.peer_reviewer ? (shouldAnonymizePeer ? `#${anonTokenFor(track.peer_reviewer)}` : track.peer_reviewer.display_name) : '--' }}</span>
               <button
                 v-if="canReassignReviewer"
                 @click="openReassignModal"
@@ -1733,7 +1656,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
               :key="event.id"
               class="flex gap-2.5 border-b border-border last:border-0 py-3 first:pt-0"
             >
-              <span class="mt-1.5 flex-shrink-0 h-2 w-2 rounded-full" :class="timelineDotColor(event)"></span>
+              <span class="mt-1.5 flex-shrink-0 h-2 w-2 rounded-full" :class="workflowEventDotColor(event.event_type)"></span>
               <div class="min-w-0 flex-1">
                 <div class="text-sm text-foreground">{{ formatTimelineEvent(event) }}</div>
                 <div v-if="transitionLabel(event)" class="text-xs font-mono text-muted-foreground mt-0.5">
@@ -1984,7 +1907,6 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
     />
     <MasteringChatSidebar
       v-if="canSeeMastering && track"
-      ref="chatSidebarRef"
       :track-id="trackId"
       :track-completed="track.status === 'completed'"
       :issues="issues"

@@ -5,6 +5,7 @@ import { ChevronRight, MessageSquare } from 'lucide-vue-next'
 
 import type { Discussion, Track } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
+import { stepIsMasteringRelated } from '@/utils/workflow'
 
 const props = defineProps<{
   track: Track
@@ -63,7 +64,7 @@ const state = computed(() => {
   }
 
   if (
-    props.track.workflow_step?.ui_variant === 'mastering'
+    stepIsMasteringRelated(props.track.workflow_step)
     || props.track.status === 'mastering'
     || props.track.status === 'mastering_revision'
   ) {

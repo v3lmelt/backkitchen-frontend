@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { albumApi, circleApi, API_ORIGIN } from '@/api'
+import { albumApi, circleApi, resolveUploadUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Album } from '@/types'
 import { Music, Archive, Search } from 'lucide-vue-next'
@@ -218,7 +218,7 @@ function roleBadgeClass(album: Album): string {
           <!-- Cover image or default placeholder -->
           <div class="w-full h-32 overflow-hidden">
             <AlbumCoverImage
-              :src="album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : null"
+              :src="album.cover_image ? resolveUploadUrl(album.cover_image) : null"
               :alt="album.title"
               class="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200"
               :class="{ 'opacity-60 grayscale': album.archived_at }"

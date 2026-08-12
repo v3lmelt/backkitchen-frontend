@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   trackGetMock: vi.fn(),
   listAssignmentsMock: vi.fn(),
   albumGetMock: vi.fn(),
+  listReviewerCandidatesMock: vi.fn(),
   assignReviewerMock: vi.fn(),
   reassignReviewerMock: vi.fn(),
   issueUpdateMock: vi.fn(),
@@ -46,6 +47,13 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/api', () => ({
   API_ORIGIN: '',
+  AUTH_TOKEN_KEY: 'backkitchen_token',
+  AUTH_USER_KEY: 'backkitchen_user',
+  getAuthToken: () => localStorage.getItem('backkitchen_token'),
+  trackAudioUrl: (trackId: number, v?: number | null) => `/api/tracks/${trackId}/audio?v=${v ?? 0}`,
+  masterAudioUrl: (trackId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-audio?v=${v ?? 0}&c=${c ?? 1}`,
+  masterDeliveryAudioUrl: (trackId: number, deliveryId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-deliveries/${deliveryId}/audio?v=${v ?? 0}&c=${c ?? 1}`,
+  sourceVersionAudioUrl: (trackId: number, versionId: number) => `/api/tracks/${trackId}/source-versions/${versionId}/audio`,
   checklistApi: {
     getDraft: mocks.checklistGetDraftMock,
     getTemplate: mocks.checklistGetTemplateMock,
@@ -60,6 +68,7 @@ vi.mock('@/api', () => ({
   trackApi: {
     get: mocks.trackGetMock,
     listAssignments: mocks.listAssignmentsMock,
+    listReviewerCandidates: mocks.listReviewerCandidatesMock,
     assignReviewer: mocks.assignReviewerMock,
     reassignReviewer: mocks.reassignReviewerMock,
     workflowTransition: mocks.workflowTransitionMock,
@@ -217,6 +226,7 @@ describe('WorkflowStepView', () => {
     mocks.trackGetMock.mockReset()
     mocks.listAssignmentsMock.mockReset()
     mocks.albumGetMock.mockReset()
+    mocks.listReviewerCandidatesMock.mockReset()
     mocks.assignReviewerMock.mockReset()
     mocks.reassignReviewerMock.mockReset()
     mocks.issueUpdateMock.mockReset()
@@ -237,6 +247,7 @@ describe('WorkflowStepView', () => {
     mocks.workflowTransitionMock.mockResolvedValue({})
     mocks.listAssignmentsMock.mockResolvedValue([])
     mocks.albumGetMock.mockResolvedValue({ members: [] })
+    mocks.listReviewerCandidatesMock.mockResolvedValue([])
     mocks.assignReviewerMock.mockResolvedValue([])
     mocks.reassignReviewerMock.mockResolvedValue({ peer_reviewer_id: 2 })
     mocks.issueUpdateMock.mockImplementation(async (id: number, data: { status?: string }) => ({ id, status: data.status ?? 'open' }))
@@ -948,12 +959,9 @@ describe('WorkflowStepView', () => {
       path: '/tracks/9/step/peer_review',
       fullPath: '/tracks/9/step/peer_review',
     }
-    mocks.albumGetMock.mockResolvedValueOnce({
-      members: [
-        { id: 1, user_id: 2, user: { id: 2, display_name: 'Nova' } },
-        { id: 2, user_id: 3, user: { id: 3, display_name: 'Author' } },
-      ],
-    })
+    mocks.listReviewerCandidatesMock.mockResolvedValueOnce([
+      { user_id: 2, user: { id: 2, display_name: 'Nova' } },
+    ])
     mocks.trackGetMock.mockResolvedValue({
       track: {
         id: 9,
@@ -1003,7 +1011,7 @@ describe('WorkflowStepView', () => {
     await assignButton!.trigger('click')
     await flushPromises()
 
-    expect(mocks.albumGetMock).toHaveBeenCalledWith(5)
+    expect(mocks.listReviewerCandidatesMock).toHaveBeenCalledWith(9)
     expect(wrapper.text()).toContain('Nova')
     expect(wrapper.text()).not.toContain('Author')
 
@@ -1019,6 +1027,81 @@ describe('WorkflowStepView', () => {
     expect(mocks.assignReviewerMock).toHaveBeenCalledWith(9, [2])
   })
 
+  it('prefers the server review_state over assignment-derived progress', async () => {
+    mocks.route = {
+      params: { id: '9', stepId: 'peer_review' },
+      query: {},
+      path: '/tracks/9/step/peer_review',
+      fullPath: '/tracks/9/step/peer_review',
+    }
+    // Client-side derivation would show 0 completed / 1 required here.
+    mocks.listAssignmentsMock.mockResolvedValueOnce([
+      {
+        id: 1,
+        track_id: 9,
+        stage_id: 'peer_review',
+        user_id: 2,
+        status: 'pending',
+        decision: null,
+        cancellation_reason: null,
+        assigned_at: '2024-01-01T00:00:00Z',
+        completed_at: null,
+      },
+    ])
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Peer Track',
+        artist: 'Nova',
+        album_id: 5,
+        album_checklist_enabled: false,
+        status: 'peer_review',
+        file_path: '/audio.wav',
+        version: 1,
+        workflow_cycle: 1,
+        producer_id: 1,
+        submitter_id: 3,
+        composer_ids: [3],
+        peer_reviewer_id: 2,
+        workflow_step: {
+          id: 'peer_review',
+          label: 'Peer Review',
+          type: 'review',
+          ui_variant: 'peer_review',
+          assignee_role: 'peer_reviewer',
+          assignment_mode: 'manual',
+          required_reviewer_count: 1,
+          order: 1,
+          transitions: { pass: 'producer_gate' },
+        },
+        workflow_transitions: [{ decision: 'pass', label: 'Pass' }],
+        review_state: {
+          step_id: 'peer_review',
+          assignment_mode: 'manual',
+          required_review_count: 3,
+          active_assignment_count: 3,
+          completed_review_count: 2,
+          quorum_reached: false,
+          requires_group_finalization: true,
+        },
+      },
+      issues: [],
+      checklist_items: [],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'peer_review', label: 'Peer Review', type: 'review', ui_variant: 'peer_review', assignee_role: 'peer_reviewer', assignment_mode: 'manual', required_reviewer_count: 1, order: 1, transitions: { pass: 'producer_gate' } },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('2/3')
+    expect(wrapper.text()).not.toContain('0/1')
+  })
+
   it('lets viewer manager flag users assign reviewers from the peer review step page', async () => {
     mocks.appStore.currentUser = { id: 42 }
     mocks.route = {
@@ -1027,12 +1110,9 @@ describe('WorkflowStepView', () => {
       path: '/tracks/9/step/peer_review',
       fullPath: '/tracks/9/step/peer_review',
     }
-    mocks.albumGetMock.mockResolvedValueOnce({
-      members: [
-        { id: 1, user_id: 2, user: { id: 2, display_name: 'Nova' } },
-        { id: 2, user_id: 3, user: { id: 3, display_name: 'Author' } },
-      ],
-    })
+    mocks.listReviewerCandidatesMock.mockResolvedValueOnce([
+      { user_id: 2, user: { id: 2, display_name: 'Nova' } },
+    ])
     mocks.trackGetMock.mockResolvedValue({
       track: {
         id: 9,
@@ -1083,7 +1163,7 @@ describe('WorkflowStepView', () => {
     await assignButton!.trigger('click')
     await flushPromises()
 
-    expect(mocks.albumGetMock).toHaveBeenCalledWith(5)
+    expect(mocks.listReviewerCandidatesMock).toHaveBeenCalledWith(9)
     expect(wrapper.text()).toContain('Nova')
     expect(wrapper.text()).not.toContain('Author')
 

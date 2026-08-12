@@ -11,9 +11,23 @@ import CustomSelect from '@/components/common/CustomSelect.vue'
 import { extractClipboardImageFiles } from '@/utils/clipboardImages'
 import { formatTimestamp, roundToMilliseconds } from '@/utils/time'
 import { extractMarkerIndexReferences, extractTimeReferences } from '@/utils/timestamps'
+import { insertMentionAtCursor, issueMentionToken, userMentionToken } from '@/utils/mentions'
+import {
+  AUDIO_ACCEPT,
+  IMAGE_ACCEPT,
+  MAX_AUDIO_SIZE,
+  MAX_AUDIOS,
+  MAX_IMAGE_SIZE,
+  MAX_IMAGES,
+} from '@/utils/uploadLimits'
 
 const props = defineProps<{
   trackId: number
+  /**
+   * Workflow phase context — only namespaces the localStorage draft key. The
+   * phase itself is no longer sent on create: the backend infers it from the
+   * track's current workflow step.
+   */
   phase: string
   masterDeliveryId?: number | null
   allowInternalVisibility?: boolean
@@ -21,6 +35,11 @@ const props = defineProps<{
   mentionUsers?: User[] | null
   publicMentionUsers?: User[] | null
   internalMentionUsers?: User[] | null
+  /**
+   * Optional externally-controlled open state for the issue form (use with
+   * `v-model:form-open`). When unbound the panel manages open state itself.
+   */
+  formOpen?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -47,34 +66,24 @@ const description = ref('')
 const descriptionCursorPos = ref(0)
 const descriptionRef = ref<HTMLTextAreaElement | null>(null)
 
-async function handleDescriptionMentionSelect(issue: Issue, mention: { start: number; end: number }) {
-  const insertion = `@issue:${issue.local_number} `
-  const before = description.value.slice(0, mention.start)
-  const after = description.value.slice(mention.end)
-  description.value = `${before}${insertion}${after}`
-  const nextCursor = mention.start + insertion.length
-  descriptionCursorPos.value = nextCursor
+async function handleDescriptionMentionSelect(insertion: string, mention: { start: number; end: number }) {
+  const result = insertMentionAtCursor(description.value, mention, insertion)
+  description.value = result.text
+  descriptionCursorPos.value = result.cursorPos
   await nextTick()
   const el = descriptionRef.value
   if (el) {
     el.focus()
-    el.setSelectionRange(nextCursor, nextCursor)
+    el.setSelectionRange(result.cursorPos, result.cursorPos)
   }
 }
 
+async function handleDescriptionIssueMentionSelect(issue: Issue, mention: { start: number; end: number }) {
+  await handleDescriptionMentionSelect(issueMentionToken(issue), mention)
+}
+
 async function handleDescriptionUserMentionSelect(user: User, mention: { start: number; end: number }) {
-  const insertion = `@user:${user.id} `
-  const before = description.value.slice(0, mention.start)
-  const after = description.value.slice(mention.end)
-  description.value = `${before}${insertion}${after}`
-  const nextCursor = mention.start + insertion.length
-  descriptionCursorPos.value = nextCursor
-  await nextTick()
-  const el = descriptionRef.value
-  if (el) {
-    el.focus()
-    el.setSelectionRange(nextCursor, nextCursor)
-  }
+  await handleDescriptionMentionSelect(userMentionToken(user), mention)
 }
 const severity = ref<'critical' | 'major' | 'minor' | 'suggestion'>('major')
 const markers = ref<{ marker_type: 'point' | 'range'; time_start: number; time_end: number | null }[]>([])
@@ -88,12 +97,6 @@ const POINT_NEAR_THRESHOLD_SECONDS = 0.05
 const MIN_RANGE_DURATION_SECONDS = 0.05
 const RANGE_MATCH_TOLERANCE_SECONDS = 0.05
 const ISSUE_DRAFT_STORAGE_PREFIX = 'backkitchen_issue_draft'
-const MAX_AUDIO_SIZE = 200 * 1024 * 1024
-const MAX_AUDIOS = 3
-const AUDIO_ACCEPT = 'audio/mpeg,audio/wav,audio/flac,audio/aac,audio/ogg,.mp3,.wav,.flac,.aac,.ogg'
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024
-const MAX_IMAGES = 3
-const IMAGE_ACCEPT = 'image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp'
 
 const draftStorageKey = computed(() => {
   const delivery = props.masterDeliveryId == null ? 'none' : String(props.masterDeliveryId)
@@ -512,7 +515,6 @@ async function submitIssue() {
     title: title.value,
     description: description.value,
     severity: severity.value,
-    phase: props.phase,
     visibility: internalVisibilityAllowed.value ? issueVisibility.value : defaultIssueVisibility(),
     markers: issueMode.value === 'general' ? [] : markers.value.map(m => ({
       marker_type: m.marker_type,
@@ -645,6 +647,14 @@ watch(showForm, (open) => {
   emit('formOpenChange', open)
 }, { immediate: true })
 
+// External open-state control (v-model:form-open). One-way: prop changes drive
+// the internal open/close; internal changes flow back via formOpenChange.
+watch(() => props.formOpen, (open) => {
+  if (open == null) return
+  if (open) openForm()
+  else closeForm()
+})
+
 watch(draftStorageKey, () => {
   clearMarkerHintTimer()
   resetForm()
@@ -671,8 +681,6 @@ defineExpose({
   commitRangeFromAnchorTo,
   clearRangeAnchor,
   rangeAnchor,
-  openForm,
-  closeForm,
 })
 </script>
 
@@ -806,7 +814,7 @@ defineExpose({
           default-target="track"
           :issues="props.issues"
           :mention-users="activeMentionUsers"
-          @select="handleDescriptionMentionSelect"
+          @select="handleDescriptionIssueMentionSelect"
           @select-user="handleDescriptionUserMentionSelect"
         />
       </div>

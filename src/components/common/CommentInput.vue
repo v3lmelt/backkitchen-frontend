@@ -6,11 +6,9 @@ import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.v
 import type { Issue, User } from '@/types'
 import type { TimestampTarget } from '@/utils/timestamps'
 import { extractClipboardImageFiles } from '@/utils/clipboardImages'
+import { insertMentionAtCursor, issueMentionToken, userMentionToken } from '@/utils/mentions'
+import { AUDIO_ACCEPT, MAX_AUDIO_SIZE, MAX_IMAGE_SIZE } from '@/utils/uploadLimits'
 import { Music, ImageIcon } from 'lucide-vue-next'
-
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024  // 10 MB
-const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
-const AUDIO_ACCEPT = 'audio/mpeg,audio/wav,audio/flac,audio/aac,audio/ogg,.mp3,.wav,.flac,.aac,.ogg'
 
 const props = withDefaults(defineProps<{
   placeholder: string
@@ -54,34 +52,24 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const audioInputRef = ref<HTMLInputElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 
-async function handleIssueMentionSelect(issue: Issue, mention: { start: number; end: number }) {
-  const insertion = `@issue:${issue.local_number} `
-  const before = content.value.slice(0, mention.start)
-  const after = content.value.slice(mention.end)
-  content.value = `${before}${insertion}${after}`
-  const nextCursor = mention.start + insertion.length
-  cursorPos.value = nextCursor
+async function handleMentionSelect(insertion: string, mention: { start: number; end: number }) {
+  const result = insertMentionAtCursor(content.value, mention, insertion)
+  content.value = result.text
+  cursorPos.value = result.cursorPos
   await nextTick()
   const el = textareaRef.value
   if (el) {
     el.focus()
-    el.setSelectionRange(nextCursor, nextCursor)
+    el.setSelectionRange(result.cursorPos, result.cursorPos)
   }
 }
 
+async function handleIssueMentionSelect(issue: Issue, mention: { start: number; end: number }) {
+  await handleMentionSelect(issueMentionToken(issue), mention)
+}
+
 async function handleUserMentionSelect(user: User, mention: { start: number; end: number }) {
-  const insertion = `@user:${user.id} `
-  const before = content.value.slice(0, mention.start)
-  const after = content.value.slice(mention.end)
-  content.value = `${before}${insertion}${after}`
-  const nextCursor = mention.start + insertion.length
-  cursorPos.value = nextCursor
-  await nextTick()
-  const el = textareaRef.value
-  if (el) {
-    el.focus()
-    el.setSelectionRange(nextCursor, nextCursor)
-  }
+  await handleMentionSelect(userMentionToken(user), mention)
 }
 
 const canSubmit = computed(

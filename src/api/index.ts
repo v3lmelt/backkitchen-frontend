@@ -23,6 +23,7 @@ import type {
   InviteCode,
   PresignedUploadResponse,
   ReopenRequest,
+  ReviewerCandidate,
   StageAssignment,
   WebhookConfig,
   WebhookDelivery,
@@ -43,12 +44,20 @@ import type {
 
 const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL ?? '') as string
 const BASE = API_ORIGIN + '/api'
-const TOKEN_KEY = 'backkitchen_token'
+
+/** localStorage keys holding the current session. */
+export const AUTH_TOKEN_KEY = 'backkitchen_token'
+export const AUTH_USER_KEY = 'backkitchen_user'
+
+/** Read the stored auth token, if any. */
+export function getAuthToken(): string | null {
+  return localStorage.getItem(AUTH_TOKEN_KEY)
+}
 
 export { API_ORIGIN }
 
 function withAssetToken(url: string): string {
-  const token = localStorage.getItem(TOKEN_KEY)
+  const token = getAuthToken()
   if (!token || /[?&]token=/.test(url)) return url
   const separator = url.includes('?') ? '&' : '?'
   return `${url}${separator}token=${encodeURIComponent(token)}`
@@ -78,6 +87,31 @@ export function resolveUploadUrl(path: string | null | undefined): string {
   return resolveAssetUrl(`/uploads/${path.replace(/^\/+/, '')}`)
 }
 
+/**
+ * Track audio endpoint URLs. `cacheKey` feeds the `?v=` cache-busting param
+ * (track version / delivery number); `cycle` feeds `&c=` (workflow cycle).
+ */
+export function trackAudioUrl(trackId: number, cacheKey?: number | null): string {
+  return `${API_ORIGIN}/api/tracks/${trackId}/audio?v=${cacheKey ?? 0}`
+}
+
+export function masterAudioUrl(trackId: number, cacheKey?: number | null, cycle?: number | null): string {
+  return `${API_ORIGIN}/api/tracks/${trackId}/master-audio?v=${cacheKey ?? 0}&c=${cycle ?? 1}`
+}
+
+export function sourceVersionAudioUrl(trackId: number, versionId: number): string {
+  return `${API_ORIGIN}/api/tracks/${trackId}/source-versions/${versionId}/audio`
+}
+
+export function masterDeliveryAudioUrl(
+  trackId: number,
+  deliveryId: number,
+  cacheKey?: number | null,
+  cycle?: number | null,
+): string {
+  return `${API_ORIGIN}/api/tracks/${trackId}/master-deliveries/${deliveryId}/audio?v=${cacheKey ?? 0}&c=${cycle ?? 1}`
+}
+
 function parseErrorDetail(detail: unknown): string {
   if (typeof detail === 'string') return detail
   if (Array.isArray(detail)) {
@@ -87,7 +121,7 @@ function parseErrorDetail(detail: unknown): string {
 }
 
 function requestHeaders(headers?: HeadersInit): { headers: HeadersInit; token: string | null } {
-  const token = localStorage.getItem(TOKEN_KEY)
+  const token = getAuthToken()
   return {
     headers: {
       ...(headers || {}),
@@ -106,11 +140,11 @@ export function onAuthCleared(cb: AuthClearedCallback) {
 }
 
 function clearStoredAuth(expectedToken?: string | null) {
-  if (expectedToken && localStorage.getItem(TOKEN_KEY) !== expectedToken) {
+  if (expectedToken && getAuthToken() !== expectedToken) {
     return
   }
-  localStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem('backkitchen_user')
+  localStorage.removeItem(AUTH_TOKEN_KEY)
+  localStorage.removeItem(AUTH_USER_KEY)
   _onAuthCleared?.()
 }
 
@@ -124,7 +158,7 @@ let verifyPromiseToken: string | null = null
  * confirms the token is no longer valid.
  */
 async function verifyTokenStillValid(expectedToken?: string | null): Promise<boolean> {
-  const token = expectedToken || localStorage.getItem(TOKEN_KEY)
+  const token = expectedToken || getAuthToken()
   if (!token) return false
   if (verifyPromise && verifyPromiseToken === token) return verifyPromise
   verifyPromiseToken = token
@@ -153,7 +187,7 @@ async function verifyTokenStillValid(expectedToken?: string | null): Promise<boo
  * /login mid-session.
  */
 async function handleUnauthorized(url: string, requestToken?: string | null): Promise<void> {
-  if (requestToken && localStorage.getItem(TOKEN_KEY) !== requestToken) {
+  if (requestToken && getAuthToken() !== requestToken) {
     return
   }
   // /auth/me is the oracle itself — trust its verdict directly.
@@ -181,7 +215,7 @@ export function uploadWithProgress<T>(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open(method, `${BASE}${url}`)
-    const token = localStorage.getItem(TOKEN_KEY)
+    const token = getAuthToken()
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
 
     if (onProgress) {
@@ -358,7 +392,7 @@ export const albumApi = {
     return request<WorkflowEvent[]>(`/albums/${id}/activity${qs ? `?${qs}` : ''}`)
   },
   exportStream: (id: number, onEvent: (event: ExportProgressEvent) => void): { cancel: () => void } => {
-    const token = localStorage.getItem(TOKEN_KEY)
+    const token = getAuthToken()
     const controller = new AbortController()
     ;(async () => {
       try {
@@ -396,7 +430,7 @@ export const albumApi = {
     return { cancel: () => controller.abort() }
   },
   exportDownload: async (id: number, downloadId: string): Promise<Blob> => {
-    const token = localStorage.getItem(TOKEN_KEY)
+    const token = getAuthToken()
     const res = await fetch(`${BASE}/albums/${id}/export/download/${downloadId}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
@@ -452,6 +486,12 @@ export const circleApi = {
     request<WorkflowTemplate>(`/circles/${circleId}/workflow-templates/${templateId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteWorkflowTemplate: (circleId: number, templateId: number) =>
     request<void>(`/circles/${circleId}/workflow-templates/${templateId}`, { method: 'DELETE' }),
+}
+
+export const workflowApi = {
+  /** Backend-served default workflow step configuration for new albums. */
+  getDefaultConfig: () =>
+    request<WorkflowConfig>('/workflow/default-config'),
 }
 
 export const trackApi = {
@@ -558,6 +598,8 @@ export const trackApi = {
       body: JSON.stringify(data),
     }),
   // Stage assignments
+  listReviewerCandidates: (trackId: number) =>
+    request<ReviewerCandidate[]>(`/tracks/${trackId}/reviewer-candidates`),
   assignReviewer: (trackId: number, userIds: number[]) =>
     request<StageAssignment[]>(`/tracks/${trackId}/assign-reviewer`, {
       method: 'POST',
@@ -633,7 +675,8 @@ export const issueApi = {
     title: string
     description: string
     severity: string
-    phase: string
+    /** Optional: the backend infers the phase from the current workflow step when omitted. */
+    phase?: string
     markers: { marker_type: string; time_start: number; time_end?: number | null }[]
     master_delivery_id?: number | null
     audios?: File[]
@@ -644,7 +687,7 @@ export const issueApi = {
     form.append('title', data.title)
     form.append('description', data.description)
     form.append('severity', data.severity)
-    form.append('phase', data.phase)
+    if (data.phase) form.append('phase', data.phase)
     form.append('markers_json', JSON.stringify(data.markers))
     form.append('visibility', data.visibility)
     if (data.master_delivery_id != null) {

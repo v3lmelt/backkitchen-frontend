@@ -33,6 +33,13 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/api', () => ({
   API_ORIGIN: '',
+  AUTH_TOKEN_KEY: 'backkitchen_token',
+  AUTH_USER_KEY: 'backkitchen_user',
+  getAuthToken: () => localStorage.getItem('backkitchen_token'),
+  trackAudioUrl: (trackId: number, v?: number | null) => `/api/tracks/${trackId}/audio?v=${v ?? 0}`,
+  masterAudioUrl: (trackId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-audio?v=${v ?? 0}&c=${c ?? 1}`,
+  masterDeliveryAudioUrl: (trackId: number, deliveryId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-deliveries/${deliveryId}/audio?v=${v ?? 0}&c=${c ?? 1}`,
+  sourceVersionAudioUrl: (trackId: number, versionId: number) => `/api/tracks/${trackId}/source-versions/${versionId}/audio`,
   trackApi: {
     get: mocks.trackGetMock,
     listAssignments: mocks.listAssignmentsMock,

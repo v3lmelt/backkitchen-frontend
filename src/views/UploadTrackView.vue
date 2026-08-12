@@ -11,6 +11,7 @@ import { Plus, Upload, X } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { viewerCanManageAlbum } from '@/utils/albumPermissions'
+import { MAX_AUDIO_SIZE } from '@/utils/uploadLimits'
 
 type ArtistEntry = {
   name: string
@@ -23,7 +24,6 @@ const { t } = useI18n()
 
 const DRAFT_STORAGE_KEY = 'backkitchen_upload_draft_v1'
 
-const MAX_AUDIO_SIZE = 200 * 1024 * 1024 // 200 MB
 const appStore = useAppStore()
 const { error: toastError, success: toastSuccess } = useToast()
 const albums = ref<Album[]>([])

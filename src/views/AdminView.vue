@@ -9,7 +9,7 @@ import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import { parseUTC } from '@/utils/time'
-import { translateStepLabel, translateWorkflowStatusLabel } from '@/utils/workflow'
+import { translateStepLabel, translateWorkflowDecision as translateWorkflowDecisionLabel, translateWorkflowStatusLabel } from '@/utils/workflow'
 import type {
   AdminActivityLogEntry,
   AdminAuditLogEntry,
@@ -168,14 +168,13 @@ function translateWorkflowStatus(status: string | null | undefined) {
 }
 
 function translateWorkflowDecision(decision: string) {
-  if (decision.startsWith('reject_to_')) {
-    return t('workflowStep.rejectToStep', {
-      step: translateWorkflowStatus(decision.slice('reject_to_'.length)),
-    })
-  }
-  const actionKey = `trackDetail.actions.${decision}`
-  if (te(actionKey)) return t(actionKey)
-  return humanizeToken(decision)
+  return translateWorkflowDecisionLabel(
+    decision,
+    workflowAlbum.value?.workflow_config ?? null,
+    t,
+    te,
+    humanizeToken(decision),
+  )
 }
 
 function translateActivityEventType(eventType: string) {

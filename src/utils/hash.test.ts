@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hashId } from './hash'
+import { anonTokenFor, hashId } from './hash'
 
 function legacyHashId(id: number): string {
   let h = 2166136261
@@ -38,5 +38,25 @@ describe('hashId', () => {
 
   it('rotates ids away from the legacy hash', () => {
     expect(hashId(1)).not.toBe(legacyHashId(1))
+  })
+})
+
+describe('anonTokenFor', () => {
+  it('prefers the server-computed anon_token when present', () => {
+    expect(anonTokenFor({ id: 1, anon_token: 'SERVER' })).toBe('SERVER')
+  })
+
+  it('falls back to the local hash of the user id', () => {
+    expect(anonTokenFor({ id: 1 })).toBe(hashId(1))
+    expect(anonTokenFor({ id: 1, anon_token: null })).toBe(hashId(1))
+  })
+
+  it('falls back to the explicit id when no user object is embedded', () => {
+    expect(anonTokenFor(null, 42)).toBe(hashId(42))
+    expect(anonTokenFor(undefined, 42)).toBe(hashId(42))
+  })
+
+  it('returns an empty string when nothing identifies the user', () => {
+    expect(anonTokenFor(null)).toBe('')
   })
 })

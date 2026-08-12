@@ -43,7 +43,7 @@
       >
         <!-- logo -->
         <div class="shrink-0 w-12 h-12 rounded-full overflow-hidden bg-border flex items-center justify-center">
-          <img v-if="circle.logo_url" :src="`${API_ORIGIN}/uploads/${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
+          <img v-if="circle.logo_url" :src="resolveUploadUrl(circle.logo_url)" alt="" class="w-full h-full object-cover" />
           <Smile v-else class="w-5 h-5 text-muted-foreground" :stroke-width="1.5" />
         </div>
         <div class="flex-1 min-w-0">
@@ -87,7 +87,7 @@ import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { circleApi, API_ORIGIN } from '@/api'
+import { circleApi, resolveUploadUrl } from '@/api'
 import type { CircleSummary } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { UserPlus, Plus, Smile } from 'lucide-vue-next'

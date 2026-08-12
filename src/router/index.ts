@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import { getAuthToken } from '@/api'
+
 const PUBLIC_ROUTES = ['/login', '/register', '/verify-email', '/forgot-password', '/reset-password']
-const TOKEN_KEY = 'backkitchen_token'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -115,7 +116,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  const token = localStorage.getItem(TOKEN_KEY)
+  const token = getAuthToken()
   if (to.path === '/verify-email' || to.path === '/reset-password') return true
   if (PUBLIC_ROUTES.includes(to.path)) {
     if (token) return '/'

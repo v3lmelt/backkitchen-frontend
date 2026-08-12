@@ -3,7 +3,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import draggable from 'vuedraggable'
-import { albumApi, trackApi, checklistApi, invitationApi, userApi, circleApi, API_ORIGIN } from '@/api'
+import { albumApi, trackApi, checklistApi, invitationApi, userApi, circleApi, resolveUploadUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
 import {
@@ -1206,7 +1206,7 @@ async function refreshDeliveries() {
     <div class="flex items-center gap-4">
       <div class="w-10 h-10 flex-shrink-0 overflow-hidden border border-border">
         <AlbumCoverImage
-          :src="album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : null"
+          :src="album.cover_image ? resolveUploadUrl(album.cover_image) : null"
           :alt="album.title"
           class="w-full h-full object-cover"
         />
@@ -1262,7 +1262,7 @@ async function refreshDeliveries() {
               @click="canManageAlbum && coverInputRef?.click()"
             >
               <AlbumCoverImage
-                :src="coverPreviewUrl || (album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : null)"
+                :src="coverPreviewUrl || (album.cover_image ? resolveUploadUrl(album.cover_image) : null)"
                 :alt="album.title"
                 class="absolute inset-0 w-full h-full object-cover"
               />
