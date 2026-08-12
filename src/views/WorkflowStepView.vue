@@ -21,17 +21,14 @@ import BatchIssueActions from '@/components/workflow/BatchIssueActions.vue'
 import type { WorkflowAction } from '@/components/workflow/WorkflowActionBar.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import BaseModal from '@/components/common/BaseModal.vue'
-import DiscussionPanel from '@/components/common/DiscussionPanel.vue'
 import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
 import IntakeStep from '@/components/workflow/step/IntakeStep.vue'
 import PeerReviewStep from '@/components/workflow/step/PeerReviewStep.vue'
 import ProducerGateStep from '@/components/workflow/step/ProducerGateStep.vue'
-import MasteringStep from '@/components/workflow/step/MasteringStep.vue'
 import FinalReviewStep from '@/components/workflow/step/FinalReviewStep.vue'
 import ReviewerAssignmentModal from '@/components/workflow/step/ReviewerAssignmentModal.vue'
 import { ChevronLeft, Upload, Link, Info } from 'lucide-vue-next'
 import { useAudioDownload } from '@/composables/useAudioDownload'
-import { useDiscussions } from '@/composables/useDiscussions'
 import { useDiscussionRealtime } from '@/composables/useDiscussionRealtime'
 import { useIssuePreviewPlayback, type PreviewAction } from '@/composables/useIssuePreviewPlayback'
 import { useToast } from '@/composables/useToast'
@@ -81,12 +78,7 @@ const appStore = useAppStore()
 const trackId = computed(() => Number(route.params.id))
 const error = ref('')
 
-// ── Mastering discussion (composable) ──────────────────────────────────────
-const masteringDiscussion = useDiscussions(trackId, 'mastering', { paginated: true })
-const { subscribe: subscribeDiscussionRealtime, dispatch: dispatchDiscussionEvent } = useDiscussionRealtime()
-subscribeDiscussionRealtime((event, discussionId) => {
-  void masteringDiscussion.applyRealtimeEvent(event, discussionId)
-})
+const { dispatch: dispatchDiscussionEvent } = useDiscussionRealtime()
 
 const wsReloading = ref(false)
 const wsHadConnection = ref(false)
@@ -1347,107 +1339,6 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
       layout="grouped"
       :group-label="t('producer.decisionGroupLabel')"
     />
-  </div>
-  <div v-else-if="activeVariant === 'mastering'" class="max-w-4xl mx-auto min-h-full flex flex-col">
-    <div class="space-y-6">
-      <MasteringStep
-        :track="track"
-        :workflow-config="workflowConfig"
-        :error="error"
-        :audio-url="audioUrl"
-        :waveform-issues="waveformIssues"
-        :track-id="trackId"
-        :has-comparable-versions="olderPlayableSourceVersions.length > 0"
-        :show-source-compare="showSourceCompare"
-        :source-compare-options="sourceCompareOptions"
-        v-model:compare-source-version-id="selectedCompareSourceVersionId"
-        :is-source-compare-active="isSourceCompareActive"
-        :waveform-mode="waveformMode"
-        :hovered-issue-id="hoveredIssueId"
-        :downloading="downloading"
-        :download-progress="downloadProgress"
-        :register-waveform="registerWaveform"
-        :register-issue-form="registerIssueForm"
-        v-model:form-open="isIssueFormOpen"
-        :issues="issues"
-        :mention-candidates="mentionCandidates"
-        :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
-        :list-issues="fallbackWaveformIssues"
-        :displayed-source-version-number="displayedSourceVersionNumber"
-        :review-assignments="reviewAssignments"
-        :batch-updating="batchUpdatingIssues"
-        :batch-actions="stageBatchActions"
-        v-model:selected-issue-ids="selectedStageIssueIds"
-        v-model:batch-note="stageBatchNote"
-        v-model:delivery-message="deliveryMessage"
-        :has-upload-file="Boolean(uploadFile)"
-        :local-delivery-preview-url="localDeliveryPreviewUrl"
-        :uploading="uploading"
-        :upload-progress="uploadProgress"
-        :can-submit-delivery="canSubmitDelivery"
-        :master-delivery="masterDelivery"
-        :master-audio-url="masterAudioUrl"
-        :has-comparable-masters="olderPlayableMasterDeliveries.length > 0"
-        :show-master-compare="showMasterCompare"
-        :master-compare-options="masterCompareOptions"
-        v-model:compare-master-delivery-id="selectedCompareMasterDeliveryId"
-        :compare-master-audio-url="selectedCompareMasterAudioUrl"
-        :sorted-master-deliveries="sortedMasterDeliveries"
-        @back="goBack"
-        @toggle-source-compare="toggleSourceCompare"
-        @download="handleDownload"
-        @request-waveform-mode="onRequestWaveformMode"
-        @issue-select="onIssueSelect"
-        @issue-hover="handleIssueHover"
-        @issue-leave="handleIssueLeave"
-        @issue-created="onIssueCreated"
-        @batch-clear="selectedStageIssueIds = []; stageBatchNote = ''"
-        @batch-apply="applyStageBatchStatus($event)"
-        @quick-status-change="onQuickIssueStatusChange"
-        @file-change="onFileChange"
-        @upload-delivery="handleUpload('delivery')"
-        @clear-delivery="uploadFile = null; resetDeliveryPreview()"
-        @toggle-master-compare="toggleMasterCompare"
-        @download-master="handleMasterDownload"
-        @compare-delivery="compareWithMasterDelivery($event.id)"
-        @download-delivery="handleMasterVersionDownload"
-      />
-
-      <!-- Mastering Discussion -->
-      <DiscussionPanel
-        :discussions="masteringDiscussion.discussions.value"
-        :issues="issues"
-        :mention-users="mentionCandidates.mastering"
-        :heading="t('mastering.discussionHeading', { count: masteringDiscussion.discussions.value.length })"
-        :placeholder="t('mastering.discussionPlaceholder')"
-        :submit-label="t('mastering.postDiscussion')"
-        :posting="masteringDiscussion.posting.value"
-        :posting-progress="masteringDiscussion.postingProgress.value"
-        :editing-id="masteringDiscussion.editingId.value"
-        :editing-content="masteringDiscussion.editingContent.value"
-        :history-items="masteringDiscussion.historyItems.value"
-        :show-history-for-id="masteringDiscussion.showHistoryForId.value"
-        :loading="masteringDiscussion.loading.value"
-        :load-error="masteringDiscussion.loadError.value"
-        :enable-audio="true"
-        :has-more="masteringDiscussion.hasMore.value"
-        :loading-older="masteringDiscussion.loadingOlder.value"
-        @submit="masteringDiscussion.submit"
-        @start-edit="masteringDiscussion.startEdit"
-        @save-edit="masteringDiscussion.saveEdit"
-        @cancel-edit="masteringDiscussion.cancelEdit"
-        @remove="masteringDiscussion.remove"
-        @show-history="masteringDiscussion.showHistory"
-        @close-history="masteringDiscussion.closeHistory"
-        @open-image="masteringDiscussion.openImage"
-        @open-issue="openLinkedIssue"
-        @retry="masteringDiscussion.load"
-        @load-older="masteringDiscussion.loadOlder"
-        @update:editing-content="masteringDiscussion.editingContent.value = $event"
-      />
-    </div>
-
-    <WorkflowActionBar :actions="deliveryActions" />
   </div>
   <div v-else-if="activeVariant === 'final_review'" class="max-w-4xl mx-auto min-h-full flex flex-col">
     <FinalReviewStep

@@ -39,14 +39,19 @@ type MasteringStepLike = Pick<WorkflowStepDef, 'id' | 'type' | 'ui_variant' | 'i
 
 /**
  * Whether a step belongs to the mastering flow. Prefers the backend-computed
- * `is_mastering_related` flag; falls back to the same heuristic the backend
- * uses (`workflow_engine.target_is_mastering_related`) for older payloads.
+ * `is_mastering_related` flag (present on current payloads); falls back to a
+ * heuristic for older payloads.
+ *
+ * The fallback mirrors the id/ui_variant part of the backend heuristic
+ * (`workflow_engine.target_is_mastering_related`) but intentionally omits the
+ * `type === 'delivery'` match: not every delivery step belongs to the mastering
+ * flow, and a custom delivery step in a non-mastering workflow must not route
+ * into the mastering workspace or be labelled mastering-related.
  */
 export function stepIsMasteringRelated(step: MasteringStepLike | null | undefined): boolean {
   if (!step) return false
   if (step.is_mastering_related != null) return step.is_mastering_related
-  return step.type === 'delivery'
-    || step.ui_variant === 'mastering'
+  return step.ui_variant === 'mastering'
     || step.id.includes('master')
 }
 

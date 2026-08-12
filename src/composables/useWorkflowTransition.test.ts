@@ -183,10 +183,51 @@ describe('useWorkflowTransition', () => {
     wrapper.unmount()
   })
 
-  it('intercepts revision decisions on custom delivery-type steps (mastering-related via type)', async () => {
+  it('intercepts revision decisions on custom delivery-type steps flagged as mastering-related', async () => {
     const { composable, track, workflowConfig, wrapper } = mountHarness()
     // Custom workflow: the delivery step has a producer-defined id/label and no
-    // 'mastering' ui_variant, but its type still marks it as mastering-related.
+    // 'mastering' ui_variant. It is only mastering-related when the backend
+    // flags it via `is_mastering_related` — the delivery type alone no longer
+    // classifies a step as mastering-related in the client fallback.
+    const customDeliveryStep = {
+      id: 'mix_delivery',
+      label: 'Mix Delivery',
+      type: 'delivery',
+      ui_variant: 'generic',
+      is_mastering_related: true,
+      assignee_role: 'mastering_engineer',
+      order: 0,
+      transitions: { request_revision: 'mix_delivery_revision' },
+    }
+    workflowConfig.value = {
+      version: 2,
+      steps: [
+        customDeliveryStep,
+        {
+          id: 'mix_delivery_revision',
+          label: 'Mix Delivery Revision',
+          type: 'revision',
+          assignee_role: 'submitter',
+          order: 1,
+          transitions: {},
+          return_to: 'mix_delivery',
+        },
+      ],
+    } as unknown as WorkflowConfig
+    track.value = makeTrack({ workflow_step: customDeliveryStep })
+
+    await composable.executeTransition('request_revision')
+
+    expect(mocks.workflowTransitionMock).not.toHaveBeenCalled()
+    expect(composable.revisionTypeModalOpen.value).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('does not intercept revision decisions on unflagged custom delivery steps', async () => {
+    mocks.workflowTransitionMock.mockResolvedValue({ status: 'mix_delivery_revision' })
+    const { composable, track, workflowConfig, wrapper } = mountHarness()
+    // Without `is_mastering_related` and without a mastering id/ui_variant, a
+    // custom delivery step is not mastering-related in the narrowed fallback.
     const customDeliveryStep = {
       id: 'mix_delivery',
       label: 'Mix Delivery',
@@ -215,8 +256,8 @@ describe('useWorkflowTransition', () => {
 
     await composable.executeTransition('request_revision')
 
-    expect(mocks.workflowTransitionMock).not.toHaveBeenCalled()
-    expect(composable.revisionTypeModalOpen.value).toBe(true)
+    expect(mocks.workflowTransitionMock).toHaveBeenCalledWith(9, 'request_revision')
+    expect(composable.revisionTypeModalOpen.value).toBe(false)
     wrapper.unmount()
   })
 

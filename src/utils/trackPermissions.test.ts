@@ -207,6 +207,44 @@ describe('isFinalReviewStep', () => {
   })
 })
 
+describe('anonymized payloads (null ids)', () => {
+  it('resolves no assignee when the track ids are null', () => {
+    const track = makeTrack({
+      submitter_id: null,
+      peer_reviewer_id: null,
+      producer_id: null,
+      mastering_engineer_id: null,
+    })
+    expect(resolveStepAssigneeUserId(track, makeStep({ assignee_role: 'submitter' }))).toBe(null)
+    expect(resolveStepAssigneeUserId(track, makeStep({ assignee_role: 'peer_reviewer' }))).toBe(null)
+    expect(resolveStepAssigneeUserId(track, makeStep({ assignee_role: 'producer' }))).toBe(null)
+    expect(resolveStepAssigneeUserId(track, makeStep({ assignee_role: 'mastering_engineer' }))).toBe(null)
+  })
+
+  it('does not treat an anonymous viewer as a step assignee', () => {
+    const track = makeTrack({
+      submitter_id: null,
+      peer_reviewer_id: null,
+      producer_id: null,
+      mastering_engineer_id: null,
+    })
+    expect(viewerIsStepAssignee(track, makeStep({ assignee_role: 'submitter' }), 10, false)).toBe(false)
+    expect(viewerIsStepAssignee(track, makeStep({ assignee_role: 'peer_reviewer' }), 40, false)).toBe(false)
+  })
+
+  it('hides the mastering workspace from anonymous viewers without a server flag', () => {
+    const track = makeTrack({
+      submitter_id: null,
+      peer_reviewer_id: null,
+      producer_id: null,
+      mastering_engineer_id: null,
+    })
+    expect(canViewerSeeMastering(track, 10, false)).toBe(false)
+    // Server-computed flag still wins.
+    expect(canViewerSeeMastering({ ...track, viewer_is_mastering_participant: true }, 10, false)).toBe(true)
+  })
+})
+
 describe('canUserApproveFinal', () => {
   const finalStep = makeStep({ type: 'approval', ui_variant: 'final_review' })
 

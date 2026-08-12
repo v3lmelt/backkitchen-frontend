@@ -375,7 +375,7 @@ describe('WorkflowStepView', () => {
     expect(buttons.some(button => button.text() === 'Return to Mastering')).toBe(true)
   })
 
-  it('shows master delivery history with compare and per-version download actions', async () => {
+  it('redirects mastering steps to the dedicated mastering page', async () => {
     mocks.trackGetMock.mockResolvedValueOnce({
       track: {
         id: 9,
@@ -386,16 +386,6 @@ describe('WorkflowStepView', () => {
         version: 1,
         workflow_cycle: 2,
         mastering_engineer_id: 1,
-        current_master_delivery: {
-          id: 22,
-          workflow_cycle: 2,
-          delivery_number: 3,
-          file_path: '/master-v3.wav',
-          confirmed_at: '2024-01-03T00:00:00Z',
-          producer_approved_at: null,
-          submitter_approved_at: null,
-          created_at: '2024-01-03T00:00:00Z',
-        },
         workflow_step: {
           id: 'mastering',
           label: 'Mastering',
@@ -411,56 +401,24 @@ describe('WorkflowStepView', () => {
       },
       issues: [],
       checklist_items: [],
-      master_deliveries: [
-        {
-          id: 22,
-          workflow_cycle: 2,
-          delivery_number: 3,
-          file_path: '/master-v3.wav',
-          confirmed_at: '2024-01-03T00:00:00Z',
-          producer_approved_at: null,
-          submitter_approved_at: null,
-          created_at: '2024-01-03T00:00:00Z',
-        },
-        {
-          id: 21,
-          workflow_cycle: 1,
-          delivery_number: 2,
-          file_path: '/master-v2.wav',
-          confirmed_at: '2024-01-02T00:00:00Z',
-          producer_approved_at: null,
-          submitter_approved_at: null,
-          created_at: '2024-01-02T00:00:00Z',
-        },
-      ],
+      master_deliveries: [],
       workflow_config: {
         version: 2,
         steps: [
           { id: 'mastering', label: 'Mastering', type: 'delivery', ui_variant: 'mastering', assignee_role: 'mastering_engineer', order: 1, transitions: { deliver: 'final_review' } },
-          { id: 'final_review', label: 'Final Review', type: 'approval', ui_variant: 'final_review', assignee_role: 'producer', order: 2, transitions: {} },
         ],
       },
     })
 
-    const wrapper = mountWithPlugins(WorkflowStepView)
+    mountWithPlugins(WorkflowStepView)
     await flushPromises()
 
-    const compareButton = wrapper.findAll('button').find(button => button.text().includes('Compare'))
-    expect(compareButton).toBeTruthy()
-
-    await compareButton!.trigger('click')
-    await flushPromises()
-    expect(wrapper.find('.compare-select').exists()).toBe(true)
-
-    const downloadButtons = wrapper.findAll('button').filter(button => button.text().includes('Download Audio'))
-    expect(downloadButtons.length).toBeGreaterThan(1)
-
-    await downloadButtons[downloadButtons.length - 1].trigger('click')
-    expect(mocks.downloadAudioAssetMock).toHaveBeenCalledWith(
-      '/api/tracks/9/master-deliveries/21/audio?v=2&c=1',
-      'Master Track_master_v2_history_202401020000',
-      '/master-v2.wav',
-    )
+    // Mastering steps never render inline in this view; `onLoaded` redirects
+    // them to the dedicated mastering workspace.
+    expect(mocks.replaceMock).toHaveBeenCalledWith({
+      path: '/tracks/9/mastering',
+      query: {},
+    })
   })
 
   it('requires an uploaded audio file before submitting a delivery step', async () => {

@@ -9,9 +9,13 @@ describe('stepIsMasteringRelated', () => {
     expect(stepIsMasteringRelated({ id: 'mastering', type: 'delivery', ui_variant: 'mastering', is_mastering_related: false })).toBe(false)
   })
 
-  it('falls back to the backend heuristic when the flag is absent', () => {
+  it('falls back to a mastering-only heuristic when the flag is absent', () => {
+    // Mastering flow steps are identified by id/ui_variant, not by being a
+    // delivery-type step: a custom delivery step in a non-mastering workflow is
+    // NOT mastering-related (narrowed from the previous `type === 'delivery'`
+    // broad match).
     expect(stepIsMasteringRelated({ id: 'mastering', type: 'delivery', ui_variant: 'mastering' })).toBe(true)
-    expect(stepIsMasteringRelated({ id: 'anything', type: 'delivery', ui_variant: null })).toBe(true)
+    expect(stepIsMasteringRelated({ id: 'anything', type: 'delivery', ui_variant: null })).toBe(false)
     expect(stepIsMasteringRelated({ id: 'anything', type: 'approval', ui_variant: 'mastering' })).toBe(true)
     expect(stepIsMasteringRelated({ id: 'mastering_revision', type: 'revision', ui_variant: null })).toBe(true)
     expect(stepIsMasteringRelated({ id: 'peer_review', type: 'review', ui_variant: 'peer_review' })).toBe(false)

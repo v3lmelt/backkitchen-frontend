@@ -432,7 +432,8 @@ export interface Track {
   version: number
   workflow_cycle: number
   submitter_id: number | null
-  composer_ids?: number[]
+  /** `null` when the payload is anonymized (anonymous track view). */
+  composer_ids?: number[] | null
   external_composer_names?: string[]
   proxy_uploader_id?: number | null
   peer_reviewer_id: number | null
