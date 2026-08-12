@@ -200,7 +200,7 @@ describe('useTrackWebSocket', () => {
   it('re-pulls track data whenever the socket (re)connects', async () => {
     localStorage.setItem('backkitchen_token', 'secret')
     const onTrackUpdated = vi.fn()
-    const wrapper = mountHarness(7, onTrackUpdated)
+    mountHarness(7, onTrackUpdated)
 
     TestWebSocket.instances[0].emitOpen()
     await nextTick()
