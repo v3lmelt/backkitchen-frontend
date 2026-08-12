@@ -116,4 +116,28 @@ describe('useIssueMutations', () => {
     expect(mocks.toastErrorMock).toHaveBeenCalledWith('No permission')
     wrapper.unmount()
   })
+
+  it('skips the rollback when a newer snapshot replaced the list while the request was in flight', async () => {
+    mocks.issueUpdateMock.mockRejectedValue(new Error('No permission'))
+    const { composable, issues, wrapper } = mountHarness([
+      makeIssue({ id: 1, updated_at: '2024-01-01T00:00:00Z' }),
+      makeIssue({ id: 2, title: 'Issue 2' }),
+    ])
+
+    const promise = composable.onQuickIssueStatusChange({ issue: issues.value[0], status: 'resolved' })
+    // A WebSocket-triggered reload replaces the whole list with the
+    // collaborator's newer state while the optimistic request is in flight.
+    issues.value = [
+      makeIssue({ id: 1, status: 'resolved', title: 'From collaborator', updated_at: '2024-01-02T00:00:00Z' }),
+      issues.value[1],
+    ]
+    await promise
+    await flushPromises()
+
+    // The stale snapshot must NOT overwrite the fresher collaborator state.
+    expect(issues.value[0].title).toBe('From collaborator')
+    expect(issues.value[0].status).toBe('resolved')
+    expect(mocks.toastErrorMock).toHaveBeenCalledWith('No permission')
+    wrapper.unmount()
+  })
 })

@@ -38,6 +38,19 @@ export function useTrackWebSocket(trackId: MaybeRef<number>, onTrackUpdated: () 
         // Ignore malformed messages
       }
     },
+    onOpen: () => {
+      // Re-pull track data whenever the socket (re)connects so changes made
+      // while the connection was down are not silently lost. The caller's
+      // `wsReloading` guard makes this idempotent during a reload in flight.
+      onTrackUpdated()
+    },
+    // The track endpoint echoes any received message back to every subscriber
+    // (including the sender), so the ping doubles as a liveness probe: the
+    // echo counts as a received message and keeps `lastMessageAt` fresh.
+    heartbeat: {
+      intervalMs: 30_000,
+      timeoutMs: 90_000,
+    },
   })
 
   socket.start()

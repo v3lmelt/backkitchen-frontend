@@ -1449,6 +1449,7 @@
     "reviewDefaults": "评审默认设置",
     "reviewerAssignmentMode": "默认评审人分配",
     "reviewerAssignmentHint": "会同步修改第一个同行评审阶段的设置。",
+    "reviewerAssignmentUnavailable": "默认评审人分配暂不可用，请稍后重试",
     "fixedReviewerHint": "请在下方工作流编辑器中为第一个同行评审阶段选择固定评审人；曲师本人会在对应曲目中自动排除。",
     "checklistMode": "同行评审清单",
     "checklistModeCircleDefault": "沿用社团默认",

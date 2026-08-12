@@ -72,6 +72,10 @@ const workflowConfig = ref<WorkflowConfig | null>(null)
 // loaded on mount; used when the user customizes the workflow without a
 // template.
 const defaultWorkflowConfig = ref<WorkflowConfig | null>(null)
+// True while the default workflow config is being fetched on mount. The
+// reviewer-assignment quick controls stay disabled during this window so the
+// user is not offered a selection that could be silently dropped.
+const defaultWorkflowConfigLoading = ref(true)
 const selectedCircleId = ref<number | null>(null)
 const circles = ref<CircleSummary[]>([])
 const selectedCircleDefaultChecklistEnabled = ref<boolean | null>(null)
@@ -171,7 +175,10 @@ const reviewerAssignmentMode = computed<ReviewAssignmentMode>({
   get: () => getFirstPeerReviewAssignmentMode(workflowConfig.value ?? defaultWorkflowConfig.value),
   set: (mode) => {
     const next = workflowConfig.value ?? defaultWorkflowConfig.value
-    if (!next) return
+    if (!next) {
+      toastWarning(t('albumNew.reviewerAssignmentUnavailable'))
+      return
+    }
     workflowConfig.value = setFirstPeerReviewAssignmentMode(next, mode)
   },
 })
@@ -224,7 +231,9 @@ onMounted(async () => {
     defaultWorkflowConfig.value = await loadDefaultWorkflowConfig((key, fallback) => t(key, fallback))
   } catch {
     // Older backends lack the endpoint; the workflow quick controls stay
-    // inert until a template provides a config.
+    // inert (toggling one surfaces a toast) until a template provides a config.
+  } finally {
+    defaultWorkflowConfigLoading.value = false
   }
 })
 
@@ -641,24 +650,27 @@ async function create() {
           <div class="flex flex-wrap gap-2">
             <button
               type="button"
-              class="btn-secondary text-xs"
+              class="btn-secondary text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               :class="reviewerAssignmentMode === 'auto' ? 'border-primary text-primary' : ''"
+              :disabled="defaultWorkflowConfigLoading"
               @click="reviewerAssignmentMode = 'auto'"
             >
               {{ t('workflowEditor.auto') }}
             </button>
             <button
               type="button"
-              class="btn-secondary text-xs"
+              class="btn-secondary text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               :class="reviewerAssignmentMode === 'manual' ? 'border-primary text-primary' : ''"
+              :disabled="defaultWorkflowConfigLoading"
               @click="reviewerAssignmentMode = 'manual'"
             >
               {{ t('workflowEditor.manual') }}
             </button>
             <button
               type="button"
-              class="btn-secondary text-xs"
+              class="btn-secondary text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               :class="reviewerAssignmentMode === 'fixed' ? 'border-primary text-primary' : ''"
+              :disabled="defaultWorkflowConfigLoading"
               @click="reviewerAssignmentMode = 'fixed'; showWorkflowBuilder = true"
             >
               {{ t('workflowEditor.fixed') }}

@@ -566,6 +566,49 @@ describe('AlbumNewView', () => {
     }))
   })
 
+  it('disables the reviewer assignment controls while the default workflow config is loading', async () => {
+    let resolveDefaultConfig!: (value: unknown) => void
+    mocks.getDefaultWorkflowConfigMock.mockImplementation(
+      () => new Promise(resolve => { resolveDefaultConfig = resolve }),
+    )
+
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    const findModeButton = (label: string) =>
+      wrapper.findAll('button').find(button => button.text().includes(label))!
+
+    expect(findModeButton('Auto').attributes('disabled')).toBeDefined()
+    expect(findModeButton('Manual').attributes('disabled')).toBeDefined()
+    expect(findModeButton('Fixed').attributes('disabled')).toBeDefined()
+
+    resolveDefaultConfig(defaultWorkflowConfigFixture())
+    await flushPromises()
+
+    expect(wrapper.findAll('button').find(button => button.text().includes('Auto'))!.attributes('disabled')).toBeUndefined()
+    expect(wrapper.findAll('button').find(button => button.text().includes('Manual'))!.attributes('disabled')).toBeUndefined()
+    expect(wrapper.findAll('button').find(button => button.text().includes('Fixed'))!.attributes('disabled')).toBeUndefined()
+  })
+
+  it('warns via toast when switching the reviewer assignment mode without a workflow config', async () => {
+    mocks.getDefaultWorkflowConfigMock.mockRejectedValue(new Error('Endpoint unavailable'))
+
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    const manualButton = wrapper.findAll('button').find(button => button.text().includes('Manual'))!
+    expect(manualButton.attributes('disabled')).toBeUndefined()
+    await manualButton.trigger('click')
+
+    expect(mocks.toastWarningMock).toHaveBeenCalledWith(
+      'Default reviewer assignment is unavailable right now, please try again later',
+    )
+    // The selection is not applied: the mode stays on the default (auto).
+    const autoButton = wrapper.findAll('button').find(button => button.text().includes('Auto'))!
+    expect(autoButton.classes()).toContain('border-primary')
+    expect(manualButton.classes()).not.toContain('border-primary')
+  })
+
   it('keeps default workflow labels localized when the reviewer mode quick control creates the workflow config', async () => {
     const { wrapper, i18n } = mountAlbumNewViewWithZhI18n()
     await flushPromises()

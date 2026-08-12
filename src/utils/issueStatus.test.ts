@@ -136,8 +136,14 @@ describe('action classes', () => {
   it('quick action class is per-status', () => {
     expect(issueStatusQuickActionClass('resolved')).toContain('bg-success-bg')
     expect(issueStatusQuickActionClass('internal_resolved')).toContain('bg-info-bg')
-    expect(issueStatusQuickActionClass('disagreed')).toContain('bg-info-bg')
+    expect(issueStatusQuickActionClass('disagreed')).toContain('bg-error-bg')
     expect(issueStatusQuickActionClass('open')).toContain('bg-warning-bg')
     expect(issueStatusQuickActionClass('pending_discussion')).toContain('bg-warning-bg')
+  })
+
+  it('keeps the disagreed styling consistent between the panel and quick actions', () => {
+    expect(issueStatusPanelActionClass('disagreed', true)).toBe(issueStatusQuickActionClass('disagreed'))
+    expect(issueStatusPanelActionClass('disagreed', true)).toContain('bg-error-bg')
+    expect(issueStatusPanelActionClass('disagreed', true)).toContain('text-error')
   })
 })

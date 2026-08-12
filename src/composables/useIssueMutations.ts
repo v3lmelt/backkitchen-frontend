@@ -36,7 +36,14 @@ export function useIssueMutations({ issues, selectedIssue }: UseIssueMutationsOp
       const updatedIssue = await issueApi.update(issue.id, { status })
       onIssueUpdated(updatedIssue)
     } catch (err: any) {
-      onIssueUpdated(previousIssue)
+      // Roll back only when the local entry is still the snapshot we started
+      // from. A WebSocket-triggered reload may have replaced the whole list
+      // with a collaborator's newer state while the request was in flight;
+      // overwriting that fresh data with the stale snapshot would lose it.
+      const currentIssue = issues.value.find(item => item.id === issue.id)
+      if (currentIssue && currentIssue.updated_at === previousIssue.updated_at) {
+        onIssueUpdated(previousIssue)
+      }
       toastError(err.message || t('workflowStep.transitionFailed'))
     }
   }

@@ -1402,6 +1402,7 @@
     "reviewDefaults": "Review Defaults",
     "reviewerAssignmentMode": "Default reviewer assignment",
     "reviewerAssignmentHint": "Syncs the first peer review stage settings.",
+    "reviewerAssignmentUnavailable": "Default reviewer assignment is unavailable right now, please try again later",
     "fixedReviewerHint": "Choose fixed reviewers for the first peer review stage below. The composer is excluded from reviewing their own track.",
     "checklistMode": "Peer review checklist",
     "checklistModeCircleDefault": "Circle Default",

@@ -223,4 +223,24 @@ describe('usePeerReviewChecklist', () => {
     expect(composable.checklistItems.value).toEqual([])
     wrapper.unmount()
   })
+
+  it('treats an enabled checklist with an empty template as saved and submittable', async () => {
+    mocks.getDraftMock.mockRejectedValue(new Error('no draft'))
+    mocks.getTemplateMock.mockResolvedValue({ items: [], is_default: true })
+    const { composable, detail, wrapper } = mountHarness({
+      albumChecklistEnabled: true,
+    })
+    composable.applyDetail(detail)
+
+    await composable.loadPeerChecklist(3)
+
+    expect(composable.checklistDraft.value).toEqual([])
+    expect(composable.isPeerReviewChecklistEnabled.value).toBe(true)
+    expect(composable.checklistSaved.value).toBe(true)
+    // Mirrors the `peerReviewActions` gate in WorkflowStepView:
+    // disabled only when the checklist is enabled and not saved.
+    const submitDisabled = composable.isPeerReviewChecklistEnabled.value && !composable.checklistSaved.value
+    expect(submitDisabled).toBe(false)
+    wrapper.unmount()
+  })
 })

@@ -126,12 +126,19 @@ export function issueStatusActionHint(
   return ''
 }
 
+/**
+ * Shared styling for the `disagreed` status — error red in both the detail
+ * panel (selected pill) and the quick-action buttons. Kept as one constant so
+ * the two affordances can never drift apart semantically.
+ */
+const DISAGREED_ACTION_CLASS = 'bg-error-bg text-error border border-error/30'
+
 /** Selected/unselected pill styling used by the issue detail panels. */
 export function issueStatusPanelActionClass(status: IssueStatus, isPending: boolean): string {
   if (isPending) {
     if (status === 'resolved') return 'bg-success-bg text-success border border-success/30'
     if (status === 'internal_resolved') return 'bg-info-bg text-info border border-info/30'
-    if (status === 'disagreed') return 'bg-error-bg text-error border border-error/30'
+    if (status === 'disagreed') return DISAGREED_ACTION_CLASS
     return 'bg-warning-bg text-warning border border-warning/30'
   }
   return 'bg-card border border-border text-foreground hover:bg-border'
@@ -145,7 +152,7 @@ export function issueStatusQuickActionClass(status: IssueStatus): string {
     case 'internal_resolved':
       return 'bg-info-bg text-info hover:border-info/40'
     case 'disagreed':
-      return 'bg-info-bg text-info hover:border-info/40'
+      return DISAGREED_ACTION_CLASS
     case 'open':
       return 'bg-warning-bg text-warning hover:border-warning/40'
     case 'pending_discussion':

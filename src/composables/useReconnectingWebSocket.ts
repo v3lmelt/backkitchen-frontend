@@ -3,6 +3,8 @@ import { ref } from 'vue'
 const INITIAL_RECONNECT_DELAY = 2000
 const MAX_RECONNECT_DELAY = 30000
 const BACKOFF_FACTOR = 1.5
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000
+const DEFAULT_HEARTBEAT_TIMEOUT_MS = 90_000
 
 export interface ReconnectingWebSocketOptions {
   /**
@@ -14,6 +16,17 @@ export interface ReconnectingWebSocketOptions {
   onMessage?: (event: MessageEvent, socket: WebSocket) => void
   onOpen?: (socket: WebSocket) => void
   onClose?: () => void
+  /**
+   * Liveness probing for silent connection death (laptop sleep, WiFi drop
+   * that never surfaces a FIN/RST). When set, the composable sends a ping
+   * message every `intervalMs` while the socket is open and force-closes the
+   * socket — which drives it through the normal reconnect path — once no
+   * message (including the ping echo) has been received for `timeoutMs`.
+   */
+  heartbeat?: {
+    intervalMs?: number
+    timeoutMs?: number
+  }
 }
 
 /**
@@ -29,8 +42,39 @@ export function useReconnectingWebSocket(options: ReconnectingWebSocketOptions) 
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let shouldReconnect = false
   let reconnectDelay = INITIAL_RECONNECT_DELAY
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  let lastMessageAt = 0
+
+  function startHeartbeat(socket: WebSocket) {
+    stopHeartbeat()
+    const heartbeat = options.heartbeat
+    if (!heartbeat) return
+    lastMessageAt = Date.now()
+    const intervalMs = heartbeat.intervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS
+    const timeoutMs = heartbeat.timeoutMs ?? DEFAULT_HEARTBEAT_TIMEOUT_MS
+    heartbeatTimer = setInterval(() => {
+      if (socket.readyState === WebSocket.OPEN) {
+        try {
+          socket.send(JSON.stringify({ type: 'ping' }))
+        } catch {
+          // Socket is closing — the timeout check below will force a reconnect.
+        }
+      }
+      if (Date.now() - lastMessageAt > timeoutMs) {
+        socket.close()
+      }
+    }, intervalMs)
+  }
+
+  function stopHeartbeat() {
+    if (heartbeatTimer !== null) {
+      clearInterval(heartbeatTimer)
+      heartbeatTimer = null
+    }
+  }
 
   function closeSocket() {
+    stopHeartbeat()
     if (reconnectTimer !== null) {
       clearTimeout(reconnectTimer)
       reconnectTimer = null
@@ -68,13 +112,16 @@ export function useReconnectingWebSocket(options: ReconnectingWebSocketOptions) 
     }
 
     socket.onopen = () => {
+      if (ws !== socket) return
       connected.value = true
       reconnectAttempts.value = 0
       reconnectDelay = INITIAL_RECONNECT_DELAY
+      startHeartbeat(socket)
       options.onOpen?.(socket)
     }
 
     socket.onmessage = (event: MessageEvent) => {
+      lastMessageAt = Date.now()
       options.onMessage?.(event, socket)
     }
 
@@ -82,6 +129,7 @@ export function useReconnectingWebSocket(options: ReconnectingWebSocketOptions) 
       if (ws !== socket) return
       ws = null
       connected.value = false
+      stopHeartbeat()
       options.onClose?.()
       if (shouldReconnect) scheduleReconnect()
     }

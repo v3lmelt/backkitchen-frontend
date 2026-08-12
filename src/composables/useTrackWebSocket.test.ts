@@ -18,6 +18,7 @@ class TestWebSocket {
   close = vi.fn(() => {
     this.readyState = 3
   })
+  send = vi.fn()
 
   url: string
 
@@ -110,7 +111,8 @@ describe('useTrackWebSocket', () => {
     TestWebSocket.instances[0].emitMessage({ type: 'discussion_event', track_id: 12, event: 'created', discussion_id: 44 })
     TestWebSocket.instances[0].emitMessage('not-json')
 
-    expect(onTrackUpdated).toHaveBeenCalledTimes(1)
+    // Once from the socket open (fresh-data pull) and once from the broadcast.
+    expect(onTrackUpdated).toHaveBeenCalledTimes(2)
     expect(onDiscussionEvent).toHaveBeenCalledWith('created', 44)
   })
 
@@ -193,5 +195,85 @@ describe('useTrackWebSocket', () => {
     expect(first.close).toHaveBeenCalledTimes(1)
     expect(TestWebSocket.instances).toHaveLength(2)
     expect(TestWebSocket.instances[1].url).toContain('/ws/tracks/7?token=new-token')
+  })
+
+  it('re-pulls track data whenever the socket (re)connects', async () => {
+    localStorage.setItem('backkitchen_token', 'secret')
+    const onTrackUpdated = vi.fn()
+    const wrapper = mountHarness(7, onTrackUpdated)
+
+    TestWebSocket.instances[0].emitOpen()
+    await nextTick()
+    expect(onTrackUpdated).toHaveBeenCalledTimes(1)
+
+    // A drop + reconnect must trigger a fresh reload to backfill the gap.
+    TestWebSocket.instances[0].emitClose()
+    await nextTick()
+    vi.advanceTimersByTime(2_000)
+    expect(TestWebSocket.instances).toHaveLength(2)
+
+    TestWebSocket.instances[1].emitOpen()
+    await nextTick()
+    expect(onTrackUpdated).toHaveBeenCalledTimes(2)
+  })
+
+  it('force-closes and reconnects when no message arrives within the heartbeat timeout', async () => {
+    localStorage.setItem('backkitchen_token', 'secret')
+    const wrapper = mountHarness(7, vi.fn())
+    const first = TestWebSocket.instances[0]
+    first.emitOpen()
+    await nextTick()
+    expect((wrapper.vm as any).connected).toBe(true)
+
+    // 30s of silence is within the 90s timeout.
+    vi.advanceTimersByTime(30_000)
+    expect(first.close).not.toHaveBeenCalled()
+
+    // Past three missed pings (>90s without any message) the heartbeat
+    // force-closes the socket so the normal reconnect path takes over.
+    vi.advanceTimersByTime(90_000)
+    expect(first.close).toHaveBeenCalledTimes(1)
+
+    // The browser then fires onclose → reconnect scheduled with initial delay.
+    first.emitClose()
+    await nextTick()
+    expect((wrapper.vm as any).connected).toBe(false)
+    vi.advanceTimersByTime(2_000)
+    expect(TestWebSocket.instances).toHaveLength(2)
+  })
+
+  it('does not force-close while messages keep arriving', async () => {
+    localStorage.setItem('backkitchen_token', 'secret')
+    const wrapper = mountHarness(7, vi.fn())
+    const first = TestWebSocket.instances[0]
+    first.emitOpen()
+    await nextTick()
+
+    // Each tick refreshes lastMessageAt before the timeout can elapse, so the
+    // heartbeat never declares the healthy socket dead.
+    for (let i = 0; i < 5; i++) {
+      vi.advanceTimersByTime(30_000)
+      first.emitMessage({ type: 'track_updated', track_id: 7 })
+    }
+
+    expect(first.close).not.toHaveBeenCalled()
+    expect(TestWebSocket.instances).toHaveLength(1)
+    expect((wrapper.vm as any).connected).toBe(true)
+  })
+
+  it('clears the heartbeat timer when the socket is stopped', async () => {
+    localStorage.setItem('backkitchen_token', 'secret')
+    const wrapper = mountHarness(7, vi.fn())
+    const first = TestWebSocket.instances[0]
+    first.emitOpen()
+    await nextTick()
+
+    wrapper.unmount() // stop() → closeSocket() → stopHeartbeat() + close()
+
+    // Advancing far past the timeout must not close the socket again or
+    // schedule a reconnect — the heartbeat timer was cleared.
+    vi.advanceTimersByTime(200_000)
+    expect(first.close).toHaveBeenCalledTimes(1)
+    expect(TestWebSocket.instances).toHaveLength(1)
   })
 })

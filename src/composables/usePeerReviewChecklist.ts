@@ -48,6 +48,7 @@ export function usePeerReviewChecklist({
   const templateItems = ref<ChecklistTemplateItem[]>([])
   const checklistDraft = ref<ChecklistDraftItem[]>([])
   const checklistPrefill = ref<ChecklistDraftPrefillMeta | null>(null)
+  const checklistDraftLoaded = ref(false)
   const albumChecklistEnabled = ref(true)
 
   const isPeerReviewChecklistEnabled = computed(() => albumChecklistEnabled.value !== false)
@@ -95,8 +96,14 @@ export function usePeerReviewChecklist({
     && checklistDraftSnapshot.value !== currentVersionChecklistSnapshot.value,
   )
   const checklistPassedCount = computed(() => checklistItems.value.filter(item => item.passed).length)
+  // Saved when the checklist is disabled, when the reviewer has persisted
+  // items for the current version, or when the enabled checklist is empty
+  // (empty template — nothing to fill in, so a review must not be blocked on
+  // an item count that can never grow).
   const checklistSaved = computed(() =>
-    !isPeerReviewChecklistEnabled.value || currentVersionChecklistItems.value.length > 0,
+    !isPeerReviewChecklistEnabled.value
+    || currentVersionChecklistItems.value.length > 0
+    || (checklistDraftLoaded.value && checklistDraft.value.length === 0),
   )
   const checklistSaveButtonLabel = computed(() =>
     checklistPrefill.value?.reconfirm_required
@@ -134,11 +141,13 @@ export function usePeerReviewChecklist({
     templateItems.value = []
     checklistDraft.value = []
     checklistPrefill.value = null
+    checklistDraftLoaded.value = false
   }
 
   /** Clear everything when navigating to a different track. */
   function resetForTrackChange() {
     checklistItems.value = []
+    checklistDraftLoaded.value = false
   }
 
   async function loadPeerChecklist(albumId: number) {
@@ -166,6 +175,7 @@ export function usePeerReviewChecklist({
           note: draftItem?.note ?? '',
         }
       })
+      checklistDraftLoaded.value = true
       return
     } catch {
       checklistPrefill.value = null
@@ -188,10 +198,10 @@ export function usePeerReviewChecklist({
         const item = currentVersionChecklistItems.value.find(entry => entry.label === label)
         return { label, passed: item?.passed ?? false, note: item?.note ?? '' }
       })
-      return
+    } else {
+      checklistDraft.value = labels.map(label => ({ label, passed: false, note: '' }))
     }
-
-    checklistDraft.value = labels.map(label => ({ label, passed: false, note: '' }))
+    checklistDraftLoaded.value = true
   }
 
   async function persistChecklist(showToast = false) {
