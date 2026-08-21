@@ -10,10 +10,12 @@ const mocks = vi.hoisted(() => ({
   notificationMarkAllReadMock: vi.fn(),
   notificationMarkReadMock: vi.fn(),
   onAuthClearedMock: vi.fn(),
-  pushMock: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
+  AUTH_TOKEN_KEY: 'backkitchen_token',
+  AUTH_USER_KEY: 'backkitchen_user',
+  getAuthToken: () => localStorage.getItem('backkitchen_token'),
   authApi: { me: mocks.meMock },
   configApi: { get: mocks.configMock },
   invitationApi: { listMine: mocks.invitationListMock, accept: vi.fn(), decline: vi.fn() },
@@ -26,11 +28,13 @@ vi.mock('@/api', () => ({
   onAuthCleared: mocks.onAuthClearedMock,
 }))
 
-vi.mock('@/router', () => ({
-  default: { push: mocks.pushMock },
-}))
-
 import { useAppStore } from './app'
+import { useNotificationsStore } from './notifications'
+import { useInvitationsStore } from './invitations'
+
+function testUser() {
+  return { id: 1, username: 'nova', display_name: 'Nova', role: 'member', avatar_color: '#123456', created_at: '2024-01-01' } as any
+}
 
 describe('app store', () => {
   beforeEach(() => {
@@ -44,7 +48,6 @@ describe('app store', () => {
     mocks.notificationMarkAllReadMock.mockReset()
     mocks.notificationMarkReadMock.mockReset()
     mocks.onAuthClearedMock.mockReset()
-    mocks.pushMock.mockReset()
     mocks.configMock.mockResolvedValue({ r2_enabled: false })
     mocks.invitationListMock.mockResolvedValue([])
     mocks.notificationListMock.mockResolvedValue([])
@@ -52,9 +55,8 @@ describe('app store', () => {
 
   it('persists auth changes', () => {
     const store = useAppStore()
-    const user = { id: 1, username: 'nova', display_name: 'Nova', role: 'member', avatar_color: '#123456', created_at: '2024-01-01' }
 
-    store.setAuth(user as any, 'token-1')
+    store.setAuth(testUser(), 'token-1')
     expect(localStorage.getItem('backkitchen_token')).toBe('token-1')
     expect(JSON.parse(localStorage.getItem('backkitchen_user') || '{}').id).toBe(1)
 
@@ -95,7 +97,7 @@ describe('app store', () => {
     await store.loadUsers()
     expect(mocks.listMock).not.toHaveBeenCalled()
 
-    store.setAuth({ id: 1, username: 'nova', display_name: 'Nova', role: 'member', avatar_color: '#123456', created_at: '2024-01-01' } as any, 'token-1')
+    store.setAuth(testUser(), 'token-1')
     mocks.listMock.mockResolvedValue([{ id: 2 }])
     await store.loadUsers()
     expect(mocks.listMock).toHaveBeenCalledTimes(1)
@@ -104,7 +106,7 @@ describe('app store', () => {
 
   it('records notification load errors for the UI to display', async () => {
     const store = useAppStore()
-    store.setAuth({ id: 1, username: 'nova', display_name: 'Nova', role: 'member', avatar_color: '#123456', created_at: '2024-01-01' } as any, 'token-1')
+    store.setAuth(testUser(), 'token-1')
     mocks.notificationListMock.mockRejectedValue(new Error('Notification API failed'))
 
     await store.loadNotifications()
@@ -113,13 +115,31 @@ describe('app store', () => {
     expect(store.notificationsHasMore).toBe(false)
   })
 
-  it('logout clears auth and routes to login', () => {
+  it('logout clears auth without navigating (callers own routing)', () => {
     const store = useAppStore()
-    store.setAuth({ id: 1, username: 'nova', display_name: 'Nova', role: 'member', avatar_color: '#123456', created_at: '2024-01-01' } as any, 'token-1')
+    store.setAuth(testUser(), 'token-1')
 
     store.logout()
 
     expect(store.currentUser).toBeNull()
-    expect(mocks.pushMock).toHaveBeenCalledWith('/login')
+    expect(store.token).toBeNull()
+  })
+
+  it('delegates notification and invitation state to the split stores', async () => {
+    const store = useAppStore()
+    const notificationsStore = useNotificationsStore()
+    const invitationsStore = useInvitationsStore()
+    store.setAuth(testUser(), 'token-1')
+
+    notificationsStore.notifications = [{ id: 7, is_read: false } as any]
+    invitationsStore.pendingInvitations = [{ id: 3 } as any]
+
+    expect(store.notifications).toEqual([{ id: 7, is_read: false }])
+    expect(store.unreadCount).toBe(1)
+    expect(store.pendingInvitations).toEqual([{ id: 3 }])
+
+    // Writes through the facade land in the split store as well.
+    store.notifications = []
+    expect(notificationsStore.notifications).toEqual([])
   })
 })

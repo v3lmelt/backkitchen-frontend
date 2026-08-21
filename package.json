@@ -6,6 +6,8 @@
   "scripts": {
     "changelog:build": "node scripts/changelog.mjs --write",
     "changelog:check": "node scripts/changelog.mjs --check",
+    "user-guide:build": "node scripts/user-guide.mjs --write",
+    "user-guide:check": "node scripts/user-guide.mjs --check",
     "dev": "vite",
     "build": "npm run changelog:check && vue-tsc -b && vite build && node -e \"require('node:fs').copyFileSync('dist/index.html','dist/404.html')\"",
     "preview": "npm run build && wrangler dev",
@@ -15,7 +17,7 @@
   "dependencies": {
     "@fontsource-variable/noto-sans-sc": "^5.2.10",
     "@vueuse/core": "^14.2.1",
-    "lucide-vue-next": "^1.0.0",
+    "lucide-vue-next": "0.577.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.30",
     "vue-i18n": "^9.14.5",

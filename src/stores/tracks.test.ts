@@ -3,11 +3,10 @@ import { createPinia, setActivePinia } from 'pinia'
 
 const mocks = vi.hoisted(() => ({
   listMock: vi.fn(),
-  getMock: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
-  trackApi: { list: mocks.listMock, get: mocks.getMock },
+  trackApi: { list: mocks.listMock },
 }))
 
 import { useTrackStore } from './tracks'
@@ -16,7 +15,6 @@ describe('tracks store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     mocks.listMock.mockReset()
-    mocks.getMock.mockReset()
   })
 
   it('loadTracks fetches and stores track list', async () => {
@@ -51,26 +49,6 @@ describe('tracks store', () => {
 
     const store = useTrackStore()
     await expect(store.loadTracks()).rejects.toThrow('network')
-    expect(store.loading).toBe(false)
-  })
-
-  it('loadTrack fetches and sets currentTrack', async () => {
-    const fakeTrack = { id: 3, title: 'Track C' }
-    mocks.getMock.mockResolvedValue({ track: fakeTrack, issues: [], checklist_items: [], events: [] })
-
-    const store = useTrackStore()
-    await store.loadTrack(3)
-
-    expect(mocks.getMock).toHaveBeenCalledWith(3)
-    expect(store.currentTrack).toEqual(fakeTrack)
-    expect(store.loading).toBe(false)
-  })
-
-  it('loadTrack resets loading on error', async () => {
-    mocks.getMock.mockRejectedValue(new Error('not found'))
-
-    const store = useTrackStore()
-    await expect(store.loadTrack(999)).rejects.toThrow('not found')
     expect(store.loading).toBe(false)
   })
 })

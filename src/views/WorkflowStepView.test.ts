@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   trackGetMock: vi.fn(),
   listAssignmentsMock: vi.fn(),
   albumGetMock: vi.fn(),
+  listReviewerCandidatesMock: vi.fn(),
   assignReviewerMock: vi.fn(),
   reassignReviewerMock: vi.fn(),
   issueUpdateMock: vi.fn(),
@@ -46,6 +47,13 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/api', () => ({
   API_ORIGIN: '',
+  AUTH_TOKEN_KEY: 'backkitchen_token',
+  AUTH_USER_KEY: 'backkitchen_user',
+  getAuthToken: () => localStorage.getItem('backkitchen_token'),
+  trackAudioUrl: (trackId: number, v?: number | null) => `/api/tracks/${trackId}/audio?v=${v ?? 0}`,
+  masterAudioUrl: (trackId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-audio?v=${v ?? 0}&c=${c ?? 1}`,
+  masterDeliveryAudioUrl: (trackId: number, deliveryId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-deliveries/${deliveryId}/audio?v=${v ?? 0}&c=${c ?? 1}`,
+  sourceVersionAudioUrl: (trackId: number, versionId: number) => `/api/tracks/${trackId}/source-versions/${versionId}/audio`,
   checklistApi: {
     getDraft: mocks.checklistGetDraftMock,
     getTemplate: mocks.checklistGetTemplateMock,
@@ -60,6 +68,7 @@ vi.mock('@/api', () => ({
   trackApi: {
     get: mocks.trackGetMock,
     listAssignments: mocks.listAssignmentsMock,
+    listReviewerCandidates: mocks.listReviewerCandidatesMock,
     assignReviewer: mocks.assignReviewerMock,
     reassignReviewer: mocks.reassignReviewerMock,
     workflowTransition: mocks.workflowTransitionMock,
@@ -138,6 +147,8 @@ vi.mock('@/components/audio/IssueMarkerList.vue', () => ({
 
 vi.mock('@/components/IssueCreatePanel.vue', () => ({
   default: {
+    name: 'IssueCreatePanel',
+    props: ['trackId', 'phase', 'allowInternalVisibility'],
     template: '<div class="issue-create" />',
   },
 }))
@@ -211,9 +222,11 @@ describe('WorkflowStepView', () => {
       path: '/tracks/9/step/intake',
       fullPath: '/tracks/9/step/intake',
     }
+    mocks.appStore.currentUser = { id: 1 }
     mocks.trackGetMock.mockReset()
     mocks.listAssignmentsMock.mockReset()
     mocks.albumGetMock.mockReset()
+    mocks.listReviewerCandidatesMock.mockReset()
     mocks.assignReviewerMock.mockReset()
     mocks.reassignReviewerMock.mockReset()
     mocks.issueUpdateMock.mockReset()
@@ -234,6 +247,7 @@ describe('WorkflowStepView', () => {
     mocks.workflowTransitionMock.mockResolvedValue({})
     mocks.listAssignmentsMock.mockResolvedValue([])
     mocks.albumGetMock.mockResolvedValue({ members: [] })
+    mocks.listReviewerCandidatesMock.mockResolvedValue([])
     mocks.assignReviewerMock.mockResolvedValue([])
     mocks.reassignReviewerMock.mockResolvedValue({ peer_reviewer_id: 2 })
     mocks.issueUpdateMock.mockImplementation(async (id: number, data: { status?: string }) => ({ id, status: data.status ?? 'open' }))
@@ -351,13 +365,17 @@ describe('WorkflowStepView', () => {
     const wrapper = mountWithPlugins(WorkflowStepView)
     await flushPromises()
 
+    const issueCreatePanel = wrapper.findComponent({ name: 'IssueCreatePanel' })
+    expect(issueCreatePanel.props('phase')).toBe('final_review')
+    expect(issueCreatePanel.props('allowInternalVisibility')).toBe(false)
+
     const buttons = wrapper.findAll('button')
     expect(buttons.filter(button => button.text() === 'Approve').length).toBe(0)
     expect(buttons.some(button => button.text() === 'Approve Current Master')).toBe(true)
     expect(buttons.some(button => button.text() === 'Return to Mastering')).toBe(true)
   })
 
-  it('shows master delivery history with compare and per-version download actions', async () => {
+  it('redirects mastering steps to the dedicated mastering page', async () => {
     mocks.trackGetMock.mockResolvedValueOnce({
       track: {
         id: 9,
@@ -368,16 +386,6 @@ describe('WorkflowStepView', () => {
         version: 1,
         workflow_cycle: 2,
         mastering_engineer_id: 1,
-        current_master_delivery: {
-          id: 22,
-          workflow_cycle: 2,
-          delivery_number: 3,
-          file_path: '/master-v3.wav',
-          confirmed_at: '2024-01-03T00:00:00Z',
-          producer_approved_at: null,
-          submitter_approved_at: null,
-          created_at: '2024-01-03T00:00:00Z',
-        },
         workflow_step: {
           id: 'mastering',
           label: 'Mastering',
@@ -393,56 +401,24 @@ describe('WorkflowStepView', () => {
       },
       issues: [],
       checklist_items: [],
-      master_deliveries: [
-        {
-          id: 22,
-          workflow_cycle: 2,
-          delivery_number: 3,
-          file_path: '/master-v3.wav',
-          confirmed_at: '2024-01-03T00:00:00Z',
-          producer_approved_at: null,
-          submitter_approved_at: null,
-          created_at: '2024-01-03T00:00:00Z',
-        },
-        {
-          id: 21,
-          workflow_cycle: 1,
-          delivery_number: 2,
-          file_path: '/master-v2.wav',
-          confirmed_at: '2024-01-02T00:00:00Z',
-          producer_approved_at: null,
-          submitter_approved_at: null,
-          created_at: '2024-01-02T00:00:00Z',
-        },
-      ],
+      master_deliveries: [],
       workflow_config: {
         version: 2,
         steps: [
           { id: 'mastering', label: 'Mastering', type: 'delivery', ui_variant: 'mastering', assignee_role: 'mastering_engineer', order: 1, transitions: { deliver: 'final_review' } },
-          { id: 'final_review', label: 'Final Review', type: 'approval', ui_variant: 'final_review', assignee_role: 'producer', order: 2, transitions: {} },
         ],
       },
     })
 
-    const wrapper = mountWithPlugins(WorkflowStepView)
+    mountWithPlugins(WorkflowStepView)
     await flushPromises()
 
-    const compareButton = wrapper.findAll('button').find(button => button.text().includes('Compare'))
-    expect(compareButton).toBeTruthy()
-
-    await compareButton!.trigger('click')
-    await flushPromises()
-    expect(wrapper.find('.compare-select').exists()).toBe(true)
-
-    const downloadButtons = wrapper.findAll('button').filter(button => button.text().includes('Download Audio'))
-    expect(downloadButtons.length).toBeGreaterThan(1)
-
-    await downloadButtons[downloadButtons.length - 1].trigger('click')
-    expect(mocks.downloadAudioAssetMock).toHaveBeenCalledWith(
-      '/api/tracks/9/master-deliveries/21/audio?v=2&c=1',
-      'Master Track_master_v2_history_202401020000',
-      '/master-v2.wav',
-    )
+    // Mastering steps never render inline in this view; `onLoaded` redirects
+    // them to the dedicated mastering workspace.
+    expect(mocks.replaceMock).toHaveBeenCalledWith({
+      path: '/tracks/9/mastering',
+      query: {},
+    })
   })
 
   it('requires an uploaded audio file before submitting a delivery step', async () => {
@@ -487,7 +463,7 @@ describe('WorkflowStepView', () => {
     const wrapper = mountWithPlugins(WorkflowStepView)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Master delivery requires a playable mastered audio file')
+    expect(wrapper.text()).toContain('A reference link does not replace the required playable master audio file')
     await wrapper.find('textarea').setValue('https://cloud.example/stems\ncode: bk24')
     const submitButton = wrapper.findAll('button').find(button => button.text() === 'Confirm Upload')!
 
@@ -941,12 +917,9 @@ describe('WorkflowStepView', () => {
       path: '/tracks/9/step/peer_review',
       fullPath: '/tracks/9/step/peer_review',
     }
-    mocks.albumGetMock.mockResolvedValueOnce({
-      members: [
-        { id: 1, user_id: 2, user: { id: 2, display_name: 'Nova' } },
-        { id: 2, user_id: 3, user: { id: 3, display_name: 'Author' } },
-      ],
-    })
+    mocks.listReviewerCandidatesMock.mockResolvedValueOnce([
+      { user_id: 2, user: { id: 2, display_name: 'Nova' } },
+    ])
     mocks.trackGetMock.mockResolvedValue({
       track: {
         id: 9,
@@ -996,7 +969,159 @@ describe('WorkflowStepView', () => {
     await assignButton!.trigger('click')
     await flushPromises()
 
-    expect(mocks.albumGetMock).toHaveBeenCalledWith(5)
+    expect(mocks.listReviewerCandidatesMock).toHaveBeenCalledWith(9)
+    expect(wrapper.text()).toContain('Nova')
+    expect(wrapper.text()).not.toContain('Author')
+
+    await wrapper.find('input[type="checkbox"]').setValue(true)
+    await flushPromises()
+
+    const confirmButton = wrapper.findAll('button').find(button => button.text() === 'Confirm')
+    expect(confirmButton).toBeTruthy()
+
+    await confirmButton!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.assignReviewerMock).toHaveBeenCalledWith(9, [2])
+  })
+
+  it('prefers the server review_state over assignment-derived progress', async () => {
+    mocks.route = {
+      params: { id: '9', stepId: 'peer_review' },
+      query: {},
+      path: '/tracks/9/step/peer_review',
+      fullPath: '/tracks/9/step/peer_review',
+    }
+    // Client-side derivation would show 0 completed / 1 required here.
+    mocks.listAssignmentsMock.mockResolvedValueOnce([
+      {
+        id: 1,
+        track_id: 9,
+        stage_id: 'peer_review',
+        user_id: 2,
+        status: 'pending',
+        decision: null,
+        cancellation_reason: null,
+        assigned_at: '2024-01-01T00:00:00Z',
+        completed_at: null,
+      },
+    ])
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Peer Track',
+        artist: 'Nova',
+        album_id: 5,
+        album_checklist_enabled: false,
+        status: 'peer_review',
+        file_path: '/audio.wav',
+        version: 1,
+        workflow_cycle: 1,
+        producer_id: 1,
+        submitter_id: 3,
+        composer_ids: [3],
+        peer_reviewer_id: 2,
+        workflow_step: {
+          id: 'peer_review',
+          label: 'Peer Review',
+          type: 'review',
+          ui_variant: 'peer_review',
+          assignee_role: 'peer_reviewer',
+          assignment_mode: 'manual',
+          required_reviewer_count: 1,
+          order: 1,
+          transitions: { pass: 'producer_gate' },
+        },
+        workflow_transitions: [{ decision: 'pass', label: 'Pass' }],
+        review_state: {
+          step_id: 'peer_review',
+          assignment_mode: 'manual',
+          required_review_count: 3,
+          active_assignment_count: 3,
+          completed_review_count: 2,
+          quorum_reached: false,
+          requires_group_finalization: true,
+        },
+      },
+      issues: [],
+      checklist_items: [],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'peer_review', label: 'Peer Review', type: 'review', ui_variant: 'peer_review', assignee_role: 'peer_reviewer', assignment_mode: 'manual', required_reviewer_count: 1, order: 1, transitions: { pass: 'producer_gate' } },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('2/3')
+    expect(wrapper.text()).not.toContain('0/1')
+  })
+
+  it('lets viewer manager flag users assign reviewers from the peer review step page', async () => {
+    mocks.appStore.currentUser = { id: 42 }
+    mocks.route = {
+      params: { id: '9', stepId: 'peer_review' },
+      query: {},
+      path: '/tracks/9/step/peer_review',
+      fullPath: '/tracks/9/step/peer_review',
+    }
+    mocks.listReviewerCandidatesMock.mockResolvedValueOnce([
+      { user_id: 2, user: { id: 2, display_name: 'Nova' } },
+    ])
+    mocks.trackGetMock.mockResolvedValue({
+      track: {
+        id: 9,
+        title: 'Peer Track',
+        artist: 'Nova',
+        album_id: 5,
+        album_checklist_enabled: false,
+        status: 'peer_review',
+        file_path: '/audio.wav',
+        version: 1,
+        workflow_cycle: 1,
+        producer_id: 1,
+        viewer_is_album_manager: true,
+        submitter_id: 3,
+        composer_ids: [3],
+        peer_reviewer_id: null,
+        workflow_step: {
+          id: 'peer_review',
+          label: 'Peer Review',
+          type: 'review',
+          ui_variant: 'peer_review',
+          assignee_role: 'peer_reviewer',
+          assignment_mode: 'manual',
+          required_reviewer_count: 1,
+          order: 1,
+          transitions: { pass: 'producer_gate' },
+        },
+        workflow_transitions: [{ decision: 'pass', label: 'Pass' }],
+      },
+      issues: [],
+      checklist_items: [],
+      workflow_config: {
+        version: 2,
+        steps: [
+          { id: 'peer_review', label: 'Peer Review', type: 'review', ui_variant: 'peer_review', assignee_role: 'peer_reviewer', assignment_mode: 'manual', required_reviewer_count: 1, order: 1, transitions: { pass: 'producer_gate' } },
+        ],
+      },
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView, {
+      global: { stubs: { Teleport: true, teleport: true } },
+    })
+    await flushPromises()
+
+    const assignButton = wrapper.findAll('button').find(button => button.text().includes('Assign reviewers'))
+    expect(assignButton).toBeTruthy()
+
+    await assignButton!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.listReviewerCandidatesMock).toHaveBeenCalledWith(9)
     expect(wrapper.text()).toContain('Nova')
     expect(wrapper.text()).not.toContain('Author')
 
@@ -1065,7 +1190,7 @@ describe('WorkflowStepView', () => {
     await wrapper.find('.compare-select').trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('workflowStep.sourceCompareReadonlyHint')
+    expect(wrapper.text()).toContain('Older source-version compare is read-only. Switch back to the current version before adding new issues.')
     expect(wrapper.find('.waveform').text()).toContain('compare:201')
     expect(wrapper.find('.issue-list').text()).toBe('1')
   })
@@ -1375,6 +1500,10 @@ describe('WorkflowStepView', () => {
 
     const wrapper = mountWithPlugins(WorkflowStepView)
     await flushPromises()
+
+    const issueCreatePanel = wrapper.findComponent({ name: 'IssueCreatePanel' })
+    expect(issueCreatePanel.props('phase')).toBe('producer')
+    expect(issueCreatePanel.props('allowInternalVisibility')).toBe(false)
 
     expect(wrapper.find('.decision-group').exists()).toBe(true)
     expect(wrapper.text()).toContain('Next Decision')

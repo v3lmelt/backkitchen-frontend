@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   updateDeadlinesMock: vi.fn(),
   listWorkflowTemplatesMock: vi.fn(),
   createWorkflowTemplateMock: vi.fn(),
+  getDefaultWorkflowConfigMock: vi.fn(),
   toastErrorMock: vi.fn(),
   toastWarningMock: vi.fn(),
   toastSuccessMock: vi.fn(),
@@ -49,6 +50,9 @@ vi.mock('@/api', () => ({
   },
   userApi: {
     list: mocks.userListMock,
+  },
+  workflowApi: {
+    getDefaultConfig: mocks.getDefaultWorkflowConfigMock,
   },
 }))
 
@@ -102,6 +106,44 @@ vi.mock('@/components/workflow/WorkflowEditor.vue', () => ({
 }))
 
 import AlbumNewView from './AlbumNewView.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import { resetDefaultWorkflowConfigCache } from '@/utils/workflowConfig'
+
+// Mirrors the backend's built-in default workflow (GET /api/workflow/default-config).
+function defaultWorkflowConfigFixture() {
+  return {
+    version: 2,
+    steps: [
+      { id: 'intake', label: 'Intake', type: 'approval', ui_variant: 'intake', assignee_role: 'producer', order: 0, transitions: { accept: 'peer_review' }, allow_permanent_reject: true },
+      { id: 'peer_review', label: 'Peer Review', type: 'review', ui_variant: 'peer_review', assignee_role: 'peer_reviewer', order: 1, transitions: { pass: 'producer_gate', needs_revision: 'peer_revision' }, revision_step: 'peer_revision', assignment_mode: 'auto', required_reviewer_count: 1 },
+      { id: 'peer_revision', label: 'Peer Revision', type: 'revision', assignee_role: 'submitter', order: 2, return_to: 'peer_review', transitions: {} },
+      { id: 'producer_gate', label: 'Producer Review', type: 'approval', ui_variant: 'producer_gate', assignee_role: 'producer', order: 3, transitions: { approve: 'mastering' }, allow_permanent_reject: false },
+      { id: 'producer_revision', label: 'Producer Revision', type: 'revision', assignee_role: 'submitter', order: 4, return_to: 'producer_gate', transitions: {} },
+      { id: 'mastering', label: 'Mastering', type: 'delivery', ui_variant: 'mastering', assignee_role: 'mastering_engineer', order: 5, transitions: { deliver: 'final_review' }, revision_step: 'mastering_revision', require_confirmation: true },
+      { id: 'mastering_revision', label: 'Mastering Revision', type: 'revision', assignee_role: 'submitter', order: 6, return_to: 'mastering', transitions: {} },
+      { id: 'final_review', label: 'Final Review', type: 'approval', ui_variant: 'final_review', assignee_role: 'producer', actor_roles: ['submitter'], order: 7, transitions: {}, allow_permanent_reject: false },
+    ],
+  }
+}
+
+async function selectBackKitchenCircle(wrapper: ReturnType<typeof mount>) {
+  await wrapper.findAll('button.custom-select-option').find(button => button.text() === 'Back Kitchen')!.trigger('click')
+  await flushPromises()
+}
+
+function circleSummary(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 9,
+    name: 'Back Kitchen',
+    description: null,
+    logo_url: null,
+    default_checklist_enabled: true,
+    created_by: 1,
+    member_count: 2,
+    viewer_can_create_album: true,
+    ...overrides,
+  }
+}
 
 function mountAlbumNewViewWithZhI18n() {
   const pinia = createPinia()
@@ -142,9 +184,13 @@ describe('AlbumNewView', () => {
     mocks.updateDeadlinesMock.mockReset()
     mocks.listWorkflowTemplatesMock.mockReset()
     mocks.createWorkflowTemplateMock.mockReset()
+    mocks.getDefaultWorkflowConfigMock.mockReset()
+    resetDefaultWorkflowConfigCache()
     mocks.toastErrorMock.mockReset()
     mocks.toastWarningMock.mockReset()
     mocks.toastSuccessMock.mockReset()
+
+    Object.assign(mocks.currentUser, { id: 1, role: 'producer', display_name: 'Producer' })
 
     mocks.userListMock.mockResolvedValue([
       { id: 1, display_name: 'Producer' },
@@ -152,9 +198,12 @@ describe('AlbumNewView', () => {
       { id: 3, display_name: 'Member' },
       { id: 4, display_name: 'Outsider' },
     ])
-    mocks.circleListMock.mockResolvedValue([])
+    mocks.circleListMock.mockResolvedValue([
+      circleSummary(),
+    ])
     mocks.listWorkflowTemplatesMock.mockResolvedValue([])
     mocks.createWorkflowTemplateMock.mockResolvedValue({})
+    mocks.getDefaultWorkflowConfigMock.mockResolvedValue(defaultWorkflowConfigFixture())
     mocks.circleGetMock.mockResolvedValue({
       id: 9,
       default_checklist_enabled: true,
@@ -166,24 +215,113 @@ describe('AlbumNewView', () => {
   })
 
   it('shows a retryable error state when initial options fail to load', async () => {
-    mocks.userListMock
+    mocks.circleListMock
       .mockRejectedValueOnce(new Error('Initial options failed'))
-      .mockResolvedValueOnce([{ id: 2, display_name: 'Engineer' }])
+      .mockResolvedValueOnce([
+        circleSummary(),
+      ])
 
     const wrapper = mountWithPlugins(AlbumNewView)
     await flushPromises()
 
-    expect(mocks.userListMock).toHaveBeenCalledTimes(1)
+    expect(mocks.circleListMock).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('Initial options failed')
     expect(wrapper.text()).toContain('Retry')
 
     await wrapper.find('button.btn-secondary').trigger('click')
     await flushPromises()
 
-    expect(mocks.userListMock).toHaveBeenCalledTimes(2)
     expect(mocks.circleListMock).toHaveBeenCalledTimes(2)
+    expect(mocks.userListMock).not.toHaveBeenCalled()
     expect(wrapper.text()).not.toContain('Initial options failed')
     expect(wrapper.text()).toContain('New Album')
+  })
+
+  it('shows circle guidance instead of an actionable form when no circles are available', async () => {
+    mocks.circleListMock.mockResolvedValue([])
+
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Create or join a circle first')
+    expect(wrapper.text()).toContain('Join Circle')
+    expect(wrapper.text()).toContain('Create Circle')
+    expect(wrapper.find('input.input-field').exists()).toBe(false)
+    expect(mocks.createMock).not.toHaveBeenCalled()
+  })
+
+  it('does not submit album creation until a circle is selected', async () => {
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    await wrapper.find('input.input-field').setValue('Test Album')
+    const createButton = wrapper.findAll('button').find(button => button.text().includes('Create Album'))!
+
+    expect(createButton.attributes('disabled')).toBeDefined()
+    await createButton.trigger('click')
+
+    expect(mocks.createMock).not.toHaveBeenCalled()
+  })
+
+  it('lets a non-producer co-producer create an album for their managed circle', async () => {
+    Object.assign(mocks.currentUser, { id: 1, role: 'member', display_name: 'Co-producer' })
+    mocks.userListMock.mockRejectedValue(new Error('Producer-only endpoint should not be called'))
+    mocks.circleListMock.mockResolvedValue([
+      circleSummary({ created_by: 2 }),
+    ])
+    mocks.circleGetMock.mockResolvedValue({
+      id: 9,
+      default_checklist_enabled: true,
+      members: [
+        { id: 1, user_id: 1, role: 'co_producer', joined_at: '2024-01-01T00:00:00Z', user: { id: 1, display_name: 'Co-producer' } },
+        { id: 2, user_id: 2, role: 'owner', joined_at: '2024-01-01T00:00:00Z', user: { id: 2, display_name: 'Producer' } },
+      ],
+    })
+    mocks.createMock.mockResolvedValue({ id: 12 })
+
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    expect(mocks.circleGetMock).not.toHaveBeenCalled()
+    expect(mocks.userListMock).not.toHaveBeenCalled()
+
+    await selectBackKitchenCircle(wrapper)
+    await wrapper.find('input.input-field').setValue('Managed Circle Album')
+    await wrapper.findAll('button').find(button => button.text().includes('Create Album'))!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.circleGetMock).toHaveBeenCalledWith(9)
+    expect(mocks.createMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Managed Circle Album',
+      circle_id: 9,
+    }))
+    expect(mocks.pushMock).toHaveBeenCalledWith('/albums/12/settings')
+  })
+
+  it('does not offer album creation for a regular circle member', async () => {
+    Object.assign(mocks.currentUser, { id: 1, role: 'member', display_name: 'Member' })
+    mocks.userListMock.mockRejectedValue(new Error('Producer-only endpoint should not be called'))
+    mocks.circleListMock.mockResolvedValue([
+      circleSummary({ created_by: 2, viewer_can_create_album: false }),
+    ])
+    mocks.circleGetMock.mockResolvedValue({
+      id: 9,
+      default_checklist_enabled: true,
+      members: [
+        { id: 1, user_id: 1, role: 'member', joined_at: '2024-01-01T00:00:00Z', user: { id: 1, display_name: 'Member' } },
+        { id: 2, user_id: 2, role: 'owner', joined_at: '2024-01-01T00:00:00Z', user: { id: 2, display_name: 'Producer' } },
+      ],
+    })
+
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    expect(mocks.userListMock).not.toHaveBeenCalled()
+    expect(mocks.circleGetMock).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Create or join a circle first')
+    expect(wrapper.findAll('button.custom-select-option').some(button => button.text() === 'Back Kitchen')).toBe(false)
+    expect(wrapper.find('input.input-field').exists()).toBe(false)
+    expect(mocks.createMock).not.toHaveBeenCalled()
   })
 
   it('shows the create error inline and via toast when album creation fails', async () => {
@@ -192,6 +330,7 @@ describe('AlbumNewView', () => {
     const wrapper = mountWithPlugins(AlbumNewView)
     await flushPromises()
 
+    await selectBackKitchenCircle(wrapper)
     await wrapper.find('input.input-field').setValue('Test Album')
     await wrapper.findAll('button').find(button => button.text().includes('Create Album'))!.trigger('click')
     await flushPromises()
@@ -199,11 +338,12 @@ describe('AlbumNewView', () => {
     expect(mocks.createMock).toHaveBeenCalledWith({
       title: 'Test Album',
       description: '',
+      circle_id: 9,
       mastering_engineer_id: null,
       member_ids: [],
       deadline: null,
       phase_deadlines: null,
-      checklist_enabled: false,
+      checklist_enabled: null,
       quick_followup_enabled: false,
     })
     expect(wrapper.text()).toContain('Create failed')
@@ -231,6 +371,7 @@ describe('AlbumNewView', () => {
     const wrapper = mountWithPlugins(AlbumNewView)
     await flushPromises()
 
+    await selectBackKitchenCircle(wrapper)
     await wrapper.find('input.input-field').setValue('Album With Cover')
     const fileInput = wrapper.find('input[type="file"]')
     const file = new File(['cover'], 'cover.png', { type: 'image/png' })
@@ -247,27 +388,27 @@ describe('AlbumNewView', () => {
     expect(mocks.pushMock).toHaveBeenCalledWith('/albums/12/settings')
   })
 
-  it('filters team members to the selected circle and removes invalid picks before save', async () => {
+  it('loads team member choices from the selected circle before save', async () => {
     mocks.circleListMock.mockResolvedValue([
-      { id: 9, name: 'Back Kitchen', description: null, logo_url: null, created_by: 1, member_count: 2 },
+      circleSummary(),
     ])
     mocks.createMock.mockResolvedValue({ id: 12 })
 
     const wrapper = mountWithPlugins(AlbumNewView)
     await flushPromises()
 
-    const memberLabel = wrapper.findAll('label').find(label => label.text().includes('Member'))
-    const outsiderLabel = wrapper.findAll('label').find(label => label.text().includes('Outsider'))
-    await memberLabel!.find('input.checkbox').setValue(true)
-    await outsiderLabel!.find('input.checkbox').setValue(true)
+    expect(mocks.circleGetMock).not.toHaveBeenCalled()
 
-    expect(wrapper.text()).toContain('Outsider')
-
-    await wrapper.findAll('button.custom-select-option').find(button => button.text() === 'Back Kitchen')!.trigger('click')
-    await flushPromises()
+    await selectBackKitchenCircle(wrapper)
 
     expect(mocks.circleGetMock).toHaveBeenCalledWith(9)
-    expect(wrapper.text()).not.toContain('Outsider')
+
+    const memberLabel = wrapper.findAll('label').find(label => label.text().includes('Member'))
+    const outsiderLabel = wrapper.findAll('label').find(label => label.text().includes('Outsider'))
+
+    expect(memberLabel).toBeDefined()
+    expect(outsiderLabel).toBeUndefined()
+    await memberLabel!.find('input.checkbox').setValue(true)
 
     await wrapper.find('input.input-field').setValue('Circle Album')
     await wrapper.findAll('button').find(button => button.text().includes('Create Album'))!.trigger('click')
@@ -288,17 +429,60 @@ describe('AlbumNewView', () => {
     expect(mocks.updateDeadlinesMock).not.toHaveBeenCalled()
   })
 
+  it('confirms before a template replaces an existing workflow draft', async () => {
+    mocks.listWorkflowTemplatesMock.mockResolvedValue([
+      {
+        id: 41,
+        circle_id: 9,
+        name: 'Template Flow',
+        description: 'A reusable flow',
+        workflow_config: {
+          version: 2,
+          steps: [
+            { id: 'template_intake', label: 'Template Intake', type: 'approval', assignee_role: 'producer', order: 0, transitions: {} },
+          ],
+        },
+        created_by: 1,
+        album_count: 2,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ])
+
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+    await selectBackKitchenCircle(wrapper)
+    await wrapper.findAll('button').find(button => button.text().includes('Workflow'))!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text().includes('Manual'))!.trigger('click')
+    expect(wrapper.find('.workflow-editor-stub').text()).not.toContain('Template Intake')
+
+    await wrapper.findAll('button').find(button => button.text().includes('Load from Template'))!.trigger('click')
+    await flushPromises()
+    await wrapper.find('div.cursor-pointer').trigger('click')
+    expect(wrapper.getComponent(ConfirmModal).props('title')).toBe('Replace the current workflow?')
+
+    wrapper.getComponent(ConfirmModal).vm.$emit('cancel')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.workflow-editor-stub').text()).not.toContain('Template Intake')
+
+    await wrapper.find('div.cursor-pointer').trigger('click')
+    wrapper.getComponent(ConfirmModal).vm.$emit('confirm')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.workflow-editor-stub').text()).toContain('Template Intake')
+    await wrapper.findAll('button').find(button => button.text().includes('Workflow'))!.trigger('click')
+    expect(wrapper.text()).toContain('Based on template: Template Flow')
+  })
+
   it('shows a retryable workflow template load error', async () => {
     mocks.circleListMock.mockResolvedValue([
-      { id: 9, name: 'Back Kitchen', description: null, logo_url: null, created_by: 1, member_count: 2 },
+      circleSummary(),
     ])
     mocks.listWorkflowTemplatesMock.mockRejectedValueOnce(new Error('Template service unavailable'))
 
     const wrapper = mountWithPlugins(AlbumNewView)
     await flushPromises()
 
-    await wrapper.findAll('button.custom-select-option').find(button => button.text() === 'Back Kitchen')!.trigger('click')
-    await flushPromises()
+    await selectBackKitchenCircle(wrapper)
     await wrapper.findAll('button').find(button => button.text().includes('Workflow'))!.trigger('click')
     await flushPromises()
     await wrapper.findAll('button').find(button => button.text().includes('Load from Template'))!.trigger('click')
@@ -316,6 +500,7 @@ describe('AlbumNewView', () => {
     const wrapper = mountWithPlugins(AlbumNewView)
     await flushPromises()
 
+    await selectBackKitchenCircle(wrapper)
     await wrapper.find('input.input-field').setValue('Timed Album')
     await wrapper.find('input[type="date"]').setValue('2025-01-10')
 
@@ -332,13 +517,14 @@ describe('AlbumNewView', () => {
     expect(mocks.createMock).toHaveBeenCalledWith({
       title: 'Timed Album',
       description: '',
+      circle_id: 9,
       mastering_engineer_id: null,
       member_ids: [],
       deadline: '2025-01-10T00:00:00.000Z',
       phase_deadlines: {
         peer_review: '2025-01-05T00:00:00.000Z',
       },
-      checklist_enabled: false,
+      checklist_enabled: null,
       quick_followup_enabled: false,
     })
     expect(mocks.updateDeadlinesMock).not.toHaveBeenCalled()
@@ -346,7 +532,7 @@ describe('AlbumNewView', () => {
 
   it('lets producers change the default reviewer assignment and checklist policy before creation', async () => {
     mocks.circleListMock.mockResolvedValue([
-      { id: 9, name: 'Back Kitchen', description: null, logo_url: null, created_by: 1, member_count: 2 },
+      circleSummary(),
     ])
     mocks.circleGetMock.mockResolvedValue({
       id: 9,
@@ -360,8 +546,7 @@ describe('AlbumNewView', () => {
     const wrapper = mountWithPlugins(AlbumNewView)
     await flushPromises()
 
-    await wrapper.findAll('button.custom-select-option').find(button => button.text() === 'Back Kitchen')!.trigger('click')
-    await flushPromises()
+    await selectBackKitchenCircle(wrapper)
 
     await wrapper.find('input.input-field').setValue('Workflow Album')
     await wrapper.findAll('button').find(button => button.text().includes('Manual'))!.trigger('click')
@@ -379,6 +564,49 @@ describe('AlbumNewView', () => {
         ]),
       }),
     }))
+  })
+
+  it('disables the reviewer assignment controls while the default workflow config is loading', async () => {
+    let resolveDefaultConfig!: (value: unknown) => void
+    mocks.getDefaultWorkflowConfigMock.mockImplementation(
+      () => new Promise(resolve => { resolveDefaultConfig = resolve }),
+    )
+
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    const findModeButton = (label: string) =>
+      wrapper.findAll('button').find(button => button.text().includes(label))!
+
+    expect(findModeButton('Auto').attributes('disabled')).toBeDefined()
+    expect(findModeButton('Manual').attributes('disabled')).toBeDefined()
+    expect(findModeButton('Fixed').attributes('disabled')).toBeDefined()
+
+    resolveDefaultConfig(defaultWorkflowConfigFixture())
+    await flushPromises()
+
+    expect(wrapper.findAll('button').find(button => button.text().includes('Auto'))!.attributes('disabled')).toBeUndefined()
+    expect(wrapper.findAll('button').find(button => button.text().includes('Manual'))!.attributes('disabled')).toBeUndefined()
+    expect(wrapper.findAll('button').find(button => button.text().includes('Fixed'))!.attributes('disabled')).toBeUndefined()
+  })
+
+  it('warns via toast when switching the reviewer assignment mode without a workflow config', async () => {
+    mocks.getDefaultWorkflowConfigMock.mockRejectedValue(new Error('Endpoint unavailable'))
+
+    const wrapper = mountWithPlugins(AlbumNewView)
+    await flushPromises()
+
+    const manualButton = wrapper.findAll('button').find(button => button.text().includes('Manual'))!
+    expect(manualButton.attributes('disabled')).toBeUndefined()
+    await manualButton.trigger('click')
+
+    expect(mocks.toastWarningMock).toHaveBeenCalledWith(
+      'Default reviewer assignment is unavailable right now, please try again later',
+    )
+    // The selection is not applied: the mode stays on the default (auto).
+    const autoButton = wrapper.findAll('button').find(button => button.text().includes('Auto'))!
+    expect(autoButton.classes()).toContain('border-primary')
+    expect(manualButton.classes()).not.toContain('border-primary')
   })
 
   it('keeps default workflow labels localized when the reviewer mode quick control creates the workflow config', async () => {

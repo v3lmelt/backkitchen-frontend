@@ -7,6 +7,7 @@ import {
   isComposerActor,
   isTrackComposer,
   platformComposerDisplayText,
+  trackArtistDisplay,
   trackComposerDisplayText,
   trackComposerIds,
 } from './trackComposers'
@@ -118,7 +119,20 @@ describe('trackComposers', () => {
     expect(externalComposerDisplayText(track)).toBe('Guest A / Guest B')
   })
 
-  it('treats the producer as composer actor only for external-only tracks', () => {
+  it('uses the proxy uploader for external-only tracks', () => {
+    const track = makeTrack({
+      composer_ids: [],
+      composers: [],
+      external_composer_names: ['Offline'],
+      proxy_uploader_id: 50,
+      producer_id: 30,
+    })
+
+    expect(isComposerActor(track, 50)).toBe(true)
+    expect(isComposerActor(track, 30)).toBe(false)
+  })
+
+  it('falls back to the producer for legacy external-only tracks', () => {
     const track = makeTrack({
       composer_ids: [],
       composers: [],
@@ -143,5 +157,36 @@ describe('trackComposers', () => {
     expect(isTrackComposer(track, 10)).toBe(false)
     expect(isComposerActor(track, 10)).toBe(true)
     expect(isComposerActor(track, 30)).toBe(false)
+  })
+
+  it('treats an anonymized payload (null ids) as having no composer information', () => {
+    const track = makeTrack({
+      submitter_id: null,
+      composer_ids: null,
+      peer_reviewer_id: null,
+      submitter: null,
+      composers: [],
+    })
+
+    expect(trackComposerIds(track)).toEqual([])
+    expect(isTrackComposer(track, 10)).toBe(false)
+    expect(trackComposerDisplayText(track)).toBe('--')
+    expect(trackArtistDisplay(track)).toBe('--')
+    expect(isComposerActor(track, 10)).toBe(false)
+    // A server-computed viewer flag still wins (false for anonymous viewers).
+    expect(isComposerActor({ ...track, viewer_is_composer_actor: false }, 10)).toBe(false)
+  })
+
+  it('prefers the server-computed viewer flag over local derivation', () => {
+    const track = makeTrack({
+      composer_ids: [],
+      composers: [],
+      external_composer_names: [],
+      submitter_id: 10,
+    })
+
+    // Local derivation would say true for the submitter, false for user 30.
+    expect(isComposerActor({ ...track, viewer_is_composer_actor: false }, 10)).toBe(false)
+    expect(isComposerActor({ ...track, viewer_is_composer_actor: true }, 30)).toBe(true)
   })
 })

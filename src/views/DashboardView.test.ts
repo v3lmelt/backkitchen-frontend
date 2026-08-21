@@ -76,6 +76,28 @@ function trackFixture(id: number, title: string, status: string, overrides: Reco
 }
 
 
+function albumFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    title: 'Album One',
+    producer_id: 1,
+    viewer_is_album_manager: true,
+    track_count: 5,
+    total_tracks: 5,
+    by_status: { submitted: 1, peer_review: 1, peer_revision: 1, mastering_revision: 1, final_review: 1, completed: 1 },
+    open_issues: 1,
+    overdue_track_count: 0,
+    recent_events: [],
+    deadline: null,
+    genres: ['Trance'],
+    catalog_number: 'BK-001',
+    circle_name: 'Back Kitchen',
+    cover_image: null,
+    ...overrides,
+  }
+}
+
+
 describe('DashboardView', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -133,24 +155,7 @@ describe('DashboardView', () => {
         }),
       ]
     })
-    mocks.albumListMock.mockResolvedValue([
-      {
-        id: 1,
-        title: 'Album One',
-        producer_id: 1,
-        track_count: 5,
-        total_tracks: 5,
-        by_status: { submitted: 1, peer_review: 1, peer_revision: 1, mastering_revision: 1, final_review: 1, completed: 1 },
-        open_issues: 1,
-        overdue_track_count: 0,
-        recent_events: [],
-        deadline: null,
-        genres: ['Trance'],
-        catalog_number: 'BK-001',
-        circle_name: 'Back Kitchen',
-        cover_image: null,
-      },
-    ])
+    mocks.albumListMock.mockResolvedValue([albumFixture()])
     mocks.albumExportDownloadMock.mockResolvedValue(new Blob(['zip']))
     mocks.albumExportStreamMock.mockImplementation((_albumId: number, onEvent: (event: any) => Promise<void> | void) => {
       void (async () => {
@@ -209,8 +214,11 @@ describe('DashboardView', () => {
     expect(mocks.acceptInvitationMock).toHaveBeenCalledWith(31)
     expect(mocks.declineInvitationMock).toHaveBeenCalledWith(31)
 
-    const exportButton = wrapper.findAll('button').find(button => button.text().includes('/'))
-    await exportButton!.trigger('click')
+    const exportButton = wrapper.findAll('button').find(button => button.text().startsWith('Export'))
+    expect(exportButton?.text()).toBe('Export completed tracks (1/5)')
+    expect(exportButton).toBeDefined()
+    if (!exportButton) throw new Error('Expected album export button')
+    await exportButton.trigger('click')
     await flushPromises()
 
     expect(mocks.albumExportStreamMock).toHaveBeenCalledWith(1, expect.any(Function))
@@ -223,6 +231,20 @@ describe('DashboardView', () => {
     clickSpy.mockRestore()
     appendSpy.mockRestore()
     removeSpy.mockRestore()
+  })
+
+  it('hides album export from viewers without album manager access', async () => {
+    mocks.albumListMock.mockResolvedValue([
+      albumFixture({ viewer_is_album_manager: false }),
+    ])
+
+    const wrapper = mountWithPlugins(DashboardView)
+    await flushPromises()
+
+    const exportButton = wrapper.findAll('button').find(button => button.text().startsWith('Export'))
+    expect(exportButton).toBeUndefined()
+    expect(mocks.albumExportStreamMock).not.toHaveBeenCalled()
+    expect(mocks.albumExportDownloadMock).not.toHaveBeenCalled()
   })
 
   it('opens album settings when an album card is clicked', async () => {

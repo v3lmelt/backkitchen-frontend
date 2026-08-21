@@ -4,7 +4,6 @@
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8">
       <div>
         <h1 class="text-2xl font-semibold font-mono text-foreground">{{ t('circles.heading') }}</h1>
-        <p class="text-sm text-muted-foreground mt-1">{{ t('circles.subheading') }}</p>
       </div>
       <div class="flex items-center gap-3 shrink-0">
         <button class="btn-secondary flex items-center gap-2" @click="showJoinModal = true">
@@ -32,7 +31,6 @@
     <div v-else-if="circles.length === 0" class="flex flex-col items-center justify-center py-24 gap-4">
       <Smile class="w-10 h-10 text-muted-foreground" :stroke-width="1.5" />
       <p class="text-muted-foreground font-mono text-sm">{{ t('circles.noCircles') }}</p>
-      <p class="text-muted-foreground text-xs">{{ t('circles.noCirclesHint') }}</p>
     </div>
 
     <!-- grid -->
@@ -45,7 +43,7 @@
       >
         <!-- logo -->
         <div class="shrink-0 w-12 h-12 rounded-full overflow-hidden bg-border flex items-center justify-center">
-          <img v-if="circle.logo_url" :src="`${API_ORIGIN}/uploads/${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
+          <img v-if="circle.logo_url" :src="resolveUploadUrl(circle.logo_url)" alt="" class="w-full h-full object-cover" />
           <Smile v-else class="w-5 h-5 text-muted-foreground" :stroke-width="1.5" />
         </div>
         <div class="flex-1 min-w-0">
@@ -89,7 +87,7 @@ import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { circleApi, API_ORIGIN } from '@/api'
+import { circleApi, resolveUploadUrl } from '@/api'
 import type { CircleSummary } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { UserPlus, Plus, Smile } from 'lucide-vue-next'

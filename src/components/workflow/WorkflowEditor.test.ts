@@ -5,6 +5,7 @@ import { mountWithPlugins } from '@/tests/utils'
 import type { WorkflowConfig, WorkflowStepDef } from '@/types'
 
 import WorkflowEditor from './WorkflowEditor.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const memberOptions = [
   { value: 101, label: 'Reviewer A' },
@@ -256,6 +257,108 @@ describe('WorkflowEditor', () => {
     const saved = lastSavedConfig(wrapper)
     const peerReview = stepById(saved, 'peer_review')
     expect(peerReview.revision_decision_policy).toBe('first_revision_request')
+  })
+
+  it('requires confirmation before replacing an edited workflow with the default', async () => {
+    const wrapper = mountWithPlugins(WorkflowEditor, {
+      props: {
+        workflowConfig: existingWorkflow,
+        memberOptions,
+        saveable: true,
+      },
+    })
+
+    await findTextInput(wrapper).setValue('Custom Intake')
+    await findButton(wrapper, 'Load Default Workflow').trigger('click')
+
+    expect(wrapper.getComponent(ConfirmModal).props('title')).toBe('Replace the current workflow?')
+    wrapper.getComponent(ConfirmModal).vm.$emit('cancel')
+    await wrapper.vm.$nextTick()
+    expect((findTextInput(wrapper).element as HTMLInputElement).value).toBe('Custom Intake')
+
+    await findButton(wrapper, 'Load Default Workflow').trigger('click')
+    wrapper.getComponent(ConfirmModal).vm.$emit('confirm')
+    await wrapper.vm.$nextTick()
+    expect((findTextInput(wrapper).element as HTMLInputElement).value).not.toBe('Custom Intake')
+  })
+
+  it('keeps or deletes a stage according to the confirmation result', async () => {
+    const wrapper = mountWithPlugins(WorkflowEditor, {
+      props: {
+        workflowConfig: existingWorkflow,
+        memberOptions,
+        saveable: true,
+      },
+    })
+
+    const finalReviewCard = wrapper
+      .findAll('[role="button"]')
+      .find(node => node.text().includes('Final Review'))
+    if (!finalReviewCard) throw new Error('Final Review card not found')
+
+    await finalReviewCard.find('button[aria-label="Delete"]').trigger('click')
+    expect(wrapper.getComponent(ConfirmModal).props('title')).toBe('Delete stage?')
+    wrapper.getComponent(ConfirmModal).vm.$emit('cancel')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('Final Review')
+
+    const refreshedFinalReviewCard = wrapper
+      .findAll('[role="button"]')
+      .find(node => node.text().includes('Final Review') && node.text().includes('Approve'))
+    if (!refreshedFinalReviewCard) throw new Error('Final Review card not found after cancellation')
+    await refreshedFinalReviewCard.find('button[aria-label="Delete"]').trigger('click')
+    wrapper.getComponent(ConfirmModal).vm.$emit('confirm')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('[role="button"]').some(node => node.text().includes('Final Review') && node.text().includes('Approve'))).toBe(false)
+  })
+
+  it('does not change a stage type until the user confirms', async () => {
+    const wrapper = mountWithPlugins(WorkflowEditor, {
+      props: {
+        workflowConfig: existingWorkflow,
+        memberOptions,
+      },
+    })
+
+    const masteringTypeButton = wrapper.findAll('button').find(node => node.text() === 'Mastering')
+    if (!masteringTypeButton) throw new Error('Mastering type button not found')
+    await masteringTypeButton.trigger('click')
+
+    expect(wrapper.emitted('update:workflowConfig')).toBeUndefined()
+    wrapper.getComponent(ConfirmModal).vm.$emit('cancel')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('update:workflowConfig')).toBeUndefined()
+
+    await masteringTypeButton.trigger('click')
+    wrapper.getComponent(ConfirmModal).vm.$emit('confirm')
+    await wrapper.vm.$nextTick()
+    const updated = lastUpdatedConfig(wrapper)
+    expect(stepById(updated as WorkflowConfig, 'intake')).toMatchObject({
+      type: 'delivery',
+      assignee_role: 'mastering_engineer',
+    })
+  })
+
+  it('reorders stages directly with arrow buttons and describes arrow controls', async () => {
+    const wrapper = mountWithPlugins(WorkflowEditor, {
+      props: {
+        workflowConfig: existingWorkflow,
+        memberOptions,
+      },
+    })
+
+    expect(wrapper.text()).toContain('Use the up and down arrows')
+    expect(wrapper.text()).not.toContain('drag')
+
+    const peerCard = wrapper
+      .findAll('[role="button"]')
+      .find(node => node.text().includes('Peer Review') && node.text().includes('2 reviewers'))
+    if (!peerCard) throw new Error('Peer Review card not found')
+    await peerCard.find('button[aria-label="Move up"]').trigger('click')
+
+    const updated = lastUpdatedConfig(wrapper) as WorkflowConfig
+    expect(stepById(updated, 'peer_review').order).toBe(0)
+    expect(stepById(updated, 'intake').order).toBe(2)
   })
 
   it('updates the revision trigger hint when switching peer review policy', async () => {

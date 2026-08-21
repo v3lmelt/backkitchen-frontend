@@ -5,8 +5,13 @@ import { useAppStore } from '@/stores/app'
 import type { Issue, IssueStatus, StageAssignment, Track } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import { formatLocaleDate, formatTimestampShort } from '@/utils/time'
-import { hashId } from '@/utils/hash'
+import { anonTokenFor } from '@/utils/hash'
 import { canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
+import {
+  availableIssueStatusActions,
+  issueStatusActionLabel,
+  issueStatusQuickActionClass,
+} from '@/utils/issueStatus'
 
 const props = withDefaults(defineProps<{
   issues: Issue[]
@@ -55,7 +60,7 @@ function toggleSelect(issueId: number) {
 }
 
 function authorLabel(issue: Issue): string {
-  if (issue.phase === 'peer') return `#${hashId(issue.author_id)}`
+  if (issue.phase === 'peer') return `#${anonTokenFor(issue.author, issue.author_id)}`
   return issue.author?.display_name ?? `#${issue.author_id}`
 }
 
@@ -90,43 +95,18 @@ function canChangeIssueStatus(issue: Issue): boolean {
 
 function availableQuickActions(issue: Issue): IssueStatus[] {
   if (!props.enableQuickActions || !props.track) return []
-  if (canSubmitIssueStatus(issue) && issue.status === 'open') return ['resolved', 'disagreed']
-  if (canChangeIssueStatus(issue) && issue.status === 'open') return ['resolved', 'pending_discussion']
-  if (canChangeIssueStatus(issue) && issue.status === 'pending_discussion') return ['open', 'internal_resolved']
-  if (canChangeIssueStatus(issue) && issue.status === 'internal_resolved') return ['open']
-  if (canChangeIssueStatus(issue) && issue.status === 'resolved') return ['open']
-  if (canChangeIssueStatus(issue) && issue.status === 'disagreed') return ['open']
-  return []
+  return availableIssueStatusActions(issue.status, {
+    canSubmit: canSubmitIssueStatus(issue),
+    canChange: canChangeIssueStatus(issue),
+  })
 }
 
 function quickActionLabel(status: IssueStatus): string {
-  switch (status) {
-    case 'resolved':
-      return t('issueDetail.markFixed')
-    case 'internal_resolved':
-      return t('issueDetail.markInternalResolved')
-    case 'disagreed':
-      return t('issueDetail.disagree')
-    case 'open':
-      return t('issueDetail.reopen')
-    case 'pending_discussion':
-      return t('issueDetail.markPendingDiscussion')
-  }
+  return issueStatusActionLabel(t, status, { resolvedKey: 'issueDetail.markFixed' })
 }
 
 function quickActionClass(status: IssueStatus): string {
-  switch (status) {
-    case 'resolved':
-      return 'bg-success-bg text-success hover:border-success/40'
-    case 'internal_resolved':
-      return 'bg-info-bg text-info hover:border-info/40'
-    case 'disagreed':
-      return 'bg-info-bg text-info hover:border-info/40'
-    case 'open':
-      return 'bg-warning-bg text-warning hover:border-warning/40'
-    case 'pending_discussion':
-      return 'bg-warning-bg text-warning hover:border-warning/40'
-  }
+  return issueStatusQuickActionClass(status)
 }
 
 function triggerQuickAction(issue: Issue, status: IssueStatus, event: Event) {

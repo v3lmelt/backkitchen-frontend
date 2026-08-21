@@ -1,0 +1,62 @@
+{
+  "version": "0.1.42",
+  "date": "2026-07-28",
+  "headline": {
+    "zh-CN": "完善副主催协作权限边界",
+    "en": "Refines co-producer collaboration boundaries"
+  },
+  "summary": {
+    "zh-CN": "副主催的问题处理、外部曲师代传、社团成员退出和专辑导出现在会遵循更完整的身份与资源范围校验。",
+    "en": "Issue handling, external-composer proxy submissions, circle departures, and album exports now follow more complete identity and resource-scope checks for co-producers."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "协作权限修复",
+        "en": "Collaboration permission fixes"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "问题处理入口匹配实际指派",
+            "en": "Issue controls follow actual assignments"
+          },
+          "description": {
+            "zh-CN": "副主催可处理没有指定评审人的主催阶段问题；自定义评审阶段已有明确指派时，页面会遵循该指派显示操作入口。",
+            "en": "Co-producers can handle producer-stage issues without an assigned reviewer, while custom review stages with explicit assignments now show controls according to those assignments."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "外部曲师代传身份保持一致",
+            "en": "External-composer proxy identity stays consistent"
+          },
+          "description": {
+            "zh-CN": "仅包含外部曲师的曲目会由实际代传者继续执行曲师侧操作，不会错误转交给专辑主催。",
+            "en": "For tracks containing only external composers, composer-side actions remain with the actual proxy uploader instead of being assigned to the album producer."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "成员退出后同步撤销关联权限",
+            "en": "Circle departures revoke related access"
+          },
+          "description": {
+            "zh-CN": "成员离开社团或被移除后，关联专辑成员身份、评审指派和待处理邀请会同步更新，避免继续保留社团来源的访问权限。",
+            "en": "When a member leaves or is removed from a circle, related album membership, review assignments, and pending invitations are updated so circle-derived access does not remain."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "专辑导出链接绑定对应专辑",
+            "en": "Album export links stay bound to their album"
+          },
+          "description": {
+            "zh-CN": "导出下载标识只对创建该导出的专辑有效，并在下载完成或过期后清理临时文件。",
+            "en": "Export download identifiers are valid only for the album that created them, with temporary files cleaned up after download or expiration."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "version": "0.1.41",
+  "date": "2026-07-08",
+  "headline": {
+    "zh-CN": "主催可在专辑内管理曲目进度",
+    "en": "Producers can manage track progress inside albums"
+  },
+  "summary": {
+    "zh-CN": "社团所有者和副主催现在可以在专辑设置里为本社团绑定专辑手动调整曲目阶段；拒绝曲目仍需通过正常工作流或管理员工具处理。",
+    "en": "Circle owners and co-producers can now manually adjust track stages from Album Settings for albums bound to their circle, while rejection still stays in workflow actions or admin tools."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "专辑内进度管理",
+        "en": "Album-scoped progress management"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "进度管理入口移入专辑设置",
+            "en": "Progress management lives in Album Settings"
+          },
+          "description": {
+            "zh-CN": "主催和副主催可在自己管理的社团专辑中选择曲目、目标阶段并记录原因，页面会即时刷新曲目状态。",
+            "en": "Producers and co-producers can choose a track, target stage, and optional reason inside managed circle albums, with the track status refreshed immediately."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "权限边界保持社团范围",
+            "en": "Permission boundaries stay circle-scoped"
+          },
+          "description": {
+            "zh-CN": "该入口只适用于绑定到对应社团的专辑，不会开放未绑定专辑、其他社团专辑或普通成员的手动进度变更；拒绝仍通过工作流打回/拒绝或管理员控制台完成。",
+            "en": "The entry only works for albums bound to the manager's circle, not unbound albums, other-circle albums, or regular members; rejection remains handled by workflow return/reject actions or the admin console."
+          }
+        }
+      ]
+    }
+  ]
+}

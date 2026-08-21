@@ -1,4 +1,4 @@
-const TOKEN_KEY = 'backkitchen_token'
+import { getAuthToken } from '@/api'
 
 export function buildWsUrl(path: string): string {
   const apiBase = (import.meta.env.VITE_API_BASE_URL ?? '') as string
@@ -16,7 +16,7 @@ export function buildWsUrl(path: string): string {
  * Authorization headers cannot be set (e.g. `<audio>` element src).
  */
 export function withAuthToken(url: string): string {
-  const token = localStorage.getItem(TOKEN_KEY)
+  const token = getAuthToken()
   if (!token) return url
   const separator = url.includes('?') ? '&' : '?'
   return `${url}${separator}token=${encodeURIComponent(token)}`

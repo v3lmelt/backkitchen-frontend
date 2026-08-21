@@ -161,8 +161,7 @@ async function handleResend() {
 
         <!-- Registration form -->
         <div v-else key="register-form" class="bg-card border border-border rounded-none p-8">
-          <h1 class="font-mono text-xl font-bold text-foreground mb-1">{{ t('auth.register.title') }}</h1>
-          <p class="text-muted-foreground text-sm font-sans mb-7">{{ t('auth.register.subtitle') }}</p>
+          <h1 class="font-mono text-xl font-bold text-foreground mb-7">{{ t('auth.register.title') }}</h1>
 
           <!-- Error -->
           <Transition name="slide-fade">

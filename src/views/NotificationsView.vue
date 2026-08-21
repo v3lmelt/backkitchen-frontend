@@ -161,7 +161,6 @@ onMounted(async () => {
             {{ appStore.notificationChannelConnected ? t('notifications.liveConnected') : t('notifications.liveDisconnected') }}
           </span>
         </div>
-        <p class="text-sm text-muted-foreground">{{ t('notifications.title') }}</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <button
@@ -250,7 +249,7 @@ onMounted(async () => {
       <button class="btn-secondary text-sm" @click="reloadNotifications(true)">{{ t('common.retry') }}</button>
     </div>
     <div v-else-if="filteredNotifications.length === 0">
-      <EmptyState :icon="Bell" :title="t(appStore.notifications.length === 0 ? 'notifications.empty' : 'notifications.emptyFiltered')" />
+      <EmptyState :icon="Bell" :title="t('notifications.empty')" />
     </div>
     <div v-else class="space-y-3">
       <div

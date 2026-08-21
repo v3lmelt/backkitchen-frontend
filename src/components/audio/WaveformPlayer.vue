@@ -5,10 +5,11 @@ import { Play, Pause, Headphones, MapPin } from 'lucide-vue-next'
 import type { Issue, IssueMarker } from '@/types'
 import type WaveSurfer from 'wavesurfer.js'
 import type RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
-import { resolveAssetUrl } from '@/api'
+import { resolveAssetUrl, sourceVersionAudioUrl } from '@/api'
 import { useTrackPlaybackPreference } from '@/composables/useTrackPlaybackPreference'
 import { useAppStore } from '@/stores/app'
 import { formatTimestamp, formatTimestampShort, roundToMilliseconds } from '@/utils/time'
+import { isIssueResolvedLike, isIssueUnresolved } from '@/utils/issueStatus'
 import { loadAudioBlobCached } from '@/utils/audioCache'
 import { THEME_CHANGED_EVENT } from '@/utils/theme'
 
@@ -96,7 +97,7 @@ const hoverLeft = ref<number>(0)
 const compareSourceUrl = computed(() => {
   if (props.compareAudioUrl) return props.compareAudioUrl
   if (props.compareVersionId && props.trackId) {
-    return resolveAssetUrl(`/api/tracks/${props.trackId}/source-versions/${props.compareVersionId}/audio`)
+    return resolveAssetUrl(sourceVersionAudioUrl(props.trackId, props.compareVersionId))
   }
   return ''
 })
@@ -243,14 +244,6 @@ function clampGainDb(value: number): number {
 
 function gainDbToLinear(value: number): number {
   return Math.pow(10, value / 20)
-}
-
-function isIssueUnresolved(status: string): boolean {
-  return status === 'open' || status === 'pending_discussion' || status === 'disagreed'
-}
-
-function isIssueResolvedLike(status: string): boolean {
-  return status === 'resolved' || status === 'internal_resolved'
 }
 
 function getMarkerStatus(issues: Issue[]): MarkerStatus {

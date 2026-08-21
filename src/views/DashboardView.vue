@@ -2,15 +2,14 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, albumApi, API_ORIGIN } from '@/api'
+import { trackApi, albumApi, resolveUploadUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Album, AlbumStats, ExportProgressEvent, Track, TrackStatus, WorkflowEvent } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { formatRelativeTime, parseUTC } from '@/utils/time'
-import { hashId } from '@/utils/hash'
-import { trackComposerDisplayText } from '@/utils/trackComposers'
+import { trackArtistDisplay, trackArtistUsesHash } from '@/utils/trackComposers'
 import { TRACK_STATUS_COLORS } from '@/utils/status'
 import { buildTrackWorkspaceRoute, translateStepLabel } from '@/utils/workflow'
 import { useDashboardPins } from '@/composables/useDashboardPins'
@@ -21,15 +20,6 @@ import { Music, Search } from 'lucide-vue-next'
 const TRACK_PAGE_SIZE = 100
 const TRACK_DISPLAY_INITIAL = 50
 const TRACK_DISPLAY_STEP = 50
-function trackArtistDisplay(track: Track): string {
-  if (track.artist) return track.artist
-  if (track.composers?.length) return trackComposerDisplayText(track)
-  return track.submitter_id ? `#${hashId(track.submitter_id)}` : '--'
-}
-
-function trackArtistUsesHash(track: Track): boolean {
-  return Boolean(!track.artist && !track.composers?.length && track.submitter_id)
-}
 
 
 
@@ -299,7 +289,7 @@ const groupedTracks = computed(() => {
       seen.add(track.album_id)
       result.push({
         albumId: track.album_id,
-        albumTitle: albumMap.value.get(track.album_id)?.title ?? `Album #${track.album_id}`,
+        albumTitle: albumMap.value.get(track.album_id)?.title ?? t('dashboard.albumFallback', { id: track.album_id }),
         tracks: groups.get(track.album_id)!,
       })
     }
@@ -383,14 +373,14 @@ function handleExport(albumId: number) {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `${albums.value.find(al => al.id === albumId)?.title ?? 'album'}.zip`
+        a.download = `${albums.value.find(al => al.id === albumId)?.title ?? t('dashboard.exportFilenameFallback')}.zip`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
         exportProgress.value = { ...exportProgress.value!, done: true }
       } catch {
-        exportProgress.value = { ...exportProgress.value!, error: 'Download failed' }
+        exportProgress.value = { ...exportProgress.value!, error: t('common.downloadFailed') }
       }
       setTimeout(() => {
         exportingAlbum.value = null
@@ -436,7 +426,7 @@ function openTrack(track: Track) {
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 overflow-hidden rounded-none border border-border flex-shrink-0">
               <AlbumCoverImage
-                :src="inv.album?.cover_image ? `${API_ORIGIN}/uploads/${inv.album.cover_image}` : null"
+                :src="inv.album?.cover_image ? resolveUploadUrl(inv.album.cover_image) : null"
                 :alt="inv.album?.title || ''"
                 class="w-full h-full object-cover"
               />
@@ -444,7 +434,7 @@ function openTrack(track: Track) {
             <div>
               <div class="text-sm font-medium text-foreground">{{ inv.album?.title }}</div>
               <div class="text-xs text-muted-foreground">
-                {{ t('invitations.from', { name: inv.invited_by_user?.display_name || 'Unknown' }) }}
+                {{ t('invitations.from', { name: inv.invited_by_user?.display_name || t('common.unknown') }) }}
               </div>
             </div>
           </div>
@@ -502,7 +492,6 @@ function openTrack(track: Track) {
             </div>
           </button>
         </div>
-        <p v-else class="text-sm text-muted-foreground">{{ t('dashboard.noPendingActions') }}</p>
       </div>
 
       <div class="card space-y-3">
@@ -531,7 +520,6 @@ function openTrack(track: Track) {
             </div>
           </button>
         </div>
-        <p v-else class="text-sm text-muted-foreground">{{ t('dashboard.noAttentionTracks') }}</p>
       </div>
 
       <div class="card space-y-3">
@@ -555,7 +543,6 @@ function openTrack(track: Track) {
             </div>
           </button>
         </div>
-        <p v-else class="text-sm text-muted-foreground">{{ t('dashboard.noRecentUpdates') }}</p>
       </div>
     </div>
 
@@ -618,7 +605,7 @@ function openTrack(track: Track) {
           <!-- Cover image or placeholder — no color bar -->
           <div class="w-full h-28 overflow-hidden">
             <AlbumCoverImage
-              :src="album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : null"
+              :src="album.cover_image ? resolveUploadUrl(album.cover_image) : null"
               :alt="album.title"
               class="w-full h-full object-cover"
             />
@@ -661,7 +648,7 @@ function openTrack(track: Track) {
                   v-for="[statusKey, count] in albumNonZeroStatuses[album.id]"
                   :key="statusKey"
                   :style="{ width: (count / albumStatsMap[album.id].total_tracks * 100) + '%', backgroundColor: statusColor(statusKey) }"
-                  :title="`${statusKey}: ${count}`"
+                  :title="`${statusLabel(statusKey, album)}: ${count}`"
                 ></div>
               </div>
               <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground mb-4">
@@ -673,13 +660,13 @@ function openTrack(track: Track) {
               <div class="flex items-center justify-between mb-4">
                 <p class="text-xs text-muted-foreground">{{ albumStatsMap[album.id].total_tracks }} {{ t('dashboard.tracks') }}</p>
                 <button
-                  v-if="album.producer_id === appStore.currentUser?.id && completedCount(album.id) > 0"
+                  v-if="album.viewer_is_album_manager === true && completedCount(album.id) > 0"
                   @click.stop="handleExport(album.id)"
                   :disabled="exportingAlbum === album.id"
                   class="btn-secondary text-xs px-3 py-1"
                 >
                   <template v-if="exportingAlbum === album.id">{{ t('common.loading') }}</template>
-                  <template v-else>{{ t('dashboard.exportAlbum') }} ({{ completedCount(album.id) }}/{{ albumStatsMap[album.id].total_tracks }})</template>
+                  <template v-else>{{ t('dashboard.exportCompleted', { completed: completedCount(album.id), total: albumStatsMap[album.id].total_tracks }) }}</template>
                 </button>
               </div>
               <div v-if="albumStatsMap[album.id].recent_events.length > 0" class="space-y-1">
@@ -697,9 +684,6 @@ function openTrack(track: Track) {
             </template>
           </div>
         </div>
-      </div>
-      <div v-if="showPinnedOnly && displayedAlbums.length === 0" class="card text-sm text-muted-foreground">
-        {{ t('dashboard.noPinnedAlbums') }}
       </div>
     </div>
 

@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   userListMock: vi.fn(),
   circleGetMock: vi.fn(),
   trackRestoreMock: vi.fn(),
+  trackForceStatusMock: vi.fn(),
   toastSuccessMock: vi.fn(),
   toastErrorMock: vi.fn(),
   currentUser: { id: 1 },
@@ -70,6 +71,7 @@ vi.mock('@/api', () => ({
   },
   trackApi: {
     restore: mocks.trackRestoreMock,
+    forceStatus: mocks.trackForceStatusMock,
   },
   checklistApi: {
     getTemplate: mocks.checklistGetTemplateMock,
@@ -143,6 +145,7 @@ vi.mock('lucide-vue-next', () => ({
 }))
 
 import AlbumSettingsView from './AlbumSettingsView.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 function makeUser(id: number, displayName: string) {
   return {
@@ -195,6 +198,7 @@ function makeAlbum(overrides: Record<string, unknown> = {}) {
     cover_image: null,
     producer_id: 1,
     mastering_engineer_id: 2,
+    viewer_can_force_track_status: true,
     workflow_config: makeWorkflowConfig(),
     producer,
     mastering_engineer: masteringEngineer,
@@ -272,6 +276,7 @@ describe('AlbumSettingsView', () => {
     mocks.circleGetMock.mockReset()
     mocks.userListMock.mockReset()
     mocks.trackRestoreMock.mockReset()
+    mocks.trackForceStatusMock.mockReset()
     mocks.toastSuccessMock.mockReset()
     mocks.toastErrorMock.mockReset()
     mocks.currentUser = { id: 1 }
@@ -332,8 +337,131 @@ describe('AlbumSettingsView', () => {
     })
     mocks.userListMock.mockResolvedValue([makeUser(1, 'Producer'), makeUser(3, 'Member')])
     mocks.trackRestoreMock.mockResolvedValue(makeTrack(91, 'Archived Track'))
+    mocks.trackForceStatusMock.mockResolvedValue(makeTrack(11, 'Track A', { status: 'peer_review' }))
     mocks.albumArchiveMock.mockResolvedValue(makeAlbum({ archived_at: '2024-01-05T00:00:00Z' }))
     mocks.albumRestoreMock.mockResolvedValue(makeAlbum())
+  })
+
+  it('lets viewer manager flag users enter settings and use manager tabs', async () => {
+    mocks.currentUser = { id: 42 }
+    mocks.albumGetMock.mockResolvedValue(makeAlbum({
+      producer_id: 1,
+      mastering_engineer_id: 2,
+      members: [],
+      viewer_is_album_manager: true,
+    }))
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    expect(mocks.replaceMock).not.toHaveBeenCalled()
+    expect(findButtonByText(wrapper, 'Workflow')).toBeTruthy()
+    expect(findButtonByText(wrapper, 'Track Order')).toBeTruthy()
+    expect(findButtonByText(wrapper, 'Archive')).toBeTruthy()
+    expect(findButtonByText(wrapper, 'Webhook')).toBeTruthy()
+    expect(findButtonByText(wrapper, 'Danger Zone')).toBeTruthy()
+
+    await findButtonByText(wrapper, 'Workflow')!.trigger('click')
+    expect(wrapper.find('button.workflow-editor-save').exists()).toBe(true)
+
+    await findButtonByText(wrapper, 'Danger Zone')!.trigger('click')
+    expect(wrapper.text()).toContain('Archive this album')
+  })
+
+  it('shows progress tab for viewer managers', async () => {
+    mocks.currentUser = { id: 42 }
+    mocks.albumGetMock.mockResolvedValue(makeAlbum({
+      producer_id: 1,
+      mastering_engineer_id: 2,
+      members: [],
+      viewer_is_album_manager: true,
+    }))
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    expect(findButtonByText(wrapper, 'Progress')).toBeTruthy()
+  })
+
+  it('does not show progress tab for non-managers', async () => {
+    mocks.currentUser = { id: 3 }
+    mocks.albumGetMock.mockResolvedValue(makeAlbum({
+      viewer_is_album_manager: false,
+      viewer_can_force_track_status: false,
+    }))
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    expect(findButtonByText(wrapper, 'Progress')).toBeUndefined()
+  })
+
+  it('force-updates a track from album settings progress tab', async () => {
+    mocks.albumTracksMock.mockResolvedValue([
+      makeTrack(11, 'Track A', { status: 'intake', track_number: 1 }),
+    ])
+    mocks.trackForceStatusMock.mockResolvedValue(
+      makeTrack(11, 'Track A', { status: 'peer_review', track_number: 1 }),
+    )
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'Progress')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.albumTracksMock).toHaveBeenCalledWith(5)
+
+    const selects = wrapper.findAll('select')
+    await selects[0].setValue('11')
+    await selects[1].setValue('peer_review')
+    await wrapper.find('input[placeholder="Record why this progress change is needed…"]').setValue('Need another review')
+
+    await findButtonByText(wrapper, 'Update progress')!.trigger('click')
+    expect(mocks.trackForceStatusMock).not.toHaveBeenCalled()
+    expect(wrapper.getComponent(ConfirmModal).props('title')).toBe('Confirm manual stage change?')
+    wrapper.getComponent(ConfirmModal).vm.$emit('confirm')
+    await flushPromises()
+
+    expect(mocks.trackForceStatusMock).toHaveBeenCalledWith(11, {
+      new_status: 'peer_review',
+      reason: 'Need another review',
+    })
+    expect(mocks.toastSuccessMock).toHaveBeenCalledWith('Track progress updated')
+    expect(wrapper.text()).toContain('Track A · Peer Review')
+  })
+
+  it('does not submit when target equals current status', async () => {
+    mocks.albumTracksMock.mockResolvedValue([
+      makeTrack(11, 'Track A', { status: 'intake', track_number: 1 }),
+    ])
+
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'Progress')!.trigger('click')
+    await flushPromises()
+
+    const selects = wrapper.findAll('select')
+    await selects[0].setValue('11')
+    await selects[1].setValue('intake')
+
+    const updateButton = findButtonByText(wrapper, 'Update progress')!
+    expect(updateButton.attributes('disabled')).toBeDefined()
+    expect(mocks.trackForceStatusMock).not.toHaveBeenCalled()
+  })
+
+  it('does not save workflow changes when the migration warning is cancelled', async () => {
+    const wrapper = mountAlbumSettingsView()
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'Workflow')!.trigger('click')
+    await wrapper.find('button.workflow-editor-save').trigger('click')
+    wrapper.getComponent(ConfirmModal).vm.$emit('cancel')
+    await wrapper.vm.$nextTick()
+
+    expect(mocks.albumUpdateWorkflowMock).not.toHaveBeenCalled()
+    expect(wrapper.findComponent(ConfirmModal).exists()).toBe(false)
   })
 
   it('saves workflow changes and renders migration details', async () => {
@@ -354,6 +482,9 @@ describe('AlbumSettingsView', () => {
 
     await findButtonByText(wrapper, 'Workflow')!.trigger('click')
     await wrapper.find('button.workflow-editor-save').trigger('click')
+    expect(mocks.albumUpdateWorkflowMock).not.toHaveBeenCalled()
+    expect(wrapper.getComponent(ConfirmModal).props('title')).toBe('Save workflow changes?')
+    wrapper.getComponent(ConfirmModal).vm.$emit('confirm')
     await flushPromises()
 
     expect(mocks.albumUpdateWorkflowMock).toHaveBeenCalledWith(

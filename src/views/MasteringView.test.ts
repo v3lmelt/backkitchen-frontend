@@ -33,6 +33,13 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/api', () => ({
   API_ORIGIN: '',
+  AUTH_TOKEN_KEY: 'backkitchen_token',
+  AUTH_USER_KEY: 'backkitchen_user',
+  getAuthToken: () => localStorage.getItem('backkitchen_token'),
+  trackAudioUrl: (trackId: number, v?: number | null) => `/api/tracks/${trackId}/audio?v=${v ?? 0}`,
+  masterAudioUrl: (trackId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-audio?v=${v ?? 0}&c=${c ?? 1}`,
+  masterDeliveryAudioUrl: (trackId: number, deliveryId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-deliveries/${deliveryId}/audio?v=${v ?? 0}&c=${c ?? 1}`,
+  sourceVersionAudioUrl: (trackId: number, versionId: number) => `/api/tracks/${trackId}/source-versions/${versionId}/audio`,
   trackApi: {
     get: mocks.trackGetMock,
     listAssignments: mocks.listAssignmentsMock,
@@ -558,6 +565,67 @@ describe('MasteringView', () => {
     expect(wrapper.text()).not.toContain('Confirm My Upload')
   })
 
+  it('lets a non-producer album manager approve final review from the mastering workspace', async () => {
+    mocks.currentUser.id = 42
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
+      track: {
+        submitter_id: 4,
+        mastering_engineer_id: 7,
+        producer_id: 8,
+        viewer_is_album_manager: true,
+        status: 'final_review',
+        workflow_step: {
+          id: 'final_review',
+          label: 'Final Review',
+          type: 'approval',
+          ui_variant: 'final_review',
+          assignee_role: 'producer',
+          order: 1,
+          transitions: { reject_to_mastering: 'mastering' },
+        },
+        current_master_delivery: {
+          id: 21,
+          workflow_cycle: 1,
+          delivery_number: 1,
+          file_path: '/master.wav',
+          uploaded_by_id: 7,
+          confirmed_at: '2024-01-02T12:00:00Z',
+          producer_approved_at: null,
+          submitter_approved_at: '2024-01-02T13:00:00Z',
+          created_at: '2024-01-02T00:00:00Z',
+        },
+      },
+      master_deliveries: [
+        {
+          id: 21,
+          workflow_cycle: 1,
+          delivery_number: 1,
+          file_path: '/master.wav',
+          uploaded_by_id: 7,
+          confirmed_at: '2024-01-02T12:00:00Z',
+          producer_approved_at: null,
+          submitter_approved_at: '2024-01-02T13:00:00Z',
+          created_at: '2024-01-02T00:00:00Z',
+        },
+      ],
+    }))
+
+    const wrapper = mountWithPlugins(MasteringView)
+    await flushPromises()
+
+    expect(wrapper.find('.discussion-panel').exists()).toBe(true)
+
+    await openDeliveryTab(wrapper)
+
+    const approveButton = wrapper.findAll('button').find(button => button.text() === 'Approve Delivery')
+    expect(approveButton).toBeTruthy()
+
+    await approveButton!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.approveFinalReviewMock).toHaveBeenCalledWith(9)
+  })
+
   it('lets the drawer audition final-review issues through the master waveform on the listen tab', async () => {
     mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
       track: {
@@ -673,7 +741,7 @@ describe('MasteringView', () => {
     await flushPromises()
     await openDeliveryTab(wrapper)
 
-    expect(wrapper.text()).toContain('Master delivery requires a playable mastered audio file')
+    expect(wrapper.text()).toContain('A reference link does not replace the required playable master audio file')
     await wrapper.find('textarea').setValue('https://cloud.example/stems\ncode: bk24')
     const submitButton = wrapper.findAll('button').find(button => button.text() === 'Confirm Upload')!
 

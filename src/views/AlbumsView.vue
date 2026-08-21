@@ -2,13 +2,14 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { albumApi, API_ORIGIN } from '@/api'
+import { albumApi, circleApi, resolveUploadUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Album } from '@/types'
 import { Music, Archive, Search } from 'lucide-vue-next'
 import EmptyState from '@/components/common/EmptyState.vue'
 import AlbumCoverImage from '@/components/common/AlbumCoverImage.vue'
 import { parseUTC } from '@/utils/time'
+import { albumViewerRoleBadgeClass, albumViewerRoleLabel } from '@/utils/albumPermissions'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -19,6 +20,9 @@ const loadError = ref('')
 const activeTab = ref<'active' | 'archived'>('active')
 const searchQuery = ref('')
 const sortMode = ref<'attention' | 'recent' | 'title'>('attention')
+const canCreateAlbum = ref(false)
+const hasCircles = ref(false)
+const createAccessLoading = ref(true)
 
 let albumLoadSerial = 0
 let searchTimer: ReturnType<typeof setTimeout> | null = null
@@ -45,7 +49,10 @@ async function load() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  void load()
+  void loadCreateAccess()
+})
 
 watch(activeTab, () => {
   if (searchTimer) clearTimeout(searchTimer)
@@ -64,14 +71,32 @@ onBeforeUnmount(() => {
   if (searchTimer) clearTimeout(searchTimer)
 })
 
-const myAlbums = computed(() => {
-  const userId = appStore.currentUser?.id
-  if (!userId) return []
-  return albums.value.filter(album =>
-    album.producer_id === userId ||
-    album.mastering_engineer_id === userId ||
-    album.members.some(m => m.user_id === userId)
-  )
+async function loadCreateAccess() {
+  createAccessLoading.value = true
+  if (!appStore.currentUser) {
+    canCreateAlbum.value = false
+    hasCircles.value = false
+    createAccessLoading.value = false
+    return
+  }
+  try {
+    const circles = await circleApi.list()
+    hasCircles.value = circles.length > 0
+    canCreateAlbum.value = circles.some(circle => circle.viewer_can_create_album === true)
+  } catch {
+    canCreateAlbum.value = false
+    hasCircles.value = false
+  } finally {
+    createAccessLoading.value = false
+  }
+}
+
+const emptyAlbumHint = computed(() => {
+  if (activeTab.value !== 'active' || searchQuery.value.trim()) return undefined
+  if (createAccessLoading.value) return t('albums.checkingCreateAccess')
+  if (canCreateAlbum.value) return t('albums.noAlbumsCanCreateHint')
+  if (!hasCircles.value) return t('albums.noAlbumsNoCircleHint')
+  return t('albums.noAlbumsMemberHint')
 })
 
 function deadlineInfo(album: Album): { text: string; overdue: boolean } | null {
@@ -88,7 +113,7 @@ function attentionScore(album: Album): number {
 }
 
 const displayedAlbums = computed(() => {
-  const next = [...myAlbums.value]
+  const next = [...albums.value]
   return next.sort((left, right) => {
     if (sortMode.value === 'title') {
       return left.title.localeCompare(right.title)
@@ -103,21 +128,12 @@ const displayedAlbums = computed(() => {
   })
 })
 
-const isProducer = computed(() => appStore.currentUser?.role === 'producer')
-
 function userRoleInAlbum(album: Album): string {
-  const userId = appStore.currentUser?.id
-  if (!userId) return ''
-  if (album.producer_id === userId) return t('roles.producer')
-  if (album.mastering_engineer_id === userId) return t('roles.masteringEngineer')
-  return t('roles.member')
+  return albumViewerRoleLabel(album, appStore.currentUser, t)
 }
 
 function roleBadgeClass(album: Album): string {
-  const userId = appStore.currentUser?.id
-  if (album.producer_id === userId) return 'bg-warning-bg text-warning'
-  if (album.mastering_engineer_id === userId) return 'bg-info-bg text-info'
-  return 'bg-border text-foreground'
+  return albumViewerRoleBadgeClass(album, appStore.currentUser)
 }
 </script>
 
@@ -131,16 +147,16 @@ function roleBadgeClass(album: Album): string {
           <input
             v-model="searchQuery"
             type="text"
-            :placeholder="t('admin.searchAlbums')"
+            :placeholder="t('albums.searchPlaceholder')"
             class="input-field w-full pl-9 text-sm"
           />
         </div>
         <select v-model="sortMode" class="select-field min-w-[10rem] text-sm">
-          <option value="attention">{{ t('dashboard.attentionAlbums') }}</option>
-          <option value="recent">{{ t('dashboard.recentUpdates') }}</option>
-          <option value="title">{{ t('albumNew.albumTitle') }}</option>
+          <option value="attention">{{ t('albums.sortAttention') }}</option>
+          <option value="recent">{{ t('albums.sortRecent') }}</option>
+          <option value="title">{{ t('albums.sortTitle') }}</option>
         </select>
-        <RouterLink v-if="isProducer" to="/albums/new" class="btn-primary text-sm">
+        <RouterLink v-if="canCreateAlbum" to="/albums/new" class="btn-primary text-sm">
           {{ t('albums.newAlbum') }}
         </RouterLink>
       </div>
@@ -185,8 +201,8 @@ function roleBadgeClass(album: Album): string {
     <EmptyState
       v-else-if="displayedAlbums.length === 0"
       :icon="activeTab === 'archived' ? Archive : Music"
-      :title="searchQuery.trim() ? t('admin.noAlbums') : (activeTab === 'archived' ? t('albums.archivedEmpty') : t('albums.noAlbums'))"
-      :hint="searchQuery.trim() ? undefined : (activeTab === 'active' ? t('albums.noAlbumsHint') : undefined)"
+      :title="searchQuery.trim() ? t('albums.searchEmpty') : (activeTab === 'archived' ? t('albums.archivedEmpty') : t('albums.noAlbums'))"
+      :hint="emptyAlbumHint"
     />
 
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -202,7 +218,7 @@ function roleBadgeClass(album: Album): string {
           <!-- Cover image or default placeholder -->
           <div class="w-full h-32 overflow-hidden">
             <AlbumCoverImage
-              :src="album.cover_image ? `${API_ORIGIN}/uploads/${album.cover_image}` : null"
+              :src="album.cover_image ? resolveUploadUrl(album.cover_image) : null"
               :alt="album.title"
               class="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200"
               :class="{ 'opacity-60 grayscale': album.archived_at }"

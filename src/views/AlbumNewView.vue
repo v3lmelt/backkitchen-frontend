@@ -2,7 +2,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { albumApi, circleApi, userApi } from '@/api'
+import { albumApi, circleApi } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
 import {
@@ -11,16 +11,17 @@ import {
   localizeAlbumCoverValidationError,
   validateAlbumCoverFile,
 } from '@/utils/albumCover'
-import type { CircleSummary, User, WorkflowConfig, WorkflowTemplate } from '@/types'
-import { ChevronLeft, Upload, ChevronDown, ChevronRight, HelpCircle, BookTemplate, Save } from 'lucide-vue-next'
+import type { Circle, CircleSummary, User, WorkflowConfig, WorkflowTemplate } from '@/types'
+import { ChevronLeft, Upload, ChevronDown, ChevronRight, HelpCircle, BookTemplate, Save, Plus, UserPlus } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import AlbumCoverImage from '@/components/common/AlbumCoverImage.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import {
-  buildDefaultWorkflowConfig,
   getFirstPeerReviewAssignmentMode,
+  loadDefaultWorkflowConfig,
   sanitizeWorkflowUserReferences,
   type ReviewAssignmentMode,
   setFirstPeerReviewAssignmentMode,
@@ -42,9 +43,14 @@ const circleMemberCache = new Map<number, User[]>()
 
 const form = ref({ title: '', description: '' })
 const titleError = ref('')
+const circleError = ref('')
 
 function validateTitle() {
   titleError.value = form.value.title.trim() ? '' : t('albumNew.titleRequired')
+}
+
+function validateCircle() {
+  circleError.value = selectedCircleId.value ? '' : t('albumNew.circleRequired')
 }
 
 const coverInputRef = ref<HTMLInputElement | null>(null)
@@ -62,6 +68,14 @@ const deadlineEnabled = reactive({ peer_review: false, mastering: false, final_r
 const showWorkflowBuilder = ref(false)
 const showWorkflowGuide = ref(false)
 const workflowConfig = ref<WorkflowConfig | null>(null)
+// Backend-served default workflow config (GET /api/workflow/default-config),
+// loaded on mount; used when the user customizes the workflow without a
+// template.
+const defaultWorkflowConfig = ref<WorkflowConfig | null>(null)
+// True while the default workflow config is being fetched on mount. The
+// reviewer-assignment quick controls stay disabled during this window so the
+// user is not offered a selection that could be silently dropped.
+const defaultWorkflowConfigLoading = ref(true)
 const selectedCircleId = ref<number | null>(null)
 const circles = ref<CircleSummary[]>([])
 const selectedCircleDefaultChecklistEnabled = ref<boolean | null>(null)
@@ -82,6 +96,19 @@ const saveTemplateName = ref('')
 const saveTemplateDesc = ref('')
 const savingTemplate = ref(false)
 const selectedTemplateId = ref<number | null>(null)
+const pendingTemplate = ref<WorkflowTemplate | null>(null)
+
+const selectedTemplate = computed(() =>
+  templates.value.find(template => template.id === selectedTemplateId.value) ?? null,
+)
+const workflowSummary = computed(() => {
+  if (selectedTemplate.value) {
+    return t('workflowTemplate.basedOnTemplate', { name: selectedTemplate.value.name })
+  }
+  return workflowConfig.value
+    ? t('albumNew.workflowCustomized')
+    : t('albumNew.workflowUsingDefault')
+})
 
 const assignableUsers = computed<User[]>(() =>
   selectedCircleId.value ? circleMemberUsers.value : allUsers.value
@@ -94,9 +121,10 @@ const coverButtonLabel = computed(() => t('albumNew.coverButtonLabel'))
 
 const circleOptions = computed<SelectOption[]>(() =>
   circles.value
-    .filter((c) => c.created_by === appStore.currentUser?.id)
     .map((c) => ({ value: c.id, label: c.name }))
 )
+
+const hasAvailableCircles = computed(() => circleOptions.value.length > 0)
 
 const workflowMemberOptions = computed<SelectOption[]>(() => {
   const allKnownUsers = new Map<number, User>()
@@ -144,9 +172,13 @@ function sanitizeWorkflowConfigForMembers() {
 }
 
 const reviewerAssignmentMode = computed<ReviewAssignmentMode>({
-  get: () => getFirstPeerReviewAssignmentMode(workflowConfig.value),
+  get: () => getFirstPeerReviewAssignmentMode(workflowConfig.value ?? defaultWorkflowConfig.value),
   set: (mode) => {
-    const next = workflowConfig.value ?? buildDefaultWorkflowConfig((key, fallback) => t(key, fallback))
+    const next = workflowConfig.value ?? defaultWorkflowConfig.value
+    if (!next) {
+      toastWarning(t('albumNew.reviewerAssignmentUnavailable'))
+      return
+    }
     workflowConfig.value = setFirstPeerReviewAssignmentMode(next, mode)
   },
 })
@@ -165,17 +197,24 @@ function partialSetupWarning(message: string) {
   return t('albumNew.coverUploadPartialFailure', { message })
 }
 
+function cacheCircleDetails(circle: Circle) {
+  const members = circle.members.map(member => member.user)
+  circleMemberCache.set(circle.id, members)
+  circleChecklistDefaults.set(circle.id, circle.default_checklist_enabled ?? false)
+}
+
+
 async function loadInitialOptions() {
-  if (appStore.currentUser?.role !== 'producer') {
+  if (!appStore.currentUser) {
     router.replace('/albums')
     return
   }
   loading.value = true
   loadError.value = ''
   try {
-    const [userList, circleList] = await Promise.all([userApi.list(), circleApi.list()])
-    allUsers.value = userList
-    circles.value = circleList
+    const circleList = await circleApi.list()
+    allUsers.value = []
+    circles.value = circleList.filter(circle => circle.viewer_can_create_album === true)
   } catch (error: any) {
     allUsers.value = []
     circleMemberUsers.value = []
@@ -187,6 +226,16 @@ async function loadInitialOptions() {
 }
 
 onMounted(loadInitialOptions)
+onMounted(async () => {
+  try {
+    defaultWorkflowConfig.value = await loadDefaultWorkflowConfig((key, fallback) => t(key, fallback))
+  } catch {
+    // Older backends lack the endpoint; the workflow quick controls stay
+    // inert (toggling one surfaces a toast) until a template provides a config.
+  } finally {
+    defaultWorkflowConfigLoading.value = false
+  }
+})
 
 function sanitizeTeamState(allowedUsers: User[]) {
   const allowedIds = new Set(allowedUsers.map(user => user.id))
@@ -221,12 +270,10 @@ async function loadCircleMembers(circleId: number) {
     const circle = await circleApi.get(circleId)
     if (requestId !== latestCircleMembersRequest || selectedCircleId.value !== circleId) return
 
-    const members = circle.members.map(member => member.user)
-    circleMemberCache.set(circleId, members)
-    circleChecklistDefaults.set(circleId, circle.default_checklist_enabled ?? false)
+    cacheCircleDetails(circle)
     selectedCircleDefaultChecklistEnabled.value = circle.default_checklist_enabled ?? false
-    circleMemberUsers.value = members
-    sanitizeTeamState(members)
+    circleMemberUsers.value = circleMemberCache.get(circleId) ?? []
+    sanitizeTeamState(circleMemberUsers.value)
   } catch (error: any) {
     if (requestId !== latestCircleMembersRequest || selectedCircleId.value !== circleId) return
 
@@ -286,11 +333,25 @@ async function loadTemplates() {
   }
 }
 
-async function loadFromTemplate(template: WorkflowTemplate) {
+function applyTemplate(template: WorkflowTemplate) {
   workflowConfig.value = JSON.parse(JSON.stringify(template.workflow_config))
   sanitizeWorkflowConfigForMembers()
   selectedTemplateId.value = template.id
   showTemplateList.value = false
+}
+
+function loadFromTemplate(template: WorkflowTemplate) {
+  if (workflowConfig.value) {
+    pendingTemplate.value = template
+    return
+  }
+  applyTemplate(template)
+}
+
+function confirmTemplateLoad() {
+  const template = pendingTemplate.value
+  pendingTemplate.value = null
+  if (template) applyTemplate(template)
 }
 
 async function openTemplateList() {
@@ -352,7 +413,8 @@ function toggleMember(userId: number) {
 
 async function create() {
   validateTitle()
-  if (titleError.value) return
+  validateCircle()
+  if (titleError.value || circleError.value || !selectedCircleId.value) return
   creating.value = true
   createError.value = ''
   let createdAlbumId: number | null = null
@@ -361,9 +423,7 @@ async function create() {
     sanitizeWorkflowConfigForMembers()
 
     const payload: any = { ...form.value }
-    if (selectedCircleId.value) {
-      payload.circle_id = selectedCircleId.value
-    }
+    payload.circle_id = selectedCircleId.value
     payload.mastering_engineer_id = teamState.mastering_engineer_id
     payload.member_ids = [...teamState.member_ids]
 
@@ -374,7 +434,7 @@ async function create() {
     payload.deadline = deadlineState.deadline ? new Date(deadlineState.deadline).toISOString() : null
     payload.phase_deadlines = Object.keys(phaseDeadlines).length ? phaseDeadlines : null
 
-    if (selectedCircleId.value && albumChecklistMode.value === 'circle_default') {
+    if (albumChecklistMode.value === 'circle_default') {
       payload.checklist_enabled = null
     } else {
       payload.checklist_enabled = albumChecklistMode.value !== 'disabled'
@@ -426,6 +486,24 @@ async function create() {
     </div>
 
     <template v-else>
+      <div v-if="!hasAvailableCircles" class="card max-w-2xl mx-auto text-center space-y-4">
+        <div class="space-y-2">
+          <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('albumNew.noCirclesTitle') }}</h2>
+          <p class="text-sm text-muted-foreground">{{ t('albumNew.noCirclesDesc') }}</p>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+          <RouterLink to="/circles" class="btn-secondary text-sm inline-flex items-center justify-center gap-2">
+            <UserPlus class="w-4 h-4" :stroke-width="2" />
+            {{ t('albumNew.joinCircleAction') }}
+          </RouterLink>
+          <RouterLink to="/circles/new" class="btn-primary text-sm inline-flex items-center justify-center gap-2">
+            <Plus class="w-4 h-4" :stroke-width="2" />
+            {{ t('albumNew.createCircleAction') }}
+          </RouterLink>
+        </div>
+      </div>
+
+      <template v-else>
       <!-- 基本信息 -->
       <div class="card space-y-5">
         <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('albumNew.basicInfo') }}</h2>
@@ -487,9 +565,15 @@ async function create() {
       </div>
 
       <!-- 社团 -->
-      <div v-if="circles.length" class="card space-y-4">
-        <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('settings.circleName') }}</h2>
-        <CustomSelect v-model="selectedCircleId" :options="circleOptions" :placeholder="t('settings.noneOption')" />
+      <div class="card space-y-4">
+        <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('albumNew.circleSection') }}</h2>
+        <CustomSelect
+          v-model="selectedCircleId"
+          :options="circleOptions"
+          :placeholder="t('albumNew.circlePlaceholder')"
+          @update:model-value="circleError = ''"
+        />
+        <p v-if="circleError" class="text-xs text-error">{{ circleError }}</p>
       </div>
 
       <!-- 团队 -->
@@ -566,24 +650,27 @@ async function create() {
           <div class="flex flex-wrap gap-2">
             <button
               type="button"
-              class="btn-secondary text-xs"
+              class="btn-secondary text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               :class="reviewerAssignmentMode === 'auto' ? 'border-primary text-primary' : ''"
+              :disabled="defaultWorkflowConfigLoading"
               @click="reviewerAssignmentMode = 'auto'"
             >
               {{ t('workflowEditor.auto') }}
             </button>
             <button
               type="button"
-              class="btn-secondary text-xs"
+              class="btn-secondary text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               :class="reviewerAssignmentMode === 'manual' ? 'border-primary text-primary' : ''"
+              :disabled="defaultWorkflowConfigLoading"
               @click="reviewerAssignmentMode = 'manual'"
             >
               {{ t('workflowEditor.manual') }}
             </button>
             <button
               type="button"
-              class="btn-secondary text-xs"
+              class="btn-secondary text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               :class="reviewerAssignmentMode === 'fixed' ? 'border-primary text-primary' : ''"
+              :disabled="defaultWorkflowConfigLoading"
               @click="reviewerAssignmentMode = 'fixed'; showWorkflowBuilder = true"
             >
               {{ t('workflowEditor.fixed') }}
@@ -646,7 +733,7 @@ async function create() {
         >
           <component :is="showWorkflowBuilder ? ChevronDown : ChevronRight" class="w-4 h-4 text-muted-foreground" />
           <h2 class="text-sm font-mono font-semibold text-foreground">{{ t('albumNew.workflowSection') }}</h2>
-          <span v-if="!showWorkflowBuilder" class="text-xs text-muted-foreground ml-auto">{{ t('albumNew.workflowUsingDefault') }}</span>
+          <span v-if="!showWorkflowBuilder" class="text-xs text-muted-foreground ml-auto">{{ workflowSummary }}</span>
         </button>
         <template v-if="showWorkflowBuilder">
           <p class="text-xs text-muted-foreground">
@@ -706,24 +793,20 @@ async function create() {
           </div>
 
           <!-- Template load/save buttons -->
-          <div class="flex items-center gap-2 flex-wrap">
+          <div v-if="selectedCircleId" class="flex items-center gap-2 flex-wrap">
             <button
-              v-if="selectedCircleId"
               @click="openTemplateList"
               class="btn-secondary text-xs"
             >
               <BookTemplate class="w-3.5 h-3.5 mr-1" /> {{ t('workflowTemplate.loadFromTemplate') }}
             </button>
             <button
-              v-if="selectedCircleId && workflowConfig"
+              v-if="workflowConfig"
               @click="showSaveTemplate = true"
               class="btn-secondary text-xs"
             >
               <Save class="w-3.5 h-3.5 mr-1" /> {{ t('workflowTemplate.saveAsTemplate') }}
             </button>
-            <span v-if="!selectedCircleId" class="text-xs text-muted-foreground">
-              {{ t('workflowTemplate.noCircleHint') }}
-            </span>
           </div>
 
           <!-- Template list modal -->
@@ -788,11 +871,21 @@ async function create() {
         <button @click="router.back()" :disabled="creating" class="btn-secondary text-sm flex-1">
           {{ t('common.cancel') }}
         </button>
-        <button @click="create" :disabled="creating" class="btn-primary text-sm flex-1">
+        <button @click="create" :disabled="creating || !selectedCircleId" class="btn-primary text-sm flex-1">
           {{ creating ? t('albumNew.creating') : t('albumNew.createButton') }}
         </button>
       </div>
       <p v-if="createError" class="text-sm text-error">{{ createError }}</p>
+      </template>
     </template>
+
+    <ConfirmModal
+      v-if="pendingTemplate"
+      :title="t('workflowTemplate.loadConfirmTitle')"
+      :message="t('workflowTemplate.loadConfirmMessage', { name: pendingTemplate.name })"
+      :confirm-text="t('workflowTemplate.loadFromTemplate')"
+      @confirm="confirmTemplateLoad"
+      @cancel="pendingTemplate = null"
+    />
   </div>
 </template>

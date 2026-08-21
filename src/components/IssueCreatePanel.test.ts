@@ -12,6 +12,7 @@ vi.mock('@/api', () => ({
 }))
 
 import IssueCreatePanel from './IssueCreatePanel.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 function clipboardFileItem(file: File, type = file.type): DataTransferItem {
   return {
@@ -69,6 +70,8 @@ describe('IssueCreatePanel', () => {
     vm.handleClick(1.5)
     await wrapper.vm.$nextTick()
 
+    expect(wrapper.findAll('button').some(button => ['Reviewers and composer', 'Reviewers only'].includes(button.text()))).toBe(false)
+
     await wrapper.find('input').setValue('Clicks at 1:30')
     await wrapper.find('textarea').setValue('Audible clicking artifacts')
 
@@ -85,10 +88,11 @@ describe('IssueCreatePanel', () => {
       title: 'Clicks at 1:30',
       description: 'Audible clicking artifacts',
       severity: 'major',
-      phase: 'mastering',
       visibility: 'public',
       markers: [{ marker_type: 'point', time_start: 1.5, time_end: null }],
     })
+    // The backend infers the phase from the current workflow step.
+    expect(payload.phase).toBeUndefined()
     expect(typeof onProgress).toBe('function')
   })
 
@@ -153,6 +157,27 @@ describe('IssueCreatePanel', () => {
     expect(payload.images.map((file: File) => file.name)).toEqual(['image-1.png', 'image-2.png', 'image-3.png'])
   })
 
+  it('hides internal visibility and submits public when explicitly disabled', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 9, phase: 'peer', allowInternalVisibility: false },
+    })
+
+    const vm = wrapper.vm as any
+    vm.handleClick(4.2)
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.findAll('button').some(button => ['Reviewers and composer', 'Reviewers only'].includes(button.text()))).toBe(false)
+
+    await wrapper.find('input').setValue('Needs balance tweak')
+    await wrapper.find('textarea').setValue('Low end is masking the vocal')
+    const submitBtn = wrapper.findAll('button').find(button => button.classes().includes('btn-primary') && button.classes().includes('text-sm'))!
+    await submitBtn.trigger('click')
+    await flushPromises()
+
+    expect(mocks.createMock).toHaveBeenCalledTimes(1)
+    expect(mocks.createMock.mock.calls[0][1].visibility).toBe('public')
+  })
+
   it('defaults multi-review issues to public visibility and submits it explicitly', async () => {
     const wrapper = mountWithPlugins(IssueCreatePanel, {
       props: { trackId: 9, phase: 'peer', allowInternalVisibility: true },
@@ -184,7 +209,7 @@ describe('IssueCreatePanel', () => {
     vm.handleClick(4.2)
     await wrapper.vm.$nextTick()
 
-    const visibilityToggle = wrapper.findAll('button').find(b => b.text().includes('Public'))!
+    const visibilityToggle = wrapper.findAll('button').find(b => b.text().includes('Reviewers and composer'))!
     await visibilityToggle.trigger('click')
     await wrapper.find('input').setValue('Needs balance tweak')
     await wrapper.find('textarea').setValue('Low end is masking the vocal')
@@ -197,6 +222,60 @@ describe('IssueCreatePanel', () => {
     expect(mocks.createMock).toHaveBeenCalledTimes(1)
     const [, payload] = mocks.createMock.mock.calls[0]
     expect(payload.visibility).toBe('internal')
+  })
+
+  it('resets internal visibility to public when permission is removed', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 9, phase: 'peer', allowInternalVisibility: true },
+    })
+
+    const vm = wrapper.vm as any
+    vm.handleClick(4.2)
+    await wrapper.vm.$nextTick()
+
+    const visibilityToggle = wrapper.findAll('button').find(button => button.text().includes('Reviewers and composer'))!
+    await visibilityToggle.trigger('click')
+    await wrapper.setProps({ allowInternalVisibility: false })
+
+    expect(wrapper.findAll('button').some(button => ['Reviewers and composer', 'Reviewers only'].includes(button.text()))).toBe(false)
+
+    await wrapper.find('input').setValue('Needs balance tweak')
+    await wrapper.find('textarea').setValue('Low end is masking the vocal')
+    const submitBtn = wrapper.findAll('button').find(button => button.classes().includes('btn-primary') && button.classes().includes('text-sm'))!
+    await submitBtn.trigger('click')
+    await flushPromises()
+
+    expect(mocks.createMock).toHaveBeenCalledTimes(1)
+    expect(mocks.createMock.mock.calls[0][1].visibility).toBe('public')
+  })
+
+  it('restores an internal draft as public when internal visibility is not allowed', async () => {
+    localStorage.setItem('backkitchen_issue_draft:9:peer:none', JSON.stringify({
+      showForm: true,
+      issueMode: 'timed',
+      issueVisibility: 'internal',
+      issueVisibilityTouched: true,
+      title: 'Draft title',
+      description: 'Draft description',
+      severity: 'major',
+      markers: [{ marker_type: 'point', time_start: 4.2, time_end: null }],
+      rangeAnchor: null,
+    }))
+
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 9, phase: 'peer', allowInternalVisibility: false },
+    })
+    await wrapper.vm.$nextTick()
+
+    expect((wrapper.find('input').element as HTMLInputElement).value).toBe('Draft title')
+    expect(wrapper.findAll('button').some(button => ['Reviewers and composer', 'Reviewers only'].includes(button.text()))).toBe(false)
+
+    const submitBtn = wrapper.findAll('button').find(button => button.classes().includes('btn-primary') && button.classes().includes('text-sm'))!
+    await submitBtn.trigger('click')
+    await flushPromises()
+
+    expect(mocks.createMock).toHaveBeenCalledTimes(1)
+    expect(mocks.createMock.mock.calls[0][1].visibility).toBe('public')
   })
 
   it('switches mention candidates with public and internal visibility', async () => {
@@ -218,7 +297,7 @@ describe('IssueCreatePanel', () => {
 
     expect(vm.activeMentionUsers).toEqual(publicMentionUsers)
 
-    const visibilityToggle = wrapper.findAll('button').find(b => b.text().includes('Public'))!
+    const visibilityToggle = wrapper.findAll('button').find(b => b.text().includes('Reviewers and composer'))!
     await visibilityToggle.trigger('click')
 
     expect(vm.activeMentionUsers).toEqual(internalMentionUsers)
@@ -271,6 +350,59 @@ describe('IssueCreatePanel', () => {
 
     await wrapper.findAll('button').find(b => b.text() === 'Cancel')!.trigger('click')
     expect(wrapper.find('input').exists()).toBe(false)
+  })
+
+  it('requires confirmation before discarding a non-empty draft', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 1, phase: 'peer' },
+    })
+    await wrapper.find('button.btn-primary.text-xs').trigger('click')
+    await wrapper.find('input').setValue('Draft issue')
+
+    await wrapper.findAll('button').find(button => button.text() === 'Discard draft')!.trigger('click')
+    expect(wrapper.getComponent(ConfirmModal).props('title')).toBe('Discard issue draft?')
+    wrapper.getComponent(ConfirmModal).vm.$emit('cancel')
+    await wrapper.vm.$nextTick()
+    expect((wrapper.find('input').element as HTMLInputElement).value).toBe('Draft issue')
+
+    await wrapper.findAll('button').find(button => button.text() === 'Discard draft')!.trigger('click')
+    wrapper.getComponent(ConfirmModal).vm.$emit('confirm')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('input').exists()).toBe(false)
+    expect(localStorage.getItem('backkitchen_issue_draft:1:peer:none')).toBeNull()
+  })
+
+  it('confirms before switching to a general issue removes timed markers', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 1, phase: 'peer' },
+    })
+    const vm = wrapper.vm as any
+    vm.handleClick(2.5)
+    await wrapper.vm.$nextTick()
+
+    await wrapper.findAll('button').find(button => button.text() === 'General Issue')!.trigger('click')
+    expect(wrapper.getComponent(ConfirmModal).props('message')).toContain('1 timed marker')
+    wrapper.getComponent(ConfirmModal).vm.$emit('cancel')
+    await wrapper.vm.$nextTick()
+    expect(vm.markers).toHaveLength(1)
+
+    await wrapper.findAll('button').find(button => button.text() === 'General Issue')!.trigger('click')
+    wrapper.getComponent(ConfirmModal).vm.$emit('confirm')
+    await wrapper.vm.$nextTick()
+    expect(vm.markers).toHaveLength(0)
+  })
+
+  it('shows draft, severity, attachment, and visibility guidance', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, {
+      props: { trackId: 1, phase: 'peer', allowInternalVisibility: true },
+    })
+    await wrapper.find('button.btn-primary.text-xs').trigger('click')
+
+    expect(wrapper.text()).toContain('The draft is saved in this browser')
+    expect(wrapper.text()).toContain('Critical: blocks approval or delivery')
+    expect(wrapper.text()).toContain('Up to 3 audio files, 200 MB each')
+    expect(wrapper.text()).toContain('Up to 3 images, 10 MB each')
+    expect(wrapper.text()).toContain('Visible to review participants, album managers, and the composer')
   })
 
   it('toggles same point marker off on second click', async () => {

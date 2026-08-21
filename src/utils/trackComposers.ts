@@ -1,4 +1,5 @@
 import type { Track } from '@/types'
+import { anonTokenFor } from '@/utils/hash'
 
 export function trackComposerIds(track: Track | null | undefined): number[] {
   if (!track) return []
@@ -13,9 +14,15 @@ export function isTrackComposer(track: Track | null | undefined, userId: number 
 
 export function isComposerActor(track: Track | null | undefined, userId: number | null | undefined): boolean {
   if (!track || userId == null) return false
+  // Server-computed flag is authoritative for the current viewer (all callers
+  // pass the current user's id); fall back to client-side derivation for
+  // payloads that predate the field.
+  if (track.viewer_is_composer_actor != null) return track.viewer_is_composer_actor
   if (isTrackComposer(track, userId)) return true
   if (trackComposerIds(track).length > 0) return false
-  if (externalComposerDisplayNames(track).length > 0) return track.producer_id === userId
+  if (externalComposerDisplayNames(track).length > 0) {
+    return (track.proxy_uploader_id ?? track.producer_id ?? track.submitter_id) === userId
+  }
   return track.submitter_id === userId
 }
 
@@ -56,4 +63,18 @@ export function platformComposerDisplayText(track: Track | null | undefined, fal
 export function externalComposerDisplayText(track: Track | null | undefined, fallback = '--'): string {
   const names = externalComposerDisplayNames(track)
   return names.length ? names.join(' / ') : fallback
+}
+
+/** Artist line for track headers: artist field, else composer names, else hashed submitter id. */
+export function trackArtistDisplay(track: Track | null | undefined): string {
+  if (!track) return '--'
+  if (track.artist) return track.artist
+  const composerText = trackComposerDisplayText(track)
+  if (composerText !== '--') return composerText
+  return track.submitter_id ? `#${anonTokenFor(track.submitter, track.submitter_id)}` : '--'
+}
+
+/** Whether `trackArtistDisplay` falls back to the hashed submitter id (mono styling). */
+export function trackArtistUsesHash(track: Track | null | undefined): boolean {
+  return Boolean(track && !track.artist && trackComposerDisplayText(track) === '--' && track.submitter_id)
 }

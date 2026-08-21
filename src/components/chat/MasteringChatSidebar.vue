@@ -6,6 +6,7 @@ import { useAppStore } from '@/stores/app'
 import type { Discussion, Issue, User } from '@/types'
 import { formatLocaleDate, formatDuration } from '@/utils/time'
 import { useDiscussions } from '@/composables/useDiscussions'
+import { useDiscussionRealtime } from '@/composables/useDiscussionRealtime'
 import CommentInput from '@/components/common/CommentInput.vue'
 import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
@@ -36,12 +37,6 @@ const unreadCount = ref(0)
 const messageListRef = ref<HTMLElement | null>(null)
 const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
 const pendingDeleteDiscussion = ref<Discussion | null>(null)
-
-const launcherMeta = computed(() => (
-  unreadCount.value > 0
-    ? t('chat.unreadCount', { count: unreadCount.value > 99 ? '99+' : unreadCount.value })
-    : t('chat.launchHint')
-))
 
 function openPanel() {
   if (open.value) return
@@ -114,7 +109,12 @@ onMounted(loadDiscussions)
 
 watch(() => props.trackId, loadDiscussions)
 
-defineExpose({ handleDiscussionEvent, openPanel, closePanel })
+// Realtime discussion events arrive via the shared bus (dispatched by the
+// track workspace's WebSocket) — no imperative handler exposed to parents.
+const { subscribe } = useDiscussionRealtime()
+subscribe((event, discussionId) => {
+  void handleDiscussionEvent(event, discussionId)
+})
 </script>
 
 <template>
@@ -136,7 +136,7 @@ defineExpose({ handleDiscussionEvent, openPanel, closePanel })
     </div>
     <div class="min-w-0 pr-1">
       <div class="text-xs font-mono text-primary">{{ t('chat.title') }}</div>
-      <div class="mt-0.5 text-[11px] leading-4 text-muted-foreground">{{ launcherMeta }}</div>
+      <div v-if="unreadCount > 0" class="mt-0.5 text-[11px] leading-4 text-muted-foreground">{{ t('chat.unreadCount', { count: unreadCount > 99 ? '99+' : unreadCount }) }}</div>
     </div>
   </button>
 

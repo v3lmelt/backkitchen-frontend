@@ -15,14 +15,14 @@
           :aria-label="uploadLogoLabel"
           @click="logoInputRef?.click()"
         >
-          <img v-if="circle.logo_url" :src="`${API_ORIGIN}/uploads/${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
+          <img v-if="circle.logo_url" :src="resolveUploadUrl(circle.logo_url)" alt="" class="w-full h-full object-cover" />
           <Smile v-else class="w-6 h-6 text-muted-foreground" :stroke-width="1.5" />
           <div v-if="canManageCircle" class="absolute inset-0 bg-overlay/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <Upload class="w-3.5 h-3.5 text-white" :stroke-width="2" />
           </div>
         </button>
         <div v-else class="w-16 h-16 rounded-full overflow-hidden border border-border bg-border flex items-center justify-center shrink-0 relative">
-          <img v-if="circle.logo_url" :src="`${API_ORIGIN}/uploads/${circle.logo_url}`" alt="" class="w-full h-full object-cover" />
+          <img v-if="circle.logo_url" :src="resolveUploadUrl(circle.logo_url)" alt="" class="w-full h-full object-cover" />
           <Smile v-else class="w-6 h-6 text-muted-foreground" :stroke-width="1.5" />
         </div>
         <input v-if="canManageCircle" ref="logoInputRef" type="file" accept="image/*" class="hidden" @change="uploadLogo" />
@@ -101,7 +101,6 @@
                 {{ t('circleDetail.defaultChecklistDisabled') }}
               </button>
             </div>
-            <p class="text-xs text-muted-foreground">{{ t('circleDetail.defaultChecklistHint') }}</p>
           </div>
           <div v-if="canManageCircle" class="flex justify-end">
             <button class="btn-primary" :disabled="savingInfo" @click="saveInfo">
@@ -258,7 +257,6 @@
 
           <div v-else-if="templates.length === 0" class="text-center py-8">
             <p class="text-sm text-muted-foreground">{{ t('workflowTemplate.noTemplates') }}</p>
-            <p class="text-xs text-muted-foreground mt-1">{{ t('workflowTemplate.noTemplatesHint') }}</p>
           </div>
 
           <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -292,8 +290,8 @@
         <div class="bg-card border border-error/40 rounded-none p-6 space-y-4">
           <h3 class="text-sm font-mono font-semibold text-error">{{ t('circleDetail.danger.title') }}</h3>
 
-          <!-- Owner: delete circle -->
-          <template v-if="canManageCircle">
+          <!-- Owner/operator: delete circle -->
+          <template v-if="canDeleteCircle">
             <div class="space-y-2">
               <p class="text-sm font-mono font-semibold text-foreground">{{ t('circleDetail.danger.deleteTitle') }}</p>
               <p class="text-xs text-muted-foreground">{{ t('circleDetail.danger.deleteDesc') }}</p>
@@ -404,7 +402,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { circleApi, API_ORIGIN } from '@/api'
+import { circleApi, resolveUploadUrl } from '@/api'
 import type { Circle, CircleMember, CircleRole, InviteCode, WorkflowConfig, WorkflowTemplate } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { parseUTC } from '@/utils/time'
@@ -469,6 +467,7 @@ const isOwner = computed(() =>
   circle.value ? circle.value.created_by === currentUserId.value : false
 )
 const canEditMemberRoles = computed(() => isOwner.value || hasAdminRole(appStore.currentUser, 'operator'))
+const canDeleteCircle = computed(() => isOwner.value || hasAdminRole(appStore.currentUser, 'operator'))
 const canManageCircle = computed(() =>
   canEditMemberRoles.value || currentCircleMember.value?.role === 'co_producer'
 )

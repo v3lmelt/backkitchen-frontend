@@ -2,30 +2,27 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { issueApi, commentApi, r2Api, uploadToR2, trackApi, API_ORIGIN, resolveAssetUrl } from '@/api'
-import { useAppStore } from '@/stores/app'
+import { issueApi, commentApi, trackAudioUrl, sourceVersionAudioUrl } from '@/api'
 import { useTrackStore } from '@/stores/tracks'
-import type { Comment, EditHistory, Issue, IssueStatus, MentionCandidates, StageAssignment, User } from '@/types'
+import { fetchTrackDetailBundle } from '@/composables/useTrackDetail'
+import { emptyMentionCandidates } from '@/utils/mentionCandidates'
+import type { EditHistory, Issue, MentionCandidates, StageAssignment } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
-import TimestampText from '@/components/common/TimestampText.vue'
-import CommentInput from '@/components/common/CommentInput.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
-import ConfirmModal from '@/components/common/ConfirmModal.vue'
-import { formatTimestamp, formatTimestampShort, formatLocaleDate, formatDuration } from '@/utils/time'
-import { resolveAttachmentReferenceIndex, type MarkerIndexReference, type TimeReference, type TimestampTarget } from '@/utils/timestamps'
-import { ArrowDownUp, ChevronLeft, ChevronRight, Music, Pencil, Trash2 } from 'lucide-vue-next'
-import { canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
-import { isTrackComposer } from '@/utils/trackComposers'
+import IssueDetailContent from '@/components/IssueDetailContent.vue'
+import { formatTimestamp, formatTimestampShort } from '@/utils/time'
+import type { MarkerIndexReference } from '@/utils/timestamps'
+import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { isIssueOpenOrInternal } from '@/utils/issueStatus'
 import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
 const router = useRouter()
-const { t, locale } = useI18n()
-const appStore = useAppStore()
+const { t } = useI18n()
 const trackStore = useTrackStore()
-const { success: toastSuccess, error: toastError } = useToast()
+const { error: toastError } = useToast()
 const issueId = computed(() => Number(route.params.id))
 
 const issue = ref<Issue | null>(null)
@@ -35,12 +32,7 @@ const showUnresolvedOnly = ref(false)
 const currentSourceVersionNumber = ref<number | null>(null)
 const cachedTrack = ref<import('@/types').Track | null>(null)
 const reviewAssignments = ref<StageAssignment[]>([])
-const mentionCandidates = ref<MentionCandidates>({
-  general: [],
-  mastering: [],
-  issue_public: [],
-  issue_internal: [],
-})
+const mentionCandidates = ref<MentionCandidates>(emptyMentionCandidates())
 
 const issueIsOutdated = computed(() => {
   if (!issue.value || issue.value.source_version_number == null || currentSourceVersionNumber.value == null) return false
@@ -65,17 +57,13 @@ const waveformIssues = computed(() => {
 let loadCount = 0
 let cachedTrackId: number | null = null
 const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
-const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
-const statusNoteInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
-const issueAudioRefs = new Map<number, HTMLAudioElement>()
-const commentAudioRefs = new Map<string, HTMLAudioElement>()
 
 const audioUrl = computed(() => {
   if (!issue.value) return ''
   if (canOpenIssueSourceAudio.value) {
-    return `${API_ORIGIN}/api/tracks/${issue.value.track_id}/source-versions/${issue.value.source_version_id}/audio`
+    return sourceVersionAudioUrl(issue.value.track_id, issue.value.source_version_id!)
   }
-  return `${API_ORIGIN}/api/tracks/${issue.value.track_id}/audio?v=${issue.value.source_version_number ?? 0}`
+  return trackAudioUrl(issue.value.track_id, issue.value.source_version_number ?? 0)
 })
 
 function onWaveformReady() {
@@ -106,52 +94,6 @@ watch(issueId, () => {
   })
 })
 watch(audioUrl, (url) => { prevAudioUrl = url })
-const pendingStatus = ref<IssueStatus | null>(null)
-
-const canSubmitIssueStatus = computed(() => {
-  return issue.value != null
-    && canUserSubmitIssueStatus(appStore.currentUser?.id, cachedTrack.value, issue.value)
-})
-
-const canChangeIssueStatus = computed(() => {
-  return issue.value != null
-    && canUserChangeIssueStatus(appStore.currentUser?.id, cachedTrack.value, issue.value, reviewAssignments.value)
-})
-
-const shouldHideInternalComments = computed(() =>
-  Boolean(cachedTrack.value && isTrackComposer(cachedTrack.value, appStore.currentUser?.id)),
-)
-
-function isInternalIssueStatus(status: IssueStatus | string | null | undefined): boolean {
-  return status === 'pending_discussion' || status === 'internal_resolved'
-}
-
-function mentionUsersForVisibility(visibility: string | null | undefined): User[] {
-  return visibility === 'internal' ? mentionCandidates.value.issue_internal : mentionCandidates.value.issue_public
-}
-
-const activeIssueMentionUsers = computed(() => (
-  isInternalIssueStatus(issue.value?.status) ? mentionCandidates.value.issue_internal : mentionCandidates.value.issue_public
-))
-
-const statusNoteMentionUsers = computed(() => (
-  isInternalIssueStatus(issue.value?.status) || isInternalIssueStatus(pendingStatus.value)
-    ? mentionCandidates.value.issue_internal
-    : mentionCandidates.value.issue_public
-))
-
-const commentSortOrder = ref<'desc' | 'asc'>('desc')
-
-const visibleComments = computed(() => {
-  const filtered = (issue.value?.comments ?? []).filter(
-    comment => !(shouldHideInternalComments.value && comment.visibility === 'internal'),
-  )
-  if (commentSortOrder.value === 'desc') {
-    return [...filtered].reverse()
-  }
-  return filtered
-})
-
 
 const loadError = ref(false)
 
@@ -173,17 +115,16 @@ async function loadIssue(id: number) {
     if (token !== loadCount) return
     issue.value = fetched
     if (fetched.track_id !== cachedTrackId) {
-      const [all, detail, assignments] = await Promise.all([
+      const [all, { detail, assignments }] = await Promise.all([
         issueApi.listForTrack(fetched.track_id),
-        trackApi.get(fetched.track_id),
-        trackApi.listAssignments(fetched.track_id).catch(() => []),
+        fetchTrackDetailBundle(fetched.track_id),
       ])
       if (token !== loadCount) return
       allTrackIssues.value = all
       currentSourceVersionNumber.value = detail.track.version
       cachedTrack.value = detail.track
       trackStore.setCurrentTrack(detail.track)
-      mentionCandidates.value = detail.mention_candidates ?? { general: [], mastering: [], issue_public: [], issue_internal: [] }
+      mentionCandidates.value = detail.mention_candidates ?? emptyMentionCandidates()
       reviewAssignments.value = assignments
       cachedTrackId = fetched.track_id
     }
@@ -218,7 +159,7 @@ const siblingIssues = computed(() => {
 
 const visibleSiblingIssues = computed(() => {
   if (!showUnresolvedOnly.value) return siblingIssues.value
-  return siblingIssues.value.filter(i => i.status !== 'resolved' && i.status !== 'internal_resolved' && i.status !== 'disagreed')
+  return siblingIssues.value.filter(i => isIssueOpenOrInternal(i.status))
 })
 
 const currentSiblingIndex = computed(() =>
@@ -233,75 +174,14 @@ const nextIssue = computed(() =>
     : null
 )
 
-const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
-
 function isOutdatedIssue(item: Issue): boolean {
   if (item.source_version_number == null || currentSourceVersionNumber.value == null) return false
   return item.source_version_number !== currentSourceVersionNumber.value
 }
 
-function setCommentAudioRef(commentId: number, index: number, element: unknown) {
-  const key = `${commentId}:${index}`
-  if (!(element instanceof HTMLAudioElement)) {
-    commentAudioRefs.delete(key)
-    return
-  }
-
-  commentAudioRefs.set(key, element)
-}
-
-function setIssueAudioRef(index: number, element: unknown) {
-  if (!(element instanceof HTMLAudioElement)) {
-    issueAudioRefs.delete(index)
-    return
-  }
-
-  issueAudioRefs.set(index, element)
-}
-
-async function playTrackReference(reference: TimeReference) {
+async function playTrackReferenceAt(time: number) {
   if (!waveformRef.value) return
-  await waveformRef.value.playFrom(reference.startSeconds)
-}
-
-async function playIssueAttachmentReference(reference: TimeReference) {
-  const attachmentIndex = resolveAttachmentReferenceIndex(reference, 'attachment', issue.value?.audios?.length ?? 0)
-  if (attachmentIndex == null) return
-
-  const audio = issueAudioRefs.get(attachmentIndex)
-  if (!audio) return
-
-  audio.currentTime = reference.startSeconds
-  await audio.play().catch(() => undefined)
-}
-
-async function playCommentAttachmentReference(comment: Comment, reference: TimeReference) {
-  const attachmentIndex = resolveAttachmentReferenceIndex(reference, 'attachment', comment.audios?.length ?? 0)
-  if (attachmentIndex == null) return
-
-  const audio = commentAudioRefs.get(`${comment.id}:${attachmentIndex}`)
-  if (!audio) return
-
-  audio.currentTime = reference.startSeconds
-  await audio.play().catch(() => undefined)
-}
-
-async function handleIssueDescriptionReference(reference: TimeReference, target: TimestampTarget) {
-  if (target === 'attachment') {
-    await playIssueAttachmentReference(reference)
-    return
-  }
-
-  await playTrackReference(reference)
-}
-
-async function handleCommentReference(comment: Comment, reference: TimeReference, target: TimestampTarget) {
-  if (target === 'attachment') {
-    await playCommentAttachmentReference(comment, reference)
-    return
-  }
-
-  await playTrackReference(reference)
+  await waveformRef.value.playFrom(time)
 }
 
 function openIssueReference(targetIssueId: number) {
@@ -323,104 +203,6 @@ async function jumpToIssueMarkerReference(reference: MarkerIndexReference) {
   await waveformRef.value.playFrom(marker.time_start)
 }
 
-const submittingComment = ref(false)
-const commentUploadProgress = ref(0)
-
-async function handleCommentSubmit(payload: { content: string; images: File[]; audios: File[] }) {
-  if (!appStore.currentUser || !issue.value) return
-  if (submittingComment.value) return
-  submittingComment.value = true
-  commentUploadProgress.value = 0
-  try {
-    let comment: Comment
-
-    if (appStore.r2Enabled && payload.audios.length > 0) {
-      const presignedResp = await r2Api.requestCommentAudioUpload(
-        issueId.value,
-        payload.audios.map(f => ({
-          filename: f.name,
-          content_type: f.type || 'application/octet-stream',
-          file_size: f.size,
-        })),
-      )
-      const totalSize = payload.audios.reduce((s, f) => s + f.size, 0)
-      let uploadedBytes = 0
-      for (let i = 0; i < presignedResp.uploads.length; i++) {
-        const file = payload.audios[i]
-        const prevBytes = uploadedBytes
-        await uploadToR2(presignedResp.uploads[i].upload_url, file, file.type || 'application/octet-stream', (p) => {
-          const currentBytes = prevBytes + (file.size * p / 100)
-          commentUploadProgress.value = Math.round((currentBytes / totalSize) * 100)
-        })
-        uploadedBytes += file.size
-      }
-      comment = await issueApi.addComment(issueId.value, {
-        content: payload.content,
-        images: payload.images.length ? payload.images : undefined,
-        audioObjectKeys: presignedResp.uploads.map(u => u.object_key),
-        audioOriginalFilenames: payload.audios.map(f => f.name),
-      })
-    } else {
-      comment = await issueApi.addComment(issueId.value, {
-        content: payload.content,
-        images: payload.images.length ? payload.images : undefined,
-        audios: payload.audios.length ? payload.audios : undefined,
-      }, (p) => { commentUploadProgress.value = p })
-    }
-
-    if (!issue.value.comments) issue.value.comments = []
-    issue.value.comments.push(comment)
-    commentInputRef.value?.reset()
-  } catch (e: any) {
-    toastError(e?.message || t('common.requestFailed'))
-  } finally {
-    submittingComment.value = false
-  }
-}
-
-// Comment edit/delete
-const editingCommentId = ref<number | null>(null)
-const editingCommentContent = ref('')
-const pendingDeleteComment = ref<Comment | null>(null)
-
-function startEditComment(comment: Comment) {
-  editingCommentId.value = comment.id
-  editingCommentContent.value = comment.content
-}
-
-async function saveEditComment(comment: Comment) {
-  const content = editingCommentContent.value.trim()
-  if (!content || !issue.value?.comments) return
-  try {
-    const updated = await commentApi.update(comment.id, content)
-    const idx = issue.value.comments.findIndex(c => c.id === comment.id)
-    if (idx !== -1) issue.value.comments[idx] = updated
-    editingCommentId.value = null
-    toastSuccess(t('issueDetail.commentUpdated'))
-  } catch (e: any) {
-    toastError(e?.message || t('common.requestFailed'))
-  }
-}
-
-function promptDeleteComment(comment: Comment) {
-  pendingDeleteComment.value = comment
-}
-
-async function deleteComment() {
-  const comment = pendingDeleteComment.value
-  if (!comment || !issue.value?.comments) return
-  try {
-    await commentApi.delete(comment.id)
-    issue.value.comments = issue.value.comments.filter(c => c.id !== comment.id)
-    toastSuccess(t('issueDetail.commentDeleted'))
-  } catch (e: any) {
-    toastError(e?.message || t('common.requestFailed'))
-  }
-  finally {
-    pendingDeleteComment.value = null
-  }
-}
-
 // Edit history
 const historyItems = ref<EditHistory[]>([])
 const showHistoryForCommentId = ref<number | null>(null)
@@ -440,88 +222,10 @@ function closeHistory() {
   historyItems.value = []
 }
 
-function selectStatus(status: IssueStatus) {
-  pendingStatus.value = status
-  statusNoteInputRef.value?.reset()
-}
-
-function availableStatusActions(currentStatus: IssueStatus): IssueStatus[] {
-  if (canSubmitIssueStatus.value) {
-    if (currentStatus === 'open') return ['resolved', 'disagreed']
-    return []
-  }
-
-  if (!canChangeIssueStatus.value) return []
-  if (currentStatus === 'open') return ['resolved', 'pending_discussion']
-  if (currentStatus === 'pending_discussion') return ['open', 'internal_resolved']
-  if (currentStatus === 'internal_resolved') return ['open']
-  if (currentStatus === 'resolved') return ['open']
-  if (currentStatus === 'disagreed') return ['open']
-  return []
-}
-
-const statusActions = computed<IssueStatus[]>(() => {
-  if (!issue.value) return []
-  return availableStatusActions(issue.value.status)
-})
-
-function statusActionLabel(status: IssueStatus): string {
-  if (status === 'open' && (issue.value?.status === 'pending_discussion' || issue.value?.status === 'internal_resolved')) {
-    return t('issueDetail.publish')
-  }
-  switch (status) {
-    case 'resolved':
-      return t('issueDetail.markFixed')
-    case 'internal_resolved':
-      return t('issueDetail.markInternalResolved')
-    case 'disagreed':
-      return t('issueDetail.disagree')
-    case 'open':
-      return t('issueDetail.reopen')
-    case 'pending_discussion':
-      return t('issueDetail.markPendingDiscussion')
-  }
-}
-
-function statusActionClass(status: IssueStatus): string {
-  if (pendingStatus.value === status) {
-    if (status === 'resolved') return 'bg-success-bg text-success border border-success/30'
-    if (status === 'internal_resolved') return 'bg-info-bg text-info border border-info/30'
-    if (status === 'disagreed') return 'bg-error-bg text-error border border-error/30'
-    return 'bg-warning-bg text-warning border border-warning/30'
-  }
-  return 'bg-card border border-border text-foreground hover:bg-border'
-}
-
-const submittingStatusNote = ref(false)
-const statusNoteUploadProgress = ref(0)
-
-async function handleStatusNoteSubmit(payload: { content: string; images: File[]; audios: File[] }) {
-  if (!issue.value || !pendingStatus.value) return
-  submittingStatusNote.value = true
-  statusNoteUploadProgress.value = 0
-  try {
-    issue.value = await issueApi.update(issueId.value, {
-      status: pendingStatus.value,
-      status_note: payload.content || undefined,
-      images: payload.images.length ? payload.images : undefined,
-      audios: payload.audios.length ? payload.audios : undefined,
-    }, (p) => { statusNoteUploadProgress.value = p })
-    const idx = allTrackIssues.value.findIndex(i => i.id === issueId.value)
-    if (idx !== -1 && issue.value) allTrackIssues.value[idx] = issue.value
-    pendingStatus.value = null
-    statusNoteInputRef.value?.reset()
-    toastSuccess(t('issueDetail.statusUpdated'))
-  } catch (e: any) {
-    toastError(e?.message || t('issueDetail.statusUpdateFailed'))
-  } finally {
-    submittingStatusNote.value = false
-  }
-}
-
-function cancelStatusChange() {
-  pendingStatus.value = null
-  statusNoteInputRef.value?.reset()
+function onIssueUpdated(updated: Issue) {
+  issue.value = updated
+  const idx = allTrackIssues.value.findIndex(i => i.id === updated.id)
+  if (idx !== -1) allTrackIssues.value[idx] = updated
 }
 
 function goBackToTrack() {
@@ -681,282 +385,24 @@ function openVersionCompare() {
               :height="120"
               @ready="onWaveformReady"
             />
-            <div class="border-t border-border px-4 py-2 flex items-center justify-between gap-4">
-              <div v-if="issueIsOutdated" class="text-xs text-muted-foreground">
-                {{ t(canOpenIssueSourceAudio ? 'issueDetail.outdatedWaveformHint' : 'issueDetail.outdatedWaveformUnavailable') }}
-              </div>
-              <div v-else class="flex-1" />
+            <div class="border-t border-border px-4 py-2 flex items-center justify-end gap-4">
               <span class="text-[11px] font-mono text-muted-foreground/50 whitespace-nowrap hidden sm:block select-none">{{ t('issueDetail.keyboardHint') }}</span>
             </div>
           </div>
-        <!-- Description -->
-        <div class="card">
-          <TimestampText
-            :text="issue.description"
+
+          <IssueDetailContent
+            :issue="issue"
+            variant="page"
+            :track="cachedTrack"
+            :assignments="reviewAssignments"
             :issues="allTrackIssues"
-            :mention-users="activeIssueMentionUsers"
-            class="text-sm text-foreground"
-            @activate="(reference, target) => handleIssueDescriptionReference(reference, target)"
-            @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
-            @issueActivate="(target) => openIssueReference(target.id)"
+            :mention-candidates="mentionCandidates"
+            @updated="onIssueUpdated"
+            @track-reference="playTrackReferenceAt"
+            @marker-activate="jumpToIssueMarkerReference"
+            @open-issue="openIssueReference"
+            @show-comment-history="showCommentHistory"
           />
-          <div v-if="issue.audios?.length" class="mt-4 space-y-2">
-            <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('issue.audioAttachments') }}</h3>
-            <div class="flex flex-col gap-2">
-              <div
-                v-for="(audio, index) in issue.audios"
-                :key="audio.id"
-                class="bg-background border border-border rounded-2xl px-4 py-3 space-y-2"
-              >
-                <div class="flex items-center gap-2">
-                  <Music class="w-4 h-4 text-primary flex-shrink-0" :stroke-width="2" />
-                  <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
-                  <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
-                </div>
-                <audio
-                  :ref="(element) => setIssueAudioRef(index, element)"
-                  :src="resolveAssetUrl(audio.audio_url)"
-                  controls
-                  class="w-full h-8"
-                  style="accent-color: rgb(var(--color-primary));"
-                />
-              </div>
-            </div>
-          </div>
-          <div class="text-xs text-muted-foreground mt-3">
-            {{ t('issueDetail.created', { date: fmtDate(issue.created_at) }) }}
-          </div>
-        </div>
-
-        <!-- Status Actions -->
-        <div class="space-y-3">
-          <div v-if="statusActions.length" class="flex gap-2 flex-wrap">
-            <button
-              v-for="status in statusActions"
-              :key="`status-${status}`"
-              @click="selectStatus(status)"
-              class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
-              :class="statusActionClass(status)"
-            >
-              {{ statusActionLabel(status) }}
-            </button>
-          </div>
-          <div v-if="pendingStatus" class="space-y-2">
-            <CommentInput
-              ref="statusNoteInputRef"
-              :placeholder="t('issue.statusNotePlaceholder')"
-              :submit-label="t('common.confirm')"
-              :submitting="submittingStatusNote"
-              :upload-progress="statusNoteUploadProgress"
-              enable-audio
-              enable-timestamp-popover
-              timestamp-default-target="track"
-              :issues="allTrackIssues"
-              :mention-users="statusNoteMentionUsers"
-              @submit="handleStatusNoteSubmit"
-            />
-            <button @click="cancelStatusChange" class="btn-secondary text-sm">
-              {{ t('common.cancel') }}
-            </button>
-          </div>
-        </div>
-
-        <!-- Comments -->
-        <div class="space-y-4">
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-sans font-semibold text-foreground">
-              {{ t('issueDetail.commentsHeading', { count: visibleComments.length }) }}
-            </h3>
-            <button
-              v-if="visibleComments.length > 1"
-              @click="commentSortOrder = commentSortOrder === 'desc' ? 'asc' : 'desc'"
-              class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowDownUp class="w-3.5 h-3.5" />
-              {{ commentSortOrder === 'desc' ? t('issueDetail.sortNewestFirst') : t('issueDetail.sortOldestFirst') }}
-            </button>
-          </div>
-
-          <p v-if="!visibleComments.length" class="text-sm text-muted-foreground italic">
-            {{ t('issueDetail.commentsEmptyHint') }}
-          </p>
-
-          <template v-for="comment in visibleComments" :key="comment.id">
-            <div v-if="comment.is_status_note" class="rounded-lg bg-warning-bg border border-warning/20 px-3 py-2">
-              <div class="flex items-center gap-2 mb-2 flex-wrap">
-                <span class="text-xs font-semibold text-warning">{{ t('issue.revisionNote') }}</span>
-                <template v-if="comment.old_status && comment.new_status">
-                  <span class="text-warning/40 text-xs">·</span>
-                  <StatusBadge :status="comment.old_status" type="issue" />
-                  <span class="text-xs text-muted-foreground">→</span>
-                  <StatusBadge :status="comment.new_status" type="issue" />
-                </template>
-                <span
-                  v-if="comment.visibility === 'internal'"
-                  class="inline-flex items-center rounded-full bg-info-bg px-2 py-0.5 text-[10px] font-mono text-info"
-                >{{ t('issueDetail.internalCommentBadge') }}</span>
-              </div>
-                <TimestampText
-                  :text="comment.content"
-                  :issues="allTrackIssues"
-                  :mention-users="mentionUsersForVisibility(comment.visibility)"
-                  class="text-sm text-foreground"
-                  :default-target="comment.audios?.length ? 'attachment' : 'track'"
-                  @activate="(reference, target) => handleCommentReference(comment, reference, target)"
-                  @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
-                  @issueActivate="(target) => openIssueReference(target.id)"
-                />
-              <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-2">
-                <a
-                  v-for="img in comment.images"
-                  :key="img.id"
-                  :href="resolveAssetUrl(img.image_url)"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <img
-                    :src="resolveAssetUrl(img.image_url)"
-                    class="h-20 w-20 object-cover rounded border border-border cursor-pointer hover:opacity-80 transition-opacity"
-                    alt="attachment"
-                  />
-                </a>
-              </div>
-              <div v-if="comment.audios && comment.audios.length" class="flex flex-col gap-2 mt-2">
-                <div
-                  v-for="(audio, index) in comment.audios"
-                  :key="audio.id"
-                  class="bg-background/50 border border-border rounded-2xl px-4 py-3 space-y-2"
-                >
-                  <div class="flex items-center gap-2">
-                    <Music class="w-4 h-4 text-primary flex-shrink-0" :stroke-width="2" />
-                    <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
-                    <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
-                  </div>
-                  <audio
-                    :ref="(element) => setCommentAudioRef(comment.id, index, element)"
-                    :src="resolveAssetUrl(audio.audio_url)"
-                    controls
-                    class="w-full h-8"
-                    style="accent-color: rgb(var(--color-primary));"
-                  />
-                </div>
-              </div>
-              <p class="text-xs text-muted-foreground mt-1">{{ comment.author?.display_name || t('issueDetail.unknown') }} · {{ fmtDate(comment.created_at) }}</p>
-            </div>
-            <div v-else class="card">
-              <div class="flex items-center gap-2 mb-2">
-                <div
-                  v-if="comment.author"
-                  class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                  :style="{ backgroundColor: comment.author.avatar_color }"
-                >
-                  {{ comment.author.display_name.charAt(0) }}
-                </div>
-                <span class="text-sm font-medium text-foreground">
-                  {{ comment.author?.display_name || t('issueDetail.unknown') }}
-                </span>
-                <span class="text-xs text-muted-foreground">{{ fmtDate(comment.created_at) }}</span>
-                <span
-                  v-if="comment.visibility === 'internal'"
-                  class="inline-flex items-center rounded-full bg-info-bg px-2 py-0.5 text-[10px] font-mono text-info"
-                >{{ t('issueDetail.internalCommentBadge') }}</span>
-                <button
-                  v-if="comment.edited_at"
-                  class="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                  @click="showCommentHistory(comment.id)"
-                >
-                  ({{ t('editHistory.edited') }})
-                </button>
-                <template v-if="comment.author_id === appStore.currentUser?.id && !comment.is_status_note">
-                  <button @click="startEditComment(comment)" class="text-muted-foreground hover:text-foreground transition-colors ml-auto">
-                    <Pencil class="w-3.5 h-3.5" :stroke-width="2" />
-                  </button>
-                  <button @click="promptDeleteComment(comment)" class="text-muted-foreground hover:text-error transition-colors">
-                    <Trash2 class="w-3.5 h-3.5" :stroke-width="2" />
-                  </button>
-                </template>
-              </div>
-              <template v-if="editingCommentId === comment.id">
-                <textarea
-                  v-model="editingCommentContent"
-                  class="textarea-field w-full text-sm"
-                  rows="3"
-                  @keydown.ctrl.enter="saveEditComment(comment)"
-                  @keydown.meta.enter="saveEditComment(comment)"
-                />
-                <div class="flex gap-2 mt-1">
-                  <button @click="saveEditComment(comment)" class="btn-primary text-xs">{{ t('common.save') }}</button>
-                  <button @click="editingCommentId = null" class="btn-secondary text-xs">{{ t('common.cancel') }}</button>
-                </div>
-              </template>
-              <TimestampText
-                v-else
-                :text="comment.content"
-                :issues="allTrackIssues"
-                :mention-users="mentionUsersForVisibility(comment.visibility)"
-                class="text-sm text-foreground"
-                :default-target="comment.audios?.length ? 'attachment' : 'track'"
-                @activate="(reference, target) => handleCommentReference(comment, reference, target)"
-                @markerActivate="(reference) => jumpToIssueMarkerReference(reference)"
-                @issueActivate="(target) => openIssueReference(target.id)"
-              />
-              <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-3">
-                <a
-                  v-for="img in comment.images"
-                  :key="img.id"
-                  :href="resolveAssetUrl(img.image_url)"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <img
-                    :src="resolveAssetUrl(img.image_url)"
-                    class="h-20 w-20 object-cover rounded border border-border cursor-pointer hover:opacity-80 transition-opacity"
-                    alt="attachment"
-                  />
-                </a>
-              </div>
-              <div v-if="comment.audios && comment.audios.length" class="flex flex-col gap-2 mt-3">
-                <div
-                  v-for="(audio, index) in comment.audios"
-                  :key="audio.id"
-                  class="bg-background border border-border rounded-2xl px-4 py-3 space-y-2"
-                >
-                  <div class="flex items-center gap-2">
-                    <Music class="w-4 h-4 text-primary flex-shrink-0" :stroke-width="2" />
-                    <span class="text-xs font-mono text-foreground truncate flex-1">{{ audio.original_filename }}</span>
-                    <span v-if="audio.duration" class="text-xs text-muted-foreground font-mono flex-shrink-0">{{ formatDuration(audio.duration) }}</span>
-                  </div>
-                  <audio
-                    :ref="(element) => setCommentAudioRef(comment.id, index, element)"
-                    :src="resolveAssetUrl(audio.audio_url)"
-                    controls
-                    class="w-full h-8"
-                    style="accent-color: rgb(var(--color-primary));"
-                  />
-                </div>
-              </div>
-            </div>
-          </template>
-
-          <!-- New Comment -->
-          <p
-            v-if="issue?.status === 'pending_discussion' || issue?.status === 'internal_resolved'"
-            class="rounded-none border border-info/30 bg-info-bg px-3 py-2 text-xs text-info"
-          >{{ t('issueDetail.internalCommentHint') }}</p>
-          <CommentInput
-            ref="commentInputRef"
-            :placeholder="t('issueDetail.addCommentPlaceholder')"
-            :submit-label="t('issueDetail.addComment')"
-            :submitting="submittingComment"
-            :upload-progress="commentUploadProgress"
-            enable-audio
-            enable-timestamp-popover
-            timestamp-default-target="attachment"
-            :issues="allTrackIssues"
-            :mention-users="activeIssueMentionUsers"
-            @submit="handleCommentSubmit"
-          />
-        </div>
       </div>
       </Transition>
 
@@ -1058,16 +504,6 @@ function openVersionCompare() {
     v-if="showHistoryForCommentId !== null"
     :items="historyItems"
     @close="closeHistory"
-  />
-
-  <ConfirmModal
-    v-if="pendingDeleteComment"
-    :title="t('issueDetail.deleteCommentTitle')"
-    :message="t('issueDetail.deleteCommentConfirm')"
-    :confirm-text="t('common.delete')"
-    :destructive="true"
-    @confirm="deleteComment"
-    @cancel="pendingDeleteComment = null"
   />
 </template>
 

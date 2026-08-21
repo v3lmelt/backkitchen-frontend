@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 
 import type { Issue, IssueStatus, User } from '@/types'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
+import { insertMentionAtCursor, issueMentionToken, userMentionToken } from '@/utils/mentions'
+import { issueStatusActionLabel, issueStatusQuickActionClass } from '@/utils/issueStatus'
 
 const props = defineProps<{
   selectedCount: number
@@ -25,33 +27,11 @@ const noteCursorPos = ref(0)
 const noteRef = ref<HTMLTextAreaElement | null>(null)
 
 function actionLabel(status: IssueStatus): string {
-  switch (status) {
-    case 'resolved':
-      return t('issueDetail.markFixed')
-    case 'internal_resolved':
-      return t('issueDetail.markInternalResolved')
-    case 'disagreed':
-      return t('issueDetail.disagree')
-    case 'open':
-      return t('issueDetail.reopen')
-    case 'pending_discussion':
-      return t('issueDetail.markPendingDiscussion')
-  }
+  return issueStatusActionLabel(t, status, { resolvedKey: 'issueDetail.markFixed' })
 }
 
 function actionClass(status: IssueStatus): string {
-  switch (status) {
-    case 'resolved':
-      return 'bg-success-bg text-success hover:border-success/40'
-    case 'internal_resolved':
-      return 'bg-info-bg text-info hover:border-info/40'
-    case 'disagreed':
-      return 'bg-info-bg text-info hover:border-info/40'
-    case 'open':
-      return 'bg-warning-bg text-warning hover:border-warning/40'
-    case 'pending_discussion':
-      return 'bg-warning-bg text-warning hover:border-warning/40'
-  }
+  return issueStatusQuickActionClass(status)
 }
 
 function updateNote(value: string) {
@@ -59,21 +39,20 @@ function updateNote(value: string) {
 }
 
 async function insertTextAtMention(insertion: string, mention: { start: number; end: number }) {
-  const next = `${props.note.slice(0, mention.start)}${insertion}${props.note.slice(mention.end)}`
-  updateNote(next)
-  const nextCursor = mention.start + insertion.length
-  noteCursorPos.value = nextCursor
+  const result = insertMentionAtCursor(props.note, mention, insertion)
+  updateNote(result.text)
+  noteCursorPos.value = result.cursorPos
   await nextTick()
   noteRef.value?.focus()
-  noteRef.value?.setSelectionRange(nextCursor, nextCursor)
+  noteRef.value?.setSelectionRange(result.cursorPos, result.cursorPos)
 }
 
 function handleIssueMentionSelect(issue: Issue, mention: { start: number; end: number }) {
-  void insertTextAtMention(`@issue:${issue.local_number} `, mention)
+  void insertTextAtMention(issueMentionToken(issue), mention)
 }
 
 function handleUserMentionSelect(user: User, mention: { start: number; end: number }) {
-  void insertTextAtMention(`@user:${user.id} `, mention)
+  void insertTextAtMention(userMentionToken(user), mention)
 }
 </script>
 

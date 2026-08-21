@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import type { Issue, StageAssignment, Track } from '@/types'
 
-import { activeAssignmentsForStep, canUserChangeIssueStatus, canUserSubmitIssueStatus } from './reviewAssignments'
+import {
+  activeAssignmentsForStep,
+  availableBatchActionsForIssue,
+  canUserChangeIssueStatus,
+  canUserReviewIssue,
+  canUserSubmitIssueStatus,
+  intersectBatchActions,
+} from './reviewAssignments'
 
 function makeTrack(overrides: Partial<Track> = {}): Track {
   return {
@@ -168,6 +175,102 @@ describe('reviewAssignments', () => {
     expect(canUserSubmitIssueStatus(11, track, issue)).toBe(true)
   })
 
+  it('allows album managers to handle producer issues when no reviewer is assigned', () => {
+    const track = makeTrack({
+      status: 'producer_gate',
+      viewer_is_album_manager: true,
+    })
+    const issue = makeIssue({
+      phase: 'producer',
+      author_id: 40,
+      source_version_id: 5,
+      master_delivery_id: null,
+    })
+
+    expect(canUserReviewIssue(50, track, issue)).toBe(true)
+    expect(canUserChangeIssueStatus(50, track, issue)).toBe(true)
+  })
+
+  it('does not let album managers bypass explicit producer assignments', () => {
+    const track = makeTrack({
+      status: 'producer_gate',
+      viewer_is_album_manager: true,
+    })
+    const issue = makeIssue({ phase: 'producer', author_id: 40 })
+    const assignments = [
+      makeAssignment({ stage_id: 'producer_gate', user_id: 60 }),
+    ]
+
+    expect(canUserReviewIssue(50, track, issue, assignments)).toBe(false)
+    expect(canUserChangeIssueStatus(50, track, issue, assignments)).toBe(false)
+    expect(canUserChangeIssueStatus(60, track, issue, assignments)).toBe(true)
+  })
+
+  it('recognizes explicit reviewers on custom producer review stages', () => {
+    const track = makeTrack({
+      status: 'producer_quality_gate',
+      viewer_is_album_manager: true,
+      workflow_step: {
+        id: 'producer_quality_gate',
+        label: 'Producer Quality Gate',
+        type: 'review',
+        ui_variant: 'producer_gate',
+        assignee_role: 'producer',
+        order: 0,
+        transitions: {},
+        assignment_mode: 'manual',
+      },
+    })
+    const issue = makeIssue({ phase: 'producer', author_id: 40 })
+    const assignments = [
+      makeAssignment({ stage_id: 'producer_quality_gate', user_id: 60 }),
+    ]
+
+    expect(canUserReviewIssue(50, track, issue, assignments)).toBe(false)
+    expect(canUserChangeIssueStatus(50, track, issue, assignments)).toBe(false)
+    expect(canUserChangeIssueStatus(60, track, issue, assignments)).toBe(true)
+  })
+
+  it('ignores membership-revoked assignments for the album-manager fallback', () => {
+    const track = makeTrack({
+      status: 'producer_gate',
+      viewer_is_album_manager: true,
+    })
+    const issue = makeIssue({ phase: 'producer', author_id: 40 })
+    const assignments = [
+      makeAssignment({
+        stage_id: 'producer_gate',
+        user_id: 60,
+        status: 'cancelled',
+        cancellation_reason: 'circle_membership_revoked',
+      }),
+    ]
+
+    expect(canUserChangeIssueStatus(50, track, issue, assignments)).toBe(true)
+  })
+
+  it('allows album managers to review final issues without changing their status', () => {
+    const track = makeTrack({ viewer_is_album_manager: true })
+    const issue = makeIssue({ author_id: 40 })
+
+    expect(canUserReviewIssue(50, track, issue)).toBe(true)
+    expect(canUserChangeIssueStatus(50, track, issue)).toBe(false)
+  })
+
+  it('allows the external composer proxy to submit non-final issue status', () => {
+    const track = makeTrack({
+      status: 'producer_gate',
+      composer_ids: [],
+      external_composer_names: ['Offline Composer'],
+      proxy_uploader_id: 50,
+      producer_id: 20,
+    })
+    const issue = makeIssue({ phase: 'producer' })
+
+    expect(canUserSubmitIssueStatus(50, track, issue)).toBe(true)
+    expect(canUserSubmitIssueStatus(20, track, issue)).toBe(false)
+  })
+
   it('keeps revision-request-cancelled reviewers on internal issue status permissions', () => {
     const track = makeTrack({ status: 'peer_revision', peer_reviewer_id: null })
     const issue = makeIssue({
@@ -203,5 +306,48 @@ describe('reviewAssignments', () => {
     ]
 
     expect(canUserChangeIssueStatus(41, track, issue, assignments)).toBe(true)
+  })
+})
+
+
+describe('availableBatchActionsForIssue', () => {
+  it('allows submitters to resolve or disagree on open issues', () => {
+    const issue = makeIssue({ status: 'open' })
+    expect(availableBatchActionsForIssue(issue, true, false)).toEqual(['resolved', 'disagreed'])
+  })
+
+  it('allows status handlers to resolve or mark pending discussion on open issues', () => {
+    const issue = makeIssue({ status: 'open' })
+    expect(availableBatchActionsForIssue(issue, false, true)).toEqual(['resolved', 'pending_discussion'])
+  })
+
+  it('allows reopening from terminal statuses when the user can change status', () => {
+    for (const status of ['internal_resolved', 'resolved', 'disagreed'] as const) {
+      expect(availableBatchActionsForIssue(makeIssue({ status }), false, true)).toEqual(['open'])
+    }
+    expect(availableBatchActionsForIssue(makeIssue({ status: 'pending_discussion' }), false, true))
+      .toEqual(['open', 'internal_resolved'])
+  })
+
+  it('returns no actions without permissions', () => {
+    expect(availableBatchActionsForIssue(makeIssue({ status: 'open' }), false, false)).toEqual([])
+  })
+})
+
+describe('intersectBatchActions', () => {
+  const openIssue = makeIssue({ id: 1, status: 'open' })
+
+  it('returns an empty list for an empty selection', () => {
+    expect(intersectBatchActions([], () => ['resolved'])).toEqual([])
+  })
+
+  it('keeps only actions available for every selected issue', () => {
+    const resolvedIssue = makeIssue({ id: 2, status: 'resolved' })
+    const availableFor = (issue: Issue) =>
+      availableBatchActionsForIssue(issue, false, true)
+    const anotherOpenIssue = makeIssue({ id: 3, status: 'open' })
+    expect(intersectBatchActions([openIssue, anotherOpenIssue], availableFor)).toEqual(['resolved', 'pending_discussion'])
+    expect(intersectBatchActions([openIssue, resolvedIssue], availableFor)).toEqual([])
+    expect(intersectBatchActions([resolvedIssue], availableFor)).toEqual(['open'])
   })
 })

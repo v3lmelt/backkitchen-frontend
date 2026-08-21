@@ -76,9 +76,17 @@ vi.mock('@/composables/useToast', () => ({
 
 vi.mock('@/components/common/ConfirmModal.vue', () => ({
   default: {
-    props: ['title'],
+    props: ['title', 'message', 'confirmText', 'destructive'],
     emits: ['confirm', 'cancel'],
-    template: '<div class="confirm-modal"><button class="confirm-delete" @click="$emit(\'confirm\')">confirm</button></div>',
+    template: `
+      <div class="confirm-modal" :data-destructive="String(Boolean(destructive))">
+        <span class="confirm-title">{{ title }}</span>
+        <span class="confirm-message">{{ message }}</span>
+        <span class="confirm-text">{{ confirmText }}</span>
+        <button class="cancel-action" @click="$emit('cancel')">cancel</button>
+        <button class="confirm-action" @click="$emit('confirm')">confirm</button>
+      </div>
+    `,
   },
 }))
 
@@ -238,37 +246,60 @@ describe('AdminView', () => {
     expect(wrapper.text()).toContain('Users')
   })
 
-  it('updates user role and admin access', async () => {
-    const wrapper = mountWithPlugins(AdminView)
-    await flushPromises()
-    await openTab(wrapper, 'Users')
-
-    const selects = wrapper.findAll('select')
-    await selects[0].setValue('producer')
-    await selects[1].setValue('superadmin')
-    await flushPromises()
-
-    expect(mocks.updateUserMock).toHaveBeenCalledWith(1, { role: 'producer' })
-    expect(mocks.updateUserMock).toHaveBeenCalledWith(1, { admin_role: 'superadmin' })
-  })
-
-  it('suspends a user and deletes through confirmation', async () => {
+  it('confirms user role and admin access changes before applying them', async () => {
     const wrapper = mountWithPlugins(AdminView)
     await flushPromises()
     await openTab(wrapper, 'Users')
 
     const memberRow = wrapper.findAll('tr').find(row => row.text().includes('Member') && row.text().includes('@member'))
     if (!memberRow) throw new Error('Member row not found')
+    const selects = memberRow.findAll('select')
+
+    await selects[0].setValue('producer')
+    expect(mocks.updateUserMock).not.toHaveBeenCalled()
+    expect((selects[0].element as HTMLSelectElement).value).toBe('member')
+    expect(wrapper.find('.confirm-title').text()).toBe('Change account role?')
+    await wrapper.find('button.cancel-action').trigger('click')
+    expect(mocks.updateUserMock).not.toHaveBeenCalled()
+
+    await selects[0].setValue('producer')
+    await wrapper.find('button.confirm-action').trigger('click')
+    await flushPromises()
+    expect(mocks.updateUserMock).toHaveBeenCalledWith(2, { role: 'producer' })
+
+    const refreshedMemberRow = wrapper.findAll('tr').find(row => row.text().includes('Member') && row.text().includes('@member'))
+    if (!refreshedMemberRow) throw new Error('Updated member row not found')
+    await refreshedMemberRow.findAll('select')[1].setValue('viewer')
+    expect(mocks.updateUserMock).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('.confirm-title').text()).toBe('Change admin access?')
+    await wrapper.find('button.confirm-action').trigger('click')
+    await flushPromises()
+
+    expect(mocks.updateUserMock).toHaveBeenCalledWith(2, { admin_role: 'viewer' })
+  })
+
+  it('confirms suspension and deletion with destructive actions', async () => {
+    const wrapper = mountWithPlugins(AdminView)
+    await flushPromises()
+    await openTab(wrapper, 'Users')
+
+    let memberRow = wrapper.findAll('tr').find(row => row.text().includes('Member') && row.text().includes('@member'))
+    if (!memberRow) throw new Error('Member row not found')
 
     const suspendButton = memberRow.findAll('button').find(button => button.text() === 'Suspend')
     await suspendButton!.trigger('click')
+    expect(mocks.suspendUserMock).not.toHaveBeenCalled()
+    expect(wrapper.find('.confirm-modal').attributes('data-destructive')).toBe('true')
+    await wrapper.find('button.confirm-action').trigger('click')
     await flushPromises()
 
     expect(mocks.suspendUserMock).toHaveBeenCalledWith(2, 'Suspended from admin console')
 
+    memberRow = wrapper.findAll('tr').find(row => row.text().includes('Member') && row.text().includes('@member'))
+    if (!memberRow) throw new Error('Suspended member row not found')
     const deleteButton = memberRow.findAll('button').find(button => button.text() === 'Soft Delete')
     await deleteButton!.trigger('click')
-    await wrapper.find('button.confirm-delete').trigger('click')
+    await wrapper.find('button.confirm-action').trigger('click')
     await flushPromises()
 
     expect(mocks.deleteUserMock).toHaveBeenCalledWith(2, 'Soft deleted from admin console')
@@ -336,8 +367,11 @@ describe('AdminView', () => {
     const statusSelect = wrapper.findAll('select').find(select => select.text().includes('Select a status'))
     await statusSelect!.setValue('peer_review')
 
-    const runButton = wrapper.findAll('button').find(button => button.text() === 'Run Action')
+    const runButton = wrapper.findAll('button').filter(button => button.text() === 'Force Status').at(-1)
     await runButton!.trigger('click')
+    expect(mocks.forceStatusMock).not.toHaveBeenCalled()
+    expect(wrapper.find('.confirm-title').text()).toBe('Force track status?')
+    await wrapper.find('button.confirm-action').trigger('click')
     await flushPromises()
 
     expect(mocks.forceStatusMock).toHaveBeenCalledWith(99, {

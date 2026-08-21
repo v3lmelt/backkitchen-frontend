@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   circleGetMock: vi.fn(),
   listInviteCodesMock: vi.fn(),
   updateMemberRoleMock: vi.fn(),
+  deleteCircleMock: vi.fn(),
+  leaveCircleMock: vi.fn(),
   currentUser: { id: 1 },
   toastSuccessMock: vi.fn(),
   toastErrorMock: vi.fn(),
@@ -44,8 +46,8 @@ vi.mock('@/api', () => ({
     createInviteCode: vi.fn(),
     revokeInviteCode: vi.fn(),
     listWorkflowTemplates: vi.fn().mockResolvedValue([]),
-    delete: vi.fn(),
-    leave: vi.fn(),
+    delete: mocks.deleteCircleMock,
+    leave: mocks.leaveCircleMock,
   },
 }))
 
@@ -86,6 +88,8 @@ describe('CircleDetailView', () => {
     mocks.circleGetMock.mockReset()
     mocks.listInviteCodesMock.mockReset()
     mocks.updateMemberRoleMock.mockReset()
+    mocks.deleteCircleMock.mockReset()
+    mocks.leaveCircleMock.mockReset()
     mocks.toastSuccessMock.mockReset()
     mocks.toastErrorMock.mockReset()
     mocks.currentUser = { id: 1 }
@@ -145,6 +149,74 @@ describe('CircleDetailView', () => {
 
     const dayInput = wrapper.find('input[type="number"]')
     expect(dayInput.attributes('max')).toBe('365')
+  })
+
+  it('shows co-producers the leave-circle danger flow instead of deletion', async () => {
+    mocks.currentUser = { id: 2 }
+    mocks.circleGetMock.mockResolvedValue({
+      id: 9,
+      name: 'Back Kitchen',
+      description: 'Circle description',
+      website: null,
+      logo_url: null,
+      default_checklist_enabled: true,
+      created_by: 1,
+      created_at: '2024-01-01T00:00:00Z',
+      members: [
+        {
+          id: 1,
+          circle_id: 9,
+          user_id: 1,
+          role: 'owner',
+          joined_at: '2024-01-01T00:00:00Z',
+          user: {
+            id: 1,
+            username: 'producer',
+            display_name: 'Producer',
+            role: 'producer',
+            avatar_color: '#123456',
+            created_at: '2024-01-01T00:00:00Z',
+            is_admin: false,
+          },
+        },
+        {
+          id: 2,
+          circle_id: 9,
+          user_id: 2,
+          role: 'co_producer',
+          joined_at: '2024-01-01T00:00:00Z',
+          user: {
+            id: 2,
+            username: 'coproducer',
+            display_name: 'Co Producer',
+            role: 'member',
+            avatar_color: '#654321',
+            created_at: '2024-01-01T00:00:00Z',
+            is_admin: false,
+          },
+        },
+      ],
+    })
+
+    const wrapper = mountWithPlugins(CircleDetailView)
+    await flushPromises()
+
+    await wrapper.findAll('button').find(button => button.text().trim() === 'Danger Zone')!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Leave Circle')
+    expect(wrapper.text()).toContain('Leave circle')
+    expect(wrapper.text()).not.toContain('Delete Circle')
+    expect(wrapper.text()).not.toContain('Delete this circle')
+
+    await wrapper.findAll('button').find(button => button.text().trim() === 'Leave circle')!.trigger('click')
+    expect(wrapper.text()).toContain('Leave "Back Kitchen"?')
+
+    await wrapper.findAll('button').find(button => button.text().trim() === 'Confirm')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.leaveCircleMock).toHaveBeenCalledWith(9)
+    expect(mocks.deleteCircleMock).not.toHaveBeenCalled()
   })
 
   it('allows owners to promote members to co-producer from the member list', async () => {

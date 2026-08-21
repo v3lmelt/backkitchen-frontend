@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   trackRequestReopenMock: vi.fn(),
   discussionCreateMock: vi.fn(),
   issueUpdateMock: vi.fn(),
+  setVisibilityMock: vi.fn(),
   currentUser: { id: 2 },
   waveformPlayFromMock: vi.fn(),
   waveformSeekToMock: vi.fn(),
@@ -42,6 +43,13 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/api', () => ({
   API_ORIGIN: '',
+  AUTH_TOKEN_KEY: 'backkitchen_token',
+  AUTH_USER_KEY: 'backkitchen_user',
+  getAuthToken: () => localStorage.getItem('backkitchen_token'),
+  trackAudioUrl: (trackId: number, v?: number | null) => `/api/tracks/${trackId}/audio?v=${v ?? 0}`,
+  masterAudioUrl: (trackId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-audio?v=${v ?? 0}&c=${c ?? 1}`,
+  masterDeliveryAudioUrl: (trackId: number, deliveryId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-deliveries/${deliveryId}/audio?v=${v ?? 0}&c=${c ?? 1}`,
+  sourceVersionAudioUrl: (trackId: number, versionId: number) => `/api/tracks/${trackId}/source-versions/${versionId}/audio`,
   trackApi: {
     get: mocks.trackGetMock,
     listAssignments: mocks.listAssignmentsMock,
@@ -51,6 +59,7 @@ vi.mock('@/api', () => ({
     cancelSourceFollowup: mocks.cancelSourceFollowupMock,
     reopen: mocks.trackReopenMock,
     requestReopen: mocks.trackRequestReopenMock,
+    setVisibility: mocks.setVisibilityMock,
   },
   issueApi: {
     update: mocks.issueUpdateMock,
@@ -338,6 +347,7 @@ describe('TrackDetailView', () => {
     mocks.uploadToR2Mock.mockReset()
     mocks.trackReopenMock.mockReset()
     mocks.trackRequestReopenMock.mockReset()
+    mocks.setVisibilityMock.mockReset()
     mocks.issueUpdateMock.mockReset()
     mocks.waveformPlayFromMock.mockReset()
     mocks.waveformSeekToMock.mockReset()
@@ -348,6 +358,7 @@ describe('TrackDetailView', () => {
     vi.stubGlobal('open', mocks.openMock)
     mocks.trackReopenMock.mockResolvedValue({})
     mocks.trackRequestReopenMock.mockResolvedValue({})
+    mocks.setVisibilityMock.mockResolvedValue({ is_public: true })
     mocks.uploadSourceVersionMock.mockResolvedValue({})
     mocks.createSourceFollowupMock.mockResolvedValue({})
     mocks.decideSourceFollowupMock.mockResolvedValue({})
@@ -402,12 +413,12 @@ describe('TrackDetailView', () => {
     })
   })
 
-  it('shows all visible issues while filtering source waveform markers to the current audio', async () => {
+  it('shows current-cycle issues while filtering source waveform markers to the current audio', async () => {
     const wrapper = mountTrackDetailView()
     await flushPromises()
 
-    expect(wrapper.find('.issue-count').text()).toBe('3')
-    expect(wrapper.text()).toContain('Older cycle')
+    expect(wrapper.find('.issue-count').text()).toBe('2')
+    expect(wrapper.text()).not.toContain('Older cycle')
     expect(wrapper.find('.waveform').text()).toContain('issues:1')
     expect(wrapper.find('.waveform').text()).toContain('compare:none')
 
@@ -559,7 +570,7 @@ describe('TrackDetailView', () => {
 
   })
 
-  it('keeps old master-delivery issues visible when no current master exists', async () => {
+  it('hides issues from older workflow cycles', async () => {
     mocks.trackGetMock.mockResolvedValueOnce(makeTrackDetailResponse({
       track: {
         status: 'peer_review',
@@ -590,8 +601,8 @@ describe('TrackDetailView', () => {
     const wrapper = mountTrackDetailView()
     await flushPromises()
 
-    expect(wrapper.find('.issue-count').text()).toBe('1')
-    expect(wrapper.find('.issue-select').text()).toContain('Old master issue:open')
+    expect(wrapper.find('.issue-count').text()).toBe('0')
+    expect(wrapper.text()).not.toContain('Old master issue')
 
     const waveforms = wrapper.findAll('.waveform')
     expect(waveforms).toHaveLength(1)
@@ -762,6 +773,29 @@ describe('TrackDetailView', () => {
     expect(wrapper.text()).not.toContain('#16')
   })
 
+  it('keeps #n labels on timeline events for issues from previous workflow cycles', async () => {
+    const detail = makeTrackDetailResponse()
+    mocks.trackGetMock.mockResolvedValueOnce({
+      ...detail,
+      events: [
+        {
+          id: 101,
+          event_type: 'issue_created',
+          payload: { issue_id: 3 },
+          actor: { display_name: 'Echo' },
+          created_at: '2024-01-04T00:00:00Z',
+        },
+      ],
+    })
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    // Issue 3 belongs to an older workflow_cycle and is filtered out of the
+    // visible issue list, but the timeline must still resolve its number.
+    expect(wrapper.text()).toContain('#3')
+  })
+
   it('opens compare mode from the route query', async () => {
     mocks.route = {
       name: 'track-detail',
@@ -785,6 +819,31 @@ describe('TrackDetailView', () => {
 
     expect(wrapper.text()).toContain('Visible to participants only')
     expect(wrapper.findAll('button').some(button => button.text() === 'Make visible to all members')).toBe(true)
+  })
+
+  it('lets manager-flagged viewers control producer-side visibility', async () => {
+    mocks.currentUser = { id: 42 }
+    mocks.trackGetMock.mockResolvedValueOnce(makeTrackDetailResponse({
+      track: {
+        producer_id: 8,
+        submitter_id: 2,
+        viewer_is_album_manager: true,
+        is_public: false,
+      },
+    }))
+    mocks.setVisibilityMock.mockResolvedValueOnce({ is_public: true })
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    const visibilityButton = wrapper.findAll('button').find(button => button.text() === 'Make visible to all members')
+    expect(visibilityButton).toBeTruthy()
+
+    await visibilityButton!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.setVisibilityMock).toHaveBeenCalledWith(7, true)
+    expect(wrapper.text()).toContain('Visible to all members')
   })
 
   it('renders the mastering chat sidebar before the track enters mastering', async () => {
@@ -1114,7 +1173,7 @@ describe('TrackDetailView', () => {
         submitter_id: 2,
         producer_id: 8,
         mastering_engineer_id: 9,
-        allowed_actions: [],
+        allowed_actions: ['request_reopen'],
         open_issue_count: 0,
         submitter: { display_name: 'Nova' },
         current_source_version: { id: 301 },

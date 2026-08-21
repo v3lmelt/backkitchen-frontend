@@ -9,7 +9,7 @@ import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import { parseUTC } from '@/utils/time'
-import { translateStepLabel, translateWorkflowStatusLabel } from '@/utils/workflow'
+import { translateStepLabel, translateWorkflowDecision as translateWorkflowDecisionLabel, translateWorkflowStatusLabel } from '@/utils/workflow'
 import type {
   AdminActivityLogEntry,
   AdminAuditLogEntry,
@@ -25,6 +25,13 @@ import type {
 
 type TabKey = 'dashboard' | 'users' | 'albums' | 'circles' | 'activity' | 'audits' | 'workflow'
 type WorkflowAction = 'force' | 'reassign' | 'reopen' | 'archive' | 'restore' | 'delete'
+interface PendingAdminAction {
+  title: string
+  message: string
+  confirmText: string
+  destructive: boolean
+  execute: () => Promise<void>
+}
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -63,6 +70,7 @@ const usersLoading = ref(false)
 const transferUserId = ref<number | null>(null)
 const transferTargetUserId = ref<number | null>(null)
 const deleteUserTarget = ref<User | null>(null)
+const pendingAdminAction = ref<PendingAdminAction | null>(null)
 
 const albums = ref<Album[]>([])
 const albumsLoading = ref(false)
@@ -150,20 +158,23 @@ function translateUserRole(role: string) {
   return te(key) ? t(key) : humanizeToken(role)
 }
 
+function translateAdminRole(role: AdminRole) {
+  return t(`admin.adminRoles.${role}`)
+}
+
 function translateWorkflowStatus(status: string | null | undefined) {
   if (!status) return '-'
   return translateWorkflowStatusLabel(status, workflowAlbum.value?.workflow_config ?? null, t, te)
 }
 
 function translateWorkflowDecision(decision: string) {
-  if (decision.startsWith('reject_to_')) {
-    return t('workflowStep.rejectToStep', {
-      step: translateWorkflowStatus(decision.slice('reject_to_'.length)),
-    })
-  }
-  const actionKey = `trackDetail.actions.${decision}`
-  if (te(actionKey)) return t(actionKey)
-  return humanizeToken(decision)
+  return translateWorkflowDecisionLabel(
+    decision,
+    workflowAlbum.value?.workflow_config ?? null,
+    t,
+    te,
+    humanizeToken(decision),
+  )
 }
 
 function translateActivityEventType(eventType: string) {
@@ -254,6 +265,16 @@ function exportAuditCsv() {
       fmtTime(entry.created_at),
     ]),
   )
+}
+
+function requestAdminAction(action: PendingAdminAction) {
+  pendingAdminAction.value = action
+}
+
+async function confirmAdminAction() {
+  const action = pendingAdminAction.value
+  pendingAdminAction.value = null
+  if (action) await action.execute()
 }
 
 function readSelectValue(event: Event): string {
@@ -420,7 +441,21 @@ async function onRoleChange(user: User, role: UserRole) {
 }
 
 function onRoleSelect(user: User, event: Event) {
-  void onRoleChange(user, readSelectValue(event) as UserRole)
+  const target = event.target as HTMLSelectElement
+  const role = target.value as UserRole
+  target.value = user.role
+  if (role === user.role) return
+  requestAdminAction({
+    title: t('admin.confirmations.roleTitle'),
+    message: t('admin.confirmations.roleMessage', {
+      name: user.display_name,
+      from: translateUserRole(user.role),
+      to: translateUserRole(role),
+    }),
+    confirmText: t('admin.confirmations.changeRole'),
+    destructive: false,
+    execute: () => onRoleChange(user, role),
+  })
 }
 
 async function onAdminRoleChange(user: User, adminRole: AdminRole) {
@@ -434,10 +469,25 @@ async function onAdminRoleChange(user: User, adminRole: AdminRole) {
 }
 
 function onAdminRoleSelect(user: User, event: Event) {
-  void onAdminRoleChange(user, readSelectValue(event) as AdminRole)
+  const target = event.target as HTMLSelectElement
+  const adminRole = target.value as AdminRole
+  const currentAdminRole = user.admin_role ?? 'none'
+  target.value = currentAdminRole
+  if (adminRole === currentAdminRole) return
+  requestAdminAction({
+    title: t('admin.confirmations.adminRoleTitle'),
+    message: t('admin.confirmations.adminRoleMessage', {
+      name: user.display_name,
+      from: translateAdminRole(currentAdminRole),
+      to: translateAdminRole(adminRole),
+    }),
+    confirmText: t('admin.confirmations.changeAdminRole'),
+    destructive: adminRole === 'none',
+    execute: () => onAdminRoleChange(user, adminRole),
+  })
 }
 
-async function onVerifiedToggle(user: User) {
+async function updateVerification(user: User) {
   try {
     const updated = await adminApi.updateUser(user.id, { email_verified: !user.email_verified })
     Object.assign(user, updated)
@@ -447,7 +497,20 @@ async function onVerifiedToggle(user: User) {
   }
 }
 
-async function suspendUser(user: User) {
+function onVerifiedToggle(user: User) {
+  requestAdminAction({
+    title: t('admin.confirmations.verificationTitle'),
+    message: t('admin.confirmations.verificationMessage', {
+      name: user.display_name,
+      state: user.email_verified ? t('admin.states.unverified') : t('admin.states.verified'),
+    }),
+    confirmText: user.email_verified ? t('admin.markUnverified') : t('admin.markVerified'),
+    destructive: user.email_verified === true,
+    execute: () => updateVerification(user),
+  })
+}
+
+async function executeSuspendUser(user: User) {
   try {
     const updated = await adminApi.suspendUser(user.id, t('admin.reasons.suspendedFromAdminConsole'))
     Object.assign(user, updated)
@@ -455,6 +518,16 @@ async function suspendUser(user: User) {
   } catch (error: any) {
     toast.error(error.message)
   }
+}
+
+function suspendUser(user: User) {
+  requestAdminAction({
+    title: t('admin.confirmations.suspendTitle'),
+    message: t('admin.confirmations.suspendMessage', { name: user.display_name }),
+    confirmText: t('admin.suspend'),
+    destructive: true,
+    execute: () => executeSuspendUser(user),
+  })
 }
 
 async function restoreUser(user: User) {
@@ -467,7 +540,7 @@ async function restoreUser(user: User) {
   }
 }
 
-async function revokeSessions(user: User) {
+async function executeRevokeSessions(user: User) {
   try {
     const updated = await adminApi.revokeUserSessions(user.id, t('admin.reasons.sessionsRevokedFromAdminConsole'))
     Object.assign(user, updated)
@@ -475,6 +548,16 @@ async function revokeSessions(user: User) {
   } catch (error: any) {
     toast.error(error.message)
   }
+}
+
+function revokeSessions(user: User) {
+  requestAdminAction({
+    title: t('admin.confirmations.revokeSessionsTitle'),
+    message: t('admin.confirmations.revokeSessionsMessage', { name: user.display_name }),
+    confirmText: t('admin.revokeSessions'),
+    destructive: true,
+    execute: () => executeRevokeSessions(user),
+  })
 }
 
 async function confirmDeleteUser() {
@@ -493,7 +576,7 @@ async function confirmDeleteUser() {
   }
 }
 
-async function confirmTransfer(user: User) {
+async function executeTransfer(user: User) {
   if (!transferTargetUserId.value) return
 
   try {
@@ -509,7 +592,22 @@ async function confirmTransfer(user: User) {
   }
 }
 
-async function toggleAlbumArchive(album: Album) {
+function confirmTransfer(user: User) {
+  const target = users.value.find(candidate => candidate.id === transferTargetUserId.value)
+  if (!target) return
+  requestAdminAction({
+    title: t('admin.confirmations.transferTitle'),
+    message: t('admin.confirmations.transferMessage', {
+      from: user.display_name,
+      to: target.display_name,
+    }),
+    confirmText: t('admin.confirmTransfer'),
+    destructive: false,
+    execute: () => executeTransfer(user),
+  })
+}
+
+async function executeAlbumArchiveToggle(album: Album) {
   const wasArchived = Boolean(album.archived_at)
   try {
     const updated = wasArchived ? await albumApi.restore(album.id) : await albumApi.archive(album.id)
@@ -520,7 +618,48 @@ async function toggleAlbumArchive(album: Album) {
   }
 }
 
-async function runWorkflowAction() {
+function toggleAlbumArchive(album: Album) {
+  if (album.archived_at) {
+    void executeAlbumArchiveToggle(album)
+    return
+  }
+  requestAdminAction({
+    title: t('admin.confirmations.archiveAlbumTitle'),
+    message: t('admin.confirmations.archiveAlbumMessage', { name: album.title }),
+    confirmText: t('admin.workflowActions.archive'),
+    destructive: true,
+    execute: () => executeAlbumArchiveToggle(album),
+  })
+}
+
+function runWorkflowAction() {
+  const track = workflowTrack.value
+  if (!track) return
+  if (workflowAction.value === 'restore' || workflowAction.value === 'reassign') {
+    void executeWorkflowAction()
+    return
+  }
+
+  const action = workflowAction.value
+  const target = action === 'force'
+    ? translateWorkflowStatus(workflowNewStatus.value)
+    : action === 'reopen'
+      ? translateWorkflowStatus(workflowReopenStageId.value)
+      : translateWorkflowActionLabel(action)
+  requestAdminAction({
+    title: t(`admin.confirmations.workflow.${action}Title`),
+    message: t(`admin.confirmations.workflow.${action}Message`, {
+      track: track.title,
+      current: translateWorkflowStatus(track.status),
+      target,
+    }),
+    confirmText: t(`admin.confirmations.workflow.${action}Confirm`),
+    destructive: action === 'archive' || action === 'delete',
+    execute: executeWorkflowAction,
+  })
+}
+
+async function executeWorkflowAction() {
   if (!workflowTrack.value) return
 
   const reason = workflowReason.value
@@ -562,7 +701,22 @@ async function runWorkflowAction() {
   }
 }
 
-async function decideReopenRequest(entry: AdminReopenRequestEntry, decision: 'approve' | 'reject') {
+function decideReopenRequest(entry: AdminReopenRequestEntry, decision: 'approve' | 'reject') {
+  requestAdminAction({
+    title: decision === 'approve'
+      ? t('admin.confirmations.reopenRequestApproveTitle')
+      : t('admin.confirmations.reopenRequestRejectTitle'),
+    message: t('admin.confirmations.reopenRequestMessage', {
+      track: entry.track_title ?? trackFallback(entry.track_id),
+      stage: translateWorkflowStatus(entry.target_stage_id),
+    }),
+    confirmText: decision === 'approve' ? t('admin.approve') : t('admin.reject'),
+    destructive: decision === 'reject',
+    execute: () => executeReopenDecision(entry, decision),
+  })
+}
+
+async function executeReopenDecision(entry: AdminReopenRequestEntry, decision: 'approve' | 'reject') {
   try {
     await adminApi.decideReopenRequest(entry.id, {
       decision,
@@ -625,7 +779,6 @@ onMounted(() => {
   <div class="max-w-6xl mx-auto space-y-6">
     <div class="space-y-2">
       <h1 class="text-2xl font-mono font-bold text-foreground">{{ t('admin.title') }}</h1>
-      <p class="text-sm text-muted-foreground">{{ t('admin.subtitle') }}</p>
     </div>
 
     <div class="flex gap-2 border-b border-border overflow-x-auto">
@@ -698,7 +851,6 @@ onMounted(() => {
         <div class="grid lg:grid-cols-2 gap-6">
           <div class="card space-y-3">
             <h2 class="text-sm font-mono font-semibold">{{ t('admin.recentWorkflowEvents') }}</h2>
-            <div v-if="dashboardStats.recent_events.length === 0" class="text-sm text-muted-foreground">{{ t('admin.noRecentWorkflowEvents') }}</div>
             <div
               v-for="entry in dashboardStats.recent_events"
               :key="entry.id"
@@ -713,7 +865,6 @@ onMounted(() => {
           </div>
           <div class="card space-y-3">
             <h2 class="text-sm font-mono font-semibold">{{ t('admin.recentAdminAudits') }}</h2>
-            <div v-if="dashboardStats.recent_audits.length === 0" class="text-sm text-muted-foreground">{{ t('admin.noRecentAdminActions') }}</div>
             <div
               v-for="entry in dashboardStats.recent_audits"
               :key="entry.id"
@@ -760,6 +911,9 @@ onMounted(() => {
                   <select class="input-field min-w-[140px]" :value="user.admin_role || 'none'" @change="onAdminRoleSelect(user, $event)">
                     <option v-for="option in adminRoleOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
                   </select>
+                  <p class="mt-1 max-w-52 text-[11px] text-muted-foreground">
+                    {{ t(`admin.adminRoleDescriptions.${user.admin_role || 'none'}`) }}
+                  </p>
                 </td>
                 <td class="py-3 pr-4 text-xs space-y-1">
                   <div>{{ user.email_verified ? t('admin.states.verified') : t('admin.states.unverified') }}</div>
@@ -828,8 +982,7 @@ onMounted(() => {
           </div>
           <div v-if="expandedAlbumId === album.id" class="border-t border-border px-4 py-3">
             <div v-if="albumTracksLoading === album.id"><SkeletonLoader :rows="3" /></div>
-            <div v-else-if="!albumTracks[album.id]?.length" class="text-sm text-muted-foreground">{{ t('admin.noTracks') }}</div>
-            <div v-else class="space-y-2">
+            <div v-else-if="albumTracks[album.id]?.length" class="space-y-2">
               <div
                 v-for="track in albumTracks[album.id]"
                 :key="track.id"
@@ -842,7 +995,7 @@ onMounted(() => {
                     <span v-if="track.archived_at"> | {{ t('admin.states.archived') }}</span>
                   </div>
                 </div>
-                <StatusBadge :status="track.status" type="track" :variant="track.workflow_variant" />
+                <StatusBadge :status="track.status" type="track" :variant="track.workflow_variant" :label="track.workflow_step?.label ?? null" />
                 <button class="btn-secondary text-xs" @click="goToTrack(track.id)">{{ t('admin.open') }}</button>
               </div>
             </div>
@@ -978,9 +1131,7 @@ onMounted(() => {
             </select>
           </div>
           <div v-if="workflowTracksLoading"><SkeletonLoader :rows="5" /></div>
-          <div v-else-if="!workflowAlbumId" class="text-sm text-muted-foreground">{{ t('admin.selectAlbumPrompt') }}</div>
-          <div v-else-if="workflowTracks.length === 0" class="text-sm text-muted-foreground">{{ t('admin.noTracks') }}</div>
-          <div v-else class="space-y-2 max-h-[500px] overflow-y-auto">
+          <div v-else-if="workflowAlbumId && workflowTracks.length > 0" class="space-y-2 max-h-[500px] overflow-y-auto">
             <button
               v-for="track in workflowTracks"
               :key="track.id"
@@ -990,7 +1141,7 @@ onMounted(() => {
             >
               <div class="flex items-center justify-between gap-3">
                 <span class="text-sm">{{ track.title }}</span>
-                <StatusBadge :status="track.status" type="track" :variant="track.workflow_variant" />
+                <StatusBadge :status="track.status" type="track" :variant="track.workflow_variant" :label="track.workflow_step?.label ?? null" />
               </div>
               <p class="text-xs text-muted-foreground mt-1">
                 {{ track.artist || '-' }}
@@ -1060,7 +1211,7 @@ onMounted(() => {
               :disabled="workflowSubmitting || (workflowAction === 'force' && !workflowNewStatus) || (workflowAction === 'reassign' && workflowTargetUserIds.length === 0) || (workflowAction === 'reopen' && !workflowReopenStageId)"
               @click="runWorkflowAction"
             >
-              {{ workflowSubmitting ? t('admin.working') : t('admin.runAction') }}
+              {{ workflowSubmitting ? t('admin.working') : translateWorkflowActionLabel(workflowAction) }}
             </button>
           </div>
 
@@ -1070,8 +1221,7 @@ onMounted(() => {
               <input v-model="reopenDecisionReason" class="input-field max-w-xs" :placeholder="t('admin.decisionReason')" />
             </div>
             <div v-if="reopenRequestsLoading"><SkeletonLoader :rows="4" /></div>
-            <div v-else-if="reopenRequests.length === 0" class="text-sm text-muted-foreground">{{ t('admin.noPendingReopenRequests') }}</div>
-            <div v-else class="space-y-3">
+            <div v-else-if="reopenRequests.length > 0" class="space-y-3">
               <div v-for="entry in reopenRequests" :key="entry.id" class="border border-border p-3 space-y-2">
                 <div class="flex items-center justify-between gap-3">
                   <div>
@@ -1093,6 +1243,16 @@ onMounted(() => {
         </div>
       </div>
     </template>
+
+    <ConfirmModal
+      v-if="pendingAdminAction"
+      :title="pendingAdminAction.title"
+      :message="pendingAdminAction.message"
+      :confirm-text="pendingAdminAction.confirmText"
+      :destructive="pendingAdminAction.destructive"
+      @confirm="confirmAdminAction"
+      @cancel="pendingAdminAction = null"
+    />
 
     <ConfirmModal
       v-if="deleteUserTarget"

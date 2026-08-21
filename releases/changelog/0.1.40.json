@@ -1,0 +1,42 @@
+{
+  "version": "0.1.40",
+  "date": "2026-07-07",
+  "headline": {
+    "zh-CN": "副主催可完整协作专辑流程",
+    "en": "Co-producers can fully assist album workflows"
+  },
+  "summary": {
+    "zh-CN": "副主催现在会在专辑、曲目、工作流和提交页面获得与后端权限一致的协作入口，同时社团危险区会正确保留所有权边界。",
+    "en": "Co-producers now get album, track, workflow, and submission controls that match backend permissions, while circle danger-zone ownership boundaries remain enforced."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "副主催协作",
+        "en": "Co-producer collaboration"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "专辑与曲目入口不再漏掉副主催",
+            "en": "Album and track entry points no longer omit co-producers"
+          },
+          "description": {
+            "zh-CN": "副主催可以看到可管理的社团专辑，进入专辑设置，处理曲目侧主催流程、评审分配、外部曲师代传和成品导出。",
+            "en": "Co-producers can see managed circle albums, enter album settings, handle producer-side track workflow controls, manage reviewer assignments, proxy-submit for external composers, and export completed albums."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "社团危险区区分协作与所有权",
+            "en": "Circle danger zone separates collaboration from ownership"
+          },
+          "description": {
+            "zh-CN": "副主催在社团危险区只会看到离开社团操作；删除社团仍仅限所有者或管理员。",
+            "en": "Co-producers now see only the leave-circle action in the danger zone; deleting a circle remains limited to owners or administrators."
+          }
+        }
+      ]
+    }
+  ]
+}
