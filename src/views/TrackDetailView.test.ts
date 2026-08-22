@@ -413,12 +413,12 @@ describe('TrackDetailView', () => {
     })
   })
 
-  it('shows current-cycle issues while filtering source waveform markers to the current audio', async () => {
+  it('keeps cross-cycle issue history while filtering waveform markers to the current audio', async () => {
     const wrapper = mountTrackDetailView()
     await flushPromises()
 
-    expect(wrapper.find('.issue-count').text()).toBe('2')
-    expect(wrapper.text()).not.toContain('Older cycle')
+    expect(wrapper.find('.issue-count').text()).toBe('3')
+    expect(wrapper.text()).toContain('Older cycle')
     expect(wrapper.find('.waveform').text()).toContain('issues:1')
     expect(wrapper.find('.waveform').text()).toContain('compare:none')
 
@@ -570,7 +570,7 @@ describe('TrackDetailView', () => {
 
   })
 
-  it('hides issues from older workflow cycles', async () => {
+  it('keeps issues from older workflow cycles out of the current waveform', async () => {
     mocks.trackGetMock.mockResolvedValueOnce(makeTrackDetailResponse({
       track: {
         status: 'peer_review',
@@ -601,8 +601,8 @@ describe('TrackDetailView', () => {
     const wrapper = mountTrackDetailView()
     await flushPromises()
 
-    expect(wrapper.find('.issue-count').text()).toBe('0')
-    expect(wrapper.text()).not.toContain('Old master issue')
+    expect(wrapper.find('.issue-count').text()).toBe('1')
+    expect(wrapper.text()).toContain('Old master issue')
 
     const waveforms = wrapper.findAll('.waveform')
     expect(waveforms).toHaveLength(1)
@@ -639,6 +639,22 @@ describe('TrackDetailView', () => {
     await flushPromises()
 
     expect(wrapper.find('.drawer-title').text()).toBe('Current version')
+    expect(mocks.pushMock).not.toHaveBeenCalled()
+  })
+
+  it('opens an issue from a previous workflow cycle through the route query', async () => {
+    mocks.route = {
+      name: 'track-detail',
+      path: '/tracks/7',
+      fullPath: '/tracks/7?issue=3',
+      params: { id: '7' },
+      query: { issue: '3' },
+    }
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    expect(wrapper.find('.drawer-title').text()).toBe('Older cycle')
     expect(mocks.pushMock).not.toHaveBeenCalled()
   })
 
@@ -697,6 +713,24 @@ describe('TrackDetailView', () => {
 
     expect(wrapper.findAll('.issue-select')[0].text()).toContain('Server resolved:resolved')
     expect(wrapper.find('.drawer-title').text()).toBe('')
+  })
+
+  it('updates the status of an issue from a previous workflow cycle', async () => {
+    mocks.issueUpdateMock.mockResolvedValueOnce(makeIssue({
+      id: 3,
+      local_number: 3,
+      workflow_cycle: 1,
+      title: 'Older cycle resolved',
+      status: 'resolved',
+    }))
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    await wrapper.findAll('.quick-status')[2].trigger('click')
+    await flushPromises()
+
+    expect(mocks.issueUpdateMock).toHaveBeenCalledWith(3, { status: 'resolved' })
+    expect(wrapper.findAll('.issue-select')[2].text()).toContain('Older cycle resolved:resolved')
   })
 
   it('reverts quick issue status when the API update fails', async () => {
@@ -791,8 +825,8 @@ describe('TrackDetailView', () => {
     const wrapper = mountTrackDetailView()
     await flushPromises()
 
-    // Issue 3 belongs to an older workflow_cycle and is filtered out of the
-    // visible issue list, but the timeline must still resolve its number.
+    // Issue 3 belongs to an older workflow_cycle, and the timeline must keep
+    // resolving the same track-local issue number.
     expect(wrapper.text()).toContain('#3')
   })
 

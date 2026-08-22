@@ -582,7 +582,13 @@
     "gain": "Gain",
     "resetGain": "Reset",
     "resetToZeroDb": "Reset to 0 dB",
-    "activeGainNotice": "Playback gain is active: {gain}. This only affects your monitoring and does not modify the audio file."
+    "activeGainNotice": "Playback gain is active: {gain}. This only affects your monitoring and does not modify the audio file.",
+    "zoom": "Timeline zoom",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fit": "Fit track",
+    "zoomMultiplier": "{value}×",
+    "zoomHint": "Hold Ctrl or Command and scroll to zoom; hold Space to pan while annotating"
   },
   "checklistLabels": {
     "arrangement": "Arrangement",

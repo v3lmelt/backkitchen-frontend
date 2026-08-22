@@ -559,17 +559,21 @@ watch(() => route.query.issue, () => {
 
 const {
   syncIssueDrawerFromRoute,
-  openIssueDrawer,
-  onIssueSelect,
+  onIssueSelect: openSelectedIssue,
   closeIssueDrawer,
 } = useIssueDrawer({ issues, selectedIssue })
+
+function onIssueSelect(issue: Issue) {
+  waveformRef.value?.focusIssue?.(issue)
+  openSelectedIssue(issue)
+}
 
 const { onIssueUpdated, onQuickIssueStatusChange } = useIssueMutations({ issues, selectedIssue })
 
 function openLinkedIssue(issueId: number) {
   const localIssue = issues.value.find(issue => issue.id === issueId)
   if (localIssue) {
-    openIssueDrawer(localIssue)
+    onIssueSelect(localIssue)
     return
   }
 
@@ -1331,7 +1335,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
       @producer-batch-clear="selectedProducerIssueIds = []; producerBatchNote = ''"
       @producer-batch-apply="applyProducerBatchStatus($event)"
       @quick-status-change="onQuickIssueStatusChange"
-      @open-issue="openIssueDrawer"
+      @open-issue="onIssueSelect"
     />
 
     <WorkflowActionBar
@@ -1454,6 +1458,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           ref="waveformRef"
           :audio-url="audioUrl"
           :issues="waveformIssues"
+          zoomable
           :track-id="trackId"
           :compare-version-id="selectedCompareSourceVersionId"
           @ready="onWaveformReady"
@@ -1545,6 +1550,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           ref="waveformRef"
           :audio-url="audioUrl"
           :issues="fallbackWaveformIssues"
+          zoomable
           :track-id="trackId"
           :compare-version-id="selectedCompareSourceVersionId"
           @ready="onWaveformReady"
@@ -1610,6 +1616,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           ref="waveformRef"
           :audio-url="audioUrl"
           :issues="revisionWaveformIssues"
+          zoomable
           :track-id="trackId"
           :hovered-issue-id="hoveredIssueId"
           @issueHover="handleIssueHover"
@@ -1670,7 +1677,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           :hovered-issue-id="hoveredIssueId"
           :show-activity="true"
           :enable-quick-actions="true"
-          @select="openIssueDrawer"
+          @select="onIssueSelect"
           @update:selectedIds="selectedRevisionIssueIds = $event"
           @hover="handleIssueHover"
           @leave="handleIssueLeave"
@@ -1864,7 +1871,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
             {{ t('workflowStep.sourceCompareReadonlyHint') }}
           </p>
         </div>
-        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" :track-id="trackId" :compare-version-id="selectedCompareSourceVersionId" />
+        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" zoomable :track-id="trackId" :compare-version-id="selectedCompareSourceVersionId" />
       </div>
 
       <div class="card space-y-4">
@@ -1928,7 +1935,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           <p class="text-xs text-muted-foreground mb-1">{{ t('workflowStep.deliveryMessageLabel') }}</p>
           <p class="whitespace-pre-wrap break-words text-sm text-foreground">{{ masterDelivery.delivery_message }}</p>
         </div>
-        <WaveformPlayer v-if="masterAudioUrl" :audio-url="masterAudioUrl" :issues="[]" :track-id="trackId" playback-scope="master" />
+        <WaveformPlayer v-if="masterAudioUrl" :audio-url="masterAudioUrl" :issues="[]" zoomable :track-id="trackId" playback-scope="master" />
         <p v-else class="text-sm text-muted-foreground">{{ t('workflowStep.textDeliveryNoAudio') }}</p>
       </div>
 

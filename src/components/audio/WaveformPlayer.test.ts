@@ -31,6 +31,11 @@ type WaveSurferInstance = {
   destroy: ReturnType<typeof vi.fn>
   setVolume: ReturnType<typeof vi.fn>
   setOptions: ReturnType<typeof vi.fn>
+  zoom: ReturnType<typeof vi.fn>
+  getWidth: ReturnType<typeof vi.fn>
+  getScroll: ReturnType<typeof vi.fn>
+  setScroll: ReturnType<typeof vi.fn>
+  setScrollTime: ReturnType<typeof vi.fn>
   getMediaElement: ReturnType<typeof vi.fn>
   getDuration: ReturnType<typeof vi.fn>
   getCurrentTime: ReturnType<typeof vi.fn>
@@ -73,6 +78,11 @@ vi.mock('wavesurfer.js', () => ({
         destroy: vi.fn(),
         setVolume: vi.fn(),
         setOptions: vi.fn(),
+        zoom: vi.fn(),
+        getWidth: vi.fn(() => 800),
+        getScroll: vi.fn(() => 0),
+        setScroll: vi.fn(),
+        setScrollTime: vi.fn(),
         getMediaElement: vi.fn(() => mediaElement),
         getDuration: vi.fn(() => 95),
         getCurrentTime: vi.fn(() => 12.3),
@@ -92,6 +102,11 @@ vi.mock('wavesurfer.js', () => ({
         destroy: instance.destroy,
         setVolume: instance.setVolume,
         setOptions: instance.setOptions,
+        zoom: instance.zoom,
+        getWidth: instance.getWidth,
+        getScroll: instance.getScroll,
+        setScroll: instance.setScroll,
+        setScrollTime: instance.setScrollTime,
         getMediaElement: instance.getMediaElement,
         getDuration: instance.getDuration,
         getCurrentTime: instance.getCurrentTime,
@@ -358,6 +373,115 @@ describe('WaveformPlayer', () => {
 
     await quickReset!.trigger('click')
     expect(wrapper.emitted('update:gainDb')?.at(-1)).toEqual([0])
+  })
+
+  it('zooms review waveforms while keeping visible markers on the scrolled timeline', async () => {
+    const wrapper = mountWithPlugins(WaveformPlayer, {
+      props: {
+        audioUrl: '/api/tracks/1/audio',
+        zoomable: true,
+        issues: [{
+          id: 7,
+          title: 'Precise issue',
+          severity: 'major',
+          status: 'open',
+          created_at: '2026-08-21T00:00:00Z',
+          markers: [{ id: 9, issue_id: 7, marker_type: 'point', time_start: 30, time_end: null }],
+        }],
+      },
+    })
+
+    await flushWaveformMount()
+    waveSurferInstances[0].handlers.ready?.()
+    await wrapper.vm.$nextTick()
+
+    const zoomIn = wrapper.findAll('button').find(button => button.attributes('aria-label') === 'Zoom in')
+    expect(zoomIn).toBeTruthy()
+    await zoomIn!.trigger('click')
+
+    expect(waveSurferInstances[0].zoom).toHaveBeenLastCalledWith(1600 / 95)
+    expect(wrapper.text()).toContain('2×')
+
+    waveSurferInstances[0].handlers.scroll?.(20, 40, 100, 900)
+    await wrapper.vm.$nextTick()
+
+    const markerButton = wrapper.get('button[aria-label="Precise issue"]')
+    expect((markerButton.element.parentElement as HTMLElement).style.left).toBe('50%')
+  })
+
+  it('keeps draft point numbers stable when earlier markers leave the viewport', async () => {
+    const wrapper = mountWithPlugins(WaveformPlayer, {
+      props: {
+        audioUrl: '/api/tracks/1/audio',
+        zoomable: true,
+        draftMarkers: [
+          { marker_type: 'point', time_start: 10, time_end: null },
+          { marker_type: 'point', time_start: 80, time_end: null },
+        ],
+      },
+    })
+
+    await flushWaveformMount()
+    waveSurferInstances[0].handlers.ready?.()
+    await wrapper.vm.$nextTick()
+    await wrapper.findAll('button').find(button => button.attributes('aria-label') === 'Zoom in')!.trigger('click')
+
+    waveSurferInstances[0].handlers.scroll?.(70, 90, 100, 900)
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.findAll('.draft-point-index').map(marker => marker.text())).toEqual(['2'])
+  })
+
+  it('centers an existing issue without changing the current zoom level', async () => {
+    const issue = {
+      id: 8,
+      title: 'Late issue',
+      severity: 'major',
+      status: 'open',
+      created_at: '2026-08-21T00:00:00Z',
+      markers: [{ id: 10, issue_id: 8, marker_type: 'point', time_start: 80, time_end: null }],
+    }
+    const wrapper = mountWithPlugins(WaveformPlayer, {
+      props: {
+        audioUrl: '/api/tracks/1/audio',
+        zoomable: true,
+        issues: [issue],
+      },
+    })
+
+    await flushWaveformMount()
+    waveSurferInstances[0].handlers.ready?.()
+    await wrapper.vm.$nextTick()
+    await wrapper.findAll('button').find(button => button.attributes('aria-label') === 'Zoom in')!.trigger('click')
+    const zoomCalls = waveSurferInstances[0].zoom.mock.calls.length
+
+    ;(wrapper.vm as unknown as { focusIssue: (value: unknown) => void }).focusIssue(issue)
+
+    expect(waveSurferInstances[0].zoom).toHaveBeenCalledTimes(zoomCalls)
+    expect(waveSurferInstances[0].setScrollTime).toHaveBeenLastCalledWith(47.5)
+  })
+
+  it('applies the active zoom and scroll position when a comparison waveform becomes ready', async () => {
+    const wrapper = mountWithPlugins(WaveformPlayer, {
+      props: {
+        audioUrl: '/api/tracks/1/audio',
+        trackId: 1,
+        zoomable: true,
+      },
+    })
+
+    await flushWaveformMount()
+    waveSurferInstances[0].handlers.ready?.()
+    await wrapper.vm.$nextTick()
+    await wrapper.findAll('button').find(button => button.attributes('aria-label') === 'Zoom in')!.trigger('click')
+    waveSurferInstances[0].getScroll.mockReturnValue(240)
+
+    await wrapper.setProps({ compareVersionId: 2 })
+    await flushWaveformMount()
+    waveSurferInstances[1].handlers.ready?.()
+
+    expect(waveSurferInstances[1].zoom).toHaveBeenLastCalledWith(1600 / 95)
+    expect(waveSurferInstances[1].setScroll).toHaveBeenLastCalledWith(240)
   })
 
 })

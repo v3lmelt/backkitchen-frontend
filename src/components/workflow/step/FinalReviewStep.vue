@@ -151,6 +151,7 @@ function bindIssueForm(el: unknown) {
         :audio-url="masterAudioUrl"
         :compare-audio-url="compareMasterAudioUrl"
         :issues="finalReviewIssues"
+        zoomable
         :track-id="trackId"
         playback-scope="master"
         :selectable="true"
