@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Play, Pause, Headphones, MapPin } from 'lucide-vue-next'
+import { Play, Pause, Headphones, MapPin, Maximize2, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import type { Issue, IssueMarker } from '@/types'
 import type WaveSurfer from 'wavesurfer.js'
 import type RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
@@ -33,11 +33,13 @@ const props = withDefaults(defineProps<{
   draftRangeAnchor?: number | null
   hoveredIssueId?: number | null
   compact?: boolean
+  zoomable?: boolean
 }>(), {
   mode: 'seek',
   showGainControl: true,
   playbackScope: 'source',
   compact: false,
+  zoomable: false,
 })
 
 const emit = defineEmits<{
@@ -94,6 +96,17 @@ const visibleRangeTooltipKeys = computed<Set<string>>(() => {
 const abMode = ref<'A' | 'B'>('A')
 const hoverTime = ref<number | null>(null)
 const hoverLeft = ref<number>(0)
+const visibleStartTime = ref(0)
+const visibleEndTime = ref(0)
+const waveformViewportWidth = ref(0)
+const zoomStep = ref(0)
+const isPanning = ref(false)
+const isSpacePressed = ref(false)
+const isWaveformHovered = ref(false)
+let panPointerId: number | null = null
+let panStartX = 0
+let panStartScroll = 0
+let lastPanAt = 0
 const compareSourceUrl = computed(() => {
   if (props.compareAudioUrl) return props.compareAudioUrl
   if (props.compareVersionId && props.trackId) {
@@ -109,7 +122,35 @@ const compareDuration = ref(0)
 const compareCurrentTime = ref(0)
 const activeDuration = computed(() => abMode.value === 'B' && compareDuration.value > 0 ? compareDuration.value : duration.value)
 const activeCurrentTime = computed(() => abMode.value === 'B' && compareDuration.value > 0 ? compareCurrentTime.value : currentTime.value)
-const markerTimelineDuration = computed(() => activeDuration.value)
+const markerTimelineDuration = computed(() => duration.value)
+const MAX_ZOOM_DENSITY = 200
+const ZOOM_MULTIPLIERS = [1, 2, 4, 8, 16, 32, 64, 128] as const
+const fitPxPerSec = computed(() => {
+  if (duration.value <= 0 || waveformViewportWidth.value <= 0) return 0
+  return waveformViewportWidth.value / duration.value
+})
+const maxZoomStep = computed(() => {
+  if (fitPxPerSec.value <= 0 || fitPxPerSec.value >= MAX_ZOOM_DENSITY) return 0
+  const cappedIndex = ZOOM_MULTIPLIERS.findIndex(multiplier => fitPxPerSec.value * multiplier >= MAX_ZOOM_DENSITY)
+  return cappedIndex === -1 ? ZOOM_MULTIPLIERS.length - 1 : cappedIndex
+})
+const isZoomed = computed(() => props.zoomable && zoomStep.value > 0)
+const visibleTimelineStart = computed(() => {
+  if (!isZoomed.value) return 0
+  return Math.min(Math.max(visibleStartTime.value, 0), markerTimelineDuration.value)
+})
+const visibleTimelineEnd = computed(() => {
+  if (!isZoomed.value || visibleEndTime.value <= visibleTimelineStart.value) return markerTimelineDuration.value
+  return Math.min(Math.max(visibleEndTime.value, visibleTimelineStart.value), markerTimelineDuration.value)
+})
+const visibleTimelineDuration = computed(() => Math.max(visibleTimelineEnd.value - visibleTimelineStart.value, 0))
+const zoomFactor = computed(() => {
+  if (zoomStep.value === 0 || fitPxPerSec.value <= 0) return 1
+  return getZoomDensity(zoomStep.value) / fitPxPerSec.value
+})
+const zoomDisplay = computed(() => zoomStep.value === 0
+  ? t('waveform.fit')
+  : t('waveform.zoomMultiplier', { value: formatZoomFactor(zoomFactor.value) }))
 // Draft and major issue markers use a dedicated waveform-marker token so the
 // light theme can keep annotations brighter without changing the brand accent.
 const FALLBACK_RGB: Record<string, string> = {
@@ -251,13 +292,28 @@ function getMarkerStatus(issues: Issue[]): MarkerStatus {
 }
 
 function getMarkerPosition(time: number): string {
-  if (markerTimelineDuration.value <= 0) return '0%'
-  return `${clampPercent((time / markerTimelineDuration.value) * 100)}%`
+  if (visibleTimelineDuration.value <= 0) return '0%'
+  return `${clampPercent(((time - visibleTimelineStart.value) / visibleTimelineDuration.value) * 100)}%`
+}
+
+interface PointMarkerGroupBase {
+  key: string
+  time: number
+  issues: Issue[]
+  status: MarkerStatus
 }
 
 function getMarkerPercent(time: number): number {
-  if (markerTimelineDuration.value <= 0) return 0
-  return clampPercent((time / markerTimelineDuration.value) * 100)
+  if (visibleTimelineDuration.value <= 0) return 0
+  return clampPercent(((time - visibleTimelineStart.value) / visibleTimelineDuration.value) * 100)
+}
+
+function timeIsVisible(time: number): boolean {
+  return time >= visibleTimelineStart.value && time <= visibleTimelineEnd.value
+}
+
+function rangeOverlapsVisibleWindow(start: number, end: number): boolean {
+  return end >= visibleTimelineStart.value && start <= visibleTimelineEnd.value
 }
 
 function getPointMarkerAlign(percent: number): 'left' | 'center' | 'right' {
@@ -285,12 +341,14 @@ function popoverAnchorClass(align: 'left' | 'center' | 'right'): string {
 }
 
 function getRangeWidth(start: number, end: number): string {
-  if (markerTimelineDuration.value <= 0) return '0%'
-  const width = ((Math.max(end, start) - start) / markerTimelineDuration.value) * 100
+  if (visibleTimelineDuration.value <= 0) return '0%'
+  const visibleStart = Math.max(Math.min(start, end), visibleTimelineStart.value)
+  const visibleEnd = Math.min(Math.max(start, end), visibleTimelineEnd.value)
+  const width = ((visibleEnd - visibleStart) / visibleTimelineDuration.value) * 100
   return `${Math.max(clampPercent(width), 0.35)}%`
 }
 
-const pointGroups = computed<PointMarkerGroup[]>(() => {
+const pointGroupBases = computed<PointMarkerGroupBase[]>(() => {
   if (!props.issues?.length || markerTimelineDuration.value <= 0) return []
 
   // Flatten: each point marker → its parent issue (an issue can appear in multiple groups)
@@ -307,21 +365,29 @@ const pointGroups = computed<PointMarkerGroup[]>(() => {
   return Array.from(grouped.entries())
     .map(([key, issueMap]) => {
       const time = key / 1000
-      const percent = getMarkerPercent(time)
       const issues = [...issueMap.values()].sort((a, b) => a.created_at.localeCompare(b.created_at))
       return {
         key: String(key),
         time,
-        percent,
-        left: `${percent}%`,
         issues,
         status: getMarkerStatus(issues),
-        markerAlign: getPointMarkerAlign(percent),
-        popoverAlign: getPointPopoverAlign(percent),
       }
     })
     .sort((a, b) => a.time - b.time)
 })
+
+const pointGroups = computed<PointMarkerGroup[]>(() => pointGroupBases.value
+  .filter(group => timeIsVisible(group.time))
+  .map((group) => {
+    const percent = getMarkerPercent(group.time)
+    return {
+      ...group,
+      percent,
+      left: `${percent}%`,
+      markerAlign: getPointMarkerAlign(percent),
+      popoverAlign: getPointPopoverAlign(percent),
+    }
+  }))
 
 // Flatten all range markers with their parent issue
 const rangeMarkerItems = computed<MarkerWithIssue[]>(() => {
@@ -355,6 +421,10 @@ const rangeLaneItems = computed<RangeLaneItem[]>(() => {
     })
 })
 
+const visibleRangeLaneItems = computed(() => rangeLaneItems.value.filter(item => (
+  rangeOverlapsVisibleWindow(item.marker.time_start, item.marker.time_end)
+)))
+
 const rangeLaneCount = computed(() =>
   rangeLaneItems.value.reduce((max, item) => Math.max(max, item.lane + 1), 0),
 )
@@ -368,12 +438,14 @@ const draftPointList = computed(() => {
       time: m.time_start,
       left: getMarkerPosition(m.time_start),
     }))
+    .filter(m => timeIsVisible(m.time))
 })
 
 const draftRangeList = computed(() => {
   if (!props.draftMarkers?.length || markerTimelineDuration.value <= 0) return []
   return props.draftMarkers
     .filter(m => m.marker_type === 'range' && m.time_end !== null)
+    .filter(m => rangeOverlapsVisibleWindow(m.time_start, m.time_end!))
     .map((m, i) => ({
       index: i + 1,
       time_start: m.time_start,
@@ -383,6 +455,7 @@ const draftRangeList = computed(() => {
 
 const draftRangeAnchorLeft = computed(() => {
   if (props.draftRangeAnchor == null || markerTimelineDuration.value <= 0) return null
+  if (!timeIsVisible(props.draftRangeAnchor)) return null
   return getMarkerPosition(props.draftRangeAnchor)
 })
 
@@ -397,8 +470,9 @@ function togglePointGroup(groupKey: string) {
   activePointGroupKey.value = activePointGroupKey.value === groupKey ? null : groupKey
 }
 
-function selectIssue(issue: Issue) {
+function selectIssue(issue: Issue, time: number) {
   activePointGroupKey.value = null
+  centerTimeInView(time)
   emit('regionClick', issue)
 }
 
@@ -476,17 +550,60 @@ function rangeTooltipAlignClass(item: RangeLaneItem): string {
 }
 
 function onWaveformPointerMove(event: PointerEvent) {
+  if (isPanning.value && panPointerId === event.pointerId && wavesurfer.value) {
+    const nextScroll = panStartScroll - (event.clientX - panStartX)
+    syncWaveformScroll(nextScroll)
+    event.preventDefault()
+  }
   if (markerTimelineDuration.value <= 0) return
   const target = event.currentTarget as HTMLElement | null
   if (!target) return
   const rect = target.getBoundingClientRect()
   const x = Math.min(Math.max(event.clientX - rect.left, 0), rect.width)
-  hoverTime.value = (x / rect.width) * markerTimelineDuration.value
+  hoverTime.value = visibleTimelineStart.value + (x / rect.width) * visibleTimelineDuration.value
   hoverLeft.value = x
 }
 
 function onWaveformPointerLeave() {
   hoverTime.value = null
+  isWaveformHovered.value = false
+}
+
+function onWaveformPointerEnter() {
+  isWaveformHovered.value = true
+}
+
+function canPanWaveform(): boolean {
+  return isZoomed.value && (props.mode === 'seek' || isSpacePressed.value)
+}
+
+function onWaveformPointerDown(event: PointerEvent) {
+  if (!canPanWaveform() || !wavesurfer.value || event.button !== 0) return
+  panPointerId = event.pointerId
+  panStartX = event.clientX
+  panStartScroll = wavesurfer.value.getScroll()
+  isPanning.value = true
+  ;(event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId)
+  event.preventDefault()
+}
+
+function endWaveformPan(event: PointerEvent) {
+  if (panPointerId !== event.pointerId) return
+  const currentScroll = wavesurfer.value?.getScroll() ?? panStartScroll
+  if (Math.abs(currentScroll - panStartScroll) > 2) lastPanAt = Date.now()
+  ;(event.currentTarget as HTMLElement | null)?.releasePointerCapture?.(event.pointerId)
+  panPointerId = null
+  isPanning.value = false
+}
+
+function onWindowKeyDown(event: KeyboardEvent) {
+  if (event.code !== 'Space' || !isWaveformHovered.value || !isZoomed.value) return
+  event.preventDefault()
+  isSpacePressed.value = true
+}
+
+function onWindowKeyUp(event: KeyboardEvent) {
+  if (event.code === 'Space') isSpacePressed.value = false
 }
 
 function setMode(mode: InteractionMode) {
@@ -695,10 +812,10 @@ function highlightIssue(issue: Issue | null) {
   }
 }
 
-function handleTimelineClick(issue: Issue) {
-  const firstMarker = issue.markers[0]
-  if (firstMarker) seekTo(firstMarker.time_start)
-  emit('regionClick', issue)  // parent's onIssueSelect will call highlightIssue
+function handleTimelineClick(item: RangeLaneItem) {
+  centerTimeInView((item.marker.time_start + item.marker.time_end) / 2)
+  seekTo(item.marker.time_start)
+  emit('regionClick', item.issue)
 }
 
 function emitIssueHover(issue: Issue) {
@@ -827,6 +944,132 @@ function formatTime(seconds: number): string {
   return formatTimestamp(seconds)
 }
 
+function formatZoomFactor(value: number): string {
+  if (value >= 10 || Number.isInteger(value)) return String(Math.round(value))
+  return value.toFixed(1)
+}
+
+function getZoomDensity(step: number): number {
+  if (fitPxPerSec.value <= 0) return 0
+  const multiplier = ZOOM_MULTIPLIERS[Math.min(Math.max(step, 0), ZOOM_MULTIPLIERS.length - 1)]
+  return Math.min(fitPxPerSec.value * multiplier, MAX_ZOOM_DENSITY)
+}
+
+function updateVisibleWindow(start: number, end: number) {
+  const total = markerTimelineDuration.value
+  visibleStartTime.value = Math.min(Math.max(start, 0), total)
+  visibleEndTime.value = Math.min(Math.max(end, visibleStartTime.value), total)
+  activePointGroupKey.value = null
+}
+
+function handlePrimaryScroll(start: number, end: number, scrollLeft: number) {
+  updateVisibleWindow(start, end)
+  if (compareWaveSurfer.value && isCompareReady.value) {
+    compareWaveSurfer.value.setScroll(scrollLeft)
+  }
+}
+
+function syncWaveformScroll(scrollLeft: number) {
+  wavesurfer.value?.setScroll(scrollLeft)
+  if (compareWaveSurfer.value && isCompareReady.value) {
+    compareWaveSurfer.value.setScroll(scrollLeft)
+  }
+}
+
+function applyZoomStep(nextStep: number, anchorRatio = 0.5) {
+  if (!props.zoomable || !wavesurfer.value || duration.value <= 0 || fitPxPerSec.value <= 0) return
+
+  const clampedStep = Math.min(Math.max(Math.round(nextStep), 0), maxZoomStep.value)
+  const safeAnchorRatio = Math.min(Math.max(anchorRatio, 0), 1)
+  const currentSpan = visibleTimelineDuration.value || duration.value
+  const anchorTime = visibleTimelineStart.value + currentSpan * safeAnchorRatio
+  const density = getZoomDensity(clampedStep)
+
+  zoomStep.value = clampedStep
+  wavesurfer.value.zoom(density)
+  if (compareWaveSurfer.value && isCompareReady.value) compareWaveSurfer.value.zoom(density)
+
+  const nextSpan = clampedStep === 0
+    ? duration.value
+    : Math.min(duration.value, waveformViewportWidth.value / density)
+  const maxStart = Math.max(duration.value - nextSpan, 0)
+  const nextStart = clampedStep === 0
+    ? 0
+    : Math.min(Math.max(anchorTime - nextSpan * safeAnchorRatio, 0), maxStart)
+
+  wavesurfer.value.setScrollTime(nextStart)
+  if (compareWaveSurfer.value && isCompareReady.value) compareWaveSurfer.value.setScrollTime(nextStart)
+  updateVisibleWindow(nextStart, nextStart + nextSpan)
+}
+
+function resetZoom() {
+  applyZoomStep(0)
+}
+
+function changeZoom(delta: number, anchorRatio = 0.5) {
+  applyZoomStep(zoomStep.value + delta, anchorRatio)
+}
+
+function onZoomInput(event: Event) {
+  const target = event.target as HTMLInputElement | null
+  applyZoomStep(Number(target?.value ?? 0))
+}
+
+function onWaveformWheel(event: WheelEvent) {
+  if (!props.zoomable || duration.value <= 0) return
+
+  if (event.ctrlKey || event.metaKey) {
+    event.preventDefault()
+    const target = event.currentTarget as HTMLElement | null
+    const rect = target?.getBoundingClientRect()
+    const anchorRatio = rect && rect.width > 0
+      ? Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1)
+      : 0.5
+    changeZoom(event.deltaY < 0 ? 1 : -1, anchorRatio)
+    return
+  }
+
+  if (!isZoomed.value || !wavesurfer.value) return
+  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
+  if (delta === 0) return
+  event.preventDefault()
+  syncWaveformScroll(wavesurfer.value.getScroll() + delta)
+}
+
+function centerTimeInView(time: number) {
+  if (!isZoomed.value || visibleTimelineDuration.value <= 0) return
+  const span = visibleTimelineDuration.value
+  const maxStart = Math.max(duration.value - span, 0)
+  const nextStart = Math.min(Math.max(time - span / 2, 0), maxStart)
+  wavesurfer.value?.setScrollTime(nextStart)
+  if (compareWaveSurfer.value && isCompareReady.value) compareWaveSurfer.value.setScrollTime(nextStart)
+  updateVisibleWindow(nextStart, nextStart + span)
+}
+
+function focusIssue(issue: Issue | number) {
+  const issueId = typeof issue === 'number' ? issue : issue.id
+  const target = props.issues?.find(item => item.id === issueId)
+  const marker = target?.markers[0]
+  if (!marker) return
+
+  if (isZoomed.value) {
+    const viewportCenter = visibleTimelineStart.value + visibleTimelineDuration.value / 2
+    const centerTolerance = Math.max(visibleTimelineDuration.value * 0.01, 0.01)
+    const alreadyCentered = target.markers.some(item => {
+      const itemTime = item.time_end == null
+        ? item.time_start
+        : (item.time_start + item.time_end) / 2
+      return Math.abs(itemTime - viewportCenter) <= centerTolerance
+    })
+    if (alreadyCentered) return
+  }
+
+  const focusTime = marker.time_end == null
+    ? marker.time_start
+    : (marker.time_start + marker.time_end) / 2
+  centerTimeInView(focusTime)
+}
+
 function formatGainDb(value: number): string {
   const normalized = clampGainDb(value)
   return `${normalized > 0 ? '+' : ''}${normalized.toFixed(1)} dB`
@@ -880,6 +1123,8 @@ function handleThemeChanged() {
 
 onMounted(async () => {
   window.addEventListener(THEME_CHANGED_EVENT, handleThemeChanged)
+  window.addEventListener('keydown', onWindowKeyDown)
+  window.addEventListener('keyup', onWindowKeyUp)
   if (!container.value) return
 
   const [{ default: WaveSurfer }, { default: RegionsPlugin }] = await Promise.all([
@@ -908,6 +1153,8 @@ onMounted(async () => {
   ws.on('ready', () => {
     updatePrimaryLoading(100)
     duration.value = ws.getDuration()
+    waveformViewportWidth.value = ws.getWidth()
+    updateVisibleWindow(0, duration.value)
     emit('ready', duration.value)
     renderIssueRegions()
   })
@@ -944,6 +1191,7 @@ onMounted(async () => {
 
   ws.on('click', () => {
     if (Date.now() - lastSelectionAt.value < 250) return
+    if (Date.now() - lastPanAt < 250) return
     // In seek mode clicks only move the play head (wavesurfer handles that
     // natively). Point markers are only created in annotate mode.
     if (props.selectable && props.mode !== 'annotate') return
@@ -964,6 +1212,19 @@ onMounted(async () => {
         }
       }
       syncCompareToPrimaryTime(newTime)
+    }
+  })
+
+  ws.on('scroll', (start: number, end: number, scrollLeft: number) => {
+    handlePrimaryScroll(start, end, scrollLeft)
+  })
+
+  ws.on('resize', () => {
+    waveformViewportWidth.value = ws.getWidth()
+    if (props.zoomable && zoomStep.value > 0) {
+      applyZoomStep(zoomStep.value)
+    } else {
+      updateVisibleWindow(0, duration.value)
     }
   })
 
@@ -1006,6 +1267,8 @@ watch(() => props.audioUrl, async (newUrl) => {
   if (!newUrl || !wavesurfer.value) return
   if (newUrl === loadedAudioUrl) return
   loadedAudioUrl = newUrl
+  zoomStep.value = 0
+  updateVisibleWindow(0, 0)
   isPrimaryLoading.value = true
   primaryLoadProgress.value = 0
   try {
@@ -1070,6 +1333,11 @@ watch(markerTimelineDuration, () => {
 watch([() => props.mode, () => props.selectable], () => {
   applyDragSelection()
 })
+watch(() => props.zoomable, (zoomable) => {
+  if (!zoomable || duration.value <= 0) return
+  zoomStep.value = 0
+  updateVisibleWindow(0, duration.value)
+})
 
 watch(compareSourceUrl, async (newCompareUrl) => {
   if (compareWaveSurfer.value) {
@@ -1115,6 +1383,11 @@ watch(compareSourceUrl, async (newCompareUrl) => {
     updateCompareLoading(100)
     compareDuration.value = ws.getDuration()
     isCompareReady.value = true
+    const density = getZoomDensity(zoomStep.value)
+    if (props.zoomable && zoomStep.value > 0 && density > 0) {
+      ws.zoom(density)
+      ws.setScroll(wavesurfer.value?.getScroll() ?? 0)
+    }
     syncCompareToPrimaryTime()
     applyCompareMode(abMode.value)
 
@@ -1196,6 +1469,7 @@ function seekTo(time: number) {
 }
 
 async function playFrom(time: number) {
+  centerTimeInView(time)
   seekTo(time)
   await play()
 }
@@ -1225,6 +1499,8 @@ function exportPeaks(maxLength = 400): number[] {
 
 onBeforeUnmount(() => {
   window.removeEventListener(THEME_CHANGED_EVENT, handleThemeChanged)
+  window.removeEventListener('keydown', onWindowKeyDown)
+  window.removeEventListener('keyup', onWindowKeyUp)
   disconnectGraph('primary')
   disconnectGraph('compare')
   wavesurfer.value?.destroy()
@@ -1232,7 +1508,7 @@ onBeforeUnmount(() => {
   void audioContext.value?.close()
 })
 
-defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTime, exportPeaks })
+defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, getCurrentTime, exportPeaks })
 </script>
 
 <template>
@@ -1327,7 +1603,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
               :key="issue.id"
               type="button"
               class="flex w-full items-start gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-border/40"
-              @click="selectIssue(issue)"
+              @click="selectIssue(issue, group.time)"
               @mouseenter="emitIssueHover(issue)"
               @mouseleave="emitIssueLeave"
             >
@@ -1352,19 +1628,19 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
           :style="{ height: `${rangeRulerHeight}px` }"
         >
           <button
-            v-for="item in rangeLaneItems"
+            v-for="item in visibleRangeLaneItems"
             :key="`${item.issue.id}-${item.marker.id}`"
             type="button"
             class="absolute min-w-[4px] cursor-pointer transition-all duration-150"
             :class="activeRangeIssueId === item.issue.id ? 'z-10' : 'z-[1]'"
             :style="{
-              left: getMarkerPosition(item.marker.time_start),
+              left: getMarkerPosition(Math.max(item.marker.time_start, visibleTimelineStart)),
               width: getRangeWidth(item.marker.time_start, item.marker.time_end),
               bottom: rangeLaneOffset(item.lane),
               height: '4px',
               ...rangeRulerBarStyle(item.issue),
             }"
-            @click.stop="handleTimelineClick(item.issue)"
+            @click.stop="handleTimelineClick(item)"
             @mouseenter="onRangeLaneMouseEnter(item)"
             @mouseleave="onRangeLaneMouseLeave"
           >
@@ -1377,11 +1653,20 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
         </div>
         <div
           ref="container"
+          data-testid="waveform-canvas"
           class="relative overflow-hidden rounded-none bg-[rgb(var(--color-waveform-surface))] transition-[z-index] touch-manipulation"
-          :class="[abMode === 'A' ? 'z-[2]' : 'z-0', selectable && mode === 'annotate' ? 'cursor-crosshair' : 'cursor-pointer']"
+          :class="[
+            abMode === 'A' ? 'z-[2]' : 'z-0',
+            isPanning ? 'cursor-grabbing' : (canPanWaveform() ? 'cursor-grab' : (selectable && mode === 'annotate' ? 'cursor-crosshair' : 'cursor-pointer')),
+          ]"
           :style="{ height: `${props.height || 128}px` }"
+          @pointerenter="onWaveformPointerEnter"
+          @pointerdown="onWaveformPointerDown"
           @pointermove="onWaveformPointerMove"
+          @pointerup="endWaveformPan"
+          @pointercancel="endWaveformPan"
           @pointerleave="onWaveformPointerLeave"
+          @wheel="onWaveformWheel"
         />
         <!-- Draft marker overlays (pending markers being added to a new issue) -->
         <div
@@ -1394,7 +1679,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
             :key="`dr-${i}`"
             class="absolute inset-y-0"
             :style="{
-              left: getMarkerPosition(dr.time_start),
+              left: getMarkerPosition(Math.max(dr.time_start, visibleTimelineStart)),
               width: getRangeWidth(dr.time_start, dr.time_end),
               background: DRAFT_FILL,
               borderLeft: `2px dashed ${DRAFT_EDGE}`,
@@ -1408,7 +1693,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
               :style="{ left: dp.left, width: '0', borderLeft: `2px dashed ${DRAFT_EDGE}`, opacity: 0.9 }"
             />
             <span
-              class="absolute -top-3 flex h-3.5 w-3.5 -translate-x-1/2 items-center justify-center rounded-full text-[8px] font-mono font-bold leading-none text-primary-foreground"
+              class="draft-point-index absolute -top-3 flex h-3.5 w-3.5 -translate-x-1/2 items-center justify-center rounded-full text-[8px] font-mono font-bold leading-none text-primary-foreground"
               :style="{ left: dp.left, background: DRAFT_EDGE, boxShadow: `0 0 0 1px ${tokenColor('--color-overlay', 0.4)}` }"
             >{{ dp.index }}</span>
           </template>
@@ -1473,6 +1758,60 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
       </div>
     </div>
 
+    <div
+      v-if="zoomable && !compact"
+      class="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div class="flex min-w-0 items-center gap-2">
+        <span class="shrink-0 text-xs font-mono text-muted-foreground">{{ t('waveform.zoom') }}</span>
+        <span class="min-w-[3.5rem] text-xs font-mono font-semibold text-foreground">{{ zoomDisplay }}</span>
+        <span class="hidden truncate text-[11px] text-muted-foreground lg:inline">
+          {{ t('waveform.zoomHint') }}
+        </span>
+      </div>
+      <div class="flex items-center gap-2 sm:min-w-[19rem] sm:justify-end">
+        <button
+          type="button"
+          class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground transition duration-200 hover:border-primary hover:text-primary active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="zoomStep === 0"
+          :aria-label="t('waveform.zoomOut')"
+          :title="t('waveform.zoomOut')"
+          @click="changeZoom(-1)"
+        >
+          <ZoomOut class="h-3.5 w-3.5" :stroke-width="2" />
+        </button>
+        <input
+          :value="zoomStep"
+          type="range"
+          min="0"
+          :max="maxZoomStep"
+          step="1"
+          class="waveform-zoom-slider h-2 min-w-0 flex-1 cursor-pointer sm:w-36 sm:flex-none"
+          :aria-label="t('waveform.zoom')"
+          @input="onZoomInput"
+        />
+        <button
+          type="button"
+          class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground transition duration-200 hover:border-primary hover:text-primary active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="zoomStep >= maxZoomStep"
+          :aria-label="t('waveform.zoomIn')"
+          :title="t('waveform.zoomIn')"
+          @click="changeZoom(1)"
+        >
+          <ZoomIn class="h-3.5 w-3.5" :stroke-width="2" />
+        </button>
+        <button
+          type="button"
+          class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-[11px] font-mono text-foreground transition duration-200 hover:border-primary hover:text-primary active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="zoomStep === 0"
+          @click="resetZoom"
+        >
+          <Maximize2 class="h-3.5 w-3.5" :stroke-width="2" />
+          {{ t('waveform.fit') }}
+        </button>
+      </div>
+    </div>
+
     <div class="flex flex-col gap-3">
       <div
         v-if="showGainControl && hasActiveGain"
@@ -1534,6 +1873,10 @@ defineExpose({ seekTo, togglePlay, highlightIssue, play, playFrom, getCurrentTim
 </template>
 
 <style scoped>
+.waveform-zoom-slider {
+  accent-color: rgb(var(--color-control-accent));
+}
+
 .play-icon-enter-active,
 .play-icon-leave-active {
   transition: opacity 0.12s ease-out, transform 0.12s ease-out;

@@ -582,7 +582,13 @@
     "gain": "Gain",
     "resetGain": "重置",
     "resetToZeroDb": "重置到 0 dB",
-    "activeGainNotice": "当前试听 Gain 已生效：{gain}。这只影响你的监听，不会修改音频文件。"
+    "activeGainNotice": "当前试听 Gain 已生效：{gain}。这只影响你的监听，不会修改音频文件。",
+    "zoom": "时间缩放",
+    "zoomIn": "放大波形",
+    "zoomOut": "缩小波形",
+    "fit": "适应全曲",
+    "zoomMultiplier": "{value} 倍",
+    "zoomHint": "按住 Ctrl 或 Command 滚动缩放，标注时按住空格拖拽浏览"
   },
   "checklistLabels": {
     "arrangement": "编曲",

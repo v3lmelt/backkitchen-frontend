@@ -379,7 +379,7 @@ watch(masterAudioUrl, () => {
   masterWaveformPeaks.value = []
 })
 
-const currentCycleIssues = computed(() => issues.value.filter(issue => issue.workflow_cycle === track.value?.workflow_cycle))
+const currentCycleIssues = computed(() => issues.value)
 const currentWaveformIssues = computed(() => {
   const currentVersion = track.value?.version
   if (currentVersion == null) return currentCycleIssues.value
@@ -390,10 +390,10 @@ const masterWaveformIssues = computed(() => {
   if (!deliveryId) return []
   return currentCycleIssues.value.filter(issue => issue.phase === 'final_review' && issue.master_delivery_id === deliveryId)
 })
-// The API already scopes `issues` to what this viewer may see. Keep this list
-// aligned with `track.open_issue_count`; waveform markers remain scoped above to
-// the specific audio asset they annotate.
-const visibleIssueList = computed(() => issues.value)
+// The API already scopes `allIssues` to what this viewer may see. Keep the
+// complete cross-cycle history in the detail list while waveform markers stay
+// scoped above to the current workflow cycle and audio asset.
+const visibleIssueList = computed(() => allIssues.value)
 
 // Multi-reviewer: filter assignments to current review step
 const currentStepAssignments = computed(() => {
@@ -438,20 +438,25 @@ const {
   parseIssueQuery,
   replaceIssueDrawerQuery,
   syncIssueDrawerFromRoute,
-  openIssueDrawer,
   closeIssueDrawer,
-  onIssueSelect,
+  onIssueSelect: openSelectedIssue,
 } = useIssueDrawer({
-  issues,
+  issues: allIssues,
   selectedIssue,
   shouldUseLegacyPage: () => issueDetailMode.value === 'legacy',
   openLegacyPage: openLegacyIssuePage,
 })
 
+function onIssueSelect(issue: Issue) {
+  sourceWaveformRef.value?.focusIssue?.(issue)
+  masterWaveformRef.value?.focusIssue?.(issue)
+  openSelectedIssue(issue)
+}
+
 function openIssueReference(issueId: number) {
-  const localIssue = issues.value.find(issue => issue.id === issueId)
+  const localIssue = allIssues.value.find(issue => issue.id === issueId)
   if (localIssue && issueDetailMode.value === 'inline') {
-    openIssueDrawer(localIssue)
+    onIssueSelect(localIssue)
     return
   }
 
@@ -459,6 +464,7 @@ function openIssueReference(issueId: number) {
 }
 
 function onIssueUpdated(updatedIssue: Issue) {
+  allIssues.value = allIssues.value.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue)
   issues.value = issues.value.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue)
   if (selectedIssue.value?.id === updatedIssue.id) {
     selectedIssue.value = updatedIssue
@@ -1235,6 +1241,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
               ref="sourceWaveformRef"
               :audio-url="audioUrl"
               :issues="currentWaveformIssues"
+              zoomable
               :track-id="trackId"
               :compare-version-id="selectedCompareVersionId"
               @regionClick="onIssueSelect"
@@ -1270,6 +1277,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
               ref="masterWaveformRef"
               :audio-url="masterAudioUrl"
               :issues="masterWaveformIssues"
+              zoomable
               :track-id="trackId"
               playback-scope="master"
               @regionClick="onIssueSelect"
@@ -1338,7 +1346,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
           <!-- General Discussions -->
           <DiscussionPanel
             :discussions="generalDiscussion.discussions.value"
-            :issues="issues"
+            :issues="allIssues"
             :mention-users="mentionCandidates.general"
             :heading="t('trackDetail.discussionsHeading', { count: generalDiscussion.discussions.value.length })"
             :placeholder="t('trackDetail.discussionPlaceholder')"
@@ -1896,7 +1904,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
       :issue="selectedIssue"
       :track="track"
       :assignments="reviewAssignments"
-      :issues="issues"
+      :issues="allIssues"
       :mention-candidates="mentionCandidates"
       :preview="selectedIssuePreview"
       @close="closeIssueDrawer"
@@ -1909,7 +1917,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
       v-if="canSeeMastering && track"
       :track-id="trackId"
       :track-completed="track.status === 'completed'"
-      :issues="issues"
+      :issues="allIssues"
       :mention-users="mentionCandidates.mastering"
       @open-issue="openIssueReference"
     />

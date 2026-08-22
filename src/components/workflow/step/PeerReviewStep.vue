@@ -237,6 +237,7 @@ function bindIssueForm(el: unknown) {
         :ref="registerWaveform"
         :audio-url="audioUrl"
         :issues="waveformIssues"
+        zoomable
         :track-id="trackId"
         :compare-version-id="compareSourceVersionId"
         :selectable="true"

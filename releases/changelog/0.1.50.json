@@ -1,0 +1,52 @@
+{
+  "version": "0.1.50",
+  "date": "2026-08-22",
+  "headline": {
+    "zh-CN": "评审波形支持精细缩放与定位",
+    "en": "Review waveforms now support precise zooming and navigation"
+  },
+  "summary": {
+    "zh-CN": "评审者现在可以放大波形后精确创建时间点与时间段标记，并在当前倍率下快速定位已有问题。",
+    "en": "Reviewers can now zoom into waveforms for precise point and range annotations, then locate existing issues without losing their current zoom level."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "评审体验",
+        "en": "Review experience"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "波形时间轴缩放",
+            "en": "Waveform timeline zoom"
+          },
+          "description": {
+            "zh-CN": "完整评审波形新增分级缩放、适应全曲、滚轮浏览和拖拽平移。点标记、范围标记、草稿标记与 A/B 对比波形会跟随同一时间轴同步移动。",
+            "en": "Full review waveforms now include stepped zoom, fit-to-track, wheel navigation, and drag panning. Point markers, range markers, draft annotations, and A/B comparison waveforms stay aligned to the same timeline."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "已有问题保持倍率定位",
+            "en": "Issue navigation preserves zoom"
+          },
+          "description": {
+            "zh-CN": "点击已有问题或波形标记时，波形会在当前倍率下将对应位置移动到视野中央，不会自动改变缩放比例。",
+            "en": "Selecting an existing issue or waveform marker centers its location at the current zoom level without changing the selected zoom ratio."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "保留跨轮次问题记录",
+            "en": "Cross-cycle issue history remains available"
+          },
+          "description": {
+            "zh-CN": "批准源音频补交或重新开启流程后，曲目详情仍会显示此前轮次的问题记录；当前波形只显示与当前音频对应的标记。",
+            "en": "After a source follow-up is approved or a workflow is reopened, track details continue to show issues from earlier cycles while the current waveform only displays markers for the active audio."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -75,6 +75,7 @@ function seekWaveformToIssue() {
   const firstMarker = issue.value.markers[0]
   if (firstMarker) {
     waveformRef.value.seekTo(firstMarker.time_start)
+    waveformRef.value.focusIssue(issue.value)
   }
   if (issue.value.markers.some(m => m.marker_type === 'range')) {
     waveformRef.value.highlightIssue(issue.value)
@@ -381,6 +382,7 @@ function openVersionCompare() {
               ref="waveformRef"
               :audio-url="audioUrl"
               :issues="waveformIssues"
+              zoomable
               :track-id="issue.track_id"
               :height="120"
               @ready="onWaveformReady"

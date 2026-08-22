@@ -557,9 +557,15 @@ const canConfirmDelivery = computed(() => {
 // Issue handlers
 const {
   syncIssueDrawerFromRoute,
-  onIssueSelect,
+  onIssueSelect: openSelectedIssue,
   closeIssueDrawer,
 } = useIssueDrawer({ issues, selectedIssue })
+
+function onIssueSelect(issue: Issue) {
+  waveformRef.value?.focusIssue?.(issue)
+  masterWaveformRef.value?.focusIssue?.(issue)
+  openSelectedIssue(issue)
+}
 
 const { onIssueUpdated, onQuickIssueStatusChange } = useIssueMutations({ issues, selectedIssue })
 
@@ -930,6 +936,7 @@ watch(activeTab, (newTab) => {
         ref="waveformRef"
         :audio-url="audioUrl"
         :issues="waveformIssues"
+        zoomable
         :track-id="trackId"
         :compare-version-id="selectedCompareSourceVersionId"
         :selectable="isMasteringEngineer"
@@ -982,6 +989,7 @@ watch(activeTab, (newTab) => {
           ref="masterWaveformRef"
           :audio-url="masterAudioUrl"
           :issues="finalReviewIssues"
+          zoomable
           :track-id="trackId"
           playback-scope="master"
           :compare-audio-url="selectedCompareMasterAudioUrl"
