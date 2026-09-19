@@ -126,6 +126,7 @@ export interface Invitation {
 }
 
 export interface Album {
+  is_completed?: boolean
   id: number
   title: string
   description: string | null
@@ -609,6 +610,7 @@ export interface WebhookDelivery {
 }
 
 export interface AlbumStats {
+  is_completed?: boolean
   total_tracks: number
   by_status: Partial<Record<TrackStatus, number>>
   open_issues: number

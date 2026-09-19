@@ -8,7 +8,8 @@ import type { Album, AlbumStats, ExportProgressEvent, Track, TrackStatus, Workfl
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import { formatRelativeTime, parseUTC } from '@/utils/time'
+import { formatRelativeTime } from '@/utils/time'
+import { albumDeadlineInfo } from '@/utils/albumDeadline'
 import { trackArtistDisplay, trackArtistUsesHash } from '@/utils/trackComposers'
 import { TRACK_STATUS_COLORS } from '@/utils/status'
 import { buildTrackWorkspaceRoute, translateStepLabel } from '@/utils/workflow'
@@ -64,6 +65,7 @@ const { hasAnyPins, isPinned, togglePin } = useDashboardPins(() => appStore.curr
 
 function toAlbumStats(album: Album): AlbumStats {
   return {
+    is_completed: album.is_completed ?? false,
     total_tracks: album.total_tracks ?? album.track_count ?? 0,
     by_status: album.by_status ?? {},
     open_issues: album.open_issues ?? 0,
@@ -263,6 +265,7 @@ const recentTracks = computed(() =>
 const attentionAlbums = computed(() =>
   displayedAlbums.value
     .filter((album) => {
+      if (album.is_completed || album.archived_at) return false
       const stats = albumStatsMap.value[album.id]
       return Boolean(stats && ((stats.overdue_track_count ?? 0) > 0 || stats.open_issues > 0 || deadlineInfo(album.id)?.overdue))
     })
@@ -340,15 +343,8 @@ function completedCount(albumId: number): number {
 }
 
 function deadlineInfo(albumId: number): { text: string; overdue: boolean } | null {
-  const stats = albumStatsMap.value[albumId]
-  if (!stats?.deadline) return null
-  const dl = parseUTC(stats.deadline)
-  const now = new Date()
-  const diffMs = dl.getTime() - now.getTime()
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
-  if (diffDays < 0) return { text: t('dashboard.deadlineOverdue', { days: Math.abs(diffDays) }), overdue: true }
-  if (diffDays === 0) return { text: t('dashboard.deadlineToday'), overdue: true }
-  return { text: t('dashboard.deadlineDaysLeft', { days: diffDays }), overdue: false }
+  const album = albumMap.value.get(albumId)
+  return album ? albumDeadlineInfo(album, t) : null
 }
 
 function handleExport(albumId: number) {
@@ -626,13 +622,16 @@ function openTrack(track: Track) {
                 </button>
                 <span v-if="album.catalog_number" class="text-xs font-mono text-muted-foreground">{{ album.catalog_number }}</span>
                 <div class="flex items-center gap-1 flex-wrap justify-end">
+                  <span v-if="album.is_completed" class="text-xs font-mono bg-success-bg text-success px-2 py-0.5 rounded-full">
+                    {{ t('albums.tabCompleted') }}
+                  </span>
                   <span v-if="deadlineInfo(album.id)" class="text-xs px-2 py-0.5 rounded-full" :class="deadlineInfo(album.id)!.overdue ? 'bg-error-bg text-error' : 'bg-warning-bg text-warning'">
                     {{ deadlineInfo(album.id)!.text }}
                   </span>
-                  <span v-if="albumStatsMap[album.id]?.overdue_track_count" class="text-xs bg-error-bg text-error px-2 py-0.5 rounded-full">
+                  <span v-if="!album.is_completed && albumStatsMap[album.id]?.overdue_track_count" class="text-xs bg-error-bg text-error px-2 py-0.5 rounded-full">
                     {{ t('dashboard.overdueCount', { count: albumStatsMap[album.id].overdue_track_count }) }}
                   </span>
-                  <span v-if="albumStatsMap[album.id]?.open_issues > 0" class="text-xs bg-error-bg text-error px-2 py-0.5 rounded-full">
+                  <span v-if="albumStatsMap[album.id]?.open_issues > 0" class="text-xs px-2 py-0.5 rounded-full" :class="album.is_completed ? 'bg-border text-foreground' : 'bg-error-bg text-error'">
                     {{ t('dashboard.openIssues', { count: albumStatsMap[album.id].open_issues }) }}
                   </span>
                 </div>
