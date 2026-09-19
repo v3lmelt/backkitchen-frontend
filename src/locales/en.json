@@ -598,6 +598,7 @@
     "technicalCleanliness": "Technical Cleanliness"
   },
   "dashboard": {
+    "scopeLabel": "Dashboard album scope",
     "total": "Total",
     "submitted": "Submitted",
     "peerFlow": "Peer Flow",

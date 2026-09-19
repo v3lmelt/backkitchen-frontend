@@ -49,6 +49,15 @@ describe('api client', () => {
     expect((options.headers as Record<string, string>)['Content-Type']).toBeUndefined()
   })
 
+  it('sends album scope with track search, status and pagination', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => [] })
+    await trackApi.list({ album_scope: 'managed', search: 'Needle', status: 'rejected', limit: 100, offset: 100 })
+    const url = new URL(fetchMock.mock.calls[0]![0], 'https://example.test')
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      album_scope: 'managed', search: 'Needle', status: 'rejected', limit: '100', offset: '100',
+    })
+  })
+
   it('clears auth on 401 responses', async () => {
     localStorage.setItem('backkitchen_token', 'stale')
     localStorage.setItem('backkitchen_user', '{"id":1}')

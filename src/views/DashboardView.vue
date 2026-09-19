@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { trackApi, albumApi, resolveUploadUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Album, AlbumStats, ExportProgressEvent, Track, TrackStatus, WorkflowEvent } from '@/types'
+import type { Album, AlbumScope, AlbumStats, ExportProgressEvent, Track, TrackStatus, WorkflowEvent } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -50,6 +50,14 @@ const loading = ref(true)
 const loadError = ref(false)
 const filterStatus = ref<DashboardFilterKey>('')
 const searchQuery = ref('')
+const scopeKey = computed(() => `backkitchen_dashboard_scope_${appStore.currentUser?.id ?? 'guest'}`)
+function readScope(): AlbumScope {
+  try {
+    const value = localStorage.getItem(scopeKey.value)
+    return value === 'managed' || value === 'participating' ? value : 'all'
+  } catch { return 'all' }
+}
+const scope = ref<AlbumScope>(readScope())
 const exportingAlbum = ref<number | null>(null)
 const exportProgress = ref<{
   total: number
@@ -109,12 +117,17 @@ async function loadDashboard() {
   const serial = ++dashboardLoadSerial
   loading.value = true
   loadError.value = false
+  tracks.value = []
+  rejectedTracks.value = []
+  albums.value = []
+  searchAlbumResults.value = []
   try {
     const query = searchQuery.value.trim() || undefined
+    const albumScope = scope.value
     const [loadedTracks, loadedRejectedTracks, loadedAlbums] = await Promise.all([
-      loadAllTracks({ search: query }),
-      loadAllTracks({ status: 'rejected', search: query }),
-      albumApi.list({ search: query }),
+      loadAllTracks({ search: query, album_scope: albumScope }),
+      loadAllTracks({ status: 'rejected', search: query, album_scope: albumScope }),
+      albumApi.list({ search: query, scope: albumScope }),
     ])
     if (serial !== dashboardLoadSerial) return
 
@@ -134,6 +147,21 @@ async function loadDashboard() {
 }
 
 onMounted(loadDashboard)
+
+watch(scopeKey, () => {
+  const next = readScope()
+  if (searchTimer) clearTimeout(searchTimer)
+  visibleTrackLimit.value = TRACK_DISPLAY_INITIAL
+  if (scope.value === next) void loadDashboard()
+  else scope.value = next
+})
+
+watch(scope, value => {
+  try { localStorage.setItem(scopeKey.value, value) } catch { /* Storage may be disabled. */ }
+  if (searchTimer) clearTimeout(searchTimer)
+  visibleTrackLimit.value = TRACK_DISPLAY_INITIAL
+  void loadDashboard()
+})
 
 watch(searchQuery, () => {
   visibleTrackLimit.value = TRACK_DISPLAY_INITIAL
@@ -171,7 +199,7 @@ const visibleTracks = computed(() => filteredTracks.value.slice(0, visibleTrackL
 const hasMoreTracks = computed(() => filteredTracks.value.length > visibleTracks.value.length)
 const nextBatchSize = computed(() => Math.min(TRACK_DISPLAY_STEP, filteredTracks.value.length - visibleTracks.value.length))
 
-async function loadAllTracks(params?: { status?: TrackStatus; album_id?: number; search?: string }) {
+async function loadAllTracks(params?: { status?: TrackStatus; album_id?: number; search?: string; album_scope?: AlbumScope }) {
   const allTracks: Track[] = []
   let offset = 0
 
@@ -446,7 +474,18 @@ function openTrack(track: Track) {
       </div>
     </div>
 
-    <div class="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-4">
+    <div class="flex flex-wrap items-center gap-2" role="group" :aria-label="t('dashboard.scopeLabel')">
+      <button
+        v-for="value in (['all', 'managed', 'participating'] as const)"
+        :key="value"
+        type="button"
+        :class="scope === value ? 'btn-primary' : 'btn-secondary'"
+        :aria-pressed="scope === value"
+        @click="scope = value"
+      >{{ t(`albums.scope.${value}`) }}</button>
+    </div>
+
+    <div class="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-4" :aria-busy="loading">
       <button
         v-for="card in dashboardStatCards"
         :key="card.key || 'all'"
@@ -456,7 +495,7 @@ function openTrack(track: Track) {
         :aria-pressed="filterStatus === card.key"
         @click="setDashboardFilter(card.key)"
       >
-        <div class="text-2xl font-bold" :class="card.valueClass">{{ card.count }}</div>
+        <div class="text-2xl font-bold" :class="card.valueClass">{{ loading ? '—' : card.count }}</div>
         <div class="text-xs text-muted-foreground mt-1">{{ card.label }}</div>
       </button>
     </div>

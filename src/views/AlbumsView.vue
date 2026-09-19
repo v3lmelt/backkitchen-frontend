@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { albumApi, circleApi, resolveUploadUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
-import type { Album } from '@/types'
+import type { Album, AlbumScope } from '@/types'
 import { Music, Archive, Search } from 'lucide-vue-next'
 import EmptyState from '@/components/common/EmptyState.vue'
 import AlbumCoverImage from '@/components/common/AlbumCoverImage.vue'
@@ -18,7 +18,6 @@ const albums = ref<Album[]>([])
 const loading = ref(true)
 const loadError = ref('')
 const activeTab = ref<'active' | 'completed' | 'archived'>('active')
-type AlbumScope = 'all' | 'managed' | 'participating'
 const scopeKey = computed(() => `backkitchen_album_scope_${appStore.currentUser?.id ?? 'guest'}`)
 function readScope(): AlbumScope {
   try {
