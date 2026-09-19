@@ -676,7 +676,8 @@
       "delivery_confirmed": "{name} confirmed the delivery",
       "track_archived": "{name} archived the track",
       "track_restored": "{name} restored the track",
-      "track_force_status": "{name} manually adjusted track progress"
+      "track_force_status": "{name} manually adjusted track progress",
+      "review_roster_updated": "{name} updated the review roster"
     },
     "timeline": {
       "issueCreated": "{name} created issue #{num}",
@@ -1386,7 +1387,14 @@
     "checkingCreateAccess": "Checking album creation access…",
     "noAlbumsCanCreateHint": "Create an album or wait to join an existing one.",
     "noAlbumsNoCircleHint": "Create or join a circle first.",
-    "noAlbumsMemberHint": "Wait for an album manager to invite you."
+    "noAlbumsMemberHint": "Wait for an album manager to invite you.",
+    "scopeLabel": "Album scope",
+    "scope": {
+      "all": "All",
+      "managed": "I manage",
+      "participating": "I participate in"
+    },
+    "scopeEmpty": "No albums in this scope"
   },
   "albumNew": {
     "heading": "New Album",
@@ -2041,5 +2049,26 @@
     "empty": "No messages yet.",
     "loadOlder": "Load older messages",
     "archived": "Track completed — chat is archived"
+  },
+  "flexibleReview": {
+    "title": "Manage review",
+    "adjustProgress": "Adjust progress",
+    "enable": "Flexible review",
+    "enableHint": "Enable for this track and review stage, including later revision rounds. Edit the roster freely. When everyone finishes, any revision request sends the track back; otherwise it passes. This mode cannot be turned off.",
+    "search": "Search reviewers",
+    "unavailable": "Flexible review is unavailable for this stage. Refresh the track.",
+    "ineligible": "No longer eligible; remove",
+    "noCandidates": "No matching reviewers",
+    "selected": "{count} reviewers selected",
+    "preview": "Preview changes",
+    "added": "Add",
+    "removed": "Remove",
+    "removalHint": "Removed reviewers retain their history, but their results no longer count. Rejoining creates a new review task.",
+    "waiting": "After saving: {completed}/{total} complete. Waiting for everyone on the roster.",
+    "advance": "Saving will immediately finish this review and move to “{target}”.",
+    "refreshRequired": "Changes were not saved. Reload the roster and review the changes again.",
+    "waitingOthers": "Your review is submitted. Waiting for the other reviewers.",
+    "submitHint": "When everyone finishes, any revision request sends the track back; otherwise it passes.",
+    "saved": "Saved"
   }
 }

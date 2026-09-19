@@ -2,12 +2,12 @@
   "version": "0.1.52",
   "date": "2026-09-19",
   "headline": {
-    "zh-CN": "专辑自动完成与分类展示",
-    "en": "Automatic album completion and status tabs"
+    "zh-CN": "专辑完成状态、范围筛选与灵活评审",
+    "en": "Album completion, scope filters and flexible reviews"
   },
   "summary": {
-    "zh-CN": "有效曲目全部完成后，专辑自动进入已完成列表，不再显示逾期或进入需要关注。",
-    "en": "Albums move to Completed when all eligible tracks finish, without overdue alerts or attention reminders."
+    "zh-CN": "有效曲目全部完成后，专辑自动进入已完成列表，不再显示逾期或进入需要关注。 按参与关系筛选专辑，在曲目详情调整进度，并为单曲管理灵活评审名单。",
+    "en": "Albums move to Completed when all eligible tracks finish, without overdue alerts or attention reminders. Filter albums by participation, adjust progress from track details, and manage flexible review rosters per track."
   },
   "sections": [
     {
@@ -34,6 +34,44 @@
           "description": {
             "zh-CN": "专辑管理新增已完成标签页。已完成专辑停止截止日期提醒并退出需要关注，历史问题以中性样式保留，仪表盘置顶与导出入口继续可用。",
             "en": "Album management now has In Progress, Completed, and Archived tabs. Completed albums leave Needs Attention and stop deadline reminders; historical issues remain neutral, and dashboard pinning and export stay available."
+          }
+        }
+      ]
+    },
+    {
+      "heading": {
+        "zh-CN": "协作管理",
+        "en": "Collaboration"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "专辑查看范围",
+            "en": "Album viewing scopes"
+          },
+          "description": {
+            "zh-CN": "新增全部、我主催、我参与筛选，按账号记住选择。",
+            "en": "Choose all, managed, or participating albums; your selection is remembered per account."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "详情页调整进度",
+            "en": "Progress changes from track details"
+          },
+          "description": {
+            "zh-CN": "具有权限的管理者可在曲目流程区域直接调整进度。",
+            "en": "Authorized managers can adjust progress directly from the track workflow area."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "单曲灵活评审",
+            "en": "Flexible reviews per track"
+          },
+          "description": {
+            "zh-CN": "可为单曲阶段启用灵活评审，增减名单并保留历史；全员完成后自动通过或退回修改，保存前可预览流向。",
+            "en": "Enable flexible review for a track stage, edit its roster while retaining history, and preview automatic pass or revision outcomes before saving."
           }
         }
       ]
