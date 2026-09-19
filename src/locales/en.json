@@ -676,7 +676,13 @@
       "delivery_confirmed": "{name} confirmed the delivery",
       "track_archived": "{name} archived the track",
       "track_restored": "{name} restored the track",
-      "track_force_status": "{name} manually adjusted track progress"
+      "track_force_status": "{name} manually adjusted track progress",
+      "review_roster_updated": "{name} updated the review roster",
+      "premaster_uploaded": "{name} uploaded the pre-master audio",
+      "premaster_confirmed": "{name} confirmed the current file as the pre-master",
+      "premaster_requested": "{name} requested a new pre-master upload",
+      "premaster_request_cancelled": "{name} cancelled the pre-master upload request",
+      "premaster_spec_updated": "{name} updated the pre-master specification"
     },
     "timeline": {
       "issueCreated": "{name} created issue #{num}",
@@ -1371,7 +1377,10 @@
     "unpinDashboard": "Unpin from Dashboard",
     "pinHint": "Click the pin icon to show an album on the dashboard",
     "pinHintActive": "Pinned albums are prioritized and can be filtered with “Pinned only”.",
-    "tabActive": "Active",
+    "tabActive": "In Progress",
+    "tabCompleted": "Completed",
+    "activeEmpty": "No albums in progress",
+    "completedEmpty": "No completed albums",
     "tabArchived": "Archived",
     "archivedEmpty": "No archived albums",
     "archivedBadge": "Archived",
@@ -1383,7 +1392,14 @@
     "checkingCreateAccess": "Checking album creation access…",
     "noAlbumsCanCreateHint": "Create an album or wait to join an existing one.",
     "noAlbumsNoCircleHint": "Create or join a circle first.",
-    "noAlbumsMemberHint": "Wait for an album manager to invite you."
+    "noAlbumsMemberHint": "Wait for an album manager to invite you.",
+    "scopeLabel": "Album scope",
+    "scope": {
+      "all": "All",
+      "managed": "I manage",
+      "participating": "I participate in"
+    },
+    "scopeEmpty": "No albums in this scope"
   },
   "albumNew": {
     "heading": "New Album",
@@ -2038,5 +2054,95 @@
     "empty": "No messages yet.",
     "loadOlder": "Load older messages",
     "archived": "Track completed — chat is archived"
+  },
+  "flexibleReview": {
+    "title": "Manage review",
+    "adjustProgress": "Adjust progress",
+    "enable": "Flexible review",
+    "enableHint": "Enable for this track and review stage, including later revision rounds. Edit the roster freely. When everyone finishes, any revision request sends the track back; otherwise it passes. This mode cannot be turned off.",
+    "search": "Search reviewers",
+    "unavailable": "Flexible review is unavailable for this stage. Refresh the track.",
+    "ineligible": "No longer eligible; remove",
+    "noCandidates": "No matching reviewers",
+    "selected": "{count} reviewers selected",
+    "preview": "Preview changes",
+    "added": "Add",
+    "removed": "Remove",
+    "removalHint": "Removed reviewers retain their history, but their results no longer count. Rejoining creates a new review task.",
+    "waiting": "After saving: {completed}/{total} complete. Waiting for everyone on the roster.",
+    "advance": "Saving will immediately finish this review and move to “{target}”.",
+    "refreshRequired": "Changes were not saved. Reload the roster and review the changes again.",
+    "waitingOthers": "Your review is submitted. Waiting for the other reviewers.",
+    "submitHint": "When everyone finishes, any revision request sends the track back; otherwise it passes.",
+    "saved": "Saved"
+  },
+  "audioAnalysis": {
+    "title": "Audio technical data",
+    "sourceTitle": "Current mix technical data",
+    "sourceHistoryTitle": "Source version technical history",
+    "sourceVersionTitle": "Source version {number} technical data",
+    "masterTitle": "Current master technical data",
+    "versionTitle": "Master version {number} technical data",
+    "waiting": "Technical analysis is queued or in progress.",
+    "failed": "Technical analysis failed.",
+    "notApplicable": "Audio analysis does not apply to this external link or text delivery.",
+    "samplePeak": "Digital Peak",
+    "truePeak": "True Peak",
+    "dcOffset": "DC Offset",
+    "integrated": "Integrated",
+    "lra": "LRA",
+    "codec": "Codec",
+    "sampleFormat": "Sample format",
+    "channels": "Channel layout",
+    "duration": "Duration",
+    "bitrate": "Bitrate",
+    "analyzerVersion": "Analyzer version",
+    "sampleFormats": {
+      "pcm_s16": "16-bit integer PCM",
+      "pcm_s24": "24-bit integer PCM",
+      "pcm_s32": "32-bit integer PCM",
+      "pcm_f32": "32-bit float PCM",
+      "pcmUnknown": "{depth}-bit PCM"
+    },
+    "showChannels": "Show channel data",
+    "hideChannels": "Hide channel data",
+    "channel": "Channel",
+    "status": {
+      "pending": "Queued",
+      "processing": "Analyzing",
+      "ready": "Ready",
+      "failed": "Failed",
+      "not_applicable": "Not applicable"
+    },
+    "details": "Technical information",
+    "shortProgramme": "LRA is not recommended for programmes shorter than one minute.",
+    "validity": {
+      "silence": "Silence",
+      "below_gate": "No data above the gate",
+      "too_short": "Insufficient duration",
+      "unavailable": "Unavailable"
+    }
+  },
+  "audioSpecs": {
+    "title": "Audio specifications",
+    "trackSettings": "Track audio specifications",
+    "source": "Mastering source specifications",
+    "master": "Master delivery specifications",
+    "inherit": "Use album settings",
+    "disabled": "Disable specification checks",
+    "custom": "Custom specifications",
+    "selectionRequired": "Select at least one sample rate and sample format.",
+    "saved": "Audio specifications saved",
+    "mismatch": "Audio specifications do not match",
+    "unknown": "Specifications not verified",
+    "actual": "Actual",
+    "required": "Required",
+    "continue": "Continue anyway",
+    "fields": {
+      "container": "Container",
+      "sample_rate_hz": "Sample rate",
+      "sample_format": "Sample format"
+    },
+    "notApplicable": "Audio specification check not applicable"
   }
 }

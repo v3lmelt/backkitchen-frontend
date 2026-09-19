@@ -1,4 +1,11 @@
 <script setup lang="ts">
+import AudioSpecHint from '@/components/audio/AudioSpecHint.vue'
+import AudioSpecConfirm from '@/components/audio/AudioSpecConfirm.vue'
+import AudioSpecSettings from '@/components/audio/AudioSpecSettings.vue'
+import { useAudioFileSpec, useAudioSpecGuard } from '@/composables/useAudioSpecGuard'
+import { inspectAudioSpec } from '@/utils/audioSpecs'
+import type { AudioSpecs } from '@/types'
+
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -20,6 +27,7 @@ import { useIssueMutations } from '@/composables/useIssueMutations'
 import { useBatchIssueActions } from '@/composables/useBatchIssueActions'
 import { activeAssignmentsForStep, canUserChangeIssueStatus, canUserSubmitIssueStatus } from '@/utils/reviewAssignments'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
+import AudioTechnicalDataCard from '@/components/audio/AudioTechnicalDataCard.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import IssueDetailPanel from '@/components/IssueDetailPanel.vue'
@@ -105,6 +113,7 @@ const {
   filterIssuesForDisplayedSourceVersion,
   showMasterCompare,
   selectedCompareMasterDeliveryId,
+  selectedCompareMasterDelivery,
   masterAudioUrl,
   sortedMasterDeliveries,
   olderPlayableMasterDeliveries,
@@ -141,6 +150,21 @@ const masteringTabs = computed(() => [
 
 // Collapsible version history
 const versionHistoryExpanded = ref(false)
+const sourceHistoryExpanded = ref(false)
+const sortedSourceVersions = computed(() =>
+  [...sourceVersions.value].sort((a, b) => b.version_number - a.version_number || b.id - a.id),
+)
+const displayedSourceTechnicalVersion = computed(() => {
+  if (!selectedCompareSourceVersionId.value) return track.value?.current_source_version ?? null
+  return sourceVersions.value.find(version => version.id === selectedCompareSourceVersionId.value) ?? null
+})
+const displayedSourceTechnicalTitle = computed(() =>
+  displayedSourceTechnicalVersion.value?.id === track.value?.current_source_version?.id
+    ? t('audioAnalysis.sourceTitle')
+    : t('audioAnalysis.sourceVersionTitle', {
+        number: displayedSourceTechnicalVersion.value?.version_number ?? track.value?.version ?? 1,
+      }),
+)
 
 // Issues / waveform annotation
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
@@ -185,6 +209,23 @@ const uploadFile = ref<File | null>(null)
 const deliveryMessage = ref('')
 const localDeliveryPreviewUrl = ref('')
 const uploading = ref(false)
+
+const { pending: pendingSpecCheck, busy: specActionBusy, answer: answerSpecCheck, run: runSpecAction } = useAudioSpecGuard()
+const uploadSpec = computed(() => track.value?.effective_audio_specs?.master)
+const savingAudioSpecs = ref(false)
+async function saveAudioSpecs(value: AudioSpecs) {
+  if (!track.value) return
+  savingAudioSpecs.value = true
+  try {
+    track.value = await trackApi.updateAudioSpecs(track.value.id, value)
+    toastSuccess(t('audioSpecs.saved'))
+  } catch (err: any) { toastError(err.message || t('common.requestFailed')) }
+  finally { savingAudioSpecs.value = false }
+}
+const uploadSpecCheck = useAudioFileSpec(uploadFile, uploadSpec)
+watch(uploadFile, () => answerSpecCheck(false))
+watch(() => JSON.stringify([track.value?.id, track.value?.status, track.value?.version, track.value?.current_master_delivery?.id, track.value?.effective_audio_specs]), () => answerSpecCheck(false))
+
 const uploadProgress = ref(0)
 const uploadError = ref('')
 
@@ -202,7 +243,6 @@ const trackArtistDisplay = computed(() => trackArtistDisplayFor(track.value))
 const canSeeMasteringDiscussion = computed(() =>
   canViewerSeeMastering(track.value, appStore.currentUser?.id, viewerCanManageTrackAlbum.value),
 )
-
 watch(canSeeMasteringDiscussion, (canSee) => {
   if (!track.value) return
   if (!canSee && activeTab.value === 'discussion') {
@@ -319,18 +359,19 @@ function transitionLabel(transition: WorkflowTransitionOption) {
 }
 
 const deliveryActions = computed<WorkflowAction[]>(() => {
-  const actions = transitions.value.map((tr) => ({
+  const actions: WorkflowAction[] = transitions.value.map((tr) => ({
     label: transitionLabel(tr),
     type: actionTypeForTransition(tr),
-    disabled: acting.value,
+    disabled: acting.value || specActionBusy.value,
     handler: () => executeTransition(tr.decision),
   }))
   if (canConfirmDelivery.value) {
     actions.unshift({
       label: t('masteringPage.confirmDelivery'),
       type: 'advance' as const,
-      disabled: acting.value,
+      disabled: acting.value || specActionBusy.value,
       handler: handleConfirmDelivery,
+      specCheck: track.value?.master_spec_check,
     })
   }
   return actions
@@ -364,7 +405,9 @@ const selectedStageIssues = computed(() =>
 )
 const stageBatchActions = computed(() => intersectBatchActions(selectedStageIssues.value))
 
-const canUploadDelivery = computed(() => currentStep.value?.type === 'delivery' && isDeliveryAssignee.value)
+const canUploadDelivery = computed(() =>
+  currentStep.value?.type === 'delivery' && isDeliveryAssignee.value,
+)
 const canSubmitDelivery = computed(() => Boolean(uploadFile.value))
 
 const { downloading, downloadProgress, downloadTrackAudio, downloadAudioAsset } = useAudioDownload()
@@ -399,7 +442,11 @@ onBeforeUnmount(() => {
 })
 
 onBeforeRouteLeave(() => {
-  if (!uploading.value && !uploadFile.value && !deliveryMessage.value.trim()) return true
+  if (
+    !uploading.value
+    && !uploadFile.value
+    && !deliveryMessage.value.trim()
+  ) return true
   return window.confirm(t('workflowStep.leaveUploadConfirm'))
 })
 
@@ -455,7 +502,11 @@ function resetDeliveryPreview() {
   }
 }
 
-async function handleUploadDelivery() {
+function handleUploadDelivery() {
+  return runSpecAction(() => uploadFile.value ? inspectAudioSpec(uploadFile.value, uploadSpec.value) : Promise.resolve({ status: 'unknown' as const, differences: [] }), () => performUploadDelivery())
+}
+
+async function performUploadDelivery() {
   if (!track.value || !canSubmitDelivery.value) return
   const file = uploadFile.value
   if (!file) return
@@ -510,7 +561,11 @@ async function handleUploadDelivery() {
 }
 
 // Approve final
-async function handleApproveFinal() {
+function handleApproveFinal() {
+  return runSpecAction(track.value?.master_spec_check, () => performApproveFinal())
+}
+
+async function performApproveFinal() {
   if (!track.value) return
   const previousStatus = track.value.status
   try {
@@ -529,7 +584,11 @@ async function handleApproveFinal() {
 }
 
 // Confirm delivery
-async function handleConfirmDelivery() {
+function handleConfirmDelivery() {
+  return runSpecAction(track.value?.master_spec_check, () => performConfirmDelivery())
+}
+
+async function performConfirmDelivery() {
   if (!track.value?.current_master_delivery || !track.value) return
   const previousStatus = track.value.status
   try {
@@ -642,6 +701,7 @@ watch(activeTab, (newTab) => {
 </script>
 
 <template>
+  <AudioSpecConfirm :check="pendingSpecCheck" @answer="answerSpecCheck" />
   <BaseModal
     v-if="revisionTypeModalOpen"
     @close="revisionTypeModalOpen = false"
@@ -713,6 +773,8 @@ watch(activeTab, (newTab) => {
       </div>
     </div>
   </BaseModal>
+
+
 
   <div v-if="loading" class="max-w-4xl mx-auto"><SkeletonLoader :rows="5" :card="true" /></div>
   <div v-else-if="loadError" class="card max-w-md mx-auto mt-12 text-center space-y-3">
@@ -791,6 +853,11 @@ watch(activeTab, (newTab) => {
     <div v-if="actionError" class="card border border-error/40 bg-error-bg text-sm text-error">
       {{ actionError }}
     </div>
+
+    <details v-if="isMasteringEngineer || viewerCanManageTrackAlbum" class="card">
+      <summary class="cursor-pointer text-sm font-mono">{{ t('audioSpecs.trackSettings') }}</summary>
+      <AudioSpecSettings class="mt-4" :value="track.audio_spec_overrides" track-mode :saving="savingAudioSpecs" @save="saveAudioSpecs" />
+    </details>
 
     <!-- Tab bar -->
     <div class="flex gap-0 border-b border-border overflow-x-auto scrollbar-hide">
@@ -955,6 +1022,30 @@ watch(activeTab, (newTab) => {
         @timeupdate="onSourceWaveformTimeUpdate"
         @playbackStateChange="onSourceWaveformPlaybackStateChange"
       />
+      <AudioTechnicalDataCard
+        v-if="isListenTab"
+        :analysis="displayedSourceTechnicalVersion?.audio_analysis"
+        :title="displayedSourceTechnicalTitle"
+      />
+      <div v-if="isListenTab && sortedSourceVersions.length > 1" class="card">
+        <button class="flex w-full items-center justify-between" @click="sourceHistoryExpanded = !sourceHistoryExpanded">
+          <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('audioAnalysis.sourceHistoryTitle') }}</h3>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground">{{ sortedSourceVersions.length }}</span>
+            <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform" :class="{ 'rotate-180': sourceHistoryExpanded }" :stroke-width="2" />
+          </div>
+        </button>
+        <div v-if="sourceHistoryExpanded" class="mt-3 space-y-2">
+          <div v-for="version in sortedSourceVersions" :key="version.id" class="border border-border bg-background p-3 space-y-2">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <span class="text-sm font-mono font-semibold text-foreground">{{ t('audioAnalysis.sourceVersionTitle', { number: version.version_number }) }}</span>
+              <span v-if="version.id === track.current_source_version?.id" class="rounded-full bg-border px-2 py-0.5 text-[11px] font-mono text-foreground">{{ t('compare.currentVersion') }}</span>
+            </div>
+            <p class="text-xs text-muted-foreground">{{ fmtDate(version.created_at) }}</p>
+            <AudioTechnicalDataCard :analysis="version.audio_analysis" :title="t('audioAnalysis.sourceVersionTitle', { number: version.version_number })" />
+          </div>
+        </div>
+      </div>
     </div>
 
     <template v-if="activeTab === 'listen'">
@@ -997,6 +1088,10 @@ watch(activeTab, (newTab) => {
           @timeupdate="onMasterWaveformTimeUpdate"
           @playbackStateChange="onMasterWaveformPlaybackStateChange"
         />
+        <AudioTechnicalDataCard :analysis="track.current_master_delivery?.audio_analysis" :title="t('audioAnalysis.masterTitle')" />
+        <AudioTechnicalDataCard v-if="selectedCompareMasterDelivery" :key="selectedCompareMasterDelivery.id"
+          :analysis="selectedCompareMasterDelivery.audio_analysis"
+          :title="t('audioAnalysis.versionTitle', { number: selectedCompareMasterDelivery.delivery_number })" />
         <div v-if="finalReviewIssues.length > 0" class="mt-3">
           <h4 class="text-sm font-mono font-semibold text-foreground mb-2">{{ t('mastering.finalReviewIssuesHeading', { count: finalReviewIssues.length }) }}</h4>
           <IssueMarkerList
@@ -1109,7 +1204,7 @@ watch(activeTab, (newTab) => {
             v-model="deliveryMessage"
             class="textarea-field min-h-[120px]"
             :placeholder="t('workflowStep.deliveryMessagePlaceholder')"
-            :disabled="uploading"
+            :disabled="uploading || specActionBusy"
           ></textarea>
           <p class="text-xs text-muted-foreground">{{ t('workflowStep.deliveryMessageHint') }}</p>
         </div>
@@ -1120,11 +1215,12 @@ watch(activeTab, (newTab) => {
           <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" :compact="true" :height="96" />
         </div>
         <div class="flex flex-wrap gap-2">
-          <button @click="handleUploadDelivery" :disabled="uploading || !canSubmitDelivery" class="btn-primary text-sm h-10 inline-flex items-center justify-center">
+          <AudioSpecHint v-if="uploadFile" :check="uploadSpecCheck" />
+          <button @click="handleUploadDelivery" :disabled="uploading || specActionBusy || !canSubmitDelivery" class="btn-primary text-sm h-10 inline-flex items-center justify-center">
             <Upload class="w-4 h-4 mr-2" />
             {{ uploading ? t('workflowStep.uploading') : t('workflowStep.confirmUploadDelivery') }}
           </button>
-          <button v-if="uploadFile" @click="uploadFile = null; resetDeliveryPreview()" :disabled="uploading" class="btn-secondary text-sm">
+          <button v-if="uploadFile" @click="uploadFile = null; resetDeliveryPreview()" :disabled="uploading || specActionBusy" class="btn-secondary text-sm">
             {{ t('workflowStep.clearSelectedDelivery') }}
           </button>
         </div>
@@ -1137,13 +1233,42 @@ watch(activeTab, (newTab) => {
         <div v-if="uploadError" class="text-sm text-error">{{ uploadError }}</div>
       </div>
 
-      <!-- Approval status + actions -->
+      <!-- Current delivery file -->
       <div v-if="track.current_master_delivery" class="card space-y-3">
-        <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('masteringPage.approvalStatus') }}</h3>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="space-y-1">
+            <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('masteringPage.currentDelivery') }}</h3>
+            <p class="text-xs text-muted-foreground">
+              v{{ track.current_master_delivery.delivery_number }} ·
+              {{ track.current_master_delivery.file_path ? t('workflowStep.fileDeliveryLabel') : t('workflowStep.textDeliveryLabel') }}
+            </p>
+          </div>
+          <button
+            v-if="track.current_master_delivery.file_path"
+            type="button"
+            class="btn-secondary self-start text-xs"
+            :disabled="downloading"
+            @click="handleMasterDownload"
+          >
+            {{ downloading ? `${downloadProgress}%` : t('common.downloadAudio') }}
+          </button>
+        </div>
         <div v-if="track.current_master_delivery.delivery_message" class="border border-border bg-background rounded-none p-3">
           <p class="text-xs text-muted-foreground mb-1">{{ t('workflowStep.deliveryMessageLabel') }}</p>
           <p class="whitespace-pre-wrap break-words text-sm text-foreground">{{ track.current_master_delivery.delivery_message }}</p>
         </div>
+      </div>
+
+      <!-- Current delivery technical data -->
+      <AudioTechnicalDataCard
+        v-if="track.current_master_delivery"
+        :analysis="track.current_master_delivery.audio_analysis"
+        :title="t('audioAnalysis.masterTitle')"
+      />
+
+      <!-- Approval status + actions -->
+      <div v-if="track.current_master_delivery" class="card space-y-3">
+        <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('masteringPage.approvalStatus') }}</h3>
         <div class="flex items-center justify-between text-sm">
           <span class="text-muted-foreground">{{ t('trackDetail.producer') }}</span>
           <span class="text-xs" :class="track.current_master_delivery?.producer_approved_at ? 'text-success' : 'text-muted-foreground'">
@@ -1156,8 +1281,9 @@ watch(activeTab, (newTab) => {
             {{ track.current_master_delivery?.submitter_approved_at ? t('common.approved') : t('common.pending') }}
           </span>
         </div>
-        <div class="flex gap-2 pt-1">
-          <button v-if="canApproveFinal" @click="handleApproveFinal" class="btn-primary text-sm flex items-center gap-1.5">
+        <div class="flex flex-wrap items-center gap-2 pt-1">
+          <AudioSpecHint v-if="canApproveFinal" :check="track.master_spec_check" />
+          <button v-if="canApproveFinal" @click="handleApproveFinal" :disabled="specActionBusy" class="btn-primary text-sm flex items-center gap-1.5">
             <Check class="w-4 h-4" :stroke-width="2" />
             {{ t('masteringPage.approveDelivery') }}
           </button>
@@ -1203,6 +1329,10 @@ watch(activeTab, (newTab) => {
                 <p class="text-xs text-muted-foreground mb-1">{{ t('workflowStep.deliveryMessageLabel') }}</p>
                 <p class="whitespace-pre-wrap break-words text-sm text-foreground">{{ delivery.delivery_message }}</p>
               </div>
+              <AudioTechnicalDataCard
+                :analysis="delivery.audio_analysis"
+                :title="t('audioAnalysis.versionTitle', { number: delivery.delivery_number })"
+              />
             </div>
             <div class="flex flex-wrap items-center gap-2 shrink-0">
               <button v-if="delivery.id !== track.current_master_delivery?.id && delivery.file_path" @click="compareWithMasterDelivery(delivery.id)" class="btn-secondary text-xs px-3 py-1">

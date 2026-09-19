@@ -8,7 +8,7 @@ import type { Album } from '@/types'
 import { Music, Archive, Search } from 'lucide-vue-next'
 import EmptyState from '@/components/common/EmptyState.vue'
 import AlbumCoverImage from '@/components/common/AlbumCoverImage.vue'
-import { parseUTC } from '@/utils/time'
+import { albumDeadlineInfo } from '@/utils/albumDeadline'
 import { albumViewerRoleBadgeClass, albumViewerRoleLabel } from '@/utils/albumPermissions'
 
 const { t } = useI18n()
@@ -17,7 +17,26 @@ const appStore = useAppStore()
 const albums = ref<Album[]>([])
 const loading = ref(true)
 const loadError = ref('')
-const activeTab = ref<'active' | 'archived'>('active')
+const activeTab = ref<'active' | 'completed' | 'archived'>('active')
+type AlbumScope = 'all' | 'managed' | 'participating'
+const scopeKey = computed(() => `backkitchen_album_scope_${appStore.currentUser?.id ?? 'guest'}`)
+function readScope(): AlbumScope {
+  try {
+    const value = localStorage.getItem(scopeKey.value)
+    return value === 'managed' || value === 'participating' ? value : 'all'
+  } catch { return 'all' }
+}
+const scope = ref<AlbumScope>(readScope())
+watch(scopeKey, () => {
+  const next = readScope()
+  if (scope.value === next) void load()
+  else scope.value = next
+})
+watch(scope, value => {
+  try { localStorage.setItem(scopeKey.value, value) } catch { /* Storage may be disabled. */ }
+  if (searchTimer) clearTimeout(searchTimer)
+  void load()
+})
 const searchQuery = ref('')
 const sortMode = ref<'attention' | 'recent' | 'title'>('attention')
 const canCreateAlbum = ref(false)
@@ -35,8 +54,8 @@ async function load() {
     const search = searchQuery.value.trim() || undefined
     const loadedAlbums = await albumApi.list(
       activeTab.value === 'archived'
-        ? { archived_only: true, search }
-        : { search },
+        ? { archived_only: true, search, scope: scope.value }
+        : { search, scope: scope.value },
     )
     if (serial !== albumLoadSerial) return
     albums.value = loadedAlbums
@@ -92,7 +111,8 @@ async function loadCreateAccess() {
 }
 
 const emptyAlbumHint = computed(() => {
-  if (activeTab.value !== 'active' || searchQuery.value.trim()) return undefined
+  if (scope.value !== 'all' || activeTab.value !== 'active' || searchQuery.value.trim()) return undefined
+  if (albums.value.some(album => album.is_completed && !album.archived_at)) return undefined
   if (createAccessLoading.value) return t('albums.checkingCreateAccess')
   if (canCreateAlbum.value) return t('albums.noAlbumsCanCreateHint')
   if (!hasCircles.value) return t('albums.noAlbumsNoCircleHint')
@@ -100,20 +120,20 @@ const emptyAlbumHint = computed(() => {
 })
 
 function deadlineInfo(album: Album): { text: string; overdue: boolean } | null {
-  if (!album.deadline) return null
-  const deadline = parseUTC(album.deadline)
-  const diffDays = Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-  if (diffDays < 0) return { text: t('dashboard.deadlineOverdue', { days: Math.abs(diffDays) }), overdue: true }
-  if (diffDays === 0) return { text: t('dashboard.deadlineToday'), overdue: true }
-  return { text: t('dashboard.deadlineDaysLeft', { days: diffDays }), overdue: false }
+  return albumDeadlineInfo(album, t)
 }
 
 function attentionScore(album: Album): number {
+  if (album.is_completed || album.archived_at) return 0
   return (album.overdue_track_count ?? 0) * 100 + (deadlineInfo(album)?.overdue ? 25 : 0) + (album.open_issues ?? 0)
 }
 
 const displayedAlbums = computed(() => {
-  const next = [...albums.value]
+  const next = albums.value.filter(album => {
+    if (activeTab.value === 'archived') return Boolean(album.archived_at)
+    if (album.archived_at) return false
+    return activeTab.value === 'completed' ? album.is_completed : !album.is_completed
+  })
   return next.sort((left, right) => {
     if (sortMode.value === 'title') {
       return left.title.localeCompare(right.title)
@@ -162,6 +182,12 @@ function roleBadgeClass(album: Album): string {
       </div>
     </div>
 
+    <div class="flex flex-wrap gap-2" role="group" :aria-label="t('albums.scopeLabel')">
+      <button v-for="value in (['all', 'managed', 'participating'] as const)" :key="value"
+        type="button" :class="scope === value ? 'btn-primary' : 'btn-secondary'"
+        :aria-pressed="scope === value" @click="scope = value">{{ t(`albums.scope.${value}`) }}</button>
+    </div>
+
     <!-- Tab switcher -->
     <div class="flex gap-0 border-b border-border">
       <button
@@ -172,6 +198,15 @@ function roleBadgeClass(album: Album): string {
           : 'text-muted-foreground border-transparent hover:text-foreground'"
       >
         {{ t('albums.tabActive') }}
+      </button>
+      <button
+        @click="activeTab = 'completed'"
+        class="px-4 py-2.5 text-sm font-mono transition-colors border-b-2 -mb-px"
+        :class="activeTab === 'completed'
+          ? 'text-foreground border-primary'
+          : 'text-muted-foreground border-transparent hover:text-foreground'"
+      >
+        {{ t('albums.tabCompleted') }}
       </button>
       <button
         @click="activeTab = 'archived'"
@@ -201,7 +236,7 @@ function roleBadgeClass(album: Album): string {
     <EmptyState
       v-else-if="displayedAlbums.length === 0"
       :icon="activeTab === 'archived' ? Archive : Music"
-      :title="searchQuery.trim() ? t('albums.searchEmpty') : (activeTab === 'archived' ? t('albums.archivedEmpty') : t('albums.noAlbums'))"
+      :title="scope !== 'all' && !searchQuery.trim() ? t('albums.scopeEmpty') : searchQuery.trim() ? t('albums.searchEmpty') : (activeTab === 'archived' ? t('albums.archivedEmpty') : activeTab === 'completed' ? t('albums.completedEmpty') : t('albums.activeEmpty'))"
       :hint="emptyAlbumHint"
     />
 
@@ -250,7 +285,10 @@ function roleBadgeClass(album: Album): string {
             <p class="text-xs text-muted-foreground line-clamp-2">
               {{ album.description || t('settings.noDescription') }}
             </p>
-            <div v-if="activeTab === 'active'" class="flex flex-wrap gap-1">
+            <div v-if="!album.archived_at" class="flex flex-wrap gap-1">
+              <span v-if="album.is_completed" class="text-xs font-mono px-2 py-0.5 rounded-full bg-success-bg text-success">
+                {{ t('albums.tabCompleted') }}
+              </span>
               <span
                 v-if="deadlineInfo(album)"
                 class="text-xs font-mono px-2 py-0.5 rounded-full"
@@ -260,12 +298,13 @@ function roleBadgeClass(album: Album): string {
               </span>
               <span
                 v-if="(album.open_issues ?? 0) > 0"
-                class="text-xs font-mono px-2 py-0.5 rounded-full bg-error-bg text-error"
+                class="text-xs font-mono px-2 py-0.5 rounded-full"
+                :class="album.is_completed ? 'bg-border text-foreground' : 'bg-error-bg text-error'"
               >
                 {{ t('dashboard.openIssues', { count: album.open_issues }) }}
               </span>
               <span
-                v-if="(album.overdue_track_count ?? 0) > 0"
+                v-if="!album.is_completed && (album.overdue_track_count ?? 0) > 0"
                 class="text-xs font-mono px-2 py-0.5 rounded-full bg-error-bg text-error"
               >
                 {{ t('dashboard.overdueCount', { count: album.overdue_track_count }) }}

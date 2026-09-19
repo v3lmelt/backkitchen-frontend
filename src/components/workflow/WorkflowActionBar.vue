@@ -3,6 +3,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight, RotateCcw, X } from 'lucide-vue-next'
 import BaseModal from '@/components/common/BaseModal.vue'
+import AudioSpecHint from '@/components/audio/AudioSpecHint.vue'
+import type { AudioSpecCheck } from '@/types'
 
 export interface WorkflowActionConfirm {
   title?: string
@@ -14,6 +16,7 @@ export interface WorkflowAction {
   label: string
   /** 'advance' = forward step (prominent), 'return' = send back, 'reject' = destructive */
   type: 'advance' | 'return' | 'reject'
+  specCheck?: AudioSpecCheck
   disabled?: boolean
   handler: () => void
   /** If set, clicking shows a confirmation dialog before calling handler */
@@ -121,6 +124,7 @@ function confirmPending() {
           <div class="grouped-action-wrap">
             <p v-if="props.groupLabel" class="grouped-action-label">{{ props.groupLabel }}</p>
             <div class="decision-group">
+              <AudioSpecHint :check="props.actions.find(action => action.specCheck)?.specCheck" />
               <button
                 v-for="action in props.actions"
                 :key="action.label"
@@ -183,6 +187,8 @@ function confirmPending() {
             />
             {{ action.label }}
           </button>
+
+          <AudioSpecHint :check="props.actions.find(action => action.specCheck)?.specCheck" />
 
           <!-- Primary: advance -->
           <button

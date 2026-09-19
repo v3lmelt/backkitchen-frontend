@@ -5,6 +5,156 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.52",
+    "date": "2026-09-19",
+    "headline": {
+      "zh-CN": "专辑完成状态、范围筛选与灵活评审",
+      "en": "Album completion, scope filters and flexible reviews"
+    },
+    "summary": {
+      "zh-CN": "有效曲目全部完成后，专辑自动进入已完成列表，不再显示逾期或进入需要关注。 按参与关系筛选专辑，在曲目详情调整进度，并为单曲管理灵活评审名单。",
+      "en": "Albums move to Completed when all eligible tracks finish, without overdue alerts or attention reminders. Filter albums by participation, adjust progress from track details, and manage flexible review rosters per track."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "专辑管理",
+          "en": "Album management"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "自动识别完成状态",
+              "en": "Automatic completion status"
+            },
+            "description": {
+              "zh-CN": "排除已拒绝和已归档曲目后，至少一首有效曲目且全部完成，专辑自动标记为已完成。新增曲目或退回制作后恢复进行中；完成不会触发归档或清理文件。",
+              "en": "An album completes when it has at least one eligible track and all eligible tracks are completed. Rejected and archived tracks are excluded. Adding a track or returning one to production reopens the album; completion never archives or deletes files."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "分开查看进行中与已完成专辑",
+              "en": "Separate in-progress and completed albums"
+            },
+            "description": {
+              "zh-CN": "专辑管理新增已完成标签页。已完成专辑停止截止日期提醒并退出需要关注，历史问题以中性样式保留，仪表盘置顶与导出入口继续可用。",
+              "en": "Album management now has In Progress, Completed, and Archived tabs. Completed albums leave Needs Attention and stop deadline reminders; historical issues remain neutral, and dashboard pinning and export stay available."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "协作管理",
+          "en": "Collaboration"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "专辑查看范围",
+              "en": "Album viewing scopes"
+            },
+            "description": {
+              "zh-CN": "新增全部、我主催、我参与筛选，按账号记住选择。",
+              "en": "Choose all, managed, or participating albums; your selection is remembered per account."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "详情页调整进度",
+              "en": "Progress changes from track details"
+            },
+            "description": {
+              "zh-CN": "具有权限的管理者可在曲目流程区域直接调整进度。",
+              "en": "Authorized managers can adjust progress directly from the track workflow area."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "单曲灵活评审",
+              "en": "Flexible reviews per track"
+            },
+            "description": {
+              "zh-CN": "可为单曲阶段启用灵活评审，增减名单并保留历史；全员完成后自动通过或退回修改，保存前可预览流向。",
+              "en": "Enable flexible review for a track stage, edit its roster while retaining history, and preview automatic pass or revision outcomes before saving."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.51",
+    "date": "2026-09-19",
+    "headline": {
+      "zh-CN": "母带规格提示与音频技术信息",
+      "en": "Mastering specifications and audio technical data"
+    },
+    "summary": {
+      "zh-CN": "保留原有母带修订、上传、交付确认和终审流程，增加可继续的规格提示，并修复峰值和响度测量。",
+      "en": "Keeps the existing revision, upload, delivery confirmation and final review workflow, adds advisory format checks and fixes peak and loudness measurements."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "音频规格",
+          "en": "Audio specifications"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "源音频和成品分别设置",
+              "en": "Separate source and master requirements"
+            },
+            "description": {
+              "zh-CN": "专辑可分别设置 WAV、采样率和采样格式；单曲可继承、自定义或关闭检查。外部分轨链接不适用。",
+              "en": "Set WAV, sample rate and sample format requirements per album, with per-track inheritance, overrides or disabled checks. External stem links are not applicable."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "规格不符可确认继续",
+              "en": "Confirm and continue with mismatches"
+            },
+            "description": {
+              "zh-CN": "母带修订上传、母带上传、确认交付和双方终审批准时，规格不符会在按钮旁提示，并在点击后列出差异。每次操作单独确认；未核验不阻止流程。",
+              "en": "Source uploads during mastering revision, master uploads, delivery confirmation and each final approval show mismatches beside the action and list differences in a confirmation dialog. Confirmation applies only to that action; unverified formats do not block progress."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "技术数据",
+          "en": "Technical data"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "完整文件测量",
+              "en": "Whole-file measurements"
+            },
+            "description": {
+              "zh-CN": "修复低电平与文件末尾峰值遗漏；True Peak 采用浮点过采样并覆盖全部声道。LUFS 与 LRA 分开测量，静音、过短与无有效门限数据明确标示；旧结果后台重算。",
+              "en": "Fixes low-level precision and missed end-of-file peaks. True Peak uses floating-point oversampling across all channels. LUFS and LRA are measured separately, with explicit silence, duration and gate validity; older results are recalculated in the background."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "按版本查看折叠详情",
+              "en": "Expandable details by file version"
+            },
+            "description": {
+              "zh-CN": "默认显示格式摘要，详细指标和分声道结果按需展开。响度、峰值和直流偏移不参与规格判断。",
+              "en": "The format summary is shown by default, with metrics and per-channel data available on expansion. Loudness, peaks and DC offset are not format requirements."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.50",
     "date": "2026-08-22",
     "headline": {

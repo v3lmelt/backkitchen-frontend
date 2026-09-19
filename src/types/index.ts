@@ -25,6 +25,61 @@ export type AdminRole = 'none' | 'viewer' | 'operator' | 'superadmin'
 export type WorkflowStepType = 'approval' | 'gate' | 'review' | 'revision' | 'delivery'
 export type TrackPlaybackPreferenceScope = 'source' | 'master'
 
+export type PremasterSampleFormat = 'pcm_s16' | 'pcm_s24' | 'pcm_s32' | 'pcm_f32'
+
+export interface PremasterSpec {
+  enabled: boolean
+  allowed_sample_rates_hz: number[]
+  allowed_sample_formats: PremasterSampleFormat[]
+  allowed_containers: ['wav']
+}
+
+export type AudioSpec = PremasterSpec
+export interface AudioSpecs { source?: AudioSpec | null; master?: AudioSpec | null }
+export interface AudioSpecDifference {
+  field: 'container' | 'sample_rate_hz' | 'sample_format'
+  actual: string | number | null
+  allowed: Array<string | number>
+}
+export interface AudioSpecCheck {
+  status: 'match' | 'mismatch' | 'unknown' | 'disabled' | 'not_applicable'
+  differences: AudioSpecDifference[]
+}
+
+export interface AudioAnalysisResult {
+  ffmpeg_version?: string | null
+  integrated_status?: 'valid' | 'silence' | 'below_gate' | 'too_short' | 'unavailable'
+  lra_status?: 'valid' | 'short_programme' | 'silence' | 'below_gate' | 'too_short' | 'unavailable'
+  peak_status?: 'valid' | 'silence' | 'unavailable'
+
+  analyzer_version: number
+  container: string | null
+  codec: string | null
+  sample_format: string | null
+  bit_depth: number | null
+  sample_rate_hz: number | null
+  channels: number | null
+  channel_layout: string | null
+  duration_seconds: number | null
+  bitrate_bps: number | null
+  sample_peak_dbfs: number | null
+  sample_peak_dbfs_by_channel: Array<number | null>
+  true_peak_dbtp: number | null
+  true_peak_dbtp_by_channel: Array<number | null>
+  dc_offset: number | null
+  dc_offset_by_channel: Array<number | null>
+  integrated_lufs: number | null
+  loudness_range_lu: number | null
+}
+
+export interface AudioAnalysis {
+  status: 'pending' | 'processing' | 'ready' | 'failed' | 'not_applicable'
+  result: AudioAnalysisResult | null
+  error: string | null
+  attempts: number
+  analyzed_at: string | null
+}
+
 export type WorkflowUiVariant =
   | 'generic'
   | 'intake'
@@ -126,6 +181,7 @@ export interface Invitation {
 }
 
 export interface Album {
+  is_completed?: boolean
   id: number
   title: string
   description: string | null
@@ -146,6 +202,7 @@ export interface Album {
   deadline?: string | null
   phase_deadlines?: Record<string, string> | null
   workflow_config?: WorkflowConfig | null
+  audio_specs?: AudioSpecs
   workflow_template_id?: number | null
   workflow_template_name?: string | null
   producer?: User | null
@@ -213,9 +270,11 @@ export interface TrackSourceVersion {
   version_number: number
   file_path: string | null
   source_kind: 'file' | 'external_link' | (string & {})
+  purpose?: 'source' | 'premaster' | (string & {})
   duration: number | null
   uploaded_by_id: number | null
   revision_notes: string | null
+  audio_analysis?: AudioAnalysis
   created_at: string
 }
 
@@ -284,6 +343,7 @@ export interface MasterDelivery {
   file_path: string | null
   delivery_kind: 'file' | 'text' | (string & {})
   delivery_message: string | null
+  audio_analysis?: AudioAnalysis
   uploaded_by_id: number | null
   confirmed_at: string | null
   producer_approved_at: string | null
@@ -404,6 +464,9 @@ export interface TrackExternalComposer {
 
 /** Server-computed review progress for the track's current review step. */
 export interface TrackReviewState {
+  flexible?: boolean
+  flexible_available?: boolean
+  state_version?: string
   step_id: string
   assignment_mode: string
   required_review_count: number
@@ -414,6 +477,8 @@ export interface TrackReviewState {
 }
 
 export interface Track {
+  viewer_can_force_track_status?: boolean
+  viewer_can_manage_review?: boolean
   id: number
   title: string
   artist: string | null
@@ -451,6 +516,10 @@ export interface Track {
   author_notes: string | null
   mastering_notes: string | null
   requested_revision_type?: 'source_audio' | 'stem_files' | null
+  audio_spec_overrides?: AudioSpecs
+  effective_audio_specs?: AudioSpecs
+  source_spec_check?: AudioSpecCheck
+  master_spec_check?: AudioSpecCheck
   created_at: string
   updated_at: string
   archived_at: string | null
@@ -609,6 +678,7 @@ export interface WebhookDelivery {
 }
 
 export interface AlbumStats {
+  is_completed?: boolean
   total_tracks: number
   by_status: Partial<Record<TrackStatus, number>>
   open_issues: number
