@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { progressOptions, progressRequiresReason as needsProgressReason } from '@/utils/trackProgress'
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -16,7 +17,7 @@ import type { Album, ChecklistTemplateItem, Invitation, Track, User, WebhookConf
 import { Archive, RotateCcw, Upload } from 'lucide-vue-next'
 import { albumViewerRoleBadgeClass, albumViewerRoleLabel, viewerCanAccessAlbum, viewerCanForceTrackStatus, viewerCanManageAlbum } from '@/utils/albumPermissions'
 import { formatRelativeTime } from '@/utils/time'
-import { formatWorkflowEvent, translateStepLabel, translateWorkflowStatusLabel, workflowEventDotColor } from '@/utils/workflow'
+import { formatWorkflowEvent, translateWorkflowStatusLabel, workflowEventDotColor } from '@/utils/workflow'
 import { sanitizeWorkflowUserReferences } from '@/utils/workflowConfig'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
@@ -301,28 +302,9 @@ const orderTabLoading = computed(() =>
 
 const progressTrack = computed(() => tracks.value.find(track => track.id === progressTrackId.value) ?? null)
 
-const progressStatusOptions = computed<SelectOption[]>(() => {
-  const options = (album.value?.workflow_config?.steps ?? []).map(step => ({
-    value: step.id,
-    label: translateStepLabel(step, t),
-  }))
-  if (!options.some(option => option.value === 'completed')) {
-    options.push({ value: 'completed', label: t('status.completed') })
-  }
-  return options
-})
-
-const progressRequiresReason = computed(() => {
-  if (!progressTrack.value || !progressStatus.value) return false
-  const stepIds = (album.value?.workflow_config?.steps ?? []).map(step => step.id)
-  const currentIndex = progressTrack.value.status === 'completed'
-    ? stepIds.length
-    : stepIds.indexOf(progressTrack.value.status)
-  const targetIndex = progressStatus.value === 'completed'
-    ? stepIds.length
-    : stepIds.indexOf(progressStatus.value)
-  return currentIndex >= 0 && targetIndex >= 0 && Math.abs(targetIndex - currentIndex) > 1
-})
+const progressStatusOptions = computed<SelectOption[]>(() => progressOptions(album.value?.workflow_config, t))
+const progressRequiresReason = computed(() => Boolean(progressTrack.value && progressStatus.value
+  && needsProgressReason(album.value?.workflow_config, progressTrack.value.status, progressStatus.value)))
 
 const progressTargetLabel = computed(() =>
   progressStatusOptions.value.find(option => option.value === progressStatus.value)?.label ?? progressStatus.value,

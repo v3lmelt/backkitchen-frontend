@@ -78,6 +78,7 @@ describe('AlbumsView', () => {
   })
 
   beforeEach(() => {
+    localStorage.clear()
     mocks.pushMock.mockReset()
     mocks.listMock.mockReset()
     mocks.circleListMock.mockReset()
@@ -98,7 +99,7 @@ describe('AlbumsView', () => {
     expect(wrapper.text()).toContain('Retry')
     expect(wrapper.text()).not.toContain('No Albums')
 
-    await wrapper.find('button.btn-secondary').trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Retry')!.trigger('click')
     await flushPromises()
 
     expect(mocks.listMock).toHaveBeenCalledTimes(2)
@@ -219,7 +220,7 @@ describe('AlbumsView', () => {
     await flushPromises()
 
     expect(mocks.listMock).toHaveBeenCalledTimes(2)
-    expect(mocks.listMock).toHaveBeenLastCalledWith({ search: 'nebula' })
+    expect(mocks.listMock).toHaveBeenLastCalledWith({ search: 'nebula', scope: 'all' })
   })
 
   it('loads immediately on tab switch and cancels pending search debounce', async () => {
@@ -234,7 +235,7 @@ describe('AlbumsView', () => {
     await flushPromises()
 
     expect(mocks.listMock).toHaveBeenCalledTimes(2)
-    expect(mocks.listMock).toHaveBeenLastCalledWith({ archived_only: true, search: 'nebula' })
+    expect(mocks.listMock).toHaveBeenLastCalledWith({ archived_only: true, search: 'nebula', scope: 'all' })
 
     await vi.advanceTimersByTimeAsync(300)
     await flushPromises()
@@ -271,4 +272,27 @@ describe('AlbumsView', () => {
     expect(wrapper.text()).toContain('New Album')
     expect(wrapper.text()).not.toContain('Old Album')
   })
+  it('remembers the scope per account and combines it with archive filtering', async () => {
+    mocks.listMock.mockResolvedValue([])
+    const first = mountWithPlugins(AlbumsView)
+    await flushPromises()
+    expect(mocks.listMock).toHaveBeenLastCalledWith({ search: undefined, scope: 'all' })
+    await first.findAll('button').find(button => button.text() === 'I manage')!.trigger('click')
+    await flushPromises()
+    expect(localStorage.getItem('backkitchen_album_scope_7')).toBe('managed')
+    first.unmount()
+    const second = mountWithPlugins(AlbumsView)
+    await flushPromises()
+    expect(mocks.listMock).toHaveBeenLastCalledWith({ search: undefined, scope: 'managed' })
+    await second.findAll('button').find(button => button.text().includes('Archived'))!.trigger('click')
+    await flushPromises()
+    expect(mocks.listMock).toHaveBeenLastCalledWith({ archived_only: true, search: undefined, scope: 'managed' })
+    second.unmount()
+    mocks.currentUser = { id: 8, role: 'producer' }
+    const third = mountWithPlugins(AlbumsView)
+    await flushPromises()
+    expect(mocks.listMock).toHaveBeenLastCalledWith({ search: undefined, scope: 'all' })
+    third.unmount()
+  })
+
 })

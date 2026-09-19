@@ -676,7 +676,8 @@
       "delivery_confirmed": "{name} 确认了交付物",
       "track_archived": "{name} 归档了曲目",
       "track_restored": "{name} 恢复了曲目",
-      "track_force_status": "{name} 手动调整了曲目进度"
+      "track_force_status": "{name} 手动调整了曲目进度",
+      "review_roster_updated": "{name} 调整了评审名单"
     },
     "timeline": {
       "issueCreated": "{name} 创建了问题 #{num}",
@@ -1430,7 +1431,14 @@
     "checkingCreateAccess": "正在检查专辑创建权限…",
     "noAlbumsCanCreateHint": "可新建专辑，也可等待加入现有专辑。",
     "noAlbumsNoCircleHint": "请先创建或加入社团。",
-    "noAlbumsMemberHint": "请等待专辑管理者邀请。"
+    "noAlbumsMemberHint": "请等待专辑管理者邀请。",
+    "scopeLabel": "专辑范围",
+    "scope": {
+      "all": "全部",
+      "managed": "我主催",
+      "participating": "我参与"
+    },
+    "scopeEmpty": "当前范围内没有专辑"
   },
   "albumNew": {
     "heading": "新建专辑",
@@ -2038,5 +2046,26 @@
     "empty": "暂无消息。",
     "loadOlder": "加载更早消息",
     "archived": "曲目已完结，聊天已归档"
+  },
+  "flexibleReview": {
+    "title": "管理评审",
+    "adjustProgress": "调整进度",
+    "enable": "灵活评审",
+    "enableHint": "仅为这首曲目的当前评审阶段启用，后续返修也沿用。名单可随时增减，全员完成后自动汇总：有人要求修改则退回，否则通过。启用后不可切回专辑规则。",
+    "search": "搜索评审人",
+    "unavailable": "当前阶段不可管理灵活评审，请刷新曲目详情。",
+    "ineligible": "已不在候选范围，请移除",
+    "noCandidates": "没有匹配的评审人",
+    "selected": "已选 {count} 人",
+    "preview": "预览调整",
+    "added": "新增",
+    "removed": "移除",
+    "removalHint": "移除人员的历史记录保留，其结果不再计入当前评审；重新加入后需重新评审。",
+    "waiting": "保存后评审进度为 {completed}/{total}，等待当前名单全员完成。",
+    "advance": "保存后将立即结束本次评审，进入「{target}」。",
+    "refreshRequired": "保存未完成，请重新加载名单并确认。",
+    "waitingOthers": "你的评审已提交，等待其他评审人完成。",
+    "submitHint": "当前名单全员完成后自动汇总；有人要求修改则退回，否则通过。",
+    "saved": "已保存"
   }
 }

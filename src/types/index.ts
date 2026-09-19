@@ -404,6 +404,9 @@ export interface TrackExternalComposer {
 
 /** Server-computed review progress for the track's current review step. */
 export interface TrackReviewState {
+  flexible?: boolean
+  flexible_available?: boolean
+  state_version?: string
   step_id: string
   assignment_mode: string
   required_review_count: number
@@ -414,6 +417,8 @@ export interface TrackReviewState {
 }
 
 export interface Track {
+  viewer_can_force_track_status?: boolean
+  viewer_can_manage_review?: boolean
   id: number
   title: string
   artist: string | null

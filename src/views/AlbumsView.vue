@@ -18,6 +18,25 @@ const albums = ref<Album[]>([])
 const loading = ref(true)
 const loadError = ref('')
 const activeTab = ref<'active' | 'archived'>('active')
+type AlbumScope = 'all' | 'managed' | 'participating'
+const scopeKey = computed(() => `backkitchen_album_scope_${appStore.currentUser?.id ?? 'guest'}`)
+function readScope(): AlbumScope {
+  try {
+    const value = localStorage.getItem(scopeKey.value)
+    return value === 'managed' || value === 'participating' ? value : 'all'
+  } catch { return 'all' }
+}
+const scope = ref<AlbumScope>(readScope())
+watch(scopeKey, () => {
+  const next = readScope()
+  if (scope.value === next) void load()
+  else scope.value = next
+})
+watch(scope, value => {
+  try { localStorage.setItem(scopeKey.value, value) } catch { /* Storage may be disabled. */ }
+  if (searchTimer) clearTimeout(searchTimer)
+  void load()
+})
 const searchQuery = ref('')
 const sortMode = ref<'attention' | 'recent' | 'title'>('attention')
 const canCreateAlbum = ref(false)
@@ -35,8 +54,8 @@ async function load() {
     const search = searchQuery.value.trim() || undefined
     const loadedAlbums = await albumApi.list(
       activeTab.value === 'archived'
-        ? { archived_only: true, search }
-        : { search },
+        ? { archived_only: true, search, scope: scope.value }
+        : { search, scope: scope.value },
     )
     if (serial !== albumLoadSerial) return
     albums.value = loadedAlbums
@@ -92,7 +111,7 @@ async function loadCreateAccess() {
 }
 
 const emptyAlbumHint = computed(() => {
-  if (activeTab.value !== 'active' || searchQuery.value.trim()) return undefined
+  if (scope.value !== 'all' || activeTab.value !== 'active' || searchQuery.value.trim()) return undefined
   if (createAccessLoading.value) return t('albums.checkingCreateAccess')
   if (canCreateAlbum.value) return t('albums.noAlbumsCanCreateHint')
   if (!hasCircles.value) return t('albums.noAlbumsNoCircleHint')
@@ -162,6 +181,12 @@ function roleBadgeClass(album: Album): string {
       </div>
     </div>
 
+    <div class="flex flex-wrap gap-2" role="group" :aria-label="t('albums.scopeLabel')">
+      <button v-for="value in (['all', 'managed', 'participating'] as const)" :key="value"
+        type="button" :class="scope === value ? 'btn-primary' : 'btn-secondary'"
+        :aria-pressed="scope === value" @click="scope = value">{{ t(`albums.scope.${value}`) }}</button>
+    </div>
+
     <!-- Tab switcher -->
     <div class="flex gap-0 border-b border-border">
       <button
@@ -201,7 +226,7 @@ function roleBadgeClass(album: Album): string {
     <EmptyState
       v-else-if="displayedAlbums.length === 0"
       :icon="activeTab === 'archived' ? Archive : Music"
-      :title="searchQuery.trim() ? t('albums.searchEmpty') : (activeTab === 'archived' ? t('albums.archivedEmpty') : t('albums.noAlbums'))"
+      :title="scope !== 'all' && !searchQuery.trim() ? t('albums.scopeEmpty') : searchQuery.trim() ? t('albums.searchEmpty') : (activeTab === 'archived' ? t('albums.archivedEmpty') : t('albums.noAlbums'))"
       :hint="emptyAlbumHint"
     />
 

@@ -38,6 +38,7 @@ import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { useWorkflowTransition } from '@/composables/useWorkflowTransition'
 import { useVersionCompare } from '@/composables/useVersionCompare'
 import { usePeerReviewChecklist } from '@/composables/usePeerReviewChecklist'
+import ReviewManagementModal from '@/components/workflow/ReviewManagementModal.vue'
 import { useReviewerAssignment } from '@/composables/useReviewerAssignment'
 import {
   actionTypeForTransition,
@@ -250,7 +251,19 @@ const currentUserCanFinalizeReview = computed(() =>
   && reviewQuorumReached.value,
 )
 const currentUserCanSubmitReview = computed(() => currentUserAssignment.value?.status === 'pending')
+const showReviewManagement = ref(false)
+async function openReviewerAssignment() {
+  if (track.value?.review_state?.flexible && track.value.viewer_can_manage_review) {
+    showReviewManagement.value = true
+  } else { await openLegacyReviewerAssignment() }
+}
+async function reviewManagementSaved() {
+  showReviewManagement.value = false
+  await loadPage()
+}
+watch(trackId, () => { showReviewManagement.value = false })
 const reviewUsesFirstRevisionRequest = computed(() =>
+  !reviewState.value?.flexible &&
   currentStep.value?.type === 'review'
   && currentStep.value.revision_decision_policy === 'first_revision_request',
 )
@@ -262,7 +275,8 @@ const viewerCanManageTrackAlbum = computed(() =>
   viewerCanManageTrackAlbumOf(track.value, appStore.currentUser),
 )
 const canManageReviewAssignments = computed(() =>
-  viewerCanManageTrackAlbum.value && currentStep.value?.type === 'review',
+  viewerCanManageTrackAlbum.value && currentStep.value?.type === 'review'
+  && !track.value?.archived_at && track.value?.viewer_can_manage_review !== false,
 )
 
 const {
@@ -275,7 +289,7 @@ const {
   selectionSummary: reviewerAssignmentSelectionSummary,
   confirmDisabled: reviewerAssignmentConfirmDisabled,
   isMemberDisabled: reviewerAssignmentIsMemberDisabled,
-  open: openReviewerAssignment,
+  open: openLegacyReviewerAssignment,
   closeModal: closeReviewerAssignmentModal,
   toggleMember: toggleReviewerAssignmentMember,
   submit: submitReviewerAssignment,
@@ -1048,6 +1062,8 @@ const genericApprovalActions = computed<WorkflowAction[]>(() =>
 const peerReviewActionHint = computed((): string | undefined => {
   if (reviewWaitingForAssignment.value) return t('workflowStep.reviewWaitingForAssignment')
   if (isPeerReviewChecklistEnabled.value && !checklistSaved.value) return undefined
+  if (reviewState.value?.flexible) return t(currentUserAssignment.value?.status === 'completed'
+    ? 'flexibleReview.waitingOthers' : 'flexibleReview.submitHint')
   if (currentUserCanFinalizeReview.value) return t('workflowStep.reviewFinalizeHint')
   if (reviewRequiresGroupFinalization.value && currentUserAssignment.value?.status === 'completed' && !reviewQuorumReached.value) {
     if (reviewUsesFirstRevisionRequest.value && currentUserHasRevisionSuggestion.value) {
@@ -1087,6 +1103,8 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
 
 
 <template>
+  <ReviewManagementModal v-if="showReviewManagement && track" :key="track.id" :track-id="track.id"
+    @close="showReviewManagement = false" @saved="reviewManagementSaved" />
   <!-- Revision Type Selection Modal -->
   <BaseModal
     v-if="revisionTypeModalOpen"
@@ -1224,7 +1242,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
       :required-review-count="requiredReviewCount"
       :can-manage-assignments="canManageReviewAssignments"
       :assignment-saving="reviewerAssignmentSaving"
-      :assignment-button-label="reviewerAssignmentButtonLabel"
+      :assignment-button-label="track?.review_state?.flexible ? t('flexibleReview.title') : reviewerAssignmentButtonLabel"
       :assignments="currentStepAssignments"
       :audio-url="audioUrl"
       :waveform-issues="waveformIssues"

@@ -302,10 +302,11 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const albumApi = {
-  list: (params?: { include_archived?: boolean; archived_only?: boolean; search?: string }) => {
+  list: (params?: { include_archived?: boolean; archived_only?: boolean; search?: string; scope?: 'all' | 'managed' | 'participating' }) => {
     const q = new URLSearchParams()
     if (params?.include_archived) q.set('include_archived', 'true')
     if (params?.archived_only) q.set('archived_only', 'true')
+    if (params?.scope) q.set('scope', params.scope)
     if (params?.search) q.set('search', params.search)
     const qs = q.toString()
     return request<Album[]>(`/albums${qs ? `?${qs}` : ''}`)
@@ -592,6 +593,8 @@ export const trackApi = {
         revision_type: revisionType ?? null,
       }),
     }),
+  manageReview: (trackId: number, data: { stage_id: string; flexible: true; user_ids: number[]; state_version: string }) =>
+    request<Track>(`/tracks/${trackId}/review-management`, { method: 'PUT', body: JSON.stringify(data) }),
   forceStatus: (trackId: number, data: { new_status: string; reason?: string }) =>
     request<Track>(`/tracks/${trackId}/force-status`, {
       method: 'POST',
