@@ -16,6 +16,8 @@ import {
 } from '@/utils/trackComposers'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import IssueMarkerList from '@/components/audio/IssueMarkerList.vue'
+import TrackProgressModal from '@/components/workflow/TrackProgressModal.vue'
+import ReviewManagementModal from '@/components/workflow/ReviewManagementModal.vue'
 import WorkflowProgress from '@/components/workflow/WorkflowProgress.vue'
 import IssueDetailPanel from '@/components/IssueDetailPanel.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
@@ -672,9 +674,23 @@ async function archiveTrack() {
   }
 }
 
+const showProgressModal = ref(false)
+const showReviewManagement = ref(false)
+const canManageFlexibleReview = computed(() => track.value?.viewer_can_manage_review === true
+  && track.value?.review_state?.flexible_available === true)
+async function reloadAfterManagement() {
+  showProgressModal.value = false
+  showReviewManagement.value = false
+  await loadTrack()
+  toastSuccess(t('flexibleReview.saved'))
+}
+watch(trackId, () => { showProgressModal.value = false; showReviewManagement.value = false })
+
 // Reassign reviewer
 const canReassignReviewer = computed(() =>
   viewerCanManageTrackAlbum.value && track.value?.workflow_step?.type === 'review'
+  && !track.value?.review_state?.flexible && !track.value?.archived_at
+  && track.value?.viewer_can_manage_review !== false
 )
 const isAutoAssign = computed(() => {
   const step = track.value?.workflow_step
@@ -1208,7 +1224,13 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
       </div>
 
       <div class="card">
-        <h3 class="text-sm font-medium text-muted-foreground mb-3">{{ t('trackDetail.workflowStatus') }}</h3>
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('trackDetail.workflowStatus') }}</h3>
+          <div class="flex flex-wrap gap-2">
+            <button v-if="canManageFlexibleReview" class="btn-secondary" @click="showReviewManagement = true">{{ t('flexibleReview.title') }}</button>
+            <button v-if="track.viewer_can_force_track_status" class="btn-secondary" @click="showProgressModal = true">{{ t('flexibleReview.adjustProgress') }}</button>
+          </div>
+        </div>
         <WorkflowProgress :status="track.status" :workflow-config="workflowConfig" :variant="track.workflow_variant" />
       </div>
 
@@ -1913,6 +1935,10 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
       @preview-play-at="handleIssuePreviewPlayAt"
       @preview-action="handleIssuePreviewAction"
     />
+    <TrackProgressModal v-if="showProgressModal && track" :track="track" :config="workflowConfig"
+      @close="showProgressModal = false" @saved="reloadAfterManagement" />
+    <ReviewManagementModal v-if="showReviewManagement && track" :key="track.id" :track-id="track.id"
+      @close="showReviewManagement = false" @saved="reloadAfterManagement" />
     <MasteringChatSidebar
       v-if="canSeeMastering && track"
       :track-id="trackId"

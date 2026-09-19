@@ -134,7 +134,10 @@ function bindIssueForm(el: unknown) {
         <div class="space-y-1">
           <h3 class="text-sm font-sans font-semibold text-foreground">{{ t('workflowStep.reviewTeamHeading') }}</h3>
           <p class="text-xs text-muted-foreground">
-            <template v-if="waitingForAssignment">
+            <template v-if="track.review_state?.flexible && !waitingForAssignment">
+              {{ t(currentUserAssignment?.status === 'completed' ? 'flexibleReview.waitingOthers' : 'flexibleReview.submitHint') }}
+            </template>
+            <template v-else-if="waitingForAssignment">
               {{ t('workflowStep.reviewWaitingForAssignment') }}
             </template>
             <template v-else-if="canFinalizeReview">

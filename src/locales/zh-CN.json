@@ -676,7 +676,13 @@
       "delivery_confirmed": "{name} 确认了交付物",
       "track_archived": "{name} 归档了曲目",
       "track_restored": "{name} 恢复了曲目",
-      "track_force_status": "{name} 手动调整了曲目进度"
+      "track_force_status": "{name} 手动调整了曲目进度",
+      "review_roster_updated": "{name} 调整了评审名单",
+      "premaster_uploaded": "{name} 上传了预母带音频",
+      "premaster_confirmed": "{name} 将当前文件确认为预母带",
+      "premaster_requested": "{name} 请求曲师提交新的预母带",
+      "premaster_request_cancelled": "{name} 取消了预母带上传请求",
+      "premaster_spec_updated": "{name} 更新了预母带规格"
     },
     "timeline": {
       "issueCreated": "{name} 创建了问题 #{num}",
@@ -1418,7 +1424,10 @@
     "unpinDashboard": "从仪表盘移除",
     "pinHint": "点击图钉图标可将专辑固定到仪表盘",
     "pinHintActive": "固定的专辑会优先显示，并可通过“仅显示已固定”筛选。",
-    "tabActive": "活跃",
+    "tabActive": "进行中",
+    "tabCompleted": "已完成",
+    "activeEmpty": "暂无进行中的专辑",
+    "completedEmpty": "暂无已完成的专辑",
     "tabArchived": "已归档",
     "archivedEmpty": "没有已归档的专辑",
     "archivedBadge": "已归档",
@@ -1430,7 +1439,14 @@
     "checkingCreateAccess": "正在检查专辑创建权限…",
     "noAlbumsCanCreateHint": "可新建专辑，也可等待加入现有专辑。",
     "noAlbumsNoCircleHint": "请先创建或加入社团。",
-    "noAlbumsMemberHint": "请等待专辑管理者邀请。"
+    "noAlbumsMemberHint": "请等待专辑管理者邀请。",
+    "scopeLabel": "专辑范围",
+    "scope": {
+      "all": "全部",
+      "managed": "我主催",
+      "participating": "我参与"
+    },
+    "scopeEmpty": "当前范围内没有专辑"
   },
   "albumNew": {
     "heading": "新建专辑",
@@ -2038,5 +2054,95 @@
     "empty": "暂无消息。",
     "loadOlder": "加载更早消息",
     "archived": "曲目已完结，聊天已归档"
+  },
+  "flexibleReview": {
+    "title": "管理评审",
+    "adjustProgress": "调整进度",
+    "enable": "灵活评审",
+    "enableHint": "仅为这首曲目的当前评审阶段启用，后续返修也沿用。名单可随时增减，全员完成后自动汇总：有人要求修改则退回，否则通过。启用后不可切回专辑规则。",
+    "search": "搜索评审人",
+    "unavailable": "当前阶段不可管理灵活评审，请刷新曲目详情。",
+    "ineligible": "已不在候选范围，请移除",
+    "noCandidates": "没有匹配的评审人",
+    "selected": "已选 {count} 人",
+    "preview": "预览调整",
+    "added": "新增",
+    "removed": "移除",
+    "removalHint": "移除人员的历史记录保留，其结果不再计入当前评审；重新加入后需重新评审。",
+    "waiting": "保存后评审进度为 {completed}/{total}，等待当前名单全员完成。",
+    "advance": "保存后将立即结束本次评审，进入「{target}」。",
+    "refreshRequired": "保存未完成，请重新加载名单并确认。",
+    "waitingOthers": "你的评审已提交，等待其他评审人完成。",
+    "submitHint": "当前名单全员完成后自动汇总；有人要求修改则退回，否则通过。",
+    "saved": "已保存"
+  },
+  "audioAnalysis": {
+    "title": "音频技术数据",
+    "sourceTitle": "当前混音技术数据",
+    "sourceHistoryTitle": "源文件版本技术记录",
+    "sourceVersionTitle": "源文件版本 {number} 技术数据",
+    "masterTitle": "当前母带技术数据",
+    "versionTitle": "母带版本 {number} 技术数据",
+    "waiting": "技术分析正在排队或处理中。",
+    "failed": "技术分析失败。",
+    "notApplicable": "此外部链接或文本交付不适用音频分析。",
+    "samplePeak": "Digital Peak",
+    "truePeak": "True Peak",
+    "dcOffset": "DC Offset",
+    "integrated": "Integrated",
+    "lra": "LRA",
+    "codec": "编码",
+    "sampleFormat": "采样格式",
+    "channels": "声道布局",
+    "duration": "时长",
+    "bitrate": "码率",
+    "analyzerVersion": "分析器版本",
+    "sampleFormats": {
+      "pcm_s16": "16-bit 整数 PCM",
+      "pcm_s24": "24-bit 整数 PCM",
+      "pcm_s32": "32-bit 整数 PCM",
+      "pcm_f32": "32-bit 浮点 PCM",
+      "pcmUnknown": "{depth}-bit PCM"
+    },
+    "showChannels": "展开分声道数据",
+    "hideChannels": "收起分声道数据",
+    "channel": "声道",
+    "status": {
+      "pending": "等待分析",
+      "processing": "分析中",
+      "ready": "分析完成",
+      "failed": "分析失败",
+      "not_applicable": "不适用"
+    },
+    "details": "查看技术信息",
+    "shortProgramme": "不建议用于短音频评价（少于 1 分钟）。",
+    "validity": {
+      "silence": "静音",
+      "below_gate": "无有效响度数据",
+      "too_short": "音频时长不足",
+      "unavailable": "暂不可用"
+    }
+  },
+  "audioSpecs": {
+    "title": "音频规格",
+    "trackSettings": "单曲音频规格",
+    "source": "母带源音频规格",
+    "master": "母带成品规格",
+    "inherit": "继承专辑设置",
+    "disabled": "不检查规格",
+    "custom": "自定义规格",
+    "selectionRequired": "请至少选择一项采样率和采样格式。",
+    "saved": "音频规格已保存",
+    "mismatch": "音频规格不符",
+    "unknown": "规格暂未核验",
+    "actual": "实际",
+    "required": "要求",
+    "continue": "仍然继续",
+    "fields": {
+      "container": "文件格式",
+      "sample_rate_hz": "采样率",
+      "sample_format": "采样格式"
+    },
+    "notApplicable": "音频规格检查不适用"
   }
 }

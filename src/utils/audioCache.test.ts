@@ -52,8 +52,8 @@ async function loadAudioCacheModule() {
 function makeCacheMock(initial: Array<{ url: string; size: number }> = []) {
   const store = new Map<string, { size: number; response: Response }>()
   for (const { url, size } of initial) {
-    const blob = new Blob([new Uint8Array(Math.min(size, 16))], { type: 'audio/wav' })
-    const response = new Response(blob, {
+    // Bytes work with Node's Response without mixing Node and jsdom Blob realms.
+    const response = new Response(new Uint8Array(Math.min(size, 16)), {
       headers: {
         'Content-Type': 'audio/wav',
         'Content-Length': String(size),
@@ -116,7 +116,9 @@ describe('audioCache', () => {
 
     const result = await loadAudioBlobCached(`${BASE}/api/tracks/1/audio?v=3`, progress)
 
-    expect(result).toBeInstanceOf(Blob)
+    expect(result.type).toBe('audio/wav')
+    expect(result.size).toBe(16)
+    expect(result.slice(0, 4).size).toBe(4)
     expect(fetchMock).not.toHaveBeenCalled()
     expect(resolveAudioUrl).not.toHaveBeenCalled()
     expect(createObjectUrl).not.toHaveBeenCalled()

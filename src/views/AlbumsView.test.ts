@@ -64,6 +64,7 @@ function albumFixture(id: number, title: string, overrides: Record<string, unkno
     updated_at: '2024-01-01T00:00:00Z',
     archived_at: null,
     track_count: 2,
+    is_completed: false,
     deadline: null,
     open_issues: 0,
     overdue_track_count: 0,
@@ -78,6 +79,7 @@ describe('AlbumsView', () => {
   })
 
   beforeEach(() => {
+    localStorage.clear()
     mocks.pushMock.mockReset()
     mocks.listMock.mockReset()
     mocks.circleListMock.mockReset()
@@ -96,14 +98,14 @@ describe('AlbumsView', () => {
     expect(mocks.listMock).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('Albums failed to load')
     expect(wrapper.text()).toContain('Retry')
-    expect(wrapper.text()).not.toContain('No Albums')
+    expect(wrapper.text()).not.toContain('No albums in progress')
 
-    await wrapper.find('button.btn-secondary').trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Retry')!.trigger('click')
     await flushPromises()
 
     expect(mocks.listMock).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).not.toContain('Albums failed to load')
-    expect(wrapper.text()).toContain('No Albums')
+    expect(wrapper.text()).toContain('No albums in progress')
   })
 
   it('sorts active albums by attention level by default', async () => {
@@ -127,6 +129,64 @@ describe('AlbumsView', () => {
     expect(titles[1]).toBe('Calm Album')
   })
 
+  it('separates completed and archived albums and updates classification after reload', async () => {
+    const completed = albumFixture(2, 'Finished Album', {
+      is_completed: true, deadline: '2020-01-01T00:00:00Z', open_issues: 2,
+    })
+    const archived = albumFixture(3, 'Archived Album', {
+      is_completed: true, archived_at: '2026-09-01T00:00:00Z',
+    })
+    mocks.listMock.mockImplementation(async ({ archived_only } = {}) =>
+      archived_only ? [archived] : [albumFixture(1, 'Working Album'), completed],
+    )
+    const wrapper = mountWithPlugins(AlbumsView)
+    const switchTab = async (label: string) => {
+      await wrapper.findAll('button').find(button => button.text() === label)!.trigger('click')
+      await flushPromises()
+    }
+    await flushPromises()
+    expect(wrapper.findAll('h3').map(node => node.text())).toEqual(['Working Album'])
+
+    await switchTab('Completed')
+    expect(wrapper.findAll('h3').map(node => node.text())).toEqual(['Finished Album'])
+    expect(wrapper.text()).not.toMatch(/overdue/i)
+    expect(wrapper.find('.bg-success-bg').text()).toBe('Completed')
+    expect(wrapper.find('span.bg-border.text-foreground').text()).toContain('2')
+
+    await switchTab('Archived')
+    expect(wrapper.findAll('h3').map(node => node.text())).toEqual(['Archived Album'])
+    expect(wrapper.find('.bg-success-bg').exists()).toBe(false)
+
+    completed.is_completed = false
+    await switchTab('Completed')
+    expect(wrapper.text()).toContain('No completed albums')
+    await switchTab('In Progress')
+    expect(wrapper.findAll('h3').map(node => node.text())).toContain('Finished Album')
+    expect(wrapper.text()).toMatch(/overdue/i)
+
+    completed.is_completed = true
+    await switchTab('Completed')
+    expect(wrapper.findAll('h3').map(node => node.text())).toEqual(['Finished Album'])
+    wrapper.unmount()
+  })
+
+  it('searches within the completed tab while keeping active albums out', async () => {
+    vi.useFakeTimers()
+    mocks.listMock.mockResolvedValue([
+      albumFixture(1, 'Nebula Draft'),
+      albumFixture(2, 'Nebula Finished', { is_completed: true }),
+    ])
+    const wrapper = mountWithPlugins(AlbumsView)
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'Completed')!.trigger('click')
+    await wrapper.find('input.input-field').setValue('nebula')
+    await vi.advanceTimersByTimeAsync(300)
+    await flushPromises()
+    expect(mocks.listMock).toHaveBeenLastCalledWith({ search: 'nebula', scope: 'all' })
+    expect(wrapper.findAll('h3').map(node => node.text())).toEqual(['Nebula Finished'])
+    wrapper.unmount()
+  })
+
   it('keeps manager-flagged circle albums visible with the co-producer role label', async () => {
     mocks.currentUser = { id: 42, role: 'member' }
     mocks.listMock.mockResolvedValue([
@@ -144,7 +204,7 @@ describe('AlbumsView', () => {
 
     expect(wrapper.text()).toContain('Circle Managed Album')
     expect(wrapper.text()).toContain('Co-producer')
-    expect(wrapper.text()).not.toContain('No Albums')
+    expect(wrapper.text()).not.toContain('No albums in progress')
   })
 
   it('shows the new album CTA for a co-producer when their managed circle has no albums yet', async () => {
@@ -169,7 +229,7 @@ describe('AlbumsView', () => {
     expect(mocks.listMock).toHaveBeenCalled()
     expect(mocks.circleListMock).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('New Album')
-    expect(wrapper.text()).toContain('No Albums')
+    expect(wrapper.text()).toContain('No albums in progress')
     expect(wrapper.text()).toContain('Create an album or wait to join an existing one')
   })
 
@@ -219,7 +279,7 @@ describe('AlbumsView', () => {
     await flushPromises()
 
     expect(mocks.listMock).toHaveBeenCalledTimes(2)
-    expect(mocks.listMock).toHaveBeenLastCalledWith({ search: 'nebula' })
+    expect(mocks.listMock).toHaveBeenLastCalledWith({ search: 'nebula', scope: 'all' })
   })
 
   it('loads immediately on tab switch and cancels pending search debounce', async () => {
@@ -234,7 +294,7 @@ describe('AlbumsView', () => {
     await flushPromises()
 
     expect(mocks.listMock).toHaveBeenCalledTimes(2)
-    expect(mocks.listMock).toHaveBeenLastCalledWith({ archived_only: true, search: 'nebula' })
+    expect(mocks.listMock).toHaveBeenLastCalledWith({ archived_only: true, search: 'nebula', scope: 'all' })
 
     await vi.advanceTimersByTimeAsync(300)
     await flushPromises()
@@ -271,4 +331,27 @@ describe('AlbumsView', () => {
     expect(wrapper.text()).toContain('New Album')
     expect(wrapper.text()).not.toContain('Old Album')
   })
+  it('remembers the scope per account and combines it with archive filtering', async () => {
+    mocks.listMock.mockResolvedValue([])
+    const first = mountWithPlugins(AlbumsView)
+    await flushPromises()
+    expect(mocks.listMock).toHaveBeenLastCalledWith({ search: undefined, scope: 'all' })
+    await first.findAll('button').find(button => button.text() === 'I manage')!.trigger('click')
+    await flushPromises()
+    expect(localStorage.getItem('backkitchen_album_scope_7')).toBe('managed')
+    first.unmount()
+    const second = mountWithPlugins(AlbumsView)
+    await flushPromises()
+    expect(mocks.listMock).toHaveBeenLastCalledWith({ search: undefined, scope: 'managed' })
+    await second.findAll('button').find(button => button.text().includes('Archived'))!.trigger('click')
+    await flushPromises()
+    expect(mocks.listMock).toHaveBeenLastCalledWith({ archived_only: true, search: undefined, scope: 'managed' })
+    second.unmount()
+    mocks.currentUser = { id: 8, role: 'producer' }
+    const third = mountWithPlugins(AlbumsView)
+    await flushPromises()
+    expect(mocks.listMock).toHaveBeenLastCalledWith({ search: undefined, scope: 'all' })
+    third.unmount()
+  })
+
 })
