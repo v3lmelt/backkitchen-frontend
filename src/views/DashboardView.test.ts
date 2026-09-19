@@ -84,6 +84,7 @@ function albumFixture(overrides: Record<string, unknown> = {}) {
     viewer_is_album_manager: true,
     track_count: 5,
     total_tracks: 5,
+    is_completed: false,
     by_status: { submitted: 1, peer_review: 1, peer_revision: 1, mastering_revision: 1, final_review: 1, completed: 1 },
     open_issues: 1,
     overdue_track_count: 0,
@@ -167,6 +168,47 @@ describe('DashboardView', () => {
     mocks.acceptInvitationMock.mockResolvedValue(undefined)
     mocks.declineInvitationMock.mockResolvedValue(undefined)
     mocks.loadPendingInvitationsMock.mockResolvedValue(undefined)
+  })
+
+  it('keeps completed albums available without attention or deadline warnings', async () => {
+    mocks.pendingInvitations = []
+    mocks.trackListMock.mockResolvedValue([])
+    mocks.albumListMock.mockResolvedValue([albumFixture({
+      is_completed: true,
+      deadline: '2020-01-01T00:00:00Z',
+      open_issues: 2,
+      total_tracks: 5,
+      by_status: { completed: 5 },
+    })])
+    const wrapper = mountWithPlugins(DashboardView)
+    await flushPromises()
+    expect(wrapper.findAll('h3').map(node => node.text())).toContain('Album One')
+    expect(wrapper.find('span.bg-success-bg').text()).toBe('Completed')
+    expect(wrapper.text()).not.toMatch(/overdue/i)
+    expect(wrapper.findAll('h3').filter(node => node.text() !== 'Album One')).toHaveLength(0)
+    expect(wrapper.find('span.bg-border.text-foreground').text()).toContain('2')
+    expect(wrapper.findAll('button').some(button => button.text().includes('Export completed tracks (5/5)'))).toBe(true)
+    const pin = wrapper.findAll('button').find(button => /pin/i.test(button.text()))!
+    expect(pin.exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('restores attention and deadline warnings after a completed album reopens', async () => {
+    vi.useFakeTimers()
+    mocks.pendingInvitations = []
+    mocks.trackListMock.mockResolvedValue([])
+    const album = albumFixture({ is_completed: true, deadline: '2020-01-01T00:00:00Z' })
+    mocks.albumListMock.mockImplementation(async () => [{ ...album }])
+    const wrapper = mountWithPlugins(DashboardView)
+    await flushPromises()
+    expect(wrapper.text()).not.toMatch(/overdue/i)
+    album.is_completed = false
+    await wrapper.find('input').setValue('Album')
+    await vi.advanceTimersByTimeAsync(300)
+    await flushPromises()
+    expect(wrapper.text()).toMatch(/overdue/i)
+    expect(wrapper.findAll('h3').length).toBeGreaterThan(1)
+    wrapper.unmount()
   })
 
   it('loads dashboard data and filters tracks by status', async () => {

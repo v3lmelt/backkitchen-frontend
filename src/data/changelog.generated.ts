@@ -5,6 +5,48 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.52",
+    "date": "2026-09-19",
+    "headline": {
+      "zh-CN": "专辑自动完成与分类展示",
+      "en": "Automatic album completion and status tabs"
+    },
+    "summary": {
+      "zh-CN": "有效曲目全部完成后，专辑自动进入已完成列表，不再显示逾期或进入需要关注。",
+      "en": "Albums move to Completed when all eligible tracks finish, without overdue alerts or attention reminders."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "专辑管理",
+          "en": "Album management"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "自动识别完成状态",
+              "en": "Automatic completion status"
+            },
+            "description": {
+              "zh-CN": "排除已拒绝和已归档曲目后，至少一首有效曲目且全部完成，专辑自动标记为已完成。新增曲目或退回制作后恢复进行中；完成不会触发归档或清理文件。",
+              "en": "An album completes when it has at least one eligible track and all eligible tracks are completed. Rejected and archived tracks are excluded. Adding a track or returning one to production reopens the album; completion never archives or deletes files."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "分开查看进行中与已完成专辑",
+              "en": "Separate in-progress and completed albums"
+            },
+            "description": {
+              "zh-CN": "专辑管理新增已完成标签页。已完成专辑停止截止日期提醒并退出需要关注，历史问题以中性样式保留，仪表盘置顶与导出入口继续可用。",
+              "en": "Album management now has In Progress, Completed, and Archived tabs. Completed albums leave Needs Attention and stop deadline reminders; historical issues remain neutral, and dashboard pinning and export stay available."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.50",
     "date": "2026-08-22",
     "headline": {
