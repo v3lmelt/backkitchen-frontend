@@ -182,7 +182,7 @@ describe('AlbumsView', () => {
     await wrapper.find('input.input-field').setValue('nebula')
     await vi.advanceTimersByTimeAsync(300)
     await flushPromises()
-    expect(mocks.listMock).toHaveBeenLastCalledWith({ search: 'nebula' })
+    expect(mocks.listMock).toHaveBeenLastCalledWith({ search: 'nebula', scope: 'all' })
     expect(wrapper.findAll('h3').map(node => node.text())).toEqual(['Nebula Finished'])
     wrapper.unmount()
   })

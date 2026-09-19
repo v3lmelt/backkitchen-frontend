@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import AudioTechnicalDataCard from '@/components/audio/AudioTechnicalDataCard.vue'
+import AudioSpecHint from '@/components/audio/AudioSpecHint.vue'
+import AudioSpecConfirm from '@/components/audio/AudioSpecConfirm.vue'
+import { useAudioFileSpec, useAudioSpecGuard } from '@/composables/useAudioSpecGuard'
+import { inspectAudioSpec } from '@/utils/audioSpecs'
+
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -153,6 +159,19 @@ const revisionNotes = ref('')
 const externalStemLinkNotes = ref('')
 const revisionUploadMode = ref<'file' | 'link'>('file') // 'file' for upload, 'link' for external link
 const uploading = ref(false)
+
+const { pending: pendingSpecCheck, busy: specActionBusy, answer: answerSpecCheck, run: runSpecAction } = useAudioSpecGuard()
+const uploadSpec = computed(() => {
+  const step = track.value?.workflow_step
+  if (step?.type === 'delivery') return track.value?.effective_audio_specs?.master
+  const target = workflowConfig.value?.steps.find(item => item.id === step?.return_to)
+  if (step?.type === 'revision' && target && stepIsMasteringRelated(target)) return track.value?.effective_audio_specs?.source
+  return null
+})
+const uploadSpecCheck = useAudioFileSpec(uploadFile, uploadSpec)
+watch(uploadFile, () => answerSpecCheck(false))
+watch(() => JSON.stringify([track.value?.id, track.value?.status, track.value?.version, track.value?.current_master_delivery?.id, track.value?.effective_audio_specs]), () => answerSpecCheck(false))
+
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 const uploadProgress = ref(0)
 const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
@@ -332,6 +351,7 @@ const audioUrl = computed(() =>
 const {
   showSourceCompare,
   selectedCompareSourceVersionId,
+  selectedCompareSourceVersion,
   currentSourceVersionId,
   olderPlayableSourceVersions,
   sourceCompareOptions,
@@ -341,6 +361,7 @@ const {
   filterIssuesForDisplayedSourceVersion,
   showMasterCompare,
   selectedCompareMasterDeliveryId,
+  selectedCompareMasterDelivery,
   masterDelivery,
   masterAudioUrl,
   sortedMasterDeliveries,
@@ -748,7 +769,11 @@ const {
   },
 })
 
-async function handleUpload(kind: 'revision' | 'delivery') {
+function handleUpload(kind: 'revision' | 'delivery') {
+  return runSpecAction(() => uploadFile.value ? inspectAudioSpec(uploadFile.value, uploadSpec.value) : Promise.resolve({ status: 'unknown' as const, differences: [] }), () => performUpload(kind))
+}
+
+async function performUpload(kind: 'revision' | 'delivery') {
   if (!track.value) return
   const message = deliveryMessage.value.trim()
   if (!uploadFile.value) return
@@ -866,7 +891,11 @@ async function handleExternalSourceLinkSubmit() {
   }
 }
 
-async function confirmDelivery() {
+function confirmDelivery() {
+  return runSpecAction(track.value?.master_spec_check, () => performConfirmDelivery())
+}
+
+async function performConfirmDelivery() {
   if (!track.value || !masterDelivery.value) return
   const previousStatus = track.value.status
   acting.value = true
@@ -886,7 +915,11 @@ async function confirmDelivery() {
   }
 }
 
-async function approveFinal() {
+function approveFinal() {
+  return runSpecAction(track.value?.master_spec_check, () => performApproveFinal())
+}
+
+async function performApproveFinal() {
   if (!track.value) return
   const previousStatus = track.value.status
   acting.value = true
@@ -979,51 +1012,53 @@ const classicActions = computed<WorkflowAction[]>(() =>
   transitions.value.map((tr) => ({
     label: transitionLabel(tr),
     type: actionTypeForTransition(tr),
-    disabled: acting.value,
+    disabled: acting.value || specActionBusy.value,
     handler: () => executeTransition(tr.decision),
   })),
 )
 
 const deliveryActions = computed<WorkflowAction[]>(() => {
-  const actions = transitions.value.map((tr) => ({
+  const actions: WorkflowAction[] = transitions.value.map((tr) => ({
     label: transitionLabel(tr),
     type: actionTypeForTransition(tr),
-    disabled: acting.value,
+    disabled: acting.value || specActionBusy.value,
     handler: () => executeTransition(tr.decision),
   }))
   if (canConfirmDelivery.value) {
     actions.unshift({
       label: t('trackDetail.actions.confirm_delivery', 'Confirm Delivery'),
       type: 'advance',
-      disabled: acting.value,
+      disabled: acting.value || specActionBusy.value,
       handler: confirmDelivery,
+      specCheck: track.value?.master_spec_check,
     })
   }
   return actions
 })
 
 const finalReviewActions = computed<WorkflowAction[]>(() => {
-  const actions = transitions.value
+  const actions: WorkflowAction[] = transitions.value
     .filter(tr => !isFinalReviewDedicatedTransition(tr))
     .map((tr) => ({
     label: transitionLabel(tr),
     type: actionTypeForTransition(tr),
-    disabled: acting.value,
+    disabled: acting.value || specActionBusy.value,
     handler: () => executeTransition(tr.decision),
     }))
   if (canApproveFinal.value) {
     actions.unshift({
       label: t('finalReview.approveMaster'),
       type: 'advance',
-      disabled: acting.value,
+      disabled: acting.value || specActionBusy.value,
       handler: approveFinal,
+      specCheck: track.value?.master_spec_check,
     })
   }
   if (canRequestReturn.value) {
     actions.push({
       label: t('finalReview.requestReturn'),
       type: 'return',
-      disabled: acting.value,
+      disabled: acting.value || specActionBusy.value,
       handler: requestReturn,
     })
   }
@@ -1045,7 +1080,7 @@ const genericReviewActions = computed<WorkflowAction[]>(() =>
   transitions.value.map((tr) => ({
     label: transitionLabel(tr),
     type: tr.decision === 'return' || tr.decision.includes('revision') ? 'return' : 'advance',
-    disabled: acting.value,
+    disabled: acting.value || specActionBusy.value,
     handler: () => executeTransition(tr.decision),
   })),
 )
@@ -1054,7 +1089,7 @@ const genericApprovalActions = computed<WorkflowAction[]>(() =>
   transitions.value.map((tr) => ({
     label: transitionLabel(tr),
     type: actionTypeForTransition(tr),
-    disabled: acting.value,
+    disabled: acting.value || specActionBusy.value,
     handler: () => executeTransition(tr.decision),
   })),
 )
@@ -1105,6 +1140,8 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
 <template>
   <ReviewManagementModal v-if="showReviewManagement && track" :key="track.id" :track-id="track.id"
     @close="showReviewManagement = false" @saved="reviewManagementSaved" />
+
+  <AudioSpecConfirm :check="pendingSpecCheck" @answer="answerSpecCheck" />
   <!-- Revision Type Selection Modal -->
   <BaseModal
     v-if="revisionTypeModalOpen"
@@ -1410,6 +1447,8 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
       @download-delivery="handleMasterVersionDownload"
     />
 
+    <AudioTechnicalDataCard v-if="selectedCompareMasterDelivery" :key="selectedCompareMasterDelivery.id" :analysis="selectedCompareMasterDelivery.audio_analysis" :title="t('audioAnalysis.versionTitle', { number: selectedCompareMasterDelivery.delivery_number })" />
+    <AudioTechnicalDataCard :analysis="masterDelivery?.audio_analysis" />
     <WorkflowActionBar :actions="finalReviewActions" />
   </div>
   <div v-else class="max-w-4xl mx-auto space-y-6">
@@ -1483,6 +1522,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           @timeupdate="onWaveformTimeUpdate"
           @playbackStateChange="onWaveformPlaybackStateChange"
         />
+        <AudioTechnicalDataCard :analysis="(selectedCompareSourceVersion ?? track?.current_source_version)?.audio_analysis" />
       </div>
 
       <div v-if="fallbackStepIssues.length" class="card space-y-3">
@@ -1575,6 +1615,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           @timeupdate="onWaveformTimeUpdate"
           @playbackStateChange="onWaveformPlaybackStateChange"
         />
+        <AudioTechnicalDataCard :analysis="(selectedCompareSourceVersion ?? track?.current_source_version)?.audio_analysis" />
       </div>
 
       <div class="card space-y-3">
@@ -1643,6 +1684,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           @timeupdate="onWaveformTimeUpdate"
           @playbackStateChange="onWaveformPlaybackStateChange"
         />
+        <AudioTechnicalDataCard :analysis="(selectedCompareSourceVersion ?? track?.current_source_version)?.audio_analysis" />
       </div>
 
       <!-- 2. Issue summary + marker list (merged) -->
@@ -1740,7 +1782,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
             type="file"
             accept=".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma"
             @change="onFileChange"
-            :disabled="uploading"
+            :disabled="uploading || specActionBusy"
             class="input-field"
           />
           <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
@@ -1753,9 +1795,10 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
               <textarea v-model="revisionNotes" class="textarea-field w-full" rows="3" :placeholder="t('workflowStep.revisionNotesPlaceholder')"></textarea>
             </div>
             <div class="flex flex-wrap gap-2">
+              <AudioSpecHint v-if="uploadFile" :check="uploadSpecCheck" />
               <button
                 @click="handleUpload('revision')"
-                :disabled="uploading"
+                :disabled="uploading || specActionBusy"
                 class="btn-primary text-sm h-10 inline-flex items-center justify-center"
               >
                 <Upload class="w-4 h-4 mr-2" />
@@ -1763,7 +1806,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
               </button>
               <button
                 @click="uploadFile = null; revisionNotes = ''; resetDeliveryPreview()"
-                :disabled="uploading"
+                :disabled="uploading || specActionBusy"
                 class="btn-secondary text-sm"
               >
                 {{ t('workflowStep.clearRevision') }}
@@ -1799,7 +1842,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
               v-model="externalStemLinkNotes"
               class="textarea-field w-full min-h-[140px]"
               :placeholder="t('workflowStep.externalStemLinkPlaceholder')"
-              :disabled="uploading"
+              :disabled="uploading || specActionBusy"
             ></textarea>
             <div class="flex items-start gap-2">
               <Info class="w-3.5 h-3.5 text-info flex-shrink-0 mt-0.5" :stroke-width="2" />
@@ -1807,7 +1850,8 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
             </div>
           </div>
 
-          <div class="flex flex-wrap gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs text-muted-foreground">{{ t('audioSpecs.notApplicable') }}</span>
             <button
               @click="handleExternalSourceLinkSubmit"
               :disabled="uploading || !canSubmitExternalStemLink"
@@ -1819,7 +1863,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
             <button
               v-if="externalStemLinkNotes"
               @click="externalStemLinkNotes = ''"
-              :disabled="uploading"
+              :disabled="uploading || specActionBusy"
               class="btn-secondary text-sm"
             >
               {{ t('workflowStep.clearExternalStemLink') }}
@@ -1890,6 +1934,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           </p>
         </div>
         <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" zoomable :track-id="trackId" :compare-version-id="selectedCompareSourceVersionId" />
+        <AudioTechnicalDataCard :analysis="(selectedCompareSourceVersion ?? track?.current_source_version)?.audio_analysis" />
       </div>
 
       <div class="card space-y-4">
@@ -1910,7 +1955,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
             v-model="deliveryMessage"
             class="textarea-field min-h-[120px]"
             :placeholder="t('workflowStep.deliveryMessagePlaceholder')"
-            :disabled="uploading"
+            :disabled="uploading || specActionBusy"
           ></textarea>
         </div>
         <div v-if="uploadFile && localDeliveryPreviewUrl" class="space-y-4 border border-border bg-background rounded-none p-4">
@@ -1920,6 +1965,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           <WaveformPlayer :audio-url="localDeliveryPreviewUrl" :issues="[]" playback-scope="local" />
         </div>
         <div class="flex flex-wrap gap-2">
+          <AudioSpecHint v-if="uploadFile" :check="uploadSpecCheck" />
           <button
             @click="handleUpload('delivery')"
             :disabled="uploading || !canSubmitDelivery"
@@ -1931,7 +1977,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           <button
             v-if="uploadFile"
             @click="uploadFile = null; resetDeliveryPreview()"
-            :disabled="uploading"
+            :disabled="uploading || specActionBusy"
             class="btn-secondary text-sm"
           >
             {{ t('workflowStep.clearSelectedDelivery') }}
@@ -1955,6 +2001,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
         </div>
         <WaveformPlayer v-if="masterAudioUrl" :audio-url="masterAudioUrl" :issues="[]" zoomable :track-id="trackId" playback-scope="master" />
         <p v-else class="text-sm text-muted-foreground">{{ t('workflowStep.textDeliveryNoAudio') }}</p>
+        <AudioTechnicalDataCard v-if="masterAudioUrl" :analysis="masterDelivery?.audio_analysis" />
       </div>
 
       <WorkflowActionBar v-if="deliveryActions.length" :actions="deliveryActions" :hint="t('common.actions')" />

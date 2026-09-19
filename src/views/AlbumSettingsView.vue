@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { progressOptions, progressRequiresReason as needsProgressReason } from '@/utils/trackProgress'
+
+import AudioSpecSettings from '@/components/audio/AudioSpecSettings.vue'
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -13,7 +15,7 @@ import {
   localizeAlbumCoverValidationError,
   validateAlbumCoverFile,
 } from '@/utils/albumCover'
-import type { Album, ChecklistTemplateItem, Invitation, Track, User, WebhookConfig, WebhookDelivery, WorkflowConfig, WorkflowEvent } from '@/types'
+import type { Album, ChecklistTemplateItem, Invitation, AudioSpecs, Track, User, WebhookConfig, WebhookDelivery, WorkflowConfig, WorkflowEvent } from '@/types'
 import { Archive, RotateCcw, Upload } from 'lucide-vue-next'
 import { albumViewerRoleBadgeClass, albumViewerRoleLabel, viewerCanAccessAlbum, viewerCanForceTrackStatus, viewerCanManageAlbum } from '@/utils/albumPermissions'
 import { formatRelativeTime } from '@/utils/time'
@@ -48,6 +50,7 @@ type AlbumSettingsTab =
   | 'activity'
   | 'checklist'
   | 'workflow'
+  | 'audioSpecs'
   | 'progress'
   | 'order'
   | 'archive'
@@ -108,6 +111,8 @@ const leavingAlbum = ref(false)
 const deadlineState = reactive({ deadline: '', peer_review: '', mastering: '', final_review: '' })
 const deadlineEnabled = reactive({ peer_review: false, mastering: false, final_review: false })
 const savingDeadlines = ref(false)
+
+const savingAudioSpecs = ref(false)
 
 // Activity state
 const activityEvents = ref<WorkflowEvent[]>([])
@@ -245,6 +250,9 @@ async function confirmWorkflowSave() {
 }
 
 const canManageAlbum = computed(() => album.value ? viewerCanManageAlbum(album.value, appStore.currentUser) : false)
+const canEditAudioSpecs = computed(() =>
+  canManageAlbum.value || album.value?.mastering_engineer_id === appStore.currentUser?.id,
+)
 const canManageProgress = computed(() => album.value ? viewerCanForceTrackStatus(album.value, appStore.currentUser) : false)
 const isMemberOfAlbum = computed(() => album.value?.members.some(m => m.user_id === appStore.currentUser?.id) ?? false)
 
@@ -267,6 +275,7 @@ const availableTabs = computed(() => {
     { key: 'info', label: t('albumSettings.tabs.info') },
     { key: 'team', label: t('albumSettings.tabs.team') },
     { key: 'deadlines', label: t('albumSettings.tabs.deadlines') },
+    { key: 'audioSpecs', label: t('audioSpecs.title') },
   ]
   tabs.push({ key: 'activity', label: t('albumSettings.tabs.activity') })
   if (canManageAlbum.value || isMemberOfAlbum.value) {
@@ -305,6 +314,18 @@ const progressTrack = computed(() => tracks.value.find(track => track.id === pro
 const progressStatusOptions = computed<SelectOption[]>(() => progressOptions(album.value?.workflow_config, t))
 const progressRequiresReason = computed(() => Boolean(progressTrack.value && progressStatus.value
   && needsProgressReason(album.value?.workflow_config, progressTrack.value.status, progressStatus.value)))
+
+async function saveAudioSpecs(value: AudioSpecs) {
+  if (!album.value || !canEditAudioSpecs.value) return
+  savingAudioSpecs.value = true
+  try {
+    album.value = await albumApi.updateAudioSpecs(album.value.id, value)
+    toastSuccess(t('audioSpecs.saved'))
+  } catch (err: any) {
+    toastError(err.message || t('common.requestFailed'))
+  } finally { savingAudioSpecs.value = false }
+}
+
 
 const progressTargetLabel = computed(() =>
   progressStatusOptions.value.find(option => option.value === progressStatus.value)?.label ?? progressStatus.value,
@@ -1666,6 +1687,10 @@ async function refreshDeliveries() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div v-else-if="activeTab === 'audioSpecs'" class="card">
+        <AudioSpecSettings :value="album.audio_specs" :disabled="!canEditAudioSpecs" :saving="savingAudioSpecs" @save="saveAudioSpecs" />
       </div>
 
       <!-- Checklist tab -->

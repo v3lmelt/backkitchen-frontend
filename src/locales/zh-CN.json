@@ -677,7 +677,12 @@
       "track_archived": "{name} 归档了曲目",
       "track_restored": "{name} 恢复了曲目",
       "track_force_status": "{name} 手动调整了曲目进度",
-      "review_roster_updated": "{name} 调整了评审名单"
+      "review_roster_updated": "{name} 调整了评审名单",
+      "premaster_uploaded": "{name} 上传了预母带音频",
+      "premaster_confirmed": "{name} 将当前文件确认为预母带",
+      "premaster_requested": "{name} 请求曲师提交新的预母带",
+      "premaster_request_cancelled": "{name} 取消了预母带上传请求",
+      "premaster_spec_updated": "{name} 更新了预母带规格"
     },
     "timeline": {
       "issueCreated": "{name} 创建了问题 #{num}",
@@ -2070,5 +2075,74 @@
     "waitingOthers": "你的评审已提交，等待其他评审人完成。",
     "submitHint": "当前名单全员完成后自动汇总；有人要求修改则退回，否则通过。",
     "saved": "已保存"
+  },
+  "audioAnalysis": {
+    "title": "音频技术数据",
+    "sourceTitle": "当前混音技术数据",
+    "sourceHistoryTitle": "源文件版本技术记录",
+    "sourceVersionTitle": "源文件版本 {number} 技术数据",
+    "masterTitle": "当前母带技术数据",
+    "versionTitle": "母带版本 {number} 技术数据",
+    "waiting": "技术分析正在排队或处理中。",
+    "failed": "技术分析失败。",
+    "notApplicable": "此外部链接或文本交付不适用音频分析。",
+    "samplePeak": "Digital Peak",
+    "truePeak": "True Peak",
+    "dcOffset": "DC Offset",
+    "integrated": "Integrated",
+    "lra": "LRA",
+    "codec": "编码",
+    "sampleFormat": "采样格式",
+    "channels": "声道布局",
+    "duration": "时长",
+    "bitrate": "码率",
+    "analyzerVersion": "分析器版本",
+    "sampleFormats": {
+      "pcm_s16": "16-bit 整数 PCM",
+      "pcm_s24": "24-bit 整数 PCM",
+      "pcm_s32": "32-bit 整数 PCM",
+      "pcm_f32": "32-bit 浮点 PCM",
+      "pcmUnknown": "{depth}-bit PCM"
+    },
+    "showChannels": "展开分声道数据",
+    "hideChannels": "收起分声道数据",
+    "channel": "声道",
+    "status": {
+      "pending": "等待分析",
+      "processing": "分析中",
+      "ready": "分析完成",
+      "failed": "分析失败",
+      "not_applicable": "不适用"
+    },
+    "details": "查看技术信息",
+    "shortProgramme": "不建议用于短音频评价（少于 1 分钟）。",
+    "validity": {
+      "silence": "静音",
+      "below_gate": "无有效响度数据",
+      "too_short": "音频时长不足",
+      "unavailable": "暂不可用"
+    }
+  },
+  "audioSpecs": {
+    "title": "音频规格",
+    "trackSettings": "单曲音频规格",
+    "source": "母带源音频规格",
+    "master": "母带成品规格",
+    "inherit": "继承专辑设置",
+    "disabled": "不检查规格",
+    "custom": "自定义规格",
+    "selectionRequired": "请至少选择一项采样率和采样格式。",
+    "saved": "音频规格已保存",
+    "mismatch": "音频规格不符",
+    "unknown": "规格暂未核验",
+    "actual": "实际",
+    "required": "要求",
+    "continue": "仍然继续",
+    "fields": {
+      "container": "文件格式",
+      "sample_rate_hz": "采样率",
+      "sample_format": "采样格式"
+    },
+    "notApplicable": "音频规格检查不适用"
   }
 }

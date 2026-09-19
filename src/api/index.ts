@@ -22,6 +22,7 @@ import type {
   Invitation,
   InviteCode,
   PresignedUploadResponse,
+  AudioSpecs,
   ReopenRequest,
   ReviewerCandidate,
   StageAssignment,
@@ -117,7 +118,23 @@ function parseErrorDetail(detail: unknown): string {
   if (Array.isArray(detail)) {
     return detail.map((entry: any) => entry.msg || JSON.stringify(entry)).join('; ')
   }
+  if (detail && typeof detail === 'object' && 'message' in detail) {
+    const message = (detail as { message?: unknown }).message
+    return typeof message === 'string' ? message : ''
+  }
   return ''
+}
+
+export class ApiRequestError extends Error {
+  readonly status: number
+  readonly detail: unknown
+
+  constructor(message: string, status: number, detail: unknown) {
+    super(message)
+    this.name = 'ApiRequestError'
+    this.status = status
+    this.detail = detail
+  }
 }
 
 function requestHeaders(headers?: HeadersInit): { headers: HeadersInit; token: string | null } {
@@ -235,12 +252,14 @@ export function uploadWithProgress<T>(
           void handleUnauthorized(url, token)
         }
         let msg = `Request failed: ${xhr.status}`
+        let responseDetail: unknown
         try {
           const parsed = JSON.parse(xhr.responseText)
-          const detail = parseErrorDetail(parsed.detail)
+          responseDetail = parsed.detail
+          const detail = parseErrorDetail(responseDetail)
           if (detail) msg = detail
         } catch {}
-        reject(new Error(msg))
+        reject(new ApiRequestError(msg, xhr.status, responseDetail))
       }
     })
     xhr.addEventListener('error', () => reject(new Error('Network error')))
@@ -285,7 +304,11 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
         if (res.status === 401) {
           await handleUnauthorized(url, token)
         }
-        throw new Error(parseErrorDetail(body.detail) || `Request failed: ${res.status}`)
+        throw new ApiRequestError(
+          parseErrorDetail(body.detail) || `Request failed: ${res.status}`,
+          res.status,
+          body.detail,
+        )
       }
       if (res.status === 204) return undefined as T
       return res.json()
@@ -337,6 +360,8 @@ export const albumApi = {
     request<Album>('/albums', { method: 'POST', body: JSON.stringify(data) }),
   updateTeam: (id: number, data: { mastering_engineer_id: number | null; member_ids: number[] }) =>
     request<Album>(`/albums/${id}/team`, { method: 'PATCH', body: JSON.stringify(data) }),
+  updateAudioSpecs: (id: number, spec: AudioSpecs) =>
+    request<Album>(`/albums/${id}/audio-specs`, { method: 'PATCH', body: JSON.stringify(spec) }),
   tracks: (id: number) => request<Track[]>(`/albums/${id}/tracks`),
   archivedTracks: (id: number) => request<Track[]>(`/albums/${id}/archived-tracks`),
   stats: (id: number) => request<AlbumStats>(`/albums/${id}/stats`),
@@ -527,6 +552,8 @@ export const trackApi = {
     if (options?.resolutionNote) form.append('resolution_note', options.resolutionNote)
     return uploadWithProgress<Track>(`/tracks/${id}/source-versions`, form, onProgress)
   },
+  updateAudioSpecs: (id: number, spec: AudioSpecs) =>
+    request<Track>(`/tracks/${id}/audio-specs`, { method: 'PATCH', body: JSON.stringify(spec) }),
   submitSourceExternalLink: (
     id: number,
     data: {

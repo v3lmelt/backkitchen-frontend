@@ -1022,4 +1022,29 @@ describe('MasteringView', () => {
     expect(listenAgainWaveforms).toHaveLength(2)
     expect(listenAgainWaveforms[0].element).toBe(sourceElOnListen)
   })
+  it('asks for each delivery confirmation, cancels safely, and submits only once', async () => {
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetail({ track: {
+      master_spec_check: { status: 'mismatch', differences: [{ field: 'sample_rate_hz', actual: 44100, allowed: [48000] }] },
+    } }))
+    const wrapper = mountWithPlugins(MasteringView, { global: { stubs: { teleport: true } } })
+    await flushPromises()
+    await openDeliveryTab(wrapper)
+    const confirm = () => wrapper.findAll('button').find(button => button.text() === 'Confirm My Upload')!
+    await confirm().trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('44.1 kHz')
+    expect(wrapper.text()).toContain('48 kHz')
+    await wrapper.findAll('button').find(button => button.text() === 'Cancel')!.trigger('click')
+    await flushPromises()
+    expect(mocks.confirmDeliveryMock).not.toHaveBeenCalled()
+    await confirm().trigger('click')
+    await flushPromises()
+    const proceed = wrapper.findAll('button').find(button => button.text() === 'Continue anyway')!
+    await proceed.trigger('click')
+    await proceed.trigger('click')
+    await flushPromises()
+    expect(mocks.confirmDeliveryMock).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
 })
