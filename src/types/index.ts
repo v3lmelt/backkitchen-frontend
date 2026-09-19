@@ -1,3 +1,5 @@
+export type AlbumScope = 'all' | 'managed' | 'participating'
+
 /** Well-known legacy track statuses. Custom workflows may use arbitrary step IDs. */
 export type LegacyTrackStatus =
   | 'submitted'
