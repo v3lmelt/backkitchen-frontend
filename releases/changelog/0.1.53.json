@@ -1,0 +1,42 @@
+{
+  "version": "0.1.53",
+  "date": "2026-09-19",
+  "headline": {
+    "zh-CN": "首页按个人专辑范围筛选",
+    "en": "Personal album scopes on the dashboard"
+  },
+  "summary": {
+    "zh-CN": "首页新增全部、我主催、我参与筛选，统一查看相关专辑、曲目和待办。",
+    "en": "Filter the dashboard by all, managed or participating albums to focus its tracks, tasks and summaries."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "首页仪表盘",
+        "en": "Dashboard"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "整页联动筛选",
+            "en": "One scope across the dashboard"
+          },
+          "description": {
+            "zh-CN": "统计、待办、关注项、最近更新和列表随专辑范围一起更新，并可结合搜索、状态及固定专辑筛选。管理员全局权限不计入个人主催或参与关系。",
+            "en": "Statistics, tasks, attention panels, recent updates and lists follow the selected album scope alongside search, status and pinned-album filters. Global administrator access does not count as a personal relationship."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "独立记住首页选择",
+            "en": "Remember the dashboard selection separately"
+          },
+          "description": {
+            "zh-CN": "按账号在当前浏览器保存，首次默认全部，与专辑管理页互不影响。",
+            "en": "The selection is saved per account in this browser, defaults to All and is independent of Album Management."
+          }
+        }
+      ]
+    }
+  ]
+}

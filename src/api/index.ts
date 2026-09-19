@@ -4,6 +4,7 @@ import type {
   AdminDashboardStats,
   AdminReopenRequestEntry,
   Album,
+  AlbumScope,
   AlbumStats,
   AppConfig,
   AdminRole,
@@ -325,7 +326,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const albumApi = {
-  list: (params?: { include_archived?: boolean; archived_only?: boolean; search?: string; scope?: 'all' | 'managed' | 'participating' }) => {
+  list: (params?: { include_archived?: boolean; archived_only?: boolean; search?: string; scope?: AlbumScope }) => {
     const q = new URLSearchParams()
     if (params?.include_archived) q.set('include_archived', 'true')
     if (params?.archived_only) q.set('archived_only', 'true')
@@ -521,10 +522,11 @@ export const workflowApi = {
 }
 
 export const trackApi = {
-  list: (params?: { status?: TrackStatus; album_id?: number; search?: string; limit?: number; offset?: number }) => {
+  list: (params?: { status?: TrackStatus; album_id?: number; search?: string; album_scope?: AlbumScope; limit?: number; offset?: number }) => {
     const q = new URLSearchParams()
     if (params?.status) q.set('status', params.status)
     if (params?.album_id) q.set('album_id', String(params.album_id))
+    if (params?.album_scope) q.set('album_scope', params.album_scope)
     if (params?.search) q.set('search', params.search)
     if (params?.limit != null) q.set('limit', String(params.limit))
     if (params?.offset != null) q.set('offset', String(params.offset))

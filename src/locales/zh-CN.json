@@ -598,6 +598,7 @@
     "technicalCleanliness": "技术规范度"
   },
   "dashboard": {
+    "scopeLabel": "首页专辑范围",
     "total": "总计",
     "submitted": "已提交",
     "peerFlow": "同行评审",
