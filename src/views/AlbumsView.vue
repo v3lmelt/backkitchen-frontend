@@ -124,7 +124,7 @@ function deadlineInfo(album: Album): { text: string; overdue: boolean } | null {
 
 function attentionScore(album: Album): number {
   if (album.is_completed || album.archived_at) return 0
-  return (album.overdue_track_count ?? 0) * 100 + (deadlineInfo(album)?.overdue ? 25 : 0) + (album.open_issues ?? 0)
+  return (deadlineInfo(album)?.overdue ? 25 : 0) + (album.open_issues ?? 0)
 }
 
 const displayedAlbums = computed(() => {
@@ -301,12 +301,6 @@ function roleBadgeClass(album: Album): string {
                 :class="album.is_completed ? 'bg-border text-foreground' : 'bg-error-bg text-error'"
               >
                 {{ t('dashboard.openIssues', { count: album.open_issues }) }}
-              </span>
-              <span
-                v-if="!album.is_completed && (album.overdue_track_count ?? 0) > 0"
-                class="text-xs font-mono px-2 py-0.5 rounded-full bg-error-bg text-error"
-              >
-                {{ t('dashboard.overdueCount', { count: album.overdue_track_count }) }}
               </span>
             </div>
             <p class="text-xs text-muted-foreground font-mono">
