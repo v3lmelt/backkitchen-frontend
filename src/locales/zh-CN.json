@@ -631,7 +631,6 @@
     "deadlineOverdue": "逾期 {days} 天",
     "deadlineToday": "今日截止",
     "deadlineDaysLeft": "还剩 {days} 天",
-    "overdueCount": "{count} 首逾期",
     "colTitle": "标题",
     "colArtist": "曲师",
     "colDuration": "时长",

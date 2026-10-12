@@ -631,7 +631,6 @@
     "deadlineOverdue": "{days}d overdue",
     "deadlineToday": "Due today",
     "deadlineDaysLeft": "{days}d left",
-    "overdueCount": "{count} overdue",
     "colTitle": "Title",
     "colArtist": "Composer",
     "colDuration": "Duration",
