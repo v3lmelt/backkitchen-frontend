@@ -1112,7 +1112,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
         class="flex items-center justify-between gap-3 px-4 py-2.5 bg-warning-bg border border-warning/30 text-warning text-sm font-mono"
       >
         <div class="flex items-center gap-2 min-w-0">
-          <span class="w-2 h-2 rounded-full bg-warning animate-pulse flex-shrink-0"></span>
+          <span class="w-2 h-2 rounded-full bg-warning flex-shrink-0"></span>
           <span class="truncate">{{ wsReconnectAttempts > 0 ? t('trackDetail.liveReconnecting', { n: wsReconnectAttempts }) : t('trackDetail.liveDisconnected') }}</span>
         </div>
         <button @click="wsRetry" class="text-xs font-mono text-warning underline underline-offset-2 hover:no-underline flex-shrink-0">
@@ -1137,7 +1137,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
               class="inline-flex items-center gap-1.5 text-xs text-success font-mono"
               :title="t('trackDetail.liveConnected')"
             >
-              <span class="w-1.5 h-1.5 rounded-full bg-success animate-pulse"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
               {{ t('trackDetail.live') }}
             </span>
           </div>
@@ -1387,12 +1387,10 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
             v-for="action in primaryActions"
             :key="action.key"
             @click="action.handler()"
-            class="workflow-cta-btn group w-full flex items-center justify-between gap-2 rounded-full font-mono font-semibold px-5 h-11 text-sm transition-all
-                   bg-button-primary hover:bg-button-primary-hover text-button-primary-foreground
-                   shadow-[0_0_16px_rgb(var(--color-primary)_/_0.25)] hover:shadow-[0_0_24px_rgb(var(--color-primary)_/_0.45)]"
+            class="ui-control w-full flex items-center justify-between gap-2 rounded-full font-mono font-semibold px-5 h-11 text-sm bg-button-primary hover:bg-button-primary-hover text-button-primary-foreground"
           >
             {{ action.label }}
-            <ChevronRight class="w-5 h-5 transition-transform group-hover:translate-x-0.5" :stroke-width="2.5" />
+            <ChevronRight class="w-5 h-5" :stroke-width="2.5" />
           </button>
         </div>
 
@@ -1478,7 +1476,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
           />
           <div v-if="sourceFollowupUploading" class="space-y-1">
             <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
-              <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: sourceFollowupProgress + '%' }"></div>
+              <div class="ui-progress h-full bg-primary rounded-full" :style="{ width: sourceFollowupProgress + '%' }"></div>
             </div>
             <p class="text-xs text-muted-foreground text-right">{{ sourceFollowupProgress }}%</p>
           </div>
@@ -1510,7 +1508,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
           </p>
           <div v-if="resubmitUploading" class="space-y-1">
             <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
-              <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: resubmitProgress + '%' }"></div>
+              <div class="ui-progress h-full bg-primary rounded-full" :style="{ width: resubmitProgress + '%' }"></div>
             </div>
             <p class="text-xs text-muted-foreground text-right">{{ resubmitProgress }}%</p>
           </div>
@@ -1744,7 +1742,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
               />
               <div v-if="sourceFollowupUploading" class="space-y-1">
                 <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
-                  <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: sourceFollowupProgress + '%' }"></div>
+                  <div class="ui-progress h-full bg-primary rounded-full" :style="{ width: sourceFollowupProgress + '%' }"></div>
                 </div>
                 <p class="text-xs text-muted-foreground text-right">{{ sourceFollowupProgress }}%</p>
               </div>
@@ -1907,12 +1905,10 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
           v-for="action in primaryActions"
           :key="'m-' + action.key"
           @click="action.handler()"
-          class="workflow-cta-btn group flex items-center gap-2 rounded-full font-mono font-semibold px-5 h-10 text-sm leading-none transition-all
-                 bg-button-primary hover:bg-button-primary-hover text-button-primary-foreground
-                 shadow-[0_0_16px_rgb(var(--color-primary)_/_0.25)] hover:shadow-[0_0_24px_rgb(var(--color-primary)_/_0.45)]"
+          class="ui-control flex items-center gap-2 rounded-full font-mono font-semibold px-5 h-10 text-sm leading-none bg-button-primary hover:bg-button-primary-hover text-button-primary-foreground"
         >
           {{ action.label }}
-          <ChevronRight class="w-4 h-4 transition-transform group-hover:translate-x-0.5" :stroke-width="2.5" />
+          <ChevronRight class="w-4 h-4" :stroke-width="2.5" />
         </button>
       </div>
     </div>
@@ -1930,10 +1926,6 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
       @updated="onIssueUpdated"
       @open-issue="openIssueReference"
     />
-    <TrackProgressModal v-if="showProgressModal && track" :track="track" :config="workflowConfig"
-      @close="showProgressModal = false" @saved="reloadAfterManagement" />
-    <ReviewManagementModal v-if="showReviewManagement && track" :key="track.id" :track-id="track.id"
-      @close="showReviewManagement = false" @saved="reloadAfterManagement" />
     <MasteringChatSidebar
       v-if="canSeeMastering && track"
       :track-id="trackId"
@@ -1943,15 +1935,10 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
       @open-issue="openIssueReference"
     />
   </div>
+  <TrackProgressModal :open="showProgressModal && track !== null" :track="track" :config="workflowConfig"
+    @close="showProgressModal = false" @saved="reloadAfterManagement" />
+  <ReviewManagementModal :open="showReviewManagement && track !== null" :track-id="trackId"
+    @close="showReviewManagement = false" @saved="reloadAfterManagement" />
 
 </template>
 
-<style scoped>
-.workflow-cta-btn {
-  animation: cta-glow 3s ease-in-out infinite;
-}
-@keyframes cta-glow {
-  0%, 100% { box-shadow: 0 0 16px rgb(var(--color-primary) / 0.2); }
-  50% { box-shadow: 0 0 28px rgb(var(--color-primary) / 0.4); }
-}
-</style>

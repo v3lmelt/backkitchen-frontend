@@ -1120,13 +1120,13 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
 
 
 <template>
-  <ReviewManagementModal v-if="showReviewManagement && track" :key="track.id" :track-id="track.id"
+  <ReviewManagementModal :open="showReviewManagement && track !== null" :track-id="trackId"
     @close="showReviewManagement = false" @saved="reviewManagementSaved" />
 
-  <AudioSpecConfirm :check="pendingSpecCheck" @answer="answerSpecCheck" />
+  <AudioSpecConfirm :open="pendingSpecCheck !== null" :check="pendingSpecCheck" @answer="answerSpecCheck" />
   <!-- Revision Type Selection Modal -->
   <BaseModal
-    v-if="revisionTypeModalOpen"
+    :open="revisionTypeModalOpen"
     @close="revisionTypeModalOpen = false"
     max-width="max-w-lg"
   >
@@ -1844,7 +1844,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
 
         <div v-if="uploading" class="space-y-1">
           <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
-            <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
+            <div class="ui-progress h-full bg-primary rounded-full" :style="{ width: uploadProgress + '%' }"></div>
           </div>
           <p class="text-xs text-muted-foreground text-right">{{ uploadProgress }}%</p>
         </div>

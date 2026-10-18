@@ -702,9 +702,9 @@ watch(activeTab, (newTab) => {
 </script>
 
 <template>
-  <AudioSpecConfirm :check="pendingSpecCheck" @answer="answerSpecCheck" />
+  <AudioSpecConfirm :open="pendingSpecCheck !== null" :check="pendingSpecCheck" @answer="answerSpecCheck" />
   <BaseModal
-    v-if="revisionTypeModalOpen"
+    :open="revisionTypeModalOpen"
     @close="revisionTypeModalOpen = false"
     max-width="max-w-lg"
   >
@@ -790,7 +790,7 @@ watch(activeTab, (newTab) => {
       class="flex items-center justify-between gap-3 px-4 py-2.5 bg-warning-bg border border-warning/30 text-warning text-sm font-mono"
     >
       <div class="flex items-center gap-2 min-w-0">
-        <span class="w-2 h-2 rounded-full bg-warning animate-pulse flex-shrink-0"></span>
+        <span class="w-2 h-2 rounded-full bg-warning flex-shrink-0"></span>
         <span class="truncate">{{ wsReconnectAttempts > 0 ? t('trackDetail.liveReconnecting', { n: wsReconnectAttempts }) : t('trackDetail.liveDisconnected') }}</span>
       </div>
       <button @click="wsRetry" class="text-xs font-mono text-warning underline underline-offset-2 hover:no-underline flex-shrink-0">
@@ -804,7 +804,7 @@ watch(activeTab, (newTab) => {
         <div class="flex items-center gap-2 mb-1">
           <StatusBadge :status="track.status" type="track" :variant="track.workflow_variant" :label="track.workflow_step?.label ?? null" />
           <span v-if="wsConnected" class="inline-flex items-center gap-1.5 text-xs text-success font-mono">
-            <span class="w-1.5 h-1.5 rounded-full bg-success animate-pulse"></span>
+            <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
             {{ t('trackDetail.live') }}
           </span>
         </div>
@@ -1237,7 +1237,7 @@ watch(activeTab, (newTab) => {
         </div>
         <div v-if="uploading" class="space-y-1">
           <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
-            <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
+            <div class="ui-progress h-full bg-primary rounded-full" :style="{ width: uploadProgress + '%' }"></div>
           </div>
           <p class="text-xs text-muted-foreground text-right">{{ uploadProgress }}%</p>
         </div>

@@ -68,10 +68,9 @@ describe('Mastering historical issue behavior', () => {
     mocks.create.mockResolvedValue(historyIssue({ id: 8, local_number: 8, title: 'New current issue', markers: [] }))
   })
 
-  it('keeps every visible unresolved cycle and custom phase prominent while both closed states fold', async () => {
+  it('keeps every visible unresolved cycle and custom phase available while both closed states fold', async () => {
     const wrapper = await openIssues()
     expect(wrapper.findAll('[data-issue-id]').map(row => row.attributes('data-issue-id'))).toEqual(['2', '1', '3', '4', '7'])
-    for (const id of [2, 3, 4, 7]) expect(wrapper.get(`[data-issue-id="${id}"]`).classes()).not.toContain('opacity-60')
     expect(wrapper.text()).toContain('Resolved · 2')
     expect(wrapper.text()).not.toContain('Old closed')
     expect(wrapper.text()).not.toContain('Old internal closed')

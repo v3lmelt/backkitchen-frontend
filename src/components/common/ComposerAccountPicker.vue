@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { albumApi } from '@/api'
 import type { ComposerAccount } from '@/types'
 import BaseModal from './BaseModal.vue'
 
-const props = defineProps<{
-  albumId: number
+const props = withDefaults(defineProps<{
+  open?: boolean
+  albumId: number | null
   circleBound: boolean
   excludedUserIds: number[]
-}>()
+}>(), { open: false })
 const emit = defineEmits<{
   select: [account: ComposerAccount]
   close: []
@@ -20,8 +21,12 @@ const loading = ref(false)
 const error = ref(false)
 const searched = ref(false)
 const results = ref<ComposerAccount[]>([])
+const excludedIds = ref<number[]>([])
+watchEffect(() => {
+  if (props.open) excludedIds.value = props.excludedUserIds
+})
 const visibleResults = computed(() => {
-  const excluded = new Set(props.excludedUserIds)
+  const excluded = new Set(excludedIds.value)
   return results.value.filter(account => !excluded.has(account.id))
 })
 let requestSequence = 0
@@ -36,6 +41,7 @@ watch(query, () => {
 }, { flush: 'sync' })
 
 async function search() {
+  if (!props.open || props.albumId === null) return
   const sequence = ++requestSequence
   const term = query.value.trim()
   results.value = []
@@ -53,9 +59,21 @@ async function search() {
   }
 }
 
-onMounted(() => {
+watch(() => [props.open, props.albumId] as const, ([open]) => {
+  requestSequence++
+  if (!open) return
+  query.value = ''
+  results.value = []
+  error.value = false
+  loading.value = false
+  searched.value = false
   if (props.circleBound) void search()
-})
+}, { immediate: true })
+function afterLeave() {
+  if (props.open) return
+  results.value = []
+  excludedIds.value = []
+}
 onBeforeUnmount(() => {
   unmounted = true
   requestSequence++
@@ -63,7 +81,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <BaseModal :aria-label="t('upload.accountPickerTitle')" max-width="max-w-lg" @close="emit('close')">
+  <BaseModal :open="open" :aria-label="t('upload.accountPickerTitle')" max-width="max-w-lg" @close="emit('close')" @after-leave="afterLeave">
     <div class="space-y-4">
       <h2 class="text-sm font-mono font-semibold text-foreground pr-6">{{ t('upload.accountPickerTitle') }}</h2>
       <form class="flex flex-col sm:flex-row gap-2" @submit.prevent="search">

@@ -1161,9 +1161,8 @@ describe('TrackDetailView', () => {
     const wrapper = mountTrackDetailView()
     await flushPromises()
 
-    const buttons = wrapper.findAll('button.workflow-cta-btn')
+    const buttons = wrapper.findAll('button').filter(button => button.text().includes('Open Intake'))
     expect(buttons).toHaveLength(2)
-    expect(buttons.every(button => button.text().includes('Open Intake'))).toBe(true)
 
     await buttons[0].trigger('click')
     expect(mocks.pushMock).toHaveBeenCalledWith({ path: '/tracks/7/step/intake', query: undefined })
@@ -1179,7 +1178,7 @@ describe('TrackDetailView', () => {
     } }))
     const wrapper = mountTrackDetailView()
     await flushPromises()
-    expect(wrapper.findAll('button.workflow-cta-btn')).toHaveLength(0)
+    expect(wrapper.findAll('button').some(button => button.text().includes('Open Intake'))).toBe(false)
     expect(wrapper.find('input[type="file"]').exists()).toBe(true)
     wrapper.unmount()
   })

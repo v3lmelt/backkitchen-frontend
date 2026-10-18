@@ -419,8 +419,8 @@ describe('AlbumSettingsView', () => {
 
     await findButtonByText(wrapper, 'Update progress')!.trigger('click')
     expect(mocks.trackForceStatusMock).not.toHaveBeenCalled()
-    expect(wrapper.getComponent(ConfirmModal).props('title')).toBe('Confirm manual stage change?')
-    wrapper.getComponent(ConfirmModal).vm.$emit('confirm')
+    expect(wrapper.findAllComponents(ConfirmModal).find(modal => modal.props('open'))!.props('title')).toBe('Confirm manual stage change?')
+    wrapper.findAllComponents(ConfirmModal).find(modal => modal.props('open'))!.vm.$emit('confirm')
     await flushPromises()
 
     expect(mocks.trackForceStatusMock).toHaveBeenCalledWith(11, {
@@ -457,11 +457,11 @@ describe('AlbumSettingsView', () => {
 
     await findButtonByText(wrapper, 'Workflow')!.trigger('click')
     await wrapper.find('button.workflow-editor-save').trigger('click')
-    wrapper.getComponent(ConfirmModal).vm.$emit('cancel')
+    wrapper.findAllComponents(ConfirmModal).find(modal => modal.props('open'))!.vm.$emit('cancel')
     await wrapper.vm.$nextTick()
 
     expect(mocks.albumUpdateWorkflowMock).not.toHaveBeenCalled()
-    expect(wrapper.findComponent(ConfirmModal).exists()).toBe(false)
+    expect(wrapper.findAllComponents(ConfirmModal).some(modal => modal.props('open'))).toBe(false)
   })
 
   it('saves workflow changes and renders migration details', async () => {
@@ -483,8 +483,8 @@ describe('AlbumSettingsView', () => {
     await findButtonByText(wrapper, 'Workflow')!.trigger('click')
     await wrapper.find('button.workflow-editor-save').trigger('click')
     expect(mocks.albumUpdateWorkflowMock).not.toHaveBeenCalled()
-    expect(wrapper.getComponent(ConfirmModal).props('title')).toBe('Save workflow changes?')
-    wrapper.getComponent(ConfirmModal).vm.$emit('confirm')
+    expect(wrapper.findAllComponents(ConfirmModal).find(modal => modal.props('open'))!.props('title')).toBe('Save workflow changes?')
+    wrapper.findAllComponents(ConfirmModal).find(modal => modal.props('open'))!.vm.$emit('confirm')
     await flushPromises()
 
     expect(mocks.albumUpdateWorkflowMock).toHaveBeenCalledWith(

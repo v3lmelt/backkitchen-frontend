@@ -40,6 +40,7 @@ function legacyIssue() {
 
 describe('legacy issue detail original audio', () => {
   beforeEach(() => {
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() })
     vi.clearAllMocks(); localStorage.clear(); mocks.failedUrl = ''
     mocks.route = reactive({ params: { id: '1' }, path: '/issues/1', query: {} })
   })

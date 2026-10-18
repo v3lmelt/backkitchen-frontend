@@ -12,7 +12,7 @@ const echo: ComposerAccount = { id: 3, username: 'echo', display_name: 'Echo' }
 let wrapper: VueWrapper
 function mountPicker(circleBound = false, excludedUserIds: number[] = []) {
   wrapper = mountWithPlugins(ComposerAccountPicker, {
-    props: { albumId: 1, circleBound, excludedUserIds },
+    props: { open: true, albumId: 1, circleBound, excludedUserIds },
     global: { stubs: { teleport: true } },
   })
   return wrapper
@@ -63,5 +63,25 @@ describe('ComposerAccountPicker', () => {
     await flushPromises()
     await wrapper.findAll('button').find(button => button.text().includes('@nova'))!.trigger('click')
     expect(wrapper.emitted('select')).toEqual([[nova]])
+  })
+
+  it('keeps closed pickers idle and discards a response from a previous open session', async () => {
+    const stale = Promise.withResolvers<ComposerAccount[]>()
+    mocks.candidates.mockReturnValueOnce(stale.promise).mockResolvedValueOnce([echo])
+    wrapper = mountWithPlugins(ComposerAccountPicker, {
+      props: { albumId: 1, circleBound: true, excludedUserIds: [] },
+      global: { stubs: { teleport: true } },
+    })
+    await flushPromises()
+    expect(mocks.candidates).not.toHaveBeenCalled()
+    await wrapper.setProps({ open: true })
+    await wrapper.setProps({ open: false })
+    await wrapper.setProps({ open: true, albumId: 2 })
+    await flushPromises()
+    stale.resolve([nova])
+    await flushPromises()
+    expect(wrapper.text()).toContain('@echo')
+    expect(wrapper.text()).not.toContain('@nova')
+    expect((wrapper.find('input').element as HTMLInputElement).value).toBe('')
   })
 })

@@ -1,4 +1,4 @@
-import { ref, type Ref } from 'vue'
+import { onBeforeUnmount, ref, watch, type Ref } from 'vue'
 import { discussionApi, r2Api, resolveAssetUrl, uploadToR2 } from '@/api'
 import type { Discussion, DiscussionPhase, EditHistory } from '@/types'
 import { useToast } from '@/composables/useToast'
@@ -33,23 +33,43 @@ export function useDiscussions(
   const showHistoryForId = ref<number | null>(null)
   const loadingOlder = ref(false)
   const hasMore = ref(false)
+  let historySequence = 0
+  let listSequence = 0
+  let trackSession = 0
+  watch(trackId, () => {
+    trackSession++
+    listSequence++
+    discussions.value = []
+    loading.value = false
+    loadingOlder.value = false
+    loadError.value = ''
+    hasMore.value = false
+    posting.value = false
+    postingProgress.value = 0
+    editingId.value = null
+    closeHistory()
+  }, { flush: 'sync' })
+  onBeforeUnmount(() => {
+    historySequence++
+    listSequence++
+    trackSession++
+  })
 
   async function load() {
+    const sequence = ++listSequence
+    const requestedTrack = trackId.value
     loading.value = true
     loadError.value = ''
     try {
-      if (paginated) {
-        const items = await discussionApi.list(trackId.value, phase, { limit: pageSize })
-        discussions.value = items
-        hasMore.value = items.length === pageSize
-      } else {
-        discussions.value = await discussionApi.list(trackId.value, phase)
-        hasMore.value = false
-      }
-    } catch (err: any) {
-      loadError.value = err?.message || t('common.loadFailed')
+      const items = await discussionApi.list(requestedTrack, phase, paginated ? { limit: pageSize } : undefined)
+      if (sequence !== listSequence || requestedTrack !== trackId.value) return
+      discussions.value = items
+      hasMore.value = paginated && items.length === pageSize
+    } catch (err: unknown) {
+      if (sequence !== listSequence) return
+      loadError.value = err instanceof Error ? err.message : t('common.loadFailed')
     } finally {
-      loading.value = false
+      if (sequence === listSequence) loading.value = false
     }
   }
 
@@ -57,32 +77,38 @@ export function useDiscussions(
     if (!paginated || !hasMore.value || loadingOlder.value) return
     const oldestId = discussions.value[0]?.id
     if (oldestId === undefined) return
+    const session = trackSession
+    const requestedTrack = trackId.value
     loadingOlder.value = true
     try {
-      const older = await discussionApi.list(trackId.value, phase, {
+      const older = await discussionApi.list(requestedTrack, phase, {
         beforeId: oldestId,
         limit: pageSize,
       })
+      if (session !== trackSession) return
       if (older.length > 0) {
         discussions.value = [...older, ...discussions.value]
       }
       hasMore.value = older.length === pageSize
     } catch {
-      toastError(t('common.error'))
+      if (session === trackSession) toastError(t('common.error'))
     } finally {
-      loadingOlder.value = false
+      if (session === trackSession) loadingOlder.value = false
     }
   }
 
   // Pull the latest page and fold it into the current list without rewinding
   // any already-loaded older items. Used to react to realtime create/update.
   async function refreshLatestPage() {
+    const sequence = ++listSequence
+    const requestedTrack = trackId.value
     try {
+      const latest = await discussionApi.list(requestedTrack, phase, paginated ? { limit: pageSize } : undefined)
+      if (sequence !== listSequence || requestedTrack !== trackId.value) return
       if (!paginated) {
-        discussions.value = await discussionApi.list(trackId.value, phase)
+        discussions.value = latest
         return
       }
-      const latest = await discussionApi.list(trackId.value, phase, { limit: pageSize })
       const byId = new Map(latest.map(d => [d.id, d]))
       const merged = discussions.value.map(d => byId.get(d.id) ?? d)
       const existingIds = new Set(merged.map(d => d.id))
@@ -93,6 +119,8 @@ export function useDiscussions(
       discussions.value = merged
     } catch {
       // silent; next user action will retry
+    } finally {
+      if (sequence === listSequence) loading.value = false
     }
   }
 
@@ -109,7 +137,9 @@ export function useDiscussions(
     await refreshLatestPage()
   }
 
-  async function submit(payload: { content: string; images: File[]; audios: File[] }) {
+  async function submit(payload: { content: string; images: File[]; audios: File[] }): Promise<Discussion | null> {
+    const requestedTrack = trackId.value
+    const session = trackSession
     posting.value = true
     postingProgress.value = 0
     try {
@@ -117,7 +147,7 @@ export function useDiscussions(
 
       if (appStore.r2Enabled && payload.audios.length > 0) {
         const presignedResp = await r2Api.requestDiscussionAudioUpload(
-          trackId.value,
+          requestedTrack,
           payload.audios.map(file => ({
             filename: file.name,
             content_type: file.type || 'application/octet-stream',
@@ -136,35 +166,37 @@ export function useDiscussions(
             file.type || 'application/octet-stream',
             (percent) => {
               const currentBytes = previousBytes + (file.size * percent / 100)
-              postingProgress.value = Math.round((currentBytes / totalSize) * 100)
+              if (session === trackSession) postingProgress.value = Math.round((currentBytes / totalSize) * 100)
             },
           )
           uploadedBytes += file.size
         }
 
-        d = await discussionApi.create(trackId.value, {
+        d = await discussionApi.create(requestedTrack, {
           content: payload.content.trim(),
           phase,
           images: payload.images.length ? payload.images : undefined,
           audioObjectKeys: presignedResp.uploads.map(upload => upload.object_key),
           audioOriginalFilenames: payload.audios.map(file => file.name),
-        }, payload.images.length > 0 ? (p) => { postingProgress.value = p } : undefined)
+        }, payload.images.length > 0 ? (p) => { if (session === trackSession) postingProgress.value = p } : undefined)
       } else {
-        d = await discussionApi.create(trackId.value, {
+        d = await discussionApi.create(requestedTrack, {
           content: payload.content.trim(),
           phase,
           images: payload.images.length ? payload.images : undefined,
           audios: payload.audios.length ? payload.audios : undefined,
-        }, (p) => { postingProgress.value = p })
+        }, (p) => { if (session === trackSession) postingProgress.value = p })
       }
 
-      if (!discussions.value.some(x => x.id === d.id)) {
+      if (session === trackSession && !discussions.value.some(x => x.id === d.id)) {
         discussions.value.push(d)
       }
+      return d
     } catch {
       toastError(t('common.error'))
+      return null
     } finally {
-      posting.value = false
+      if (session === trackSession) posting.value = false
     }
   }
 
@@ -192,12 +224,16 @@ export function useDiscussions(
   }
 
   async function showHistory(discussionId: number) {
+    const sequence = ++historySequence
+    historyItems.value = []
     showHistoryForId.value = discussionId
     try {
-      historyItems.value = await discussionApi.history(discussionId)
-    } catch (error: any) {
+      const items = await discussionApi.history(discussionId)
+      if (sequence === historySequence) historyItems.value = items
+    } catch (error: unknown) {
+      if (sequence !== historySequence) return
       historyItems.value = []
-      toastError(error?.message || t('editHistory.loadFailed'))
+      toastError(error instanceof Error ? error.message : t('editHistory.loadFailed'))
     }
   }
 
@@ -206,6 +242,7 @@ export function useDiscussions(
   }
 
   function closeHistory() {
+    historySequence++
     showHistoryForId.value = null
     historyItems.value = []
   }

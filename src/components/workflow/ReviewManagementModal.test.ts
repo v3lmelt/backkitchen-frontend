@@ -12,7 +12,7 @@ const history = [
   { id: 12, stage_id: 'peer_review', user_id: 2, status: 'pending', user: users[1]!.user },
 ]
 function mountModal() {
-  return mountWithPlugins(ReviewManagementModal, { props: { trackId: 7 }, global: { stubs: { BaseModal: { template: '<div><slot /></div>' } } } })
+  return mountWithPlugins(ReviewManagementModal, { props: { open: true, trackId: 7 }, global: { stubs: { BaseModal: { props: ['open'], template: '<div v-if="open"><slot /></div>' } } } })
 }
 function button(wrapper: ReturnType<typeof mountModal>, text: string) {
   return wrapper.findAll('button').find(node => node.text() === text)!
@@ -73,5 +73,31 @@ describe('ReviewManagementModal', () => {
     await flushPromises()
     expect(mocks.get).toHaveBeenCalledTimes(2)
     expect(wrapper.emitted('saved')).toBeUndefined()
+  })
+
+  it('loads only while open and ignores a closed session response after reopening', async () => {
+    const stale = Promise.withResolvers<unknown>()
+    const current = { track: { id: 8, viewer_can_manage_review: true, workflow_step: step,
+      review_state: { step_id: 'peer_review', flexible: false, flexible_available: true, state_version: 'fresh' } },
+      workflow_config: { steps: [{ ...step, order: 1 }] } }
+    mocks.get.mockReturnValueOnce(stale.promise).mockResolvedValueOnce(current)
+    const wrapper = mountWithPlugins(ReviewManagementModal, {
+      props: { trackId: 7 },
+      global: { stubs: { BaseModal: { props: ['open'], template: '<div v-if="open"><slot /></div>' } } },
+    })
+    await flushPromises()
+    expect(mocks.get).not.toHaveBeenCalled()
+    await wrapper.setProps({ open: true })
+    await wrapper.setProps({ open: false })
+    await wrapper.setProps({ open: true, trackId: 8 })
+    await flushPromises()
+    stale.resolve({ track: { id: 7, viewer_can_manage_review: false } })
+    await flushPromises()
+    await wrapper.find('input[type="checkbox"]').setValue(true)
+    await button(wrapper, 'Preview changes').trigger('click')
+    await button(wrapper, 'Confirm').trigger('click')
+    await flushPromises()
+    expect(mocks.save).toHaveBeenCalledWith(8, expect.objectContaining({ state_version: 'fresh' }))
+    wrapper.unmount()
   })
 })

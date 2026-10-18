@@ -5,6 +5,58 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.61",
+    "date": "2026-10-18",
+    "headline": {
+      "zh-CN": "更轻盈的交互与稳定的阅读位置",
+      "en": "Lighter interactions and steadier reading"
+    },
+    "summary": {
+      "zh-CN": "统一界面动效，改善弹窗焦点与母带沟通阅读体验，并适配系统减弱动效设置。",
+      "en": "Consistent interface motion, improved dialog focus and mastering chat reading, with support for reduced motion preferences."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "交互体验",
+          "en": "Interaction"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "轻触反馈与一致的面板过渡",
+              "en": "Light press feedback and consistent panel transitions"
+            },
+            "description": {
+              "zh-CN": "按钮、菜单、侧栏与弹窗使用统一的轻量动效。减弱动效模式保留清晰的静态反馈，音频标记与播放定位保持即时响应。",
+              "en": "Buttons, menus, sidebars and dialogs share lightweight motion. Reduced motion preserves clear static feedback, while audio markers and playback positioning remain immediate."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "稳定的弹窗内容与焦点",
+              "en": "Stable dialog content and focus"
+            },
+            "description": {
+              "zh-CN": "关闭确认框时保留完整退场内容，快速重开与切换目标时保持正确焦点，并隔离旧会话请求结果。",
+              "en": "Confirmation content remains intact during dismissal. Rapid reopening and target changes preserve focus and isolate results from older dialog sessions."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "母带沟通保留阅读位置",
+              "en": "Keep your place in mastering chat"
+            },
+            "description": {
+              "zh-CN": "浏览历史消息时，收到新消息、切换全屏与重新打开面板会保留阅读位置；新增查看最新消息及未读数量提示。发送失败保留草稿，成功发送后跟随最新消息。",
+              "en": "While reading history, incoming messages, fullscreen changes and reopening preserve your place. A latest-message shortcut shows unread counts. Failed sends retain drafts; successful sends follow the latest message."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.60",
     "date": "2026-10-18",
     "headline": {

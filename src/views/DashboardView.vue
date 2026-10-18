@@ -895,7 +895,7 @@ function openTrack(track: Track) {
         <!-- Progress bar -->
         <div class="w-full h-2 bg-background rounded-full overflow-hidden">
           <div
-            class="h-full bg-primary transition-all duration-300"
+            class="ui-progress h-full bg-primary"
             :style="{ width: exportProgress.total > 0 ? `${(exportProgress.index / exportProgress.total) * 100}%` : '0%' }"
           ></div>
         </div>

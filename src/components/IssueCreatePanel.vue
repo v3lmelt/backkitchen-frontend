@@ -972,7 +972,7 @@ defineExpose({
 
       <div v-if="submittingIssue && (selectedAudios.length || selectedImages.length)" class="space-y-1">
         <div class="h-1.5 w-full overflow-hidden rounded-full bg-border">
-          <div class="h-full rounded-full bg-primary transition-all duration-300" :style="{ width: issueUploadProgress + '%' }"></div>
+          <div class="ui-progress h-full rounded-full bg-primary" :style="{ width: issueUploadProgress + '%' }"></div>
         </div>
         <p class="text-xs text-muted-foreground text-right">{{ issueUploadProgress }}%</p>
       </div>
@@ -1003,7 +1003,7 @@ defineExpose({
     </div>
 
     <ConfirmModal
-      v-if="pendingConfirmation && !readonly"
+      :open="pendingConfirmation !== null && !readonly"
       :title="pendingConfirmation === 'discard' ? t('issue.discardDraftTitle') : t('issue.clearMarkersTitle')"
       :message="pendingConfirmation === 'discard'
         ? t('issue.discardDraftMessage')

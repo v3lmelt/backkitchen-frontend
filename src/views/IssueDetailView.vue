@@ -22,6 +22,7 @@ import { issueOriginLabel, resolveIssueAudio } from '@/utils/issueAudio'
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const pageTop = ref<HTMLElement | null>(null)
 const trackStore = useTrackStore()
 const { error: toastError } = useToast()
 const issueId = computed(() => Number(route.params.id))
@@ -142,7 +143,7 @@ onMounted(() => {
 watch(issueId, (id) => {
   loadIssue(id)
   nextTick(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    pageTop.value?.scrollIntoView({ block: 'start', behavior: typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: no-preference)').matches ? 'smooth' : 'auto' })
   })
 })
 onBeforeUnmount(() => {
@@ -202,18 +203,26 @@ async function jumpToIssueMarkerReference(reference: MarkerIndexReference) {
 // Edit history
 const historyItems = ref<EditHistory[]>([])
 const showHistoryForCommentId = ref<number | null>(null)
+let historySequence = 0
+watch(issueId, closeHistory)
+onBeforeUnmount(() => { historySequence++ })
 
 async function showCommentHistory(commentId: number) {
+  const sequence = ++historySequence
+  historyItems.value = []
   showHistoryForCommentId.value = commentId
   try {
-    historyItems.value = await commentApi.history(commentId)
-  } catch (e: any) {
+    const items = await commentApi.history(commentId)
+    if (sequence === historySequence) historyItems.value = items
+  } catch (e: unknown) {
+    if (sequence !== historySequence) return
     historyItems.value = []
-    toastError(e?.message || t('editHistory.loadFailed'))
+    toastError(e instanceof Error ? e.message : t('editHistory.loadFailed'))
   }
 }
 
 function closeHistory() {
+  historySequence++
   showHistoryForCommentId.value = null
   historyItems.value = []
 }
@@ -266,6 +275,7 @@ function openVersionCompare() {
 </script>
 
 <template>
+  <div ref="pageTop" aria-hidden="true"></div>
   <div v-if="loading" class="max-w-4xl mx-auto"><SkeletonLoader :rows="5" :card="true" /></div>
   <div v-else-if="loadError" class="card max-w-md mx-auto mt-12 text-center space-y-3">
     <p class="text-sm text-error">{{ t('common.loadFailed') }}</p>
@@ -492,21 +502,23 @@ function openVersionCompare() {
   </div>
 
   <EditHistoryModal
-    v-if="showHistoryForCommentId !== null"
+    :open="showHistoryForCommentId !== null"
     :items="historyItems"
     @close="closeHistory"
   />
 </template>
 
 <style scoped>
-.issue-detail-fade-enter-active,
+.issue-detail-fade-enter-active {
+  transition: opacity var(--motion-popover-in) var(--motion-ease-out), transform var(--motion-popover-in) var(--motion-ease-out);
+}
 .issue-detail-fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity var(--motion-popover-out) var(--motion-ease-in), transform var(--motion-popover-out) var(--motion-ease-in);
 }
 
 .issue-detail-fade-enter-from,
 .issue-detail-fade-leave-to {
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(var(--motion-offset));
 }
 </style>

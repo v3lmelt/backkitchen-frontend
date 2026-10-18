@@ -502,7 +502,6 @@ function pointGroupDotStyle(group: PointMarkerGroup) {
   return {
     background: tone.edge,
     boxShadow: hovered ? `0 0 0 2px ${tone.soft}, 0 0 6px ${tone.glow}` : `0 0 0 1px ${tokenColor('--color-overlay', 0.4)}`,
-    transform: hovered ? 'scale(1.2)' : 'scale(1)',
   }
 }
 
@@ -1659,7 +1658,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
               :style="{ height: `${rangeRulerHeight + 4}px` }"
             />
             <span
-              class="h-2.5 w-2.5 shrink-0 rounded-full transition-transform duration-150"
+              class="h-2.5 w-2.5 shrink-0 rounded-full transition-colors"
               :style="pointGroupDotStyle(group)"
             />
             <span
@@ -1712,7 +1711,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
             v-for="item in visibleRangeLaneItems"
             :key="`${item.issue.id}-${item.marker.id}`"
             type="button"
-            class="absolute min-w-[4px] cursor-pointer transition-all duration-150"
+            class="range-marker absolute min-w-[4px] cursor-pointer"
             :class="activeRangeIssueId === item.issue.id ? 'z-10' : 'z-[1]'"
             :style="{
               left: getMarkerPosition(Math.max(item.marker.time_start, visibleTimelineStart)),
@@ -1735,7 +1734,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
         <div
           ref="container"
           data-testid="waveform-canvas"
-          class="relative overflow-hidden rounded-none bg-[rgb(var(--color-waveform-surface))] transition-[z-index] touch-manipulation"
+          class="relative overflow-hidden rounded-none bg-[rgb(var(--color-waveform-surface))] touch-manipulation transition-none"
           :class="[
             activeSide === 'A' ? 'z-[2]' : 'z-0',
             isPanning ? 'cursor-grabbing' : (canPanWaveform() ? 'cursor-grab' : (selectable && mode === 'annotate' ? 'cursor-crosshair' : 'cursor-pointer')),
@@ -1812,14 +1811,19 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
         <div
           v-if="isCompareMode"
           ref="compareContainerRef"
-          class="absolute inset-0 pointer-events-none transition-[z-index]"
+          class="absolute inset-0 pointer-events-none transition-none"
           :class="activeSide === 'B' ? 'z-[2]' : 'z-0'"
         ></div>
         <div v-if="isCompareMode" class="absolute top-2 right-2 flex items-center gap-1 bg-overlay/60 rounded-lg p-1 z-10">
+          <div class="relative grid grid-cols-2">
+            <span
+              class="ab-selection pointer-events-none absolute inset-y-0 left-0 w-1/2 rounded bg-button-primary"
+              :style="{ transform: `translateX(${abMode === 'B' ? 100 : 0}%)` }"
+            />
           <button
             type="button"
             @click="setAbMode('A')"
-            :class="['px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'A' ? 'bg-button-primary text-button-primary-foreground' : 'text-muted-foreground hover:text-foreground']">
+            :class="['relative px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'A' ? 'text-button-primary-foreground' : 'text-muted-foreground hover:text-foreground']">
             A
           </button>
           <button
@@ -1827,12 +1831,13 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
             :disabled="!isCompareReady"
             @click="setAbMode('B')"
             :class="[
-              'px-2 py-0.5 rounded text-xs font-bold transition-colors',
-              abMode === 'B' ? 'bg-button-primary text-button-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+              'relative px-2 py-0.5 rounded text-xs font-bold transition-colors',
+              abMode === 'B' ? 'text-button-primary-foreground' : 'text-muted-foreground hover:text-foreground',
               isCompareLoading ? 'cursor-wait' : '',
             ]">
             B
           </button>
+          </div>
           <span class="text-xs text-muted-foreground px-1">
             {{ isCompareLoading ? `Loading B ${compareLoadProgress}%` : (abMode === 'A' ? $t('compare.currentVersion') : $t('compare.previousVersion')) }}
           </span>
@@ -1854,7 +1859,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
       <div class="flex items-center gap-2 sm:min-w-[19rem] sm:justify-end">
         <button
           type="button"
-          class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground transition duration-200 hover:border-primary hover:text-primary active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+          class="ui-control inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
           :disabled="zoomStep === 0"
           :aria-label="t('waveform.zoomOut')"
           :title="t('waveform.zoomOut')"
@@ -1874,7 +1879,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
         />
         <button
           type="button"
-          class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground transition duration-200 hover:border-primary hover:text-primary active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+          class="ui-control inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
           :disabled="zoomStep >= maxZoomStep"
           :aria-label="t('waveform.zoomIn')"
           :title="t('waveform.zoomIn')"
@@ -1884,7 +1889,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
         </button>
         <button
           type="button"
-          class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-[11px] font-mono text-foreground transition duration-200 hover:border-primary hover:text-primary active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+          class="ui-control inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-[11px] font-mono text-foreground hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
           :disabled="zoomStep === 0"
           @click="resetZoom"
         >
@@ -1955,17 +1960,22 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
 </template>
 
 <style scoped>
+.range-marker {
+  transition: background-color var(--motion-feedback), border-color var(--motion-feedback), box-shadow var(--motion-feedback), opacity var(--motion-feedback);
+}
+.ab-selection {
+  transition: transform var(--motion-selection) var(--motion-ease-out);
+}
 .waveform-zoom-slider {
   accent-color: rgb(var(--color-control-accent));
 }
 
 .play-icon-enter-active,
 .play-icon-leave-active {
-  transition: opacity 0.12s ease-out, transform 0.12s ease-out;
+  transition: opacity var(--motion-feedback) var(--motion-ease-out);
 }
 .play-icon-enter-from,
 .play-icon-leave-to {
   opacity: 0;
-  transform: scale(0.85);
 }
 </style>

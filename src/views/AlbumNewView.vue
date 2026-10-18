@@ -880,9 +880,9 @@ async function create() {
     </template>
 
     <ConfirmModal
-      v-if="pendingTemplate"
+      :open="pendingTemplate !== null"
       :title="t('workflowTemplate.loadConfirmTitle')"
-      :message="t('workflowTemplate.loadConfirmMessage', { name: pendingTemplate.name })"
+      :message="t('workflowTemplate.loadConfirmMessage', { name: pendingTemplate?.name ?? '' })"
       :confirm-text="t('workflowTemplate.loadFromTemplate')"
       @confirm="confirmTemplateLoad"
       @cancel="pendingTemplate = null"

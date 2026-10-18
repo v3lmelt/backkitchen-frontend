@@ -31,21 +31,23 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const fullIssue = ref<Issue | null>(null)
+const issue = ref<Issue | null>(null)
 const loading = ref(false)
 const contentRef = ref<InstanceType<typeof IssueDetailContent> | null>(null)
 
 const previewRef = ref<InstanceType<typeof OriginalIssuePlayback> | null>(null)
-const previewIssue = computed(() => fullIssue.value ?? props.issue)
+const previewIssue = computed(() => fullIssue.value ?? issue.value)
 let detailRequest = 0
 
-watch(() => props.issue, async (issue) => {
+watch(() => props.issue, async (nextIssue) => {
   const request = ++detailRequest
+  if (!nextIssue) { loading.value = false; return }
   contentRef.value?.reset()
-  fullIssue.value = issue
-  if (!issue) { loading.value = false; return }
+  issue.value = nextIssue
+  fullIssue.value = nextIssue
   loading.value = true
   try {
-    const detail = await issueApi.get(issue.id)
+    const detail = await issueApi.get(nextIssue.id)
     if (request === detailRequest && props.issue?.id === detail.id) fullIssue.value = detail
   } catch {
     // Keep the already-visible issue context when detail/comments cannot load.
@@ -53,6 +55,13 @@ watch(() => props.issue, async (issue) => {
     if (request === detailRequest) loading.value = false
   }
 }, { immediate: true })
+
+function afterLeave() {
+  if (props.issue) return
+  issue.value = null
+  fullIssue.value = null
+  contentRef.value?.reset()
+}
 
 function formatTime(s: number) { return formatTimestamp(s) }
 
@@ -72,16 +81,16 @@ function onContentUpdated(updated: Issue) {
     <!-- Backdrop -->
     <Transition name="idp-fade">
       <div
-        v-if="issue"
+        v-if="props.issue"
         class="fixed inset-0 z-40 bg-overlay/50"
         @click="emit('close')"
       />
     </Transition>
 
     <!-- Panel -->
-    <Transition name="idp-slide">
+    <Transition name="idp-slide" @after-leave="afterLeave">
       <div
-        v-if="issue"
+        v-if="props.issue && issue"
         class="fixed inset-x-0 bottom-0 z-50 flex h-[88dvh] max-h-[88dvh] w-full flex-col border-t border-border bg-card sm:inset-y-0 sm:left-auto sm:right-0 sm:h-full sm:max-h-none sm:w-[460px] sm:border-l sm:border-t-0"
       >
         <!-- Header -->
@@ -112,7 +121,7 @@ function onContentUpdated(updated: Issue) {
           </div>
           <button
             @click="emit('close')"
-            class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors mt-0.5"
+            class="ui-control flex-shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
             :aria-label="t('common.close')"
           >
             <X class="w-5 h-5" :stroke-width="2" />
@@ -152,10 +161,12 @@ function onContentUpdated(updated: Issue) {
 </template>
 
 <style scoped>
-.idp-fade-enter-active, .idp-fade-leave-active { transition: opacity 0.2s ease; }
+.idp-fade-enter-active { transition: opacity var(--motion-panel-in) var(--motion-ease-out); }
+.idp-fade-leave-active { transition: opacity var(--motion-panel-out) var(--motion-ease-in); }
 .idp-fade-enter-from, .idp-fade-leave-to { opacity: 0; }
 
-.idp-slide-enter-active, .idp-slide-leave-active { transition: transform 0.25s ease; }
+.idp-slide-enter-active { transition: transform var(--motion-panel-in) var(--motion-ease-out); }
+.idp-slide-leave-active { transition: transform var(--motion-panel-out) var(--motion-ease-in); }
 .idp-slide-enter-from, .idp-slide-leave-to { transform: translateY(100%); }
 
 @media (min-width: 640px) {

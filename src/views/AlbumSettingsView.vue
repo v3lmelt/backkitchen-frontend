@@ -2271,9 +2271,9 @@ async function refreshDeliveries() {
   </div>
 
   <ConfirmModal
-    v-if="pendingMemberRemoval"
+    :open="pendingMemberRemoval !== null"
     :title="t('common.removeMemberTitle')"
-    :message="t('common.removeMemberConfirm', { name: pendingMemberRemoval.displayName })"
+    :message="t('common.removeMemberConfirm', { name: pendingMemberRemoval?.displayName ?? '' })"
     :confirm-text="t('circleDetail.remove')"
     :destructive="true"
     @confirm="removeMemberFromAlbum"
@@ -2281,7 +2281,7 @@ async function refreshDeliveries() {
   />
 
   <ConfirmModal
-    v-if="showResetTemplateConfirm"
+    :open="showResetTemplateConfirm"
     :title="t('settings.resetTemplateTitle')"
     :message="t('settings.resetTemplateConfirm')"
     :confirm-text="t('settings.resetToDefault')"
@@ -2291,7 +2291,7 @@ async function refreshDeliveries() {
   />
 
   <ConfirmModal
-    v-if="pendingWorkflowConfig"
+    :open="pendingWorkflowConfig !== null"
     :title="t('workflowEditor.confirmations.saveTitle')"
     :message="t('workflowEditor.confirmations.saveMessage')"
     :confirm-text="t('workflowEditor.saveWorkflow')"
@@ -2300,10 +2300,10 @@ async function refreshDeliveries() {
   />
 
   <ConfirmModal
-    v-if="showProgressConfirm && progressTrack"
+    :open="showProgressConfirm && progressTrack !== null"
     :title="t('albumSettings.progress.confirmTitle')"
     :message="t('albumSettings.progress.confirmMessage', {
-      track: progressTrack.title,
+      track: progressTrack?.title ?? '',
       from: progressCurrentLabel,
       to: progressTargetLabel,
     })"

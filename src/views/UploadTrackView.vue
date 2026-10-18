@@ -684,16 +684,15 @@ function formatFileSize(bytes: number): string {
       </div>
       <div v-if="uploading" class="space-y-1">
         <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
-          <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
+          <div class="ui-progress h-full bg-primary rounded-full" :style="{ width: uploadProgress + '%' }"></div>
         </div>
         <p class="text-xs text-muted-foreground text-right">{{ uploadProgress }}%</p>
       </div>
     </div>
     <ComposerAccountPicker
-      v-if="pickerEntry && selectedAlbum"
-      :key="selectedAlbum.id"
-      :album-id="selectedAlbum.id"
-      :circle-bound="selectedAlbum.circle_id != null"
+      :open="pickerEntry !== null && selectedAlbum !== null"
+      :album-id="selectedAlbum?.id ?? null"
+      :circle-bound="selectedAlbum?.circle_id != null"
       :excluded-user-ids="excludedComposerIds"
       @select="selectComposerAccount"
       @close="pickerEntry = null"

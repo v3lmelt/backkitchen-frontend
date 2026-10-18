@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --motion-press: 80ms;
+  --motion-feedback: 120ms;
+  --motion-popover-in: 150ms;
+  --motion-popover-out: 100ms;
+  --motion-modal-in: 180ms;
+  --motion-modal-out: 120ms;
+  --motion-panel-in: 220ms;
+  --motion-panel-out: 160ms;
+  --motion-layout: 180ms;
+  --motion-progress: 180ms;
+  --motion-selection: 140ms;
+  --motion-ease-out: cubic-bezier(.16, 1, .3, 1);
+  --motion-ease-in: ease-in;
+  --motion-offset: 4px;
+  --motion-press-scale: .985;
+}
+
 @layer base {
   html,
   html[data-theme='dark'] {
@@ -125,13 +143,39 @@
 
 @layer components {
   .btn-primary {
-    @apply bg-button-primary hover:bg-button-primary-hover text-button-primary-foreground font-medium px-4 py-2 rounded-full transition-colors;
+    @apply bg-button-primary text-button-primary-foreground font-medium px-4 py-2 rounded-full;
   }
   .btn-secondary {
-    @apply bg-card hover:bg-border text-foreground font-medium px-4 py-2 rounded-full border border-border transition-colors;
+    @apply bg-card text-foreground font-medium px-4 py-2 rounded-full border border-border;
   }
   .btn-destructive {
-    @apply text-sm font-mono px-4 h-10 rounded-full bg-error hover:opacity-90 text-white transition-opacity disabled:opacity-50;
+    @apply text-sm font-mono px-4 h-10 rounded-full bg-error text-white disabled:opacity-50;
+  }
+  .btn-primary, .btn-secondary, .btn-destructive, .ui-control {
+    transition-property: color, background-color, border-color, opacity, scale;
+    transition-duration: var(--motion-feedback);
+    transition-timing-function: var(--motion-ease-out);
+  }
+  :is(.btn-primary, .btn-secondary, .btn-destructive, .ui-control):not(:disabled):not([aria-disabled="true"]):active {
+    scale: var(--motion-press-scale);
+    transition-duration: var(--motion-press);
+  }
+  @media (hover: hover) {
+    .btn-primary:not(:disabled):not([aria-disabled="true"]):hover {
+      background-color: rgb(var(--color-button-primary-hover));
+    }
+    .btn-secondary:not(:disabled):not([aria-disabled="true"]):hover {
+      background-color: rgb(var(--color-border));
+    }
+    .btn-destructive:not(:disabled):not([aria-disabled="true"]):hover {
+      opacity: .9;
+    }
+  }
+  .input-field, .textarea-field, .select-field, .select-field-sm {
+    transition-duration: var(--motion-feedback);
+  }
+  .ui-progress {
+    transition: width var(--motion-progress) var(--motion-ease-out);
   }
   .input-field {
     @apply appearance-none bg-background border border-border rounded-full text-sm text-foreground
@@ -187,6 +231,7 @@
     right: 0;
     bottom: 0;
     z-index: 30;
+    transition: left var(--motion-layout) var(--motion-ease-out);
   }
 
   .fixed-bottom-bar-spacer {
@@ -227,11 +272,13 @@
     background: rgb(var(--color-background));
     cursor: pointer;
     position: relative;
-    transition: border-color 0.15s, background-color 0.15s;
+    transition: border-color var(--motion-feedback), background-color var(--motion-feedback);
     flex-shrink: 0;
   }
-  .checkbox:hover {
-    border-color: rgb(var(--color-control-accent-hover) / 0.65);
+  @media (hover: hover) {
+    .checkbox:hover {
+      border-color: rgb(var(--color-control-accent-hover) / 0.65);
+    }
   }
   .checkbox:checked {
     background: rgb(var(--color-control-accent));
@@ -291,23 +338,31 @@
   display: none;
 }
 
-/* Shared message-list transition (chat, discussions). */
+/* Messages enter without displacing the reader's anchor. */
 .msg-enter-active {
-  transition: opacity 0.22s ease-out, transform 0.22s ease-out;
+  transition: opacity var(--motion-feedback) var(--motion-ease-out);
 }
 .msg-enter-from {
   opacity: 0;
-  transform: translateY(8px);
 }
-.msg-leave-active {
-  transition: opacity 0.15s ease-in;
-  position: absolute;
+
+.ui-enter {
+  animation: ui-enter var(--motion-modal-in) var(--motion-ease-out);
 }
-.msg-leave-to {
+@keyframes ui-enter {
+  from { opacity: 0; transform: translateY(var(--motion-offset)); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.ui-feedback-fade-enter-active, .popover-enter-active {
+  transition: opacity var(--motion-popover-in) var(--motion-ease-out), transform var(--motion-popover-in) var(--motion-ease-out);
+}
+.ui-feedback-fade-leave-active, .popover-leave-active {
+  transition: opacity var(--motion-popover-out) var(--motion-ease-in), transform var(--motion-popover-out) var(--motion-ease-in);
+}
+.ui-feedback-fade-enter-from, .ui-feedback-fade-leave-to,
+.popover-enter-from, .popover-leave-to {
   opacity: 0;
-}
-.msg-move {
-  transition: transform 0.22s ease-out;
+  transform: translateY(calc(-1 * var(--motion-offset)));
 }
 
 /* Custom form controls - flat design */
@@ -371,4 +426,28 @@ input[type="checkbox"]:checked::after {
 input[type="checkbox"]:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-press: 0ms;
+    --motion-feedback: 0ms;
+    --motion-popover-in: 0ms;
+    --motion-popover-out: 0ms;
+    --motion-modal-in: 0ms;
+    --motion-modal-out: 0ms;
+    --motion-panel-in: 0ms;
+    --motion-panel-out: 0ms;
+    --motion-layout: 0ms;
+    --motion-progress: 0ms;
+    --motion-selection: 0ms;
+    --motion-offset: 0px;
+    --motion-press-scale: 1;
+  }
+  *, *::before, *::after {
+    animation: none !important;
+    transition-duration: 0ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
 }

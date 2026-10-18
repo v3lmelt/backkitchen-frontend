@@ -755,7 +755,7 @@ defineExpose({ reset })
   </div>
 
   <ConfirmModal
-    v-if="pendingDeleteComment"
+    :open="pendingDeleteComment !== null"
     :title="t('issueDetail.deleteCommentTitle')"
     :message="t('issueDetail.deleteCommentConfirm')"
     :confirm-text="t('common.delete')"

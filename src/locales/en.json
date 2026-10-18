@@ -2085,6 +2085,8 @@
     "enterFullscreen": "Expand mastering communication",
     "exitFullscreen": "Exit full-screen mastering communication",
     "unreadCount": "{count} unread",
+    "jumpToLatest": "View latest messages",
+    "newMessages": "{count} new messages",
     "placeholder": "Type a message…",
     "send": "Send",
     "empty": "No messages yet.",

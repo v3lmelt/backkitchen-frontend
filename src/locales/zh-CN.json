@@ -2085,6 +2085,8 @@
     "enterFullscreen": "全屏显示母带沟通",
     "exitFullscreen": "退出母带沟通全屏",
     "unreadCount": "{count} 条未读",
+    "jumpToLatest": "查看最新消息",
+    "newMessages": "{count} 条新消息",
     "placeholder": "输入消息…",
     "send": "发送",
     "empty": "暂无消息。",

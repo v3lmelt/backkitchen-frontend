@@ -367,9 +367,9 @@
     </template>
 
     <ConfirmModal
-      v-if="pendingMemberRemoval"
+      :open="pendingMemberRemoval !== null"
       :title="t('common.removeMemberTitle')"
-      :message="t('common.removeMemberConfirm', { name: pendingMemberRemoval.displayName })"
+      :message="t('common.removeMemberConfirm', { name: pendingMemberRemoval?.displayName ?? '' })"
       :confirm-text="t('circleDetail.remove')"
       :destructive="true"
       @confirm="removeMember"
@@ -377,22 +377,22 @@
     />
 
     <ConfirmModal
-      v-if="pendingTemplateAction"
-      :title="pendingTemplateAction.title"
-      :message="pendingTemplateAction.message"
-      :confirm-text="pendingTemplateAction.confirmText"
-      :destructive="pendingTemplateAction.destructive"
+      :open="pendingTemplateAction !== null"
+      :title="pendingTemplateAction?.title ?? ''"
+      :message="pendingTemplateAction?.message"
+      :confirm-text="pendingTemplateAction?.confirmText"
+      :destructive="pendingTemplateAction?.destructive"
       @confirm="confirmTemplateAction"
       @cancel="pendingTemplateAction = null"
     />
 
     <ConfirmModal
-      v-if="pendingInviteCodeRevoke"
+      :open="pendingInviteCodeRevoke !== null"
       :title="t('circleDetail.revokeInviteTitle')"
-      :message="t('circleDetail.revokeInviteConfirm', { code: pendingInviteCodeRevoke.code })"
+      :message="t('circleDetail.revokeInviteConfirm', { code: pendingInviteCodeRevoke?.code ?? '' })"
       :confirm-text="t('circleDetail.revoke')"
       :destructive="true"
-      @confirm="revokeCode(pendingInviteCodeRevoke.id)"
+      @confirm="confirmRevokeCode"
       @cancel="pendingInviteCodeRevoke = null"
     />
   </div>
@@ -657,6 +657,10 @@ async function createInviteCode() {
   } finally {
     creatingCode.value = false
   }
+}
+
+function confirmRevokeCode() {
+  if (pendingInviteCodeRevoke.value) void revokeCode(pendingInviteCodeRevoke.value.id)
 }
 
 async function revokeCode(codeId: number) {
