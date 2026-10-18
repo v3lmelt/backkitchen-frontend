@@ -2,11 +2,11 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { issueApi, commentApi, trackAudioUrl, sourceVersionAudioUrl } from '@/api'
+import { issueApi, commentApi } from '@/api'
 import { useTrackStore } from '@/stores/tracks'
 import { fetchTrackDetailBundle } from '@/composables/useTrackDetail'
 import { emptyMentionCandidates } from '@/utils/mentionCandidates'
-import type { EditHistory, Issue, MentionCandidates, StageAssignment } from '@/types'
+import type { EditHistory, Issue, MasterDelivery, MentionCandidates, StageAssignment, Track, TrackSourceVersion } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import WaveformPlayer from '@/components/audio/WaveformPlayer.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
@@ -17,6 +17,7 @@ import type { MarkerIndexReference } from '@/utils/timestamps'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { isIssueOpenOrInternal } from '@/utils/issueStatus'
 import { useToast } from '@/composables/useToast'
+import { issueOriginLabel, resolveIssueAudio } from '@/utils/issueAudio'
 
 const route = useRoute()
 const router = useRouter()
@@ -30,41 +31,25 @@ const allTrackIssues = ref<Issue[]>([])
 const loading = ref(true)
 const showUnresolvedOnly = ref(false)
 const currentSourceVersionNumber = ref<number | null>(null)
-const cachedTrack = ref<import('@/types').Track | null>(null)
+const cachedTrack = ref<Track | null>(null)
+const sourceVersions = ref<TrackSourceVersion[]>([])
+const masterDeliveries = ref<MasterDelivery[]>([])
+const audioLoadFailed = ref(false)
 const reviewAssignments = ref<StageAssignment[]>([])
 const mentionCandidates = ref<MentionCandidates>(emptyMentionCandidates())
 
-const issueIsOutdated = computed(() => {
-  if (!issue.value || issue.value.source_version_number == null || currentSourceVersionNumber.value == null) return false
-  return issue.value.source_version_number !== currentSourceVersionNumber.value
-})
-
-const canOpenIssueSourceAudio = computed(() =>
-  issueIsOutdated.value && issue.value?.source_version_id != null,
-)
-
-const displayedAudioVersionNumber = computed(() => {
-  if (issueIsOutdated.value) return issue.value?.source_version_number ?? currentSourceVersionNumber.value
-  return currentSourceVersionNumber.value ?? issue.value?.source_version_number ?? null
-})
-
-const waveformIssues = computed(() => {
-  if (!issue.value) return []
-  if (issueIsOutdated.value && !canOpenIssueSourceAudio.value) return []
-  return [issue.value]
-})
+const issueIsOutdated = computed(() => issue.value?.source_version_id != null
+  && cachedTrack.value?.current_source_version != null
+  && issue.value.source_version_id !== cachedTrack.value.current_source_version.id)
+const canOpenIssueSourceAudio = computed(() => issueIsOutdated.value && Boolean(audioUrl.value) && !audioLoadFailed.value)
+const waveformIssues = computed(() => issue.value ? [issue.value] : [])
 
 let loadCount = 0
 let cachedTrackId: number | null = null
 const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
 
-const audioUrl = computed(() => {
-  if (!issue.value) return ''
-  if (canOpenIssueSourceAudio.value) {
-    return sourceVersionAudioUrl(issue.value.track_id, issue.value.source_version_id!)
-  }
-  return trackAudioUrl(issue.value.track_id, issue.value.source_version_number ?? 0)
-})
+const audioUrl = computed(() => issue.value ? resolveIssueAudio(issue.value, cachedTrack.value, sourceVersions.value, masterDeliveries.value) : '')
+watch([audioUrl, issueId], () => { audioLoadFailed.value = false })
 
 function onWaveformReady() {
   seekWaveformToIssue()
@@ -115,7 +100,19 @@ async function loadIssue(id: number) {
     const fetched = await issueApi.get(id)
     if (token !== loadCount) return
     issue.value = fetched
-    if (fetched.track_id !== cachedTrackId) {
+    const boundMaster = fetched.master_delivery_id == null ? null
+      : cachedTrack.value?.current_master_delivery?.id === fetched.master_delivery_id ? cachedTrack.value.current_master_delivery
+      : masterDeliveries.value.find(delivery => delivery.id === fetched.master_delivery_id)
+    const boundSource = fetched.source_version_id == null ? null
+      : sourceVersions.value.find(source => source.id === fetched.source_version_id)
+        ?? (cachedTrack.value?.current_source_version?.id === fetched.source_version_id ? cachedTrack.value.current_source_version : null)
+    const missingAudioMetadata = fetched.master_delivery_id != null ? boundMaster == null
+      : fetched.source_version_id != null && boundSource == null
+    if (fetched.track_id !== cachedTrackId || missingAudioMetadata) {
+      cachedTrack.value = null
+      sourceVersions.value = []
+      masterDeliveries.value = []
+      currentSourceVersionNumber.value = null
       const [all, { detail, assignments }] = await Promise.all([
         issueApi.listForTrack(fetched.track_id),
         fetchTrackDetailBundle(fetched.track_id),
@@ -124,6 +121,8 @@ async function loadIssue(id: number) {
       allTrackIssues.value = all
       currentSourceVersionNumber.value = detail.track.version
       cachedTrack.value = detail.track
+      sourceVersions.value = detail.source_versions ?? detail.track.source_versions ?? []
+      masterDeliveries.value = detail.master_deliveries ?? []
       trackStore.setCurrentTrack(detail.track)
       mentionCandidates.value = detail.mention_candidates ?? emptyMentionCandidates()
       reviewAssignments.value = assignments
@@ -175,10 +174,6 @@ const nextIssue = computed(() =>
     : null
 )
 
-function isOutdatedIssue(item: Issue): boolean {
-  if (item.source_version_number == null || currentSourceVersionNumber.value == null) return false
-  return item.source_version_number !== currentSourceVersionNumber.value
-}
 
 async function playTrackReferenceAt(time: number) {
   if (!waveformRef.value) return
@@ -283,7 +278,7 @@ function openVersionCompare() {
     >
       <div class="min-w-0">
         <p class="font-medium text-foreground">
-          {{ t('issueDetail.outdatedVersionTitle', { issueVersion: issue.source_version_number, currentVersion: currentSourceVersionNumber }) }}
+          {{ t('issueDetail.outdatedVersionTitle', { issueVersion: issue.source_version_number ?? '?', currentVersion: currentSourceVersionNumber ?? '?' }) }}
         </p>
         <p class="mt-1 text-warning">
           {{ t(canOpenIssueSourceAudio ? 'issueDetail.outdatedVersionBody' : 'issueDetail.outdatedVersionUnavailable') }}
@@ -323,11 +318,8 @@ function openVersionCompare() {
       </div>
       <h1 class="text-2xl font-sans font-bold text-foreground">{{ issue.title }}</h1>
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mt-2">
-        <span
-          v-if="issue.source_version_number != null"
-          class="inline-flex items-center rounded-full bg-border px-2 py-1 text-xs font-mono text-foreground"
-        >
-          v{{ issue.source_version_number }}
+        <span class="inline-flex border border-border bg-background px-2 py-1 text-xs font-mono text-foreground">
+          {{ issueOriginLabel(issue, t, cachedTrack, sourceVersions) }}
         </span>
         <StatusBadge :status="issue.phase" type="phase" />
         <StatusBadge :status="issue.severity" type="severity" />
@@ -352,11 +344,8 @@ function openVersionCompare() {
             <div class="px-4 pt-3 pb-2 border-b border-border flex flex-wrap items-center gap-2">
               <div class="flex items-center gap-2 mr-auto">
                 <span class="text-xs font-mono font-medium text-muted-foreground">{{ t('issueDetail.audioContext') }}</span>
-                <span
-                  v-if="displayedAudioVersionNumber != null"
-                  class="inline-flex items-center rounded-full bg-border px-2 py-0.5 text-[11px] font-mono text-foreground"
-                >
-                  v{{ displayedAudioVersionNumber }}
+                <span class="inline-flex border border-border bg-background px-2 py-0.5 text-[11px] font-mono text-foreground">
+                  {{ issueOriginLabel(issue, t, cachedTrack, sourceVersions) }}
                 </span>
               </div>
               <template v-if="issue.markers.length > 0">
@@ -379,14 +368,18 @@ function openVersionCompare() {
               <span v-else class="text-xs text-muted-foreground italic">{{ t('issue.generalIssue') }}</span>
             </div>
             <WaveformPlayer
+              v-if="audioUrl && !audioLoadFailed"
               ref="waveformRef"
               :audio-url="audioUrl"
               :issues="waveformIssues"
               zoomable
               :track-id="issue.track_id"
               :height="120"
+              playback-scope="local"
               @ready="onWaveformReady"
+              @load-error="audioLoadFailed = true"
             />
+            <p v-else role="status" class="p-4 text-sm text-muted-foreground">{{ t('issueHistory.audioUnavailable') }}</p>
             <div class="border-t border-border px-4 py-2 flex items-center justify-end gap-4">
               <span class="text-[11px] font-mono text-muted-foreground/50 whitespace-nowrap hidden sm:block select-none">{{ t('issueDetail.keyboardHint') }}</span>
             </div>
@@ -460,23 +453,19 @@ function openVersionCompare() {
               class="w-full border border-border p-3 text-left transition-colors"
               :class="[
                 item.id === issueId ? 'bg-warning-bg border-primary/40' : 'bg-background hover:bg-card',
-                isOutdatedIssue(item) ? 'opacity-60' : '',
               ]"
             >
               <div class="min-w-0 space-y-2">
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="text-xs font-mono text-muted-foreground">#{{ item.local_number }}</span>
-                  <span
-                    v-if="item.source_version_number != null"
-                    class="inline-flex items-center rounded-full bg-border px-2 py-0.5 text-[11px] font-mono text-foreground"
-                  >
-                    v{{ item.source_version_number }}
+                  <span class="inline-flex border border-border bg-background px-2 py-0.5 text-[11px] font-mono text-foreground">
+                    {{ issueOriginLabel(item, t, cachedTrack, sourceVersions) }}
                   </span>
                   <span v-if="item.id === issueId" class="inline-flex items-center rounded-full bg-warning-bg px-2 py-0.5 text-[11px] font-mono text-warning border border-warning/20">
                     {{ t('issueDetail.currentIssue') }}
                   </span>
                 </div>
-                <p class="text-sm font-medium leading-snug break-words" :class="isOutdatedIssue(item) ? 'text-muted-foreground' : 'text-foreground'">{{ item.title }}</p>
+                <p class="text-sm font-medium leading-snug break-words text-foreground">{{ item.title }}</p>
                 <div class="flex items-center gap-2 flex-wrap">
                   <StatusBadge :status="item.severity" type="severity" />
                   <StatusBadge :status="item.status" type="issue" />

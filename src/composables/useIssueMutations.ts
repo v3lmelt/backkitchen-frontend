@@ -10,6 +10,8 @@ export interface UseIssueMutationsOptions {
   issues: Ref<Issue[]>
   /** Currently open issue in the drawer, kept in sync with list updates. */
   selectedIssue: Ref<Issue | null>
+  /** Other cycle-scoped copies of the same visible issues. */
+  additionalIssues?: Ref<Issue[]>[]
 }
 
 /**
@@ -18,12 +20,15 @@ export interface UseIssueMutationsOptions {
  * drawer selection, and performs quick status changes optimistically with a
  * rollback and error toast when the API call fails.
  */
-export function useIssueMutations({ issues, selectedIssue }: UseIssueMutationsOptions) {
+export function useIssueMutations({ issues, selectedIssue, additionalIssues = [] }: UseIssueMutationsOptions) {
   const { t } = useI18n()
   const { error: toastError } = useToast()
 
   function onIssueUpdated(updatedIssue: Issue) {
     issues.value = issues.value.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue)
+    for (const list of additionalIssues) {
+      list.value = list.value.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue)
+    }
     if (selectedIssue.value?.id === updatedIssue.id) {
       selectedIssue.value = updatedIssue
     }
@@ -35,7 +40,7 @@ export function useIssueMutations({ issues, selectedIssue }: UseIssueMutationsOp
     try {
       const updatedIssue = await issueApi.update(issue.id, { status })
       onIssueUpdated(updatedIssue)
-    } catch (err: any) {
+    } catch (err) {
       // Roll back only when the local entry is still the snapshot we started
       // from. A WebSocket-triggered reload may have replaced the whole list
       // with a collaborator's newer state while the request was in flight;
@@ -44,7 +49,7 @@ export function useIssueMutations({ issues, selectedIssue }: UseIssueMutationsOp
       if (currentIssue && currentIssue.updated_at === previousIssue.updated_at) {
         onIssueUpdated(previousIssue)
       }
-      toastError(err.message || t('workflowStep.transitionFailed'))
+      toastError(err instanceof Error ? err.message : t('workflowStep.transitionFailed'))
     }
   }
 

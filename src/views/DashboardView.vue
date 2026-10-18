@@ -263,7 +263,7 @@ const displayedAlbums = computed(() => {
 
 const actionableTracks = computed(() =>
   [...tracks.value]
-    .filter(track => (track.allowed_actions?.length ?? 0) > 0)
+    .filter(track => track.viewer_has_pending_work === true)
     .sort((left, right) => {
       const issueDelta = (right.open_issue_count ?? 0) - (left.open_issue_count ?? 0)
       if (issueDelta !== 0) return issueDelta
@@ -424,7 +424,7 @@ function openAlbumSettings(albumId: number) {
 }
 
 function openTrack(track: Track) {
-  if ((track.allowed_actions?.length ?? 0) > 0) {
+  if (track.viewer_can_open_workflow === true) {
     router.push(buildTrackWorkspaceRoute(track, { returnTo: route.fullPath }))
     return
   }

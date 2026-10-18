@@ -28,6 +28,7 @@ import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import AlbumCoverImage from '@/components/common/AlbumCoverImage.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import UserUidButton from '@/components/common/UserUidButton.vue'
 
 const { t, te, locale } = useI18n()
 const route = useRoute()
@@ -1447,6 +1448,7 @@ async function refreshDeliveries() {
                       {{ t('albumSettings.team.masteringEngineer') }}
                     </span>
                   </p>
+                  <UserUidButton :user-id="userId" />
                 </div>
                 <button
                   v-if="userId !== album.producer_id"
@@ -1543,13 +1545,14 @@ async function refreshDeliveries() {
               <div class="text-xs text-muted-foreground mb-2">{{ t('albumSettings.team.members') }}</div>
               <div v-if="album.members.length === 0" class="text-sm text-muted-foreground">{{ t('albumSettings.team.noMembers') }}</div>
               <div v-else class="flex flex-wrap gap-2">
-                <span
+                <div
                   v-for="member in album.members"
                   :key="member.id"
-                  class="text-xs font-mono px-2 py-0.5 rounded-full bg-border text-foreground"
+                  class="flex flex-wrap items-center gap-1 text-xs font-mono px-2 py-0.5 rounded-full bg-border text-foreground"
                 >
-                  {{ member.user.display_name }}
-                </span>
+                  <span>{{ member.user.display_name }}</span>
+                  <UserUidButton :user-id="member.user_id" />
+                </div>
               </div>
             </div>
             <!-- Leave album -->

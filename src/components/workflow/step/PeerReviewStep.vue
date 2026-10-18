@@ -43,11 +43,13 @@ const props = defineProps<{
   // waveform + compare
   audioUrl: string
   waveformIssues: Issue[]
+  compareWaveformIssues: Issue[]
   trackId: number
   hasComparableVersions: boolean
   showSourceCompare: boolean
   sourceCompareOptions: SelectOption[]
   compareSourceVersionId: number | null
+  compareSourceAudioUrl: string
   isSourceCompareActive: boolean
   waveformMode: 'seek' | 'annotate'
   hoveredIssueId: number | null
@@ -61,7 +63,6 @@ const props = defineProps<{
   mentionCandidates: MentionCandidates
   allowInternalVisibility: boolean
   listIssues: Issue[]
-  displayedSourceVersionNumber: number | null
   reviewAssignments: StageAssignment[]
   batchUpdating: boolean
   batchActions: IssueStatus[]
@@ -81,9 +82,6 @@ const emit = defineEmits<{
   toggleSourceCompare: []
   'update:compareSourceVersionId': [value: number | null]
   download: []
-  waveformReady: [duration: number]
-  waveformTimeupdate: [time: number]
-  waveformPlaybackStateChange: [isPlaying: boolean]
   requestWaveformMode: [mode: 'seek' | 'annotate']
   issueSelect: [issue: Issue]
   issueHover: [issue: Issue]
@@ -240,14 +238,15 @@ function bindIssueForm(el: unknown) {
         :ref="registerWaveform"
         :audio-url="audioUrl"
         :issues="waveformIssues"
+        :compare-issues="compareWaveformIssues"
         zoomable
         :track-id="trackId"
-        :compare-version-id="compareSourceVersionId"
-        :selectable="true"
-        :mode="waveformMode"
-        :selected-range="issueFormRef?.selectedRange ?? null"
-        :draft-markers="issueFormRef?.markers ?? []"
-        :draft-range-anchor="issueFormRef?.rangeAnchor ?? null"
+        :compare-audio-url="compareSourceAudioUrl"
+        :selectable="!isSourceCompareActive"
+        :mode="isSourceCompareActive ? 'seek' : waveformMode"
+        :selected-range="isSourceCompareActive ? null : issueFormRef?.selectedRange ?? null"
+        :draft-markers="isSourceCompareActive ? [] : issueFormRef?.markers ?? []"
+        :draft-range-anchor="isSourceCompareActive ? null : issueFormRef?.rangeAnchor ?? null"
         :hovered-issue-id="hoveredIssueId"
         @click="(time: number) => issueFormRef?.handleClick(time)"
         @regionClick="emit('issueSelect', $event)"
@@ -255,9 +254,6 @@ function bindIssueForm(el: unknown) {
         @issueHover="emit('issueHover', $event)"
         @issueLeave="emit('issueLeave')"
         @requestModeChange="emit('requestWaveformMode', $event)"
-        @ready="emit('waveformReady', $event)"
-        @timeupdate="emit('waveformTimeupdate', $event)"
-        @playbackStateChange="emit('waveformPlaybackStateChange', $event)"
       />
     </div>
 
@@ -267,6 +263,8 @@ function bindIssueForm(el: unknown) {
           :ref="bindIssueForm"
           :track-id="trackId"
           phase="peer"
+          :readonly="isSourceCompareActive"
+          :creation-target="t('issueHistory.createSourceTarget', { number: track.current_source_version?.version_number ?? track.version })"
           :allow-internal-visibility="allowInternalVisibility"
           :issues="issues"
           :mention-users="mentionCandidates.issue_public"
@@ -297,7 +295,6 @@ function bindIssueForm(el: unknown) {
           :issues="listIssues"
           :selectable="true"
           :selected-ids="selectedIssueIds"
-          :current-source-version-number="displayedSourceVersionNumber"
           :hovered-issue-id="hoveredIssueId"
           :track="track"
           :assignments="reviewAssignments"

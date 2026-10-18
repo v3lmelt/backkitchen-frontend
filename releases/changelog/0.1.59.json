@@ -1,0 +1,42 @@
+{
+  "version": "0.1.59",
+  "date": "2026-10-17",
+  "headline": {
+    "zh-CN": "并发访问与数据保存稳定性修复",
+    "en": "Concurrent access and data-saving reliability"
+  },
+  "summary": {
+    "zh-CN": "修复并发请求共享数据库连接导致的查询异常和事务相互干扰，保障各请求独立读取、提交与回滚。",
+    "en": "Fix query failures and transaction interference caused by concurrent requests sharing a database connection, keeping reads, commits, and rollbacks isolated between requests."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "稳定性修复",
+        "en": "Reliability fixes"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "并发查询保持一致",
+            "en": "Consistent concurrent queries"
+          },
+          "description": {
+            "zh-CN": "修复同时加载多个接口时可能出现的用户信息读取异常、列表内容错乱和请求报错。并发请求使用独立的数据库连接。",
+            "en": "Fix user-information read failures, inconsistent lists, and request errors when multiple endpoints load simultaneously. Concurrent requests use separate database connections."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "独立处理提交与回滚",
+            "en": "Independent commits and rollbacks"
+          },
+          "description": {
+            "zh-CN": "修复一个请求结束或提交时可能影响其他请求待保存修改的问题，保留现有数据库外键约束与写入等待设置。",
+            "en": "Fix requests closing or committing transactions affecting pending changes in other requests, while preserving foreign-key enforcement and database write-wait settings."
+          }
+        }
+      ]
+    }
+  ]
+}

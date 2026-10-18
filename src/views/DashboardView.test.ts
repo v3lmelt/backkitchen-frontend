@@ -69,6 +69,8 @@ function trackFixture(id: number, title: string, status: string, overrides: Reco
     version: 1,
     updated_at: `2024-01-${String(id).padStart(2, '0')}T00:00:00Z`,
     allowed_actions: [],
+    viewer_has_pending_work: false,
+    viewer_can_open_workflow: false,
     open_issue_count: 0,
     workflow_step: { id: status, label: status },
     ...overrides,
@@ -142,6 +144,8 @@ describe('DashboardView', () => {
           version: 2,
           updated_at: '2024-01-02T00:00:00Z',
           allowed_actions: ['open-step'],
+          viewer_has_pending_work: true,
+          viewer_can_open_workflow: true,
           open_issue_count: 1,
           workflow_step: { id: 'peer_review', label: 'Peer Review' },
         }),
@@ -308,6 +312,34 @@ describe('DashboardView', () => {
       path: '/tracks/12/step/peer_review',
       query: { returnTo: '/dashboard' },
     })
+  })
+
+  it('keeps optional actions out of the queue and sends pending requests to details', async () => {
+    const rows = [
+      trackFixture(21, 'Optional reopen', 'completed', { allowed_actions: ['direct_reopen'] }),
+      trackFixture(22, 'Optional followup', 'intake', { allowed_actions: ['request_source_followup'] }),
+      trackFixture(23, 'Reopen approval', 'completed', { viewer_has_pending_work: true }),
+      trackFixture(24, 'Followup approval', 'source_followup_pending', { viewer_has_pending_work: true }),
+      trackFixture(25, 'Delivery upload', 'mastering', { viewer_has_pending_work: true, viewer_can_open_workflow: true }),
+    ]
+    mocks.trackListMock.mockImplementation(async ({ status }: { status?: string } = {}) => status === 'rejected' ? [] : rows)
+    const wrapper = mountWithPlugins(DashboardView)
+    await flushPromises()
+    const queue = wrapper.findAll('.card').find(card => card.find('h2').exists() && card.find('h2').text() === 'Waiting For Me')!
+    expect(queue.findAll('button').map(button => button.text())).toEqual([
+      expect.stringContaining('Delivery upload'),
+      expect.stringContaining('Followup approval'),
+      expect.stringContaining('Reopen approval'),
+    ])
+    await queue.findAll('button')[2]!.trigger('click')
+    expect(mocks.pushMock).toHaveBeenLastCalledWith({ path: '/tracks/23', query: { returnTo: '/dashboard' } })
+    await queue.findAll('button')[1]!.trigger('click')
+    expect(mocks.pushMock).toHaveBeenLastCalledWith({ path: '/tracks/24', query: { returnTo: '/dashboard' } })
+    await queue.findAll('button')[0]!.trigger('click')
+    expect(mocks.pushMock).toHaveBeenLastCalledWith({ path: '/tracks/25/step/mastering', query: { returnTo: '/dashboard' } })
+    await wrapper.findAll('tbody tr').find(row => row.text().includes('Optional followup'))!.trigger('click')
+    expect(mocks.pushMock).toHaveBeenLastCalledWith({ path: '/tracks/22', query: { returnTo: '/dashboard' } })
+    wrapper.unmount()
   })
 
   it('opens recent tracks without actions on the track detail page', async () => {

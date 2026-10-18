@@ -9,7 +9,7 @@ import type { AudioSpecs } from '@/types'
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, r2Api, uploadToR2, masterDeliveryAudioUrl, trackAudioUrl } from '@/api'
+import { trackApi, r2Api, uploadToR2, masterDeliveryAudioUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useTrackDetail } from '@/composables/useTrackDetail'
 import type {
@@ -21,6 +21,7 @@ import { extractAudioDuration } from '@/utils/audio'
 import { externalComposerDisplayText, isComposerActor, trackArtistDisplay as trackArtistDisplayFor } from '@/utils/trackComposers'
 import { actionTypeForTransition, stepIsMasteringRelated, translateWorkflowDecision } from '@/utils/workflow'
 import { historicalDeliveryDownloadSuffix } from '@/utils/sourceVersions'
+import { currentPlayableSource, currentSourceAudioUrl, issueBelongsToCurrentVersion, issuesForMasterAudio, issuesForSourceAudio } from '@/utils/issueAudio'
 import { useWaveformHotkeys } from '@/composables/useWaveformHotkeys'
 import { useIssueDrawer } from '@/composables/useIssueDrawer'
 import { useIssueMutations } from '@/composables/useIssueMutations'
@@ -43,15 +44,14 @@ import MasteringChatSidebar from '@/components/chat/MasteringChatSidebar.vue'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useDiscussions } from '@/composables/useDiscussions'
 import { useDiscussionRealtime } from '@/composables/useDiscussionRealtime'
-import { useDualWaveformPreview } from '@/composables/useDualWaveformPreview'
 import { useToast } from '@/composables/useToast'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
 import { useWorkflowTransition } from '@/composables/useWorkflowTransition'
 import { useVersionCompare } from '@/composables/useVersionCompare'
 import { ChevronLeft, ChevronDown, Upload, Check, Copy, ExternalLink } from 'lucide-vue-next'
 import { MAX_AUDIO_SIZE } from '@/utils/uploadLimits'
-import { FALLBACK_ISSUE_PHASES } from '@/utils/issueStatus'
 import {
+  canViewerAccessMasterAudio,
   canUserApproveFinal,
   canViewerSeeMastering,
   resolveStepAssigneeUserId,
@@ -73,6 +73,7 @@ const {
   masterDeliveries,
   workflowConfig,
   issues,
+  allIssues,
   mentionCandidates,
   sourceVersions,
   reviewAssignments,
@@ -81,9 +82,28 @@ const {
   load: loadData,
 } = useTrackDetail(trackId, {
   onDetailApplied: () => {
+    if (!canSeeMasteringDiscussion.value) {
+      void router.replace({ path: `/tracks/${trackId.value}`, query: route.query })
+      return
+    }
     syncIssueDrawerFromRoute()
   },
+  onTrackIdChange: () => {
+    selectedIssue.value = null
+    selectedStageIssueIds.value = []
+    issueVersionFilter.value = 'all'
+    focusedIssueId.value = null
+  },
 })
+const viewerCanManageTrackAlbum = computed(() =>
+  viewerCanManageTrackAlbumOf(track.value, appStore.currentUser),
+)
+const canSeeMasteringDiscussion = computed(() =>
+  canViewerSeeMastering(track.value, appStore.currentUser?.id, viewerCanManageTrackAlbum.value),
+)
+const canAccessMasterAudio = computed(() =>
+  canViewerAccessMasterAudio(track.value, appStore.currentUser?.id, viewerCanManageTrackAlbum.value),
+)
 const actionError = ref('')
 
 const {
@@ -105,12 +125,12 @@ const {
 const {
   showSourceCompare,
   selectedCompareSourceVersionId,
+  selectedCompareSourceVersion,
+  selectedCompareSourceAudioUrl,
   olderPlayableSourceVersions,
   sourceCompareOptions,
   isSourceCompareActive,
-  displayedSourceVersionNumber,
   toggleSourceCompare,
-  filterIssuesForDisplayedSourceVersion,
   showMasterCompare,
   selectedCompareMasterDeliveryId,
   selectedCompareMasterDelivery,
@@ -122,7 +142,14 @@ const {
   masterDeliveryOptionLabel,
   toggleMasterCompare,
   compareWithMasterDelivery,
-} = useVersionCompare({ trackId, track, sourceVersions, masterDeliveries })
+} = useVersionCompare({
+  trackId,
+  track,
+  sourceVersions,
+  masterDeliveries,
+  canAccessMasterAudio,
+  canAccessMasterHistory: canSeeMasteringDiscussion,
+})
 
 // Mastering notes editing
 const editingMasteringNotes = ref(false)
@@ -132,6 +159,7 @@ const masteringNotesExpanded = ref(false)
 const masteringDiscussion = useDiscussions(trackId, 'mastering', { paginated: true })
 const { subscribe: subscribeDiscussionRealtime, dispatch: dispatchDiscussionEvent } = useDiscussionRealtime()
 subscribeDiscussionRealtime((event, discussionId) => {
+  if (!canSeeMasteringDiscussion.value) return
   void masteringDiscussion.applyRealtimeEvent(event, discussionId)
 })
 
@@ -171,27 +199,13 @@ const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 const hoveredIssueId = ref<number | null>(null)
 const selectedIssue = ref<Issue | null>(null)
 const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
-const masterWaveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
-const {
-  onSourceWaveformReady,
-  onSourceWaveformTimeUpdate,
-  onSourceWaveformPlaybackStateChange,
-  onMasterWaveformReady,
-  onMasterWaveformTimeUpdate,
-  onMasterWaveformPlaybackStateChange,
-  selectedIssuePreview,
-  handleIssuePreviewPlayAt,
-  handleIssuePreviewAction,
-} = useDualWaveformPreview({
-  selectedIssue,
-  sourceWaveformRef: waveformRef,
-  masterWaveformRef,
-})
 const selectedStageIssueIds = ref<number[]>([])
 const stageBatchNote = ref('')
 const isIssueFormOpen = ref(false)
+const issueVersionFilter = ref<'all' | 'current'>('all')
+const focusedIssueId = ref<number | null>(null)
 const waveformMode = computed<'seek' | 'annotate'>(() =>
-  activeTab.value === 'issues' && isIssueFormOpen.value ? 'annotate' : 'seek',
+  !isSourceCompareActive.value && activeTab.value === 'issues' && isIssueFormOpen.value ? 'annotate' : 'seek',
 )
 // The source waveform (and its toolbar/compare controls) is shared between
 // the Listen and Issues tabs so switching between them doesn't re-decode the
@@ -233,21 +247,12 @@ const uploadError = ref('')
 const isSubmitter = computed(() => isComposerActor(track.value, appStore.currentUser?.id))
 const isMasteringEngineer = computed(() => track.value?.mastering_engineer_id === appStore.currentUser?.id)
 const isProxySubmission = computed(() => Boolean(track.value?.is_proxy_submission && track.value.external_submitter_name))
-const viewerCanManageTrackAlbum = computed(() =>
-  viewerCanManageTrackAlbumOf(track.value, appStore.currentUser),
-)
 const composerApprovalLabel = computed(() =>
   isProxySubmission.value ? t('trackDetail.externalSubmitterProxy') : t('trackDetail.composers')
 )
 const trackArtistDisplay = computed(() => trackArtistDisplayFor(track.value))
-const canSeeMasteringDiscussion = computed(() =>
-  canViewerSeeMastering(track.value, appStore.currentUser?.id, viewerCanManageTrackAlbum.value),
-)
 watch(canSeeMasteringDiscussion, (canSee) => {
-  if (!track.value) return
-  if (!canSee && activeTab.value === 'discussion') {
-    activeTab.value = 'listen'
-  }
+  if (canSee) void masteringDiscussion.load()
 })
 
 const currentStep = computed(() => track.value?.workflow_step ?? null)
@@ -273,11 +278,7 @@ function canCurrentUserContinueInMasteringWorkspace(nextTrack: Track): boolean {
   const isFinalReview = step.ui_variant === 'final_review' || step.id === 'final_review'
   if (!isFinalReview || step.type !== 'approval') return false
 
-  const delivery = nextTrack.current_master_delivery
-  if (!delivery?.confirmed_at) return false
-  if (viewerCanManageTrackAlbumOf(nextTrack, appStore.currentUser)) return !delivery.producer_approved_at
-  if (isComposerActor(nextTrack, userId)) return !delivery.submitter_approved_at
-  return false
+  return canUserApproveFinal(nextTrack, userId, viewerCanManageTrackAlbumOf(nextTrack, appStore.currentUser))
 }
 
 function shouldStayOnMasteringWorkspace(previousStatus: string, nextTrack: Track): boolean {
@@ -291,9 +292,7 @@ function pushToTrackDetail() {
 }
 
 // Source audio
-const audioUrl = computed(() =>
-  track.value?.file_path ? trackAudioUrl(trackId.value, track.value.version ?? 0) : '',
-)
+const audioUrl = computed(() => currentSourceAudioUrl(track.value, sourceVersions.value))
 const currentExternalSourceVersion = computed<TrackSourceVersion | null>(() => {
   const current = track.value?.current_source_version
   if (!current || current.source_kind !== 'external_link') return null
@@ -335,17 +334,17 @@ async function copyExternalSourceNotes() {
 }
 
 // Issues
-const fallbackStepIssues = computed(() => issues.value.filter(i => (FALLBACK_ISSUE_PHASES as readonly string[]).includes(i.phase)))
-const fallbackWaveformIssues = computed(() => filterIssuesForDisplayedSourceVersion(fallbackStepIssues.value))
-const masteringWaveformIssues = computed(() =>
-  issues.value.filter(i => i.phase === 'mastering'),
-)
-const waveformIssues = computed(() => filterIssuesForDisplayedSourceVersion(masteringWaveformIssues.value))
-const finalReviewIssues = computed(() => {
-  const deliveryId = track.value?.current_master_delivery?.id ?? null
-  if (!deliveryId) return []
-  return issues.value.filter(i => i.phase === 'final_review' && i.master_delivery_id === deliveryId)
-})
+const visibleIssues = computed(() => issueVersionFilter.value === 'all'
+  ? allIssues.value
+  : allIssues.value.filter(issue => issueBelongsToCurrentVersion(issue, track.value, sourceVersions.value)))
+const waveformIssues = computed(() => issuesForSourceAudio(
+  allIssues.value, currentPlayableSource(track.value, sourceVersions.value), track.value, true, sourceVersions.value,
+))
+const compareWaveformIssues = computed(() => issuesForSourceAudio(
+  allIssues.value, selectedCompareSourceVersion.value, track.value,
+))
+const finalReviewIssues = computed(() => issuesForMasterAudio(allIssues.value, track.value?.current_master_delivery ?? null))
+const compareMasterIssues = computed(() => issuesForMasterAudio(allIssues.value, selectedCompareMasterDelivery.value))
 
 // Review assignments
 const currentStepAssignments = computed(() => activeAssignmentsForStep(reviewAssignments.value, currentStep.value?.id))
@@ -378,7 +377,7 @@ const deliveryActions = computed<WorkflowAction[]>(() => {
 })
 
 // Batch issue actions
-const stageBatchIssueList = computed(() => fallbackWaveformIssues.value)
+const stageBatchIssueList = computed(() => visibleIssues.value)
 
 function canCurrentUserChangeIssueStatus(issue: Issue): boolean {
   return canUserChangeIssueStatus(appStore.currentUser?.id, track.value, issue, reviewAssignments.value)
@@ -391,10 +390,12 @@ function canCurrentUserSubmitIssueStatus(issue: Issue): boolean {
 const {
   batchUpdatingIssues,
   intersectBatchActions,
+  availableBatchActionsForIssue,
   applyBatchIssueStatusChange: applyBatchStatusChange,
 } = useBatchIssueActions({
   trackId,
-  issues,
+  issues: allIssues,
+  additionalIssues: [issues],
   selectedIssue,
   canSubmitStatus: canCurrentUserSubmitIssueStatus,
   canChangeStatus: canCurrentUserChangeIssueStatus,
@@ -432,7 +433,6 @@ watch(wsConnected, (val) => {
 })
 
 onMounted(loadData)
-onMounted(() => { masteringDiscussion.load() })
 onMounted(() => {
   window.addEventListener('keydown', handleWaveformHotkeys)
 })
@@ -618,18 +618,16 @@ const {
   syncIssueDrawerFromRoute,
   onIssueSelect: openSelectedIssue,
   closeIssueDrawer,
-} = useIssueDrawer({ issues, selectedIssue })
+} = useIssueDrawer({ issues: allIssues, selectedIssue })
 
 function onIssueSelect(issue: Issue) {
-  waveformRef.value?.focusIssue?.(issue)
-  masterWaveformRef.value?.focusIssue?.(issue)
   openSelectedIssue(issue)
 }
 
-const { onIssueUpdated, onQuickIssueStatusChange } = useIssueMutations({ issues, selectedIssue })
+const { onIssueUpdated, onQuickIssueStatusChange } = useIssueMutations({ issues: allIssues, additionalIssues: [issues], selectedIssue })
 
 function openLinkedIssue(issueId: number) {
-  const localIssue = issues.value.find(issue => issue.id === issueId)
+  const localIssue = allIssues.value.find(issue => issue.id === issueId)
   if (localIssue) {
     onIssueSelect(localIssue)
     return
@@ -639,7 +637,10 @@ function openLinkedIssue(issueId: number) {
 }
 
 function onIssueCreated(issue: Issue) {
-  issues.value.push(issue)
+  if (!allIssues.value.some(item => item.id === issue.id)) allIssues.value.push(issue)
+  if (issue.workflow_cycle === track.value?.workflow_cycle && !issues.value.some(item => item.id === issue.id)) issues.value.push(issue)
+  issueVersionFilter.value = 'all'
+  focusedIssueId.value = issue.id
 }
 
 function handleIssueHover(issue: Issue) {
@@ -661,7 +662,7 @@ function applyBatchIssueStatusChange(status: Issue['status']) {
 }
 
 // Waveform hotkeys
-const { handleWaveformHotkeys } = useWaveformHotkeys({ issueFormRef, waveformRef })
+const { handleWaveformHotkeys } = useWaveformHotkeys({ issueFormRef, waveformRef, canUse: () => selectedIssue.value === null })
 
 watch(isSourceCompareActive, (active) => {
   if (!active) return
@@ -673,15 +674,15 @@ watch(() => route.query.issue, () => {
   syncIssueDrawerFromRoute()
 })
 
-watch([stageBatchIssueList], ([issuesList]) => {
-  const validIds = new Set(issuesList.map(issue => issue.id))
+watch([stageBatchIssueList, track, reviewAssignments, () => appStore.currentUser], () => {
+  const validIds = new Set(stageBatchIssueList.value.filter(issue => availableBatchActionsForIssue(issue).length > 0).map(issue => issue.id))
   selectedStageIssueIds.value = selectedStageIssueIds.value.filter(id => validIds.has(id))
   if (selectedStageIssueIds.value.length === 0) stageBatchNote.value = ''
 })
 
 function handleMasterVersionDownload(delivery: MasterDelivery) {
-  if (!delivery.file_path) return
-  const url = masterDeliveryAudioUrl(trackId.value, delivery.id, delivery.delivery_number, delivery.workflow_cycle)
+  if (!canSeeMasteringDiscussion.value || !canAccessMasterAudio.value || !delivery.file_path) return
+  const url = masterDeliveryAudioUrl(trackId.value, delivery)
   const historySuffix = historicalDeliveryDownloadSuffix(delivery, track.value?.workflow_cycle)
   downloadAudioAsset(url, `${track.value?.title ?? 'track'}_master_v${delivery.delivery_number}${historySuffix}`, delivery.file_path)
 }
@@ -781,7 +782,7 @@ watch(activeTab, (newTab) => {
     <p class="text-sm text-error">{{ t('common.loadFailed') }}</p>
     <button @click="loadData" class="btn-secondary text-sm">{{ t('common.retry') }}</button>
   </div>
-  <div v-else-if="track" class="max-w-4xl mx-auto min-h-full flex flex-col">
+  <div v-else-if="track && canSeeMasteringDiscussion" class="max-w-4xl mx-auto min-h-full flex flex-col">
   <div class="space-y-6">
     <!-- WebSocket disconnect banner -->
     <div
@@ -1003,14 +1004,15 @@ watch(activeTab, (newTab) => {
         ref="waveformRef"
         :audio-url="audioUrl"
         :issues="waveformIssues"
+        :compare-issues="compareWaveformIssues"
         zoomable
         :track-id="trackId"
-        :compare-version-id="selectedCompareSourceVersionId"
-        :selectable="isMasteringEngineer"
+        :compare-audio-url="selectedCompareSourceAudioUrl"
+        :selectable="isMasteringEngineer && !isSourceCompareActive"
         :mode="waveformMode"
-        :selected-range="issueFormRef?.selectedRange ?? null"
-        :draft-markers="issueFormRef?.markers ?? []"
-        :draft-range-anchor="issueFormRef?.rangeAnchor ?? null"
+        :selected-range="isSourceCompareActive ? null : issueFormRef?.selectedRange ?? null"
+        :draft-markers="isSourceCompareActive ? [] : issueFormRef?.markers ?? []"
+        :draft-range-anchor="isSourceCompareActive ? null : issueFormRef?.rangeAnchor ?? null"
         :hovered-issue-id="hoveredIssueId"
         @click="(time: number) => issueFormRef?.handleClick(time)"
         @regionClick="onIssueSelect"
@@ -1018,9 +1020,6 @@ watch(activeTab, (newTab) => {
         @issueHover="handleIssueHover"
         @issueLeave="handleIssueLeave"
         @requestModeChange="onRequestWaveformMode"
-        @ready="onSourceWaveformReady"
-        @timeupdate="onSourceWaveformTimeUpdate"
-        @playbackStateChange="onSourceWaveformPlaybackStateChange"
       />
       <AudioTechnicalDataCard
         v-if="isListenTab"
@@ -1077,16 +1076,13 @@ watch(activeTab, (newTab) => {
           <p class="whitespace-pre-wrap break-words text-sm text-foreground">{{ track.current_master_delivery.delivery_message }}</p>
         </div>
         <WaveformPlayer
-          ref="masterWaveformRef"
           :audio-url="masterAudioUrl"
           :issues="finalReviewIssues"
+          :compare-issues="compareMasterIssues"
           zoomable
           :track-id="trackId"
           playback-scope="master"
           :compare-audio-url="selectedCompareMasterAudioUrl"
-          @ready="onMasterWaveformReady"
-          @timeupdate="onMasterWaveformTimeUpdate"
-          @playbackStateChange="onMasterWaveformPlaybackStateChange"
         />
         <AudioTechnicalDataCard :analysis="track.current_master_delivery?.audio_analysis" :title="t('audioAnalysis.masterTitle')" />
         <AudioTechnicalDataCard v-if="selectedCompareMasterDelivery" :key="selectedCompareMasterDelivery.id"
@@ -1122,14 +1118,27 @@ watch(activeTab, (newTab) => {
     </template>
 
     <template v-if="activeTab === 'issues'">
+      <div class="flex items-center gap-2" role="group" :aria-label="t('issueHistory.versionFilter')">
+        <button
+          v-for="filter in (['all', 'current'] as const)"
+          :key="filter"
+          type="button"
+          class="border border-border px-3 py-1.5 text-xs font-mono transition-colors"
+          :class="issueVersionFilter === filter ? 'bg-card text-foreground border-primary/50' : 'bg-background text-muted-foreground hover:text-foreground'"
+          :aria-pressed="issueVersionFilter === filter"
+          @click="issueVersionFilter = filter"
+        >{{ t(filter === 'all' ? 'issueHistory.allVersions' : 'issueHistory.currentVersion') }}</button>
+      </div>
       <!-- Issue create + list (mastering engineer) -->
       <div v-if="isMasteringEngineer" class="space-y-4">
         <IssueCreatePanel
           ref="issueFormRef"
           :track-id="trackId"
           phase="mastering"
+          :readonly="isSourceCompareActive"
+          :creation-target="t('issueHistory.createSourceTarget', { number: track.current_source_version?.version_number ?? track.version })"
           :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
-          :issues="issues"
+          :issues="allIssues"
           :mention-users="mentionCandidates.issue_public"
           :public-mention-users="mentionCandidates.issue_public"
           :internal-mention-users="mentionCandidates.issue_internal"
@@ -1138,7 +1147,7 @@ watch(activeTab, (newTab) => {
           @formOpenChange="(open: boolean) => (isIssueFormOpen = open)"
         >
           <template #heading>
-            <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.issuesHeading', { count: fallbackWaveformIssues.length }) }}</h3>
+            <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.issuesHeading', { count: visibleIssues.length }) }}</h3>
           </template>
         </IssueCreatePanel>
 
@@ -1147,7 +1156,7 @@ watch(activeTab, (newTab) => {
           :statuses="stageBatchActions"
           :note="stageBatchNote"
           :loading="batchUpdatingIssues"
-          :issues="issues"
+          :issues="allIssues"
           :mention-users="mentionCandidates.issue_internal"
           @update:note="stageBatchNote = $event"
           @clear="selectedStageIssueIds = []; stageBatchNote = ''"
@@ -1155,10 +1164,11 @@ watch(activeTab, (newTab) => {
         />
 
         <IssueMarkerList
-          :issues="fallbackWaveformIssues"
+          :issues="visibleIssues"
+          group-by-status
+          :focused-issue-id="focusedIssueId"
           :selectable="true"
           :selected-ids="selectedStageIssueIds"
-          :current-source-version-number="displayedSourceVersionNumber"
           :hovered-issue-id="hoveredIssueId"
           :track="track"
           :assignments="reviewAssignments"
@@ -1174,10 +1184,11 @@ watch(activeTab, (newTab) => {
 
       <!-- Non-mastering-engineer: read-only issue list -->
       <div v-if="!isMasteringEngineer" class="space-y-4">
-        <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.issuesHeading', { count: fallbackWaveformIssues.length }) }}</h3>
+        <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('mastering.issuesHeading', { count: visibleIssues.length }) }}</h3>
         <IssueMarkerList
-          :issues="fallbackWaveformIssues"
-          :current-source-version-number="displayedSourceVersionNumber"
+          :issues="visibleIssues"
+          group-by-status
+          :focused-issue-id="focusedIssueId"
           :hovered-issue-id="hoveredIssueId"
           :track="track"
           :assignments="reviewAssignments"
@@ -1244,7 +1255,7 @@ watch(activeTab, (newTab) => {
             </p>
           </div>
           <button
-            v-if="track.current_master_delivery.file_path"
+            v-if="masterAudioUrl"
             type="button"
             class="btn-secondary self-start text-xs"
             :disabled="downloading"
@@ -1352,24 +1363,24 @@ watch(activeTab, (newTab) => {
   </div>
 
   <IssueDetailPanel
-    :issue="selectedIssue"
+    v-if="canSeeMasteringDiscussion"
+    :issue="loadError ? null : selectedIssue"
     :track="track"
     :assignments="reviewAssignments"
-    :issues="issues"
+    :issues="allIssues"
     :mention-candidates="mentionCandidates"
-    :preview="selectedIssuePreview"
+    :source-versions="sourceVersions"
+    :master-deliveries="masterDeliveries"
     @close="closeIssueDrawer"
     @updated="onIssueUpdated"
     @open-issue="openLinkedIssue"
-    @preview-play-at="handleIssuePreviewPlayAt"
-    @preview-action="handleIssuePreviewAction"
   />
 
   <MasteringChatSidebar
     v-if="canSeeMasteringDiscussion && track"
     :track-id="trackId"
     :track-completed="track.status === 'completed'"
-    :issues="issues"
+    :issues="allIssues"
     :mention-users="mentionCandidates.mastering"
     @open-issue="openLinkedIssue"
   />

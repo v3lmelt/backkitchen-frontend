@@ -3,9 +3,9 @@ import { resolveAudioUrl } from './url'
 /**
  * Two-layer audio cache: in-memory LRU + persistent Cache API.
  *
- * Keyed by the raw audio URL (before token / presigned resolution),
- * which already encodes track ID + version/cycle and is therefore
- * a stable content identifier.
+ * Keyed by the raw protected audio URL (before token / presigned resolution).
+ * Source/delivery ID endpoints are immutable content identities; current
+ * legacy endpoints retain their version/cycle cache keys.
  *
  * Layer 1 (in-memory Map):
  *   Stores Blobs in memory for instant same-session access when
@@ -61,6 +61,7 @@ function _normalizeKey(url: string): string {
 
 function _warnIfUnversioned(key: string): void {
   if (!import.meta.env?.DEV) return
+  if (/\/api\/tracks\/\d+\/(?:source-versions|master-deliveries)\/\d+\/audio(?:\?|$)/.test(key)) return
   const qIndex = key.indexOf('?')
   const params = new URLSearchParams(qIndex === -1 ? '' : key.slice(qIndex + 1))
   if (!params.has('v') && !params.has('c')) {

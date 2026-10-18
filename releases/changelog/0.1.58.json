@@ -1,0 +1,60 @@
+{
+  "version": "0.1.58",
+  "date": "2026-10-16",
+  "headline": {
+    "zh-CN": "准确的待办与重开申请审批",
+    "en": "Accurate pending tasks and reopen approvals"
+  },
+  "summary": {
+    "zh-CN": "首页待办按当前职责展示，曲目工作台入口遵循阶段权限；主催可在曲目详情直接处理重开申请。",
+    "en": "Dashboard tasks reflect current responsibilities, workflow entry points follow stage permissions, and album managers can handle reopen requests from track details."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "待办与流程入口",
+        "en": "Pending tasks and workflow entry points"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "按实际职责显示待办",
+            "en": "Show tasks for current responsibilities"
+          },
+          "description": {
+            "zh-CN": "“等待我处理”覆盖阶段审批、评审指派、修订上传、母带交付与确认，以及已提交的补交和重开申请审批。已完成曲目的可选重开、补交入口保留在详情中，已归档内容退出待办。",
+            "en": "Waiting for Me covers stage decisions, reviewer assignment, revision uploads, master delivery and confirmation, and submitted follow-up and reopen approvals. Optional reopen and follow-up actions remain in track details, while archived content leaves the queue."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "工作台入口遵循当前阶段权限",
+            "en": "Match workflow entry points to stage permissions"
+          },
+          "description": {
+            "zh-CN": "阶段任务进入对应工作台，申请审批进入曲目详情。曲师在接收审核阶段可继续使用源音频补交入口，工作台入口按当前用户的阶段操作权限展示。",
+            "en": "Stage tasks open the corresponding workspace, while request approvals open track details. Composers retain source follow-up actions during intake, and workflow entry points reflect the current user's stage permissions."
+          }
+        }
+      ]
+    },
+    {
+      "heading": {
+        "zh-CN": "重开申请",
+        "en": "Reopen requests"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "在曲目详情批准或拒绝申请",
+            "en": "Approve or reject requests in track details"
+          },
+          "description": {
+            "zh-CN": "专辑管理者可查看待审批申请的目标阶段与原因，并直接批准重开或拒绝申请。批准后进入申请的目标阶段，拒绝后保持已完成，申请状态与待办同步更新。曲师可查看待审批状态。",
+            "en": "Album managers can review the requested stage and reason, then approve or reject the request. Approval enters the requested stage; rejection keeps the track completed. Request status and pending tasks update together, and composers can view pending status."
+          }
+        }
+      ]
+    }
+  ]
+}

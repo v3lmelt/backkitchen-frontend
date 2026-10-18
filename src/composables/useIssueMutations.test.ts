@@ -38,13 +38,14 @@ function makeIssue(overrides: Record<string, unknown> = {}): Issue {
   } as unknown as Issue
 }
 
-function mountHarness(initialIssues: Issue[] = [makeIssue({ id: 1 }), makeIssue({ id: 2, title: 'Issue 2' })]) {
+function mountHarness(initialIssues: Issue[] = [makeIssue({ id: 1 }), makeIssue({ id: 2, title: 'Issue 2' })], initialCurrent: Issue[] = initialIssues) {
   let captured: Composable | null = null
   const issues = ref<Issue[]>(initialIssues)
   const selectedIssue = ref<Issue | null>(null)
+  const currentIssues = ref<Issue[]>([...initialCurrent])
   const Comp = defineComponent({
     setup() {
-      captured = useIssueMutations({ issues, selectedIssue })
+      captured = useIssueMutations({ issues, selectedIssue, additionalIssues: [currentIssues] })
       return () => null
     },
   })
@@ -57,6 +58,7 @@ function mountHarness(initialIssues: Issue[] = [makeIssue({ id: 1 }), makeIssue(
     composable: captured as unknown as Composable,
     issues,
     selectedIssue,
+    currentIssues,
   }
 }
 
@@ -138,6 +140,37 @@ describe('useIssueMutations', () => {
     expect(issues.value[0].title).toBe('From collaborator')
     expect(issues.value[0].status).toBe('resolved')
     expect(mocks.toastErrorMock).toHaveBeenCalledWith('No permission')
+    wrapper.unmount()
+  })
+  it('syncs current-cycle copies and open selection without inserting historical issues into current workflow state', () => {
+    const current = makeIssue({ id: 1, workflow_cycle: 2 })
+    const historical = makeIssue({ id: 2, workflow_cycle: 1 })
+    const { composable, issues, currentIssues, selectedIssue, wrapper } = mountHarness([current, historical], [current])
+    selectedIssue.value = historical
+    composable.onIssueUpdated({ ...historical, status: 'resolved' })
+    expect(issues.value[1].status).toBe('resolved')
+    expect(selectedIssue.value?.status).toBe('resolved')
+    expect(currentIssues.value.map(issue => issue.id)).toEqual([1])
+    composable.onIssueUpdated({ ...current, status: 'disagreed' })
+    expect(issues.value[0].status).toBe('disagreed')
+    expect(currentIssues.value[0].status).toBe('disagreed')
+    expect(selectedIssue.value?.id).toBe(2)
+    wrapper.unmount()
+  })
+
+  it('rolls back both visible and current-cycle copies only while the optimistic snapshot remains current', async () => {
+    const issue = makeIssue({ id: 1, workflow_cycle: 2, updated_at: '2026-10-01T00:00:00Z' })
+    const pending = Promise.withResolvers<Issue>()
+    mocks.issueUpdateMock.mockReturnValueOnce(pending.promise)
+    const { composable, issues, currentIssues, selectedIssue, wrapper } = mountHarness([issue], [issue])
+    selectedIssue.value = issue
+    const update = composable.onQuickIssueStatusChange({ issue, status: 'resolved' })
+    expect(currentIssues.value[0].status).toBe('resolved')
+    pending.reject(new Error('Denied'))
+    await update
+    expect(issues.value[0].status).toBe('open')
+    expect(currentIssues.value[0].status).toBe('open')
+    expect(selectedIssue.value?.status).toBe('open')
     wrapper.unmount()
   })
 })

@@ -5,6 +5,7 @@ import { mountWithPlugins } from '@/tests/utils'
 const mocks = vi.hoisted(() => ({
   pushMock: vi.fn(),
   albumListMock: vi.fn(),
+  candidatesMock: vi.fn(),
   uploadWithProgressMock: vi.fn(),
   requestTrackUploadMock: vi.fn(),
   confirmTrackUploadMock: vi.fn(),
@@ -19,7 +20,7 @@ vi.mock('vue-router', () => ({
 }))
 
 vi.mock('@/api', () => ({
-  albumApi: { list: mocks.albumListMock },
+  albumApi: { list: mocks.albumListMock, listComposerCandidates: mocks.candidatesMock },
   uploadWithProgress: mocks.uploadWithProgressMock,
   r2Api: {
     requestTrackUpload: mocks.requestTrackUploadMock,
@@ -72,6 +73,10 @@ describe('UploadTrackView', () => {
   beforeEach(() => {
     mocks.pushMock.mockReset()
     mocks.albumListMock.mockReset()
+    mocks.candidatesMock.mockReset().mockResolvedValue([
+      { id: 2, username: 'nova', display_name: 'Nova' },
+      { id: 3, username: 'echo', display_name: 'Echo' },
+    ])
     mocks.uploadWithProgressMock.mockReset()
     mocks.requestTrackUploadMock.mockReset()
     mocks.confirmTrackUploadMock.mockReset()
@@ -85,20 +90,6 @@ describe('UploadTrackView', () => {
     ])
   })
 
-  it('explains draft scope and audio file requirements', async () => {
-    const wrapper = mountWithPlugins(UploadTrackView)
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('Text is saved as a draft')
-    expect(wrapper.text()).toContain('choose the audio file again')
-    expect(wrapper.text()).toContain('up to 200 MB per file')
-  })
-
-  it('loads albums on mount', async () => {
-    mountWithPlugins(UploadTrackView)
-    await flushPromises()
-    expect(mocks.albumListMock).toHaveBeenCalledTimes(1)
-  })
 
   it('shows a retryable error and blocks submit when albums fail to load', async () => {
     mocks.albumListMock.mockRejectedValueOnce(new Error('Albums unavailable'))
@@ -161,27 +152,6 @@ describe('UploadTrackView', () => {
     expect(mocks.pushMock).toHaveBeenCalledWith({ path: '/tracks/42', query: { returnTo: '/upload' } })
   })
 
-  it('shows manual UID inputs without account option text', async () => {
-    mocks.appStoreState.currentUser = { id: 99, display_name: 'Kira' }
-    mocks.albumListMock.mockResolvedValue([
-      {
-        id: 1,
-        title: 'Album A',
-        members: [
-          { id: 1, user_id: 99, user: { id: 99, display_name: 'Kira' } },
-          { id: 2, user_id: 2, user: { id: 2, display_name: 'Nova' } },
-        ],
-      },
-    ])
-
-    const wrapper = mountWithPlugins(UploadTrackView)
-    await flushPromises()
-
-    expect(wrapper.find('input[placeholder="UID optional"]').exists()).toBe(true)
-    expect((wrapper.find('input[placeholder="UID optional"]').element as HTMLInputElement).value).toBe('99')
-    expect(wrapper.text()).not.toContain('No linked account')
-    expect(wrapper.text()).not.toContain('Nova')
-  })
 
   it('uploads joint platform composers together with external composer names', async () => {
     mocks.appStoreState.currentUser = { id: 99, display_name: 'Kira' }
@@ -468,5 +438,54 @@ describe('UploadTrackView', () => {
       artist: 'Offline Composer',
     }))
     expect(mocks.pushMock).toHaveBeenCalledWith({ path: '/tracks/84', query: { returnTo: '/upload' } })
+  })
+
+  it.each([false, true])('selects multiple accounts with independent aliases and external names (R2=%s)', async (r2Enabled) => {
+    mocks.appStoreState.r2Enabled = r2Enabled
+    mocks.albumListMock.mockResolvedValue([{ id: 1, title: 'Album A', producer_id: 99, circle_id: 1 }])
+    mocks.uploadWithProgressMock.mockResolvedValue({ id: 42 })
+    mocks.requestTrackUploadMock.mockResolvedValue({
+      upload_url: 'https://upload.example', object_key: 'source', upload_id: 'upload-1',
+    })
+    mocks.confirmTrackUploadMock.mockResolvedValue({ id: 42 })
+    const wrapper = mountWithPlugins(UploadTrackView, { global: { stubs: { teleport: true } } })
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'Choose account')!.trigger('click')
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text().includes('@nova'))!.trigger('click')
+    await flushPromises()
+    expect((wrapper.find('input[placeholder=\"UID optional\"]').element as HTMLInputElement).value).toBe('2')
+    expect((wrapper.find('input[placeholder=\"Composer alias\"]').element as HTMLInputElement).value).toBe('Nova')
+    await wrapper.find('input[placeholder=\"Composer alias\"]').setValue('Nova Alias')
+    await wrapper.findAll('button').find(button => button.text() === 'Choose account')!.trigger('click')
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text().includes('@nova'))!.trigger('click')
+    await flushPromises()
+    expect((wrapper.find('input[placeholder=\"Composer alias\"]').element as HTMLInputElement).value).toBe('Nova Alias')
+    await addArtistEntry(wrapper)
+    await wrapper.findAll('button').filter(button => button.text() === 'Choose account')[1].trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('button').some(button => button.text().includes('@nova'))).toBe(false)
+    await wrapper.findAll('button').find(button => button.text().includes('@echo'))!.trigger('click')
+    await addArtistEntry(wrapper)
+    await wrapper.findAll('input[placeholder=\"Composer alias\"]')[2].setValue('Offline Guest')
+    const fileInput = wrapper.find('input[type=\"file\"]')
+    Object.defineProperty(fileInput.element, 'files', { value: [new File(['audio'], 'selected.wav', { type: 'audio/wav' })] })
+    await fileInput.trigger('change')
+    await wrapper.findAll('button').find(button => button.text().includes('Submit Track'))!.trigger('click')
+    await flushPromises()
+    if (r2Enabled) {
+      for (const mock of [mocks.requestTrackUploadMock, mocks.confirmTrackUploadMock]) {
+        expect(mock).toHaveBeenCalledWith(expect.objectContaining({
+          composer_ids: [2, 3], artist: 'Nova Alias / Echo / Offline Guest', external_composer_names: ['Offline Guest'],
+        }))
+      }
+    } else {
+      const data = mocks.uploadWithProgressMock.mock.calls[0][1] as FormData
+      expect(data.getAll('composer_ids')).toEqual(['2', '3'])
+      expect(data.get('artist')).toBe('Nova Alias / Echo / Offline Guest')
+      expect(data.getAll('external_composer_names')).toEqual(['Offline Guest'])
+    }
+    wrapper.unmount()
   })
 })

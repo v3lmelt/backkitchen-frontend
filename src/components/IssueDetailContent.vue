@@ -7,6 +7,7 @@ import { useToast } from '@/composables/useToast'
 import { useAppStore } from '@/stores/app'
 import type { Comment, Issue, IssueStatus, MentionCandidates, StageAssignment, Track, User } from '@/types'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import AuthenticatedImageLink from '@/components/common/AuthenticatedImageLink.vue'
 import TimestampText from '@/components/common/TimestampText.vue'
 import CommentInput from '@/components/common/CommentInput.vue'
 import TimestampSyntaxPopover from '@/components/common/TimestampSyntaxPopover.vue'
@@ -592,20 +593,14 @@ defineExpose({ reset })
           @issueActivate="handleIssueReference"
         />
         <div v-if="comment.images && comment.images.length" class="flex flex-wrap gap-2 mt-2">
-          <a
+          <AuthenticatedImageLink
             v-for="img in comment.images"
             :key="img.id"
-            :href="resolveAssetUrl(img.image_url)"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <img
-              :src="resolveAssetUrl(img.image_url)"
-              class="object-cover rounded border border-border cursor-pointer hover:opacity-80 transition-opacity"
-              :class="isPanel ? 'h-16 w-16' : 'h-20 w-20'"
-              :alt="isPanel ? t('issueDetail.attachmentImageAlt') : 'attachment'"
-            />
-          </a>
+            :src="resolveAssetUrl(img.image_url)"
+            class="rounded-none border border-border cursor-pointer hover:opacity-80 transition-opacity"
+            :class="isPanel ? 'h-16 w-16' : 'h-20 w-20'"
+            :alt="t('issueDetail.attachmentImageAlt')"
+          />
         </div>
         <div v-if="comment.audios && comment.audios.length" class="flex flex-col gap-2 mt-2">
           <div
@@ -689,17 +684,14 @@ defineExpose({ reset })
           @issueActivate="handleIssueReference"
         />
         <div v-if="comment.images?.length" class="flex flex-wrap gap-2" :class="isPanel ? 'mt-2' : 'mt-3'">
-          <a
-            v-for="img in comment.images" :key="img.id"
-            :href="resolveAssetUrl(img.image_url)" target="_blank" rel="noopener noreferrer"
-          >
-            <img
-              :src="resolveAssetUrl(img.image_url)"
-              class="object-cover rounded border border-border hover:opacity-80 transition-opacity cursor-pointer"
-              :class="isPanel ? 'h-16 w-16' : 'h-20 w-20'"
-              :alt="isPanel ? t('issueDetail.attachmentImageAlt') : 'attachment'"
-            />
-          </a>
+          <AuthenticatedImageLink
+            v-for="img in comment.images"
+            :key="img.id"
+            :src="resolveAssetUrl(img.image_url)"
+            class="rounded-none border border-border cursor-pointer hover:opacity-80 transition-opacity"
+            :class="isPanel ? 'h-16 w-16' : 'h-20 w-20'"
+            :alt="t('issueDetail.attachmentImageAlt')"
+          />
         </div>
         <div v-if="comment.audios?.length" class="flex flex-col gap-2" :class="isPanel ? 'mt-2' : 'mt-3'">
           <div

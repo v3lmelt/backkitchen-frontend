@@ -1,8 +1,8 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { masterAudioUrl as buildMasterAudioUrl, masterDeliveryAudioUrl } from '@/api'
-import type { Issue, MasterDelivery, Track, TrackSourceVersion } from '@/types'
+import { masterDeliveryAudioUrl, sourceVersionAudioUrl } from '@/api'
+import type { MasterDelivery, Track, TrackSourceVersion } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
 import { formatMasterDeliveryOptionLabel, formatSourceVersionOptionLabel } from '@/utils/sourceVersions'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
@@ -12,16 +12,24 @@ export interface UseVersionCompareOptions {
   track: Ref<Track | null>
   sourceVersions: Ref<TrackSourceVersion[]>
   masterDeliveries: Ref<MasterDelivery[]>
+  canAccessMasterAudio: Ref<boolean>
+  canAccessMasterHistory: Ref<boolean>
 }
 
 /**
  * Shared source-version / master-delivery comparison state for the track
  * workspaces (workflow step page and mastering page): which historical version
- * is selected for A/B compare, the dropdown options, the displayed version
- * number used to filter issues, and the reset watchers that clear the
- * selection when the underlying lists change.
+ * is selected for A/B compare, dropdown options and technical-data labels,
+ * and reset watchers that clear selections when the underlying lists change.
  */
-export function useVersionCompare({ trackId, track, sourceVersions, masterDeliveries }: UseVersionCompareOptions) {
+export function useVersionCompare({
+  trackId,
+  track,
+  sourceVersions,
+  masterDeliveries,
+  canAccessMasterAudio,
+  canAccessMasterHistory,
+}: UseVersionCompareOptions) {
   const { t, locale } = useI18n()
   const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
 
@@ -36,7 +44,7 @@ export function useVersionCompare({ trackId, track, sourceVersions, masterDelive
       .sort((a, b) => b.version_number - a.version_number),
   )
   const olderPlayableSourceVersions = computed(() =>
-    olderSourceVersions.value.filter(version => version.source_kind !== 'external_link' && version.file_path !== null),
+    olderSourceVersions.value.filter(version => version.source_kind !== 'external_link' && Boolean(version.file_path)),
   )
   const sourceCompareOptions = computed<SelectOption[]>(() =>
     olderPlayableSourceVersions.value.map((version) => ({
@@ -48,9 +56,8 @@ export function useVersionCompare({ trackId, track, sourceVersions, masterDelive
     olderPlayableSourceVersions.value.find(version => version.id === selectedCompareSourceVersionId.value) ?? null,
   )
   const isSourceCompareActive = computed(() => selectedCompareSourceVersion.value !== null)
-  const displayedSourceVersionNumber = computed(() =>
-    selectedCompareSourceVersion.value?.version_number ?? track.value?.version ?? null,
-  )
+  const selectedCompareSourceAudioUrl = computed(() => selectedCompareSourceVersion.value
+    ? sourceVersionAudioUrl(trackId.value, selectedCompareSourceVersion.value) : '')
 
   function toggleSourceCompare() {
     showSourceCompare.value = !showSourceCompare.value
@@ -59,11 +66,6 @@ export function useVersionCompare({ trackId, track, sourceVersions, masterDelive
     }
   }
 
-  function filterIssuesForDisplayedSourceVersion(list: Issue[]): Issue[] {
-    const version = displayedSourceVersionNumber.value
-    if (version == null) return list
-    return list.filter(issue => issue.source_version_number == null || issue.source_version_number === version)
-  }
 
   watch(olderPlayableSourceVersions, (versions) => {
     if (!versions.some(version => version.id === selectedCompareSourceVersionId.value)) {
@@ -78,14 +80,18 @@ export function useVersionCompare({ trackId, track, sourceVersions, masterDelive
   const showMasterCompare = ref(false)
   const selectedCompareMasterDeliveryId = ref<number | null>(null)
 
-  const masterDelivery = computed<MasterDelivery | null>(() => track.value?.current_master_delivery ?? null)
+  const masterDelivery = computed<MasterDelivery | null>(() =>
+    canAccessMasterAudio.value || canAccessMasterHistory.value
+      ? track.value?.current_master_delivery ?? null
+      : null,
+  )
   const masterAudioUrl = computed(() => {
     const d = masterDelivery.value
-    if (!d?.file_path) return ''
-    return buildMasterAudioUrl(trackId.value, d.delivery_number, d.workflow_cycle)
+    if (!canAccessMasterAudio.value || !d?.file_path) return ''
+    return masterDeliveryAudioUrl(trackId.value, d)
   })
   const sortedMasterDeliveries = computed(() =>
-    [...masterDeliveries.value].sort((a, b) => {
+    [...(canAccessMasterHistory.value ? masterDeliveries.value : [])].sort((a, b) => {
       if (a.workflow_cycle !== b.workflow_cycle) return b.workflow_cycle - a.workflow_cycle
       return b.delivery_number - a.delivery_number
     }),
@@ -108,8 +114,8 @@ export function useVersionCompare({ trackId, track, sourceVersions, masterDelive
   )
   const selectedCompareMasterAudioUrl = computed(() => {
     const delivery = selectedCompareMasterDelivery.value
-    if (!delivery?.file_path) return ''
-    return masterDeliveryAudioUrl(trackId.value, delivery.id, delivery.delivery_number, delivery.workflow_cycle)
+    if (!canAccessMasterAudio.value || !delivery?.file_path) return ''
+    return masterDeliveryAudioUrl(trackId.value, delivery)
   })
 
   function masterDeliveryOptionLabel(delivery: MasterDelivery) {
@@ -148,10 +154,9 @@ export function useVersionCompare({ trackId, track, sourceVersions, masterDelive
     olderPlayableSourceVersions,
     sourceCompareOptions,
     selectedCompareSourceVersion,
+    selectedCompareSourceAudioUrl,
     isSourceCompareActive,
-    displayedSourceVersionNumber,
     toggleSourceCompare,
-    filterIssuesForDisplayedSourceVersion,
     // master compare
     showMasterCompare,
     selectedCompareMasterDeliveryId,

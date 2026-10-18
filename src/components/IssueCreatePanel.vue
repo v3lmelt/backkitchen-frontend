@@ -40,6 +40,8 @@ const props = defineProps<{
    * `v-model:form-open`). When unbound the panel manages open state itself.
    */
   formOpen?: boolean
+  readonly?: boolean
+  creationTarget?: string
 }>()
 
 const emit = defineEmits<{
@@ -51,6 +53,7 @@ const { t } = useI18n()
 const { error: toastError } = useToast()
 
 const showForm = ref(false)
+const formVisible = computed(() => showForm.value && !props.readonly)
 const issueMode = ref<'timed' | 'general'>('timed')
 const pendingConfirmation = ref<'discard' | 'general' | null>(null)
 
@@ -67,6 +70,7 @@ const descriptionCursorPos = ref(0)
 const descriptionRef = ref<HTMLTextAreaElement | null>(null)
 
 async function handleDescriptionMentionSelect(insertion: string, mention: { start: number; end: number }) {
+  if (props.readonly) return
   const result = insertMentionAtCursor(description.value, mention, insertion)
   description.value = result.text
   descriptionCursorPos.value = result.cursorPos
@@ -110,7 +114,7 @@ const activeMentionUsers = computed(() => {
   return props.publicMentionUsers ?? props.mentionUsers
 })
 
-let markerHintTimer: ReturnType<typeof setTimeout> | null = null
+let markerHintTimer: number | undefined
 const selectedAudios = ref<File[]>([])
 const audioInputRef = ref<HTMLInputElement | null>(null)
 const selectedImages = ref<File[]>([])
@@ -129,17 +133,16 @@ const hasMeaningfulDraft = computed(() =>
 )
 
 function clearMarkerHintTimer() {
-  if (!markerHintTimer) return
   clearTimeout(markerHintTimer)
-  markerHintTimer = null
+  markerHintTimer = undefined
 }
 
 function setMarkerHint(message: string) {
   clearMarkerHintTimer()
   markerHint.value = message
-  markerHintTimer = setTimeout(() => {
+  markerHintTimer = window.setTimeout(() => {
     markerHint.value = ''
-    markerHintTimer = null
+    markerHintTimer = undefined
   }, 2200)
 }
 
@@ -152,7 +155,7 @@ const severityOptions = computed(() => [
 
 // The selected range for the WaveformPlayer to highlight (last range marker being edited)
 const selectedRange = computed(() => {
-  if (issueMode.value !== 'timed' || !showForm.value) return null
+  if (props.readonly || issueMode.value !== 'timed' || !showForm.value) return null
   const lastRange = [...markers.value].reverse().find(m => m.marker_type === 'range' && m.time_end !== null)
   if (lastRange && lastRange.time_end !== null) {
     return { start: lastRange.time_start, end: lastRange.time_end }
@@ -210,6 +213,7 @@ function removeMatchingRanges(start: number, end: number): number {
 }
 
 function handleClick(time: number) {
+  if (props.readonly) return
   const rounded = roundToMilliseconds(time)
   const samePointIndex = markers.value.findIndex(marker => markerEqualsPoint(marker, rounded))
 
@@ -239,6 +243,7 @@ function handleClick(time: number) {
 }
 
 function handleRangeSelect(start: number, end: number) {
+  if (props.readonly) return
   const normalizedStart = roundToMilliseconds(Math.min(start, end))
   const normalizedEnd = roundToMilliseconds(Math.max(start, end))
   if (normalizedEnd <= normalizedStart) return
@@ -270,6 +275,7 @@ function handleRangeSelect(start: number, end: number) {
 }
 
 function handleRangeUpdate(start: number, end: number) {
+  if (props.readonly) return
   const normalizedStart = roundToMilliseconds(Math.min(start, end))
   const normalizedEnd = roundToMilliseconds(Math.max(start, end))
   if (normalizedEnd <= normalizedStart) return
@@ -292,12 +298,14 @@ function handleRangeUpdate(start: number, end: number) {
 }
 
 function removeMarker(index: number) {
+  if (props.readonly) return
   markers.value.splice(index, 1)
   if (lastDragRangeIdx.value === index) lastDragRangeIdx.value = -1
   else if (lastDragRangeIdx.value > index) lastDragRangeIdx.value--
 }
 
 function removeLastMarker() {
+  if (props.readonly) return
   if (!markers.value.length) return
   if (lastDragRangeIdx.value === markers.value.length - 1) lastDragRangeIdx.value = -1
   const removed = markers.value.pop()
@@ -308,6 +316,7 @@ function removeLastMarker() {
 }
 
 function clearMarkers() {
+  if (props.readonly) return
   if (!markers.value.length) return
   markers.value = []
   rangeAnchor.value = null
@@ -318,6 +327,7 @@ function clearMarkers() {
 }
 
 function setRangeAnchorAt(time: number) {
+  if (props.readonly) return
   const rounded = roundToMilliseconds(time)
   rangeAnchor.value = rounded
   issueMode.value = 'timed'
@@ -326,6 +336,7 @@ function setRangeAnchorAt(time: number) {
 }
 
 function commitRangeFromAnchorTo(time: number) {
+  if (props.readonly) return
   const rounded = roundToMilliseconds(time)
   if (rangeAnchor.value == null) {
     setRangeAnchorAt(rounded)
@@ -342,6 +353,7 @@ function commitRangeFromAnchorTo(time: number) {
 }
 
 function clearRangeAnchor() {
+  if (props.readonly) return
   if (rangeAnchor.value == null) return
   rangeAnchor.value = null
   setMarkerHint(t('issue.rangeAnchorCleared'))
@@ -364,7 +376,7 @@ function resetForm() {
 }
 
 function onAudioSelect(event: Event) {
-  if (submittingIssue.value) return
+  if (props.readonly || submittingIssue.value) return
   const input = event.target as HTMLInputElement
   if (!input.files) return
   for (const file of Array.from(input.files)) {
@@ -379,12 +391,12 @@ function onAudioSelect(event: Event) {
 }
 
 function removeAudio(index: number) {
-  if (submittingIssue.value) return
+  if (props.readonly || submittingIssue.value) return
   selectedAudios.value.splice(index, 1)
 }
 
 function onImageSelect(event: Event) {
-  if (submittingIssue.value) return
+  if (props.readonly || submittingIssue.value) return
   const input = event.target as HTMLInputElement
   if (!input.files) return
   for (const file of Array.from(input.files)) {
@@ -399,11 +411,12 @@ function onImageSelect(event: Event) {
 }
 
 function addImageFile(file: File) {
+  if (props.readonly) return
   selectedImages.value.push(file)
 }
 
 function handleImagePaste(event: ClipboardEvent) {
-  if (submittingIssue.value) return
+  if (props.readonly || submittingIssue.value) return
 
   const result = extractClipboardImageFiles(event, {
     maxSizeBytes: MAX_IMAGE_SIZE,
@@ -420,7 +433,7 @@ function handleImagePaste(event: ClipboardEvent) {
 }
 
 function removeImage(index: number) {
-  if (submittingIssue.value) return
+  if (props.readonly || submittingIssue.value) return
   selectedImages.value.splice(index, 1)
 }
 
@@ -510,7 +523,7 @@ function restoreDraft() {
 }
 
 async function submitIssue() {
-  if (submittingIssue.value) return
+  if (!canSubmit.value) return
   const payload: Parameters<typeof issueApi.create>[1] = {
     title: title.value,
     description: description.value,
@@ -545,6 +558,7 @@ async function submitIssue() {
 }
 
 function applyMode(mode: 'timed' | 'general') {
+  if (props.readonly) return
   issueMode.value = mode
   if (mode === 'general') {
     markers.value = []
@@ -553,6 +567,7 @@ function applyMode(mode: 'timed' | 'general') {
 }
 
 function switchMode(mode: 'timed' | 'general') {
+  if (props.readonly) return
   if (mode === issueMode.value) return
   if (mode === 'general' && markers.value.length > 0) {
     pendingConfirmation.value = 'general'
@@ -562,12 +577,14 @@ function switchMode(mode: 'timed' | 'general') {
 }
 
 function discardDraft() {
+  if (props.readonly) return
   showForm.value = false
   resetForm()
   clearDraftStorage()
 }
 
 function requestCloseForm() {
+  if (props.readonly) return
   if (!hasMeaningfulDraft.value) {
     discardDraft()
     return
@@ -576,6 +593,7 @@ function requestCloseForm() {
 }
 
 function confirmPendingAction() {
+  if (props.readonly) return
   const pending = pendingConfirmation.value
   pendingConfirmation.value = null
   if (pending === 'discard') {
@@ -586,11 +604,13 @@ function confirmPendingAction() {
 }
 
 function toggleIssueVisibility() {
+  if (props.readonly) return
   issueVisibilityTouched.value = true
   issueVisibility.value = issueVisibility.value === 'public' ? 'internal' : 'public'
 }
 
 function openForm() {
+  if (props.readonly) return
   showForm.value = true
   if (issueMode.value !== 'general') {
     issueMode.value = 'timed'
@@ -598,6 +618,7 @@ function openForm() {
 }
 
 function closeForm() {
+  if (props.readonly) return
   showForm.value = false
 }
 
@@ -606,7 +627,7 @@ function formatTime(seconds: number): string {
 }
 
 const canSubmit = computed(() => {
-  if (submittingIssue.value) return false
+  if (props.readonly || submittingIssue.value) return false
   if (!title.value.trim() || !description.value.trim()) return false
   if (issueMode.value === 'timed' && markers.value.length === 0) return false
   return true
@@ -643,7 +664,7 @@ watch(internalVisibilityAllowed, (allow) => {
   }
 }, { immediate: true })
 
-watch(showForm, (open) => {
+watch(formVisible, (open) => {
   emit('formOpenChange', open)
 }, { immediate: true })
 
@@ -655,6 +676,10 @@ watch(() => props.formOpen, (open) => {
   else closeForm()
 })
 
+watch(() => props.readonly, (readonly) => {
+  if (readonly) pendingConfirmation.value = null
+})
+
 watch(draftStorageKey, () => {
   clearMarkerHintTimer()
   resetForm()
@@ -663,6 +688,7 @@ watch(draftStorageKey, () => {
 })
 
 restoreDraft()
+if (props.formOpen) openForm()
 
 onBeforeUnmount(() => {
   clearMarkerHintTimer()
@@ -688,12 +714,14 @@ defineExpose({
   <div class="space-y-4">
     <div class="flex items-center justify-between">
       <slot name="heading" />
-      <button @click="showForm = !showForm" class="btn-primary text-xs">
+      <button :disabled="readonly" @click="showForm ? closeForm() : openForm()" class="btn-primary text-xs">
         {{ t('common.addIssue') }}
       </button>
     </div>
+    <p v-if="creationTarget" class="text-xs font-mono text-muted-foreground">{{ creationTarget }}</p>
+    <p v-if="readonly" class="text-xs text-warning">{{ t('issueHistory.readonly') }}</p>
 
-    <div v-if="showForm" class="card space-y-3 border-primary/50" @paste="handleImagePaste">
+    <div v-if="formVisible" class="card space-y-3 border-primary/50" @paste="handleImagePaste">
       <!-- Mode tabs -->
       <div class="flex rounded-full border border-border overflow-hidden">
         <button
@@ -975,7 +1003,7 @@ defineExpose({
     </div>
 
     <ConfirmModal
-      v-if="pendingConfirmation"
+      v-if="pendingConfirmation && !readonly"
       :title="pendingConfirmation === 'discard' ? t('issue.discardDraftTitle') : t('issue.clearMarkersTitle')"
       :message="pendingConfirmation === 'discard'
         ? t('issue.discardDraftMessage')

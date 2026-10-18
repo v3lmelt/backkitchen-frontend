@@ -28,6 +28,26 @@ export function canViewerSeeMastering(
     || userId === track.mastering_engineer_id
 }
 
+/**
+ * Whether the viewer may listen to or download master audio. Workspace
+ * participation stays separate: ordinary viewers only receive the completed
+ * track's current-cycle final file, even when engineer confirmation is disabled.
+ */
+export function canViewerAccessMasterAudio(
+  track: Track | null | undefined,
+  userId: number | null | undefined,
+  viewerCanManage: boolean,
+): boolean {
+  if (!track || !userId) return false
+  if (track.viewer_can_access_master_audio != null) return track.viewer_can_access_master_audio
+  if (canViewerSeeMastering(track, userId, viewerCanManage)) return true
+  const delivery = track.current_master_delivery
+  return track.status === 'completed'
+    && Boolean(delivery?.file_path)
+    && delivery?.workflow_cycle === track.workflow_cycle
+    && (delivery.delivery_kind == null || delivery.delivery_kind === 'file')
+}
+
 type StepAssigneeLike = Pick<WorkflowStepDef, 'id' | 'assignee_user_id' | 'assignee_role'>
 type TrackAssigneesLike = Pick<
   Track,
@@ -135,7 +155,7 @@ export function isFinalReviewStep(step: Pick<WorkflowStepDef, 'id' | 'type' | 'u
 
 /**
  * Whether the viewer may approve the master in final review. Requires a
- * confirmed delivery on the final-review step; producer and composer actor
+ * confirmed current-cycle delivery on the final-review step; producer and composer actor
  * each approve their own side exactly once (mirrors the backend rule in
  * `app/routers/tracks.py` `approve_final_review`).
  */
@@ -145,7 +165,7 @@ export function canUserApproveFinal(
   viewerCanManage: boolean,
 ): boolean {
   const delivery = track?.current_master_delivery
-  if (!delivery?.confirmed_at || !isFinalReviewStep(track?.workflow_step)) return false
+  if (!delivery?.confirmed_at || delivery.workflow_cycle !== track?.workflow_cycle || !isFinalReviewStep(track?.workflow_step)) return false
   if (!userId) return false
   if (viewerCanManage) return !delivery.producer_approved_at
   if (isComposerActor(track, userId)) return !delivery.submitter_approved_at

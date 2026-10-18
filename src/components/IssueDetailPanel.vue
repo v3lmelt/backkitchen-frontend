@@ -3,35 +3,28 @@ import { ref, computed, watch } from 'vue'
 
 import { useI18n } from 'vue-i18n'
 import { issueApi } from '@/api'
-import type { Issue, MentionCandidates, StageAssignment } from '@/types'
+import type { Issue, MasterDelivery, MentionCandidates, StageAssignment, Track, TrackSourceVersion } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import IssueDetailContent from '@/components/IssueDetailContent.vue'
-import IssuePlaybackPreview from '@/components/issue/IssuePlaybackPreview.vue'
-import type { PreviewAction } from '@/composables/useIssuePreviewPlayback'
+import OriginalIssuePlayback from '@/components/issue/OriginalIssuePlayback.vue'
+import { issueOriginLabel } from '@/utils/issueAudio'
 import { formatTimestamp } from '@/utils/time'
 import { anonTokenFor } from '@/utils/hash'
 import { X } from 'lucide-vue-next'
 
 const props = defineProps<{
   issue: Issue | null
-  track?: import('@/types').Track | null
+  track?: Track | null
   assignments?: StageAssignment[]
   issues?: Issue[] | null
   mentionCandidates?: MentionCandidates | null
-  preview?: {
-    duration: number
-    currentTime: number
-    isPreviewPlaying: boolean
-    activeMarkerIndex: number | null
-    peaks: number[]
-  } | null
+  sourceVersions?: TrackSourceVersion[]
+  masterDeliveries?: MasterDelivery[]
 }>()
 
 const emit = defineEmits<{
   close: []
   updated: [issue: Issue]
-  'preview-play-at': [time: number]
-  'preview-action': [issue: Issue, action: PreviewAction]
   'open-issue': [issueId: number]
 }>()
 
@@ -41,30 +34,25 @@ const fullIssue = ref<Issue | null>(null)
 const loading = ref(false)
 const contentRef = ref<InstanceType<typeof IssueDetailContent> | null>(null)
 
+const previewRef = ref<InstanceType<typeof OriginalIssuePlayback> | null>(null)
 const previewIssue = computed(() => fullIssue.value ?? props.issue)
-const hasPlaybackPreview = computed(() =>
-  Boolean(
-    previewIssue.value
-    && props.preview
-    && props.preview.duration > 0
-    && previewIssue.value.markers.length > 0,
-  ),
-)
+let detailRequest = 0
 
 watch(() => props.issue, async (issue) => {
+  const request = ++detailRequest
   contentRef.value?.reset()
-  if (!issue) { fullIssue.value = null; loading.value = false; return }
-  if (!fullIssue.value || fullIssue.value.id !== issue.id) {
-    fullIssue.value = issue
-  }
+  fullIssue.value = issue
+  if (!issue) { loading.value = false; return }
   loading.value = true
   try {
     const detail = await issueApi.get(issue.id)
-    if (props.issue?.id === detail.id) fullIssue.value = detail
+    if (request === detailRequest && props.issue?.id === detail.id) fullIssue.value = detail
+  } catch {
+    // Keep the already-visible issue context when detail/comments cannot load.
   } finally {
-    loading.value = false
+    if (request === detailRequest) loading.value = false
   }
-})
+}, { immediate: true })
 
 function formatTime(s: number) { return formatTimestamp(s) }
 
@@ -100,11 +88,8 @@ function onContentUpdated(updated: Issue) {
         <div class="px-5 py-4 border-b border-border flex items-start gap-3 flex-shrink-0">
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-1.5 flex-wrap mb-1.5">
-              <span
-                v-if="issue.source_version_number != null"
-                class="inline-flex items-center rounded-full bg-border px-2 py-0.5 text-[11px] font-mono text-foreground"
-              >
-                v{{ issue.source_version_number }}
+              <span class="inline-flex border border-border bg-background px-2 py-0.5 text-[11px] font-mono text-foreground">
+                {{ issueOriginLabel(fullIssue ?? issue, t, track ?? null, sourceVersions) }}
               </span>
               <StatusBadge :status="issue.phase" type="phase" />
               <StatusBadge :status="issue.severity" type="severity" />
@@ -145,19 +130,18 @@ function onContentUpdated(updated: Issue) {
             :issues="issues"
             :mention-candidates="mentionCandidates"
             @updated="onContentUpdated"
-            @track-reference="(time) => emit('preview-play-at', time)"
+            @track-reference="previewRef?.playFrom($event)"
             @open-issue="(issueId) => emit('open-issue', issueId)"
           >
             <template #preview>
-              <IssuePlaybackPreview
-                v-if="hasPlaybackPreview && previewIssue && preview"
+              <OriginalIssuePlayback
+                v-if="previewIssue"
+                :key="previewIssue.id"
+                ref="previewRef"
                 :issue="previewIssue"
-                :duration="preview.duration"
-                :current-time="preview.currentTime"
-                :is-preview-playing="preview.isPreviewPlaying"
-                :active-marker-index="preview.activeMarkerIndex"
-                :peaks="preview.peaks"
-                @action="emit('preview-action', previewIssue, $event)"
+                :track="track"
+                :source-versions="sourceVersions"
+                :master-deliveries="masterDeliveries"
               />
             </template>
           </IssueDetailContent>

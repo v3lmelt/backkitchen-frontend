@@ -8,7 +8,7 @@ import { inspectAudioSpec } from '@/utils/audioSpecs'
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, r2Api, uploadToR2, masterDeliveryAudioUrl, trackAudioUrl } from '@/api'
+import { trackApi, r2Api, uploadToR2, masterDeliveryAudioUrl } from '@/api'
 import type {
   Issue,
   Track,
@@ -36,7 +36,6 @@ import ReviewerAssignmentModal from '@/components/workflow/step/ReviewerAssignme
 import { ChevronLeft, Upload, Link, Info } from 'lucide-vue-next'
 import { useAudioDownload } from '@/composables/useAudioDownload'
 import { useDiscussionRealtime } from '@/composables/useDiscussionRealtime'
-import { useIssuePreviewPlayback, type PreviewAction } from '@/composables/useIssuePreviewPlayback'
 import { useToast } from '@/composables/useToast'
 import { useAppStore } from '@/stores/app'
 import { useTrackDetail } from '@/composables/useTrackDetail'
@@ -56,6 +55,7 @@ import {
   translateWorkflowDecision,
 } from '@/utils/workflow'
 import { historicalDeliveryDownloadSuffix } from '@/utils/sourceVersions'
+import { currentPlayableSource, currentSourceAudioUrl, issuesForMasterAudio, issuesForSourceAudio } from '@/utils/issueAudio'
 import { useWaveformHotkeys } from '@/composables/useWaveformHotkeys'
 import { useIssueDrawer } from '@/composables/useIssueDrawer'
 import { useIssueMutations } from '@/composables/useIssueMutations'
@@ -66,6 +66,7 @@ import { activeAssignmentsForStep, canUserChangeIssueStatus, canUserSubmitIssueS
 import { FALLBACK_ISSUE_PHASES, isIssueUnresolved } from '@/utils/issueStatus'
 import { MAX_AUDIO_SIZE } from '@/utils/uploadLimits'
 import {
+  canViewerAccessMasterAudio,
   canUserApproveFinal,
   canViewerSeeMastering,
   requiredReviewerCount,
@@ -105,6 +106,7 @@ watch(wsConnected, (connected) => {
 const {
   track,
   issues,
+  allIssues,
   mentionCandidates,
   sourceVersions,
   masterDeliveries,
@@ -121,9 +123,14 @@ const {
   },
   onDetailApplied: (detail) => {
     applyChecklistDetail(detail)
+    if (!canAccessWorkflowWorkspace.value) {
+      void router.replace({ path: `/tracks/${detail.track.id}`, query: route.query })
+      return
+    }
     syncIssueDrawerFromRoute()
   },
   onLoaded: async (detail, isCurrent) => {
+    if (!canAccessWorkflowWorkspace.value) return
     const variant = inferClassicVariant(detail.track.workflow_step ?? null)
 
     // Redirect mastering steps to the dedicated mastering page
@@ -146,6 +153,7 @@ const {
   onTrackIdChange: () => {
     resetChecklistForTrackChange()
     resetReviewerAssignment()
+    selectedIssue.value = null
   },
 })
 const isProxySubmission = computed(() => Boolean(track.value?.is_proxy_submission && track.value.external_submitter_name))
@@ -175,10 +183,6 @@ watch(() => JSON.stringify([track.value?.id, track.value?.status, track.value?.v
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 const uploadProgress = ref(0)
 const waveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
-const waveformDuration = ref(0)
-const waveformCurrentTime = ref(0)
-const waveformIsPlaying = ref(false)
-const waveformPeaks = ref<number[]>([])
 const hoveredIssueId = ref<number | null>(null)
 const selectedIssue = ref<Issue | null>(null)
 const selectedStageIssueIds = ref<number[]>([])
@@ -188,11 +192,11 @@ const stageBatchNote = ref('')
 const producerBatchNote = ref('')
 const revisionBatchNote = ref('')
 const isIssueFormOpen = ref(false)
-const waveformMode = computed<'seek' | 'annotate'>(() => (isIssueFormOpen.value ? 'annotate' : 'seek'))
+const waveformMode = computed<'seek' | 'annotate'>(() => !creationReadonly.value && isIssueFormOpen.value ? 'annotate' : 'seek')
 
 // The variant step components own the waveform/issue-form markup; they
 // register their instances upward through these callbacks so the view-level
-// concerns (hotkeys, drawer preview playback) keep working.
+// concerns (annotation hotkeys) keep working.
 function registerWaveform(el: unknown) {
   waveformRef.value = (el ?? null) as InstanceType<typeof WaveformPlayer> | null
 }
@@ -201,7 +205,7 @@ function registerIssueForm(el: unknown) {
 }
 
 function onRequestWaveformMode(next: 'seek' | 'annotate') {
-  if (next === 'annotate' && isSourceCompareActive.value) return
+  if (next === 'annotate' && creationReadonly.value) return
   isIssueFormOpen.value = next === 'annotate'
 }
 
@@ -293,6 +297,12 @@ const currentUserHasRevisionSuggestion = computed(() =>
 const viewerCanManageTrackAlbum = computed(() =>
   viewerCanManageTrackAlbumOf(track.value, appStore.currentUser),
 )
+const canSeeMastering = computed(() =>
+  canViewerSeeMastering(track.value, appStore.currentUser?.id, viewerCanManageTrackAlbum.value),
+)
+const canAccessMasterAudio = computed(() =>
+  canViewerAccessMasterAudio(track.value, appStore.currentUser?.id, viewerCanManageTrackAlbum.value),
+)
 const canManageReviewAssignments = computed(() =>
   viewerCanManageTrackAlbum.value && currentStep.value?.type === 'review'
   && !track.value?.archived_at && track.value?.viewer_can_manage_review !== false,
@@ -342,23 +352,24 @@ const activeVariant = computed<'generic' | 'intake' | 'peer_review' | 'producer_
   if (stepVariant.value === 'final_review') return 'final_review'
   return 'generic'
 })
+const canAccessWorkflowWorkspace = computed(() =>
+  canSeeMastering.value
+  || (activeVariant.value !== 'mastering' && activeVariant.value !== 'final_review' && !stepIsMasteringRelated(currentStep.value)),
+)
 const isApprovalStep = computed(() => currentStep.value?.type === 'approval' || currentStep.value?.type === 'gate')
 
-const audioUrl = computed(() =>
-  track.value?.file_path ? trackAudioUrl(trackId.value, track.value.version ?? 0) : '',
-)
+const audioUrl = computed(() => currentSourceAudioUrl(track.value, sourceVersions.value))
 
 const {
   showSourceCompare,
   selectedCompareSourceVersionId,
   selectedCompareSourceVersion,
+  selectedCompareSourceAudioUrl,
   currentSourceVersionId,
   olderPlayableSourceVersions,
   sourceCompareOptions,
   isSourceCompareActive,
-  displayedSourceVersionNumber,
   toggleSourceCompare,
-  filterIssuesForDisplayedSourceVersion,
   showMasterCompare,
   selectedCompareMasterDeliveryId,
   selectedCompareMasterDelivery,
@@ -370,7 +381,15 @@ const {
   selectedCompareMasterAudioUrl,
   toggleMasterCompare,
   compareWithMasterDelivery,
-} = useVersionCompare({ trackId, track, sourceVersions, masterDeliveries })
+} = useVersionCompare({
+  trackId,
+  track,
+  sourceVersions,
+  masterDeliveries,
+  canAccessMasterAudio,
+  canAccessMasterHistory: canSeeMastering,
+})
+const creationReadonly = computed(() => isSourceCompareActive.value || selectedCompareMasterDelivery.value !== null)
 
 const {
   checklistItems,
@@ -410,7 +429,6 @@ function resetDeliveryPreview() {
   }
 }
 
-const currentVersion = computed(() => track.value?.version ?? null)
 const allCycleIssues = computed(() => issues.value)
 const stepIssues = computed(() =>
   issues.value.filter(i => i.phase === currentStep.value?.id || i.phase === track.value?.status),
@@ -418,19 +436,24 @@ const stepIssues = computed(() =>
 const fallbackStepIssues = computed(() =>
   issues.value.filter(i => (FALLBACK_ISSUE_PHASES as readonly string[]).includes(i.phase)),
 )
-const waveformIssues = computed(() => {
-  return filterIssuesForDisplayedSourceVersion(stepIssues.value)
-})
-const fallbackWaveformIssues = computed(() => {
-  return filterIssuesForDisplayedSourceVersion(fallbackStepIssues.value)
-})
+const waveformIssues = computed(() => issuesForSourceAudio(
+  stepIssues.value, currentPlayableSource(track.value, sourceVersions.value), track.value, true, sourceVersions.value,
+))
+const compareWaveformIssues = computed(() => issuesForSourceAudio(stepIssues.value, selectedCompareSourceVersion.value, track.value))
+const fallbackWaveformIssues = computed(() => issuesForSourceAudio(
+  fallbackStepIssues.value, currentPlayableSource(track.value, sourceVersions.value), track.value, true, sourceVersions.value,
+))
+const compareFallbackIssues = computed(() => issuesForSourceAudio(fallbackStepIssues.value, selectedCompareSourceVersion.value, track.value))
 const producerIssues = computed(() =>
   issues.value.filter(i => i.phase === 'producer'),
 )
 const producerSnapshotIssues = computed(() => producerIssues.value)
-const producerWaveformIssues = computed(() => {
-  return filterIssuesForDisplayedSourceVersion(producerIssues.value)
-})
+const producerWaveformIssues = computed(() => issuesForSourceAudio(
+  producerIssues.value, currentPlayableSource(track.value, sourceVersions.value), track.value, true, sourceVersions.value,
+))
+const compareProducerIssues = computed(() => issuesForSourceAudio(producerIssues.value, selectedCompareSourceVersion.value, track.value))
+const compareMasterIssues = computed(() => issuesForMasterAudio(allIssues.value, selectedCompareMasterDelivery.value))
+const masterWaveformIssues = computed(() => issuesForMasterAudio(allIssues.value, masterDelivery.value))
 const producerOpenCount = computed(() => producerSnapshotIssues.value.filter(issue => isIssueUnresolved(issue.status)).length)
 const producerResolvedCount = computed(() =>
   producerSnapshotIssues.value.filter(issue => issue.status === 'resolved' || issue.status === 'internal_resolved').length,
@@ -476,17 +499,15 @@ const revisionOpenIssues = computed(() =>
 const revisionResolvedIssues = computed(() =>
   revisionSnapshotIssues.value.filter(issue => issue.status === 'resolved' || issue.status === 'internal_resolved'),
 )
-const revisionWaveformIssues = computed(() => {
-  if (currentVersion.value == null) return revisionOpenIssues.value
-  return revisionOpenIssues.value.filter(
-    issue => issue.source_version_number == null || issue.source_version_number === currentVersion.value,
-  )
-})
+const revisionWaveformIssues = computed(() => issuesForSourceAudio(
+  revisionOpenIssues.value, currentPlayableSource(track.value, sourceVersions.value), track.value, true, sourceVersions.value,
+))
 const openCount = computed(() => allCycleIssues.value.filter(i => isIssueUnresolved(i.status)).length)
 const resolvedCount = computed(() =>
   allCycleIssues.value.filter(i => i.status === 'resolved' || i.status === 'internal_resolved').length,
 )
 const finalReviewIssues = computed(() => {
+  if (!canSeeMastering.value) return []
   const deliveryId = masterDelivery.value?.id ?? null
   if (!deliveryId) return []
   return issues.value.filter(
@@ -512,7 +533,7 @@ const canRequestReturn = computed(() => {
   return isComposerActor(track.value, userId) && !viewerCanManageTrackAlbum.value
 })
 const canSeeMasteringSidebar = computed(() => {
-  const isParticipant = canViewerSeeMastering(track.value, appStore.currentUser?.id, viewerCanManageTrackAlbum.value)
+  const isParticipant = canSeeMastering.value
   const supportsSidebar = activeVariant.value === 'mastering' || activeVariant.value === 'final_review'
   return isParticipant && supportsSidebar
 })
@@ -582,7 +603,7 @@ const revisionAssigneeRoleLabel = computed(() => {
   return t(`workflowBuilder.roles.${role}`, role)
 })
 
-watch(isSourceCompareActive, (active) => {
+watch(creationReadonly, (active) => {
   if (!active) return
   isIssueFormOpen.value = false
   hoveredIssueId.value = null
@@ -599,11 +620,10 @@ const {
 } = useIssueDrawer({ issues, selectedIssue })
 
 function onIssueSelect(issue: Issue) {
-  waveformRef.value?.focusIssue?.(issue)
   openSelectedIssue(issue)
 }
 
-const { onIssueUpdated, onQuickIssueStatusChange } = useIssueMutations({ issues, selectedIssue })
+const { onIssueUpdated, onQuickIssueStatusChange } = useIssueMutations({ issues, additionalIssues: [allIssues], selectedIssue })
 
 function openLinkedIssue(issueId: number) {
   const localIssue = issues.value.find(issue => issue.id === issueId)
@@ -615,46 +635,6 @@ function openLinkedIssue(issueId: number) {
   void router.push(`/issues/${issueId}`)
 }
 
-function onWaveformReady(nextDuration: number) {
-  waveformDuration.value = nextDuration
-  nextTick(() => {
-    waveformPeaks.value = waveformRef.value?.exportPeaks?.(400) ?? []
-  })
-}
-
-function onWaveformTimeUpdate(time: number) {
-  waveformCurrentTime.value = time
-}
-
-function onWaveformPlaybackStateChange(isPlaying: boolean) {
-  waveformIsPlaying.value = isPlaying
-}
-
-const issuePreviewPlayback = useIssuePreviewPlayback({
-  selectedIssue,
-  waveformFor: () => waveformRef.value,
-  currentTimeFor: () => waveformCurrentTime.value,
-  isPlayingFor: () => waveformIsPlaying.value,
-})
-
-const selectedIssuePreview = computed(() => {
-  if (!selectedIssue.value || waveformDuration.value <= 0) return null
-  return {
-    duration: waveformDuration.value,
-    currentTime: waveformCurrentTime.value,
-    isPreviewPlaying: issuePreviewPlayback.isPreviewPlaying.value,
-    activeMarkerIndex: issuePreviewPlayback.activeMarkerIndex.value,
-    peaks: waveformPeaks.value,
-  }
-})
-
-async function handleIssuePreviewPlayAt(time: number) {
-  await waveformRef.value?.playFrom?.(time)
-}
-
-function handleIssuePreviewAction(_issue: Issue, action: PreviewAction) {
-  void issuePreviewPlayback.handleAction(action)
-}
 
 function canCurrentUserChangeIssueStatus(issue: Issue): boolean {
   return canUserChangeIssueStatus(appStore.currentUser?.id, track.value, issue, reviewAssignments.value)
@@ -672,6 +652,7 @@ const {
   trackId,
   issues,
   selectedIssue,
+  additionalIssues: [allIssues],
   canSubmitStatus: canCurrentUserSubmitIssueStatus,
   canChangeStatus: canCurrentUserChangeIssueStatus,
 })
@@ -688,10 +669,10 @@ const producerBatchActions = computed(() => intersectBatchActions(selectedProduc
 const revisionBatchActions = computed(() => intersectBatchActions(selectedRevisionIssues.value))
 const stageBatchIssueList = computed(() => {
   if (!currentStep.value) return []
-  if (activeVariant.value === 'peer_review' || activeVariant.value === 'mastering') return fallbackWaveformIssues.value
+  if (activeVariant.value === 'peer_review' || activeVariant.value === 'mastering') return fallbackStepIssues.value
   if (activeVariant.value === 'final_review') return finalReviewIssues.value
   if (activeVariant.value === 'producer_gate' || activeVariant.value === 'intake' || currentStep.value.type === 'revision') return []
-  if (currentStep.value.type === 'approval' || currentStep.value.type === 'review') return fallbackWaveformIssues.value
+  if (currentStep.value.type === 'approval' || currentStep.value.type === 'review') return fallbackStepIssues.value
   return []
 })
 const selectedStageIssues = computed(() =>
@@ -731,6 +712,7 @@ function applyStageBatchStatus(status: Issue['status']) {
 
 function onIssueCreated(issue: Issue) {
   issues.value.push(issue)
+  allIssues.value.push(issue)
 }
 
 function trackDetailQuery() {
@@ -1117,7 +1099,7 @@ const peerReviewActionHint = computed((): string | undefined => {
 const { handleWaveformHotkeys } = useWaveformHotkeys({
   issueFormRef,
   waveformRef,
-  canUse: () => ['peer_review', 'producer_gate', 'mastering', 'final_review'].includes(activeVariant.value),
+  canUse: () => selectedIssue.value === null && ['peer_review', 'producer_gate', 'mastering', 'final_review'].includes(activeVariant.value),
 })
 
 function handleIssueHover(issue: Issue) {
@@ -1129,8 +1111,8 @@ function handleIssueLeave() {
 }
 
 function handleMasterVersionDownload(delivery: MasterDelivery) {
-  if (!delivery.file_path) return
-  const url = masterDeliveryAudioUrl(trackId.value, delivery.id, delivery.delivery_number, delivery.workflow_cycle)
+  if (!canSeeMastering.value || !canAccessMasterAudio.value || !delivery.file_path) return
+  const url = masterDeliveryAudioUrl(trackId.value, delivery)
   const historySuffix = historicalDeliveryDownloadSuffix(delivery, track.value?.workflow_cycle)
   downloadAudioAsset(url, `${track.value?.title ?? 'track'}_master_v${delivery.delivery_number}${historySuffix}`, delivery.file_path)
 }
@@ -1237,6 +1219,8 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
     </div>
   </div>
 
+  <template v-else-if="!canAccessWorkflowWorkspace" />
+
   <div v-else-if="activeVariant === 'intake'" class="max-w-4xl mx-auto min-h-full flex flex-col">
     <IntakeStep
       :track="track"
@@ -1256,9 +1240,6 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
       @back="goBack"
       @ws-retry="wsRetry"
       @download="handleDownload"
-      @waveform-ready="onWaveformReady"
-      @waveform-timeupdate="onWaveformTimeUpdate"
-      @waveform-playback-state-change="onWaveformPlaybackStateChange"
     />
 
     <WorkflowActionBar :actions="classicActions" />
@@ -1283,11 +1264,13 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
       :assignments="currentStepAssignments"
       :audio-url="audioUrl"
       :waveform-issues="waveformIssues"
+      :compare-waveform-issues="compareWaveformIssues"
       :track-id="trackId"
       :has-comparable-versions="olderPlayableSourceVersions.length > 0"
       :show-source-compare="showSourceCompare"
       :source-compare-options="sourceCompareOptions"
       v-model:compare-source-version-id="selectedCompareSourceVersionId"
+      :compare-source-audio-url="selectedCompareSourceAudioUrl"
       :is-source-compare-active="isSourceCompareActive"
       :waveform-mode="waveformMode"
       :hovered-issue-id="hoveredIssueId"
@@ -1299,8 +1282,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
       :issues="issues"
       :mention-candidates="mentionCandidates"
       :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
-      :list-issues="fallbackWaveformIssues"
-      :displayed-source-version-number="displayedSourceVersionNumber"
+      :list-issues="fallbackStepIssues"
       :review-assignments="reviewAssignments"
       :batch-updating="batchUpdatingIssues"
       :batch-actions="stageBatchActions"
@@ -1315,9 +1297,6 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
       @back="goBack"
       @toggle-source-compare="toggleSourceCompare"
       @download="handleDownload"
-      @waveform-ready="onWaveformReady"
-      @waveform-timeupdate="onWaveformTimeUpdate"
-      @waveform-playback-state-change="onWaveformPlaybackStateChange"
       @request-waveform-mode="onRequestWaveformMode"
       @issue-select="onIssueSelect"
       @issue-hover="handleIssueHover"
@@ -1345,11 +1324,13 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
       :checklist-reviewer-count="checklistByReviewer.length"
       :audio-url="audioUrl"
       :waveform-issues="producerWaveformIssues"
+      :compare-waveform-issues="compareProducerIssues"
       :track-id="trackId"
       :has-comparable-versions="olderPlayableSourceVersions.length > 0"
       :show-source-compare="showSourceCompare"
       :source-compare-options="sourceCompareOptions"
       v-model:compare-source-version-id="selectedCompareSourceVersionId"
+      :compare-source-audio-url="selectedCompareSourceAudioUrl"
       :is-source-compare-active="isSourceCompareActive"
       :waveform-mode="waveformMode"
       :hovered-issue-id="hoveredIssueId"
@@ -1360,7 +1341,6 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
       v-model:form-open="isIssueFormOpen"
       :issues="issues"
       :mention-candidates="mentionCandidates"
-      :displayed-source-version-number="displayedSourceVersionNumber"
       :review-assignments="reviewAssignments"
       :checklist-by-reviewer="checklistByReviewer"
       :peer-open-count="peerOpenCount"
@@ -1379,9 +1359,6 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
       @back="goBack"
       @toggle-source-compare="toggleSourceCompare"
       @download="handleDownload"
-      @waveform-ready="onWaveformReady"
-      @waveform-timeupdate="onWaveformTimeUpdate"
-      @waveform-playback-state-change="onWaveformPlaybackStateChange"
       @request-waveform-mode="onRequestWaveformMode"
       @issue-select="onIssueSelect"
       @issue-hover="handleIssueHover"
@@ -1422,6 +1399,8 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
       :issues="issues"
       :mention-candidates="mentionCandidates"
       :final-review-issues="finalReviewIssues"
+      :waveform-issues="masterWaveformIssues"
+      :compare-waveform-issues="compareMasterIssues"
       :review-assignments="reviewAssignments"
       :batch-updating="batchUpdatingIssues"
       :batch-actions="stageBatchActions"
@@ -1432,9 +1411,6 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
       @back="goBack"
       @toggle-master-compare="toggleMasterCompare"
       @download-master="handleMasterDownload"
-      @waveform-ready="onWaveformReady"
-      @waveform-timeupdate="onWaveformTimeUpdate"
-      @waveform-playback-state-change="onWaveformPlaybackStateChange"
       @request-waveform-mode="onRequestWaveformMode"
       @issue-select="onIssueSelect"
       @issue-hover="handleIssueHover"
@@ -1515,18 +1491,16 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           ref="waveformRef"
           :audio-url="audioUrl"
           :issues="waveformIssues"
+          :compare-issues="compareWaveformIssues"
           zoomable
           :track-id="trackId"
-          :compare-version-id="selectedCompareSourceVersionId"
-          @ready="onWaveformReady"
-          @timeupdate="onWaveformTimeUpdate"
-          @playbackStateChange="onWaveformPlaybackStateChange"
+          :compare-audio-url="selectedCompareSourceAudioUrl"
         />
         <AudioTechnicalDataCard :analysis="(selectedCompareSourceVersion ?? track?.current_source_version)?.audio_analysis" />
       </div>
 
       <div v-if="fallbackStepIssues.length" class="card space-y-3">
-        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: fallbackWaveformIssues.length }) }}</h3>
+        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: fallbackStepIssues.length }) }}</h3>
         <BatchIssueActions
           :selected-count="selectedStageIssueIds.length"
           :statuses="stageBatchActions"
@@ -1539,10 +1513,9 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           @apply="applyStageBatchStatus($event)"
         />
         <IssueMarkerList
-          :issues="fallbackWaveformIssues"
+          :issues="fallbackStepIssues"
           :selectable="true"
           :selected-ids="selectedStageIssueIds"
-          :current-source-version-number="displayedSourceVersionNumber"
           :track="track"
           :assignments="reviewAssignments"
           :show-activity="true"
@@ -1557,6 +1530,8 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
         <IssueCreatePanel
           :track-id="trackId"
           :phase="currentStep.id"
+          :readonly="creationReadonly"
+          :creation-target="t('issueHistory.createSourceTarget', { number: track.current_source_version?.version_number ?? track.version })"
           :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
           :issues="issues"
           :mention-users="mentionCandidates.issue_public"
@@ -1608,18 +1583,16 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           ref="waveformRef"
           :audio-url="audioUrl"
           :issues="fallbackWaveformIssues"
+          :compare-issues="compareFallbackIssues"
           zoomable
           :track-id="trackId"
-          :compare-version-id="selectedCompareSourceVersionId"
-          @ready="onWaveformReady"
-          @timeupdate="onWaveformTimeUpdate"
-          @playbackStateChange="onWaveformPlaybackStateChange"
+          :compare-audio-url="selectedCompareSourceAudioUrl"
         />
         <AudioTechnicalDataCard :analysis="(selectedCompareSourceVersion ?? track?.current_source_version)?.audio_analysis" />
       </div>
 
       <div class="card space-y-3">
-        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: fallbackWaveformIssues.length }) }}</h3>
+        <h3 class="text-sm font-mono font-semibold">{{ t('workflowStep.issues', { count: fallbackStepIssues.length }) }}</h3>
         <BatchIssueActions
           :selected-count="selectedStageIssueIds.length"
           :statuses="stageBatchActions"
@@ -1632,10 +1605,9 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           @apply="applyStageBatchStatus($event)"
         />
         <IssueMarkerList
-          :issues="fallbackWaveformIssues"
+          :issues="fallbackStepIssues"
           :selectable="true"
           :selected-ids="selectedStageIssueIds"
-          :current-source-version-number="displayedSourceVersionNumber"
           :track="track"
           :assignments="reviewAssignments"
           :show-activity="true"
@@ -1650,6 +1622,8 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
         <IssueCreatePanel
           :track-id="trackId"
           :phase="currentStep.id"
+          :readonly="creationReadonly"
+          :creation-target="t('issueHistory.createSourceTarget', { number: track.current_source_version?.version_number ?? track.version })"
           :allow-internal-visibility="reviewAllowsInternalIssueVisibility"
           :issues="issues"
           :mention-users="mentionCandidates.issue_public"
@@ -1680,9 +1654,6 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           :hovered-issue-id="hoveredIssueId"
           @issueHover="handleIssueHover"
           @issueLeave="handleIssueLeave"
-          @ready="onWaveformReady"
-          @timeupdate="onWaveformTimeUpdate"
-          @playbackStateChange="onWaveformPlaybackStateChange"
         />
         <AudioTechnicalDataCard :analysis="(selectedCompareSourceVersion ?? track?.current_source_version)?.audio_analysis" />
       </div>
@@ -1731,9 +1702,9 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
           v-if="revisionSnapshotIssues.length"
           :issues="revisionSnapshotIssues"
           :track="track"
+          :assignments="reviewAssignments"
           :selectable="true"
           :selected-ids="selectedRevisionIssueIds"
-          :current-source-version-number="track.version"
           :hovered-issue-id="hoveredIssueId"
           :show-activity="true"
           :enable-quick-actions="true"
@@ -1933,7 +1904,7 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
             {{ t('workflowStep.sourceCompareReadonlyHint') }}
           </p>
         </div>
-        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" zoomable :track-id="trackId" :compare-version-id="selectedCompareSourceVersionId" />
+        <WaveformPlayer :audio-url="audioUrl" :issues="waveformIssues" :compare-issues="compareWaveformIssues" zoomable :track-id="trackId" :compare-audio-url="selectedCompareSourceAudioUrl" />
         <AudioTechnicalDataCard :analysis="(selectedCompareSourceVersion ?? track?.current_source_version)?.audio_analysis" />
       </div>
 
@@ -2025,17 +1996,16 @@ function handleMasterVersionDownload(delivery: MasterDelivery) {
 
 
   <IssueDetailPanel
-    :issue="selectedIssue"
+    :issue="loadError ? null : selectedIssue"
     :track="track"
     :assignments="reviewAssignments"
     :issues="issues"
     :mention-candidates="mentionCandidates"
-    :preview="selectedIssuePreview"
+    :source-versions="sourceVersions"
+    :master-deliveries="masterDeliveries"
     @close="closeIssueDrawer"
     @updated="onIssueUpdated"
     @open-issue="openLinkedIssue"
-    @preview-play-at="handleIssuePreviewPlayAt"
-    @preview-action="handleIssuePreviewAction"
   />
 
   <MasteringChatSidebar
