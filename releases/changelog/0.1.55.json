@@ -1,0 +1,42 @@
+{
+  "version": "0.1.55",
+  "date": "2026-10-12",
+  "headline": {
+    "zh-CN": "曲师账号选择与 UID 复制",
+    "en": "Composer account selection and UID copying"
+  },
+  "summary": {
+    "zh-CN": "专辑管理者可在上传页搜索曲师账号，社团和专辑成员页支持查看、复制 UID。",
+    "en": "Album managers can search composer accounts during upload and copy UIDs from circle and album members."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "曲师账号",
+        "en": "Composer accounts"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "上传时选择账号",
+            "en": "Choose accounts during upload"
+          },
+          "description": {
+            "zh-CN": "按显示名、用户名或 UID 搜索当前专辑可绑定的账号。选中后填入 UID，并预填空艺名；已有艺名、手工 UID 和外部曲师行继续保留。",
+            "en": "Search eligible accounts by display name, username or UID. Selection fills the UID and an empty alias while preserving existing aliases, manual UIDs and external composers."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "成员 UID 复制",
+            "en": "Copy member UIDs"
+          },
+          "description": {
+            "zh-CN": "社团成员和专辑团队展示 UID，点击复制纯数字；复制失败时可选中文本手动复制。",
+            "en": "Circle members and album teams show UIDs. Click to copy the numeric ID, or select the text manually if copying fails."
+          }
+        }
+      ]
+    }
+  ]
+}

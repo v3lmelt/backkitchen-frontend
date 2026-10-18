@@ -76,10 +76,10 @@ vi.mock('@/composables/useToast', () => ({
 
 vi.mock('@/components/common/ConfirmModal.vue', () => ({
   default: {
-    props: ['title', 'message', 'confirmText', 'destructive'],
+    props: ['open', 'title', 'message', 'confirmText', 'destructive'],
     emits: ['confirm', 'cancel'],
     template: `
-      <div class="confirm-modal" :data-destructive="String(Boolean(destructive))">
+      <div v-if="open" class="confirm-modal" :data-destructive="String(Boolean(destructive))">
         <span class="confirm-title">{{ title }}</span>
         <span class="confirm-message">{{ message }}</span>
         <span class="confirm-text">{{ confirmText }}</span>

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { issueApi, resolveAssetUrl, resolveUploadUrl, trackApi } from './index'
+import { issueApi, resolveAssetUrl, resolveUploadUrl, trackApi, uploadToR2 } from './index'
 
 const fetchMock = vi.fn()
 
@@ -161,5 +161,26 @@ describe('api client', () => {
 
   it('does not rewrite external absolute asset urls', () => {
     expect(resolveAssetUrl('https://cdn.example.com/audio.wav')).toBe('https://cdn.example.com/audio.wav')
+  })
+
+  it('uses the private cache header required by signed R2 uploads', async () => {
+    const xhr = Object.assign(new EventTarget(), {
+      upload: new EventTarget(),
+      status: 201,
+      open: vi.fn(),
+      setRequestHeader: vi.fn(),
+      send: vi.fn(),
+    })
+    vi.stubGlobal('XMLHttpRequest', vi.fn(function () { return xhr }))
+    const file = new File(['master audio'], 'master.wav', { type: 'audio/wav' })
+
+    const uploaded = uploadToR2('https://private-bucket.example/signed-put', file, 'audio/wav')
+    expect(xhr.open).toHaveBeenCalledWith('PUT', 'https://private-bucket.example/signed-put')
+    expect(xhr.setRequestHeader).toHaveBeenCalledWith('Content-Type', 'audio/wav')
+    expect(xhr.setRequestHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store')
+    expect(xhr.send).toHaveBeenCalledWith(file)
+    xhr.dispatchEvent(new Event('load'))
+
+    await expect(uploaded).resolves.toBeUndefined()
   })
 })

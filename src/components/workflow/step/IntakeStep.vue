@@ -26,9 +26,6 @@ const emit = defineEmits<{
   back: []
   wsRetry: []
   download: []
-  waveformReady: [duration: number]
-  waveformTimeupdate: [time: number]
-  waveformPlaybackStateChange: [isPlaying: boolean]
 }>()
 
 const { t } = useI18n()
@@ -96,9 +93,6 @@ const { t } = useI18n()
         :audio-url="audioUrl"
         :issues="waveformIssues"
         :track-id="trackId"
-        @ready="emit('waveformReady', $event)"
-        @timeupdate="emit('waveformTimeupdate', $event)"
-        @playbackStateChange="emit('waveformPlaybackStateChange', $event)"
       />
     </div>
   </div>

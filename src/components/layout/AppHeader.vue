@@ -210,7 +210,7 @@ function handleMenuToggle() {
       <!-- Mobile: open drawer; Desktop: toggle collapse -->
       <button
         @click="handleMenuToggle"
-        class="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+        class="ui-control text-muted-foreground hover:text-foreground flex-shrink-0"
       >
         <Menu class="w-5 h-5" :stroke-width="2" />
       </button>
@@ -266,7 +266,7 @@ function handleMenuToggle() {
     <div class="flex items-center gap-3">
       <button
         @click="toggleLocale"
-        class="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border border-border hover:border-primary/50"
+        class="ui-control text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:border-primary/50"
       >
         {{ locale === 'zh-CN' ? 'EN' : '中文' }}
       </button>
@@ -274,7 +274,7 @@ function handleMenuToggle() {
 
       <!-- 通知铃铛 -->
       <div v-if="appStore.currentUser" class="relative" data-notification-panel>
-        <button @click.stop="showNotifications = !showNotifications" class="relative p-2 rounded-lg hover:bg-border/60 transition-colors text-muted-foreground hover:text-foreground">
+        <button @click.stop="showNotifications = !showNotifications" class="ui-control relative p-2 rounded-lg hover:bg-border/60 text-muted-foreground hover:text-foreground">
           <Bell class="h-5 w-5" :stroke-width="2" />
           <span
             v-if="appStore.notificationChannelConnected"
@@ -287,6 +287,7 @@ function handleMenuToggle() {
         </button>
 
         <!-- 通知下拉面板 -->
+        <Transition name="popover">
         <div v-if="showNotifications"
           class="fixed left-4 right-4 top-14 mt-1 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-card border border-border rounded-none shadow-[var(--shadow-card)] z-50 overflow-hidden">
           <div class="flex items-center justify-between px-4 py-3 border-b border-border">
@@ -335,6 +336,7 @@ function handleMenuToggle() {
             </div>
           </div>
         </div>
+        </Transition>
       </div>
 
       <template v-if="appStore.currentUser">

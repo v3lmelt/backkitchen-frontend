@@ -257,7 +257,7 @@ defineExpose({ reset })
     <!-- Upload progress -->
     <div v-if="submitting && hasAttachments" class="space-y-1">
       <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
-        <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
+        <div class="ui-progress h-full bg-primary rounded-full" :style="{ width: uploadProgress + '%' }"></div>
       </div>
       <p class="text-xs text-muted-foreground text-right">{{ uploadProgress }}%</p>
     </div>

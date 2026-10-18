@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { trackApi } from '@/api'
 import type { ReviewerCandidate, StageAssignment, Track, WorkflowConfig } from '@/types'
@@ -8,7 +8,7 @@ import { activeAssignmentsForStep } from '@/utils/reviewAssignments'
 import { previewFlexibleReview } from '@/utils/flexibleReview'
 import { translateWorkflowStatusLabel } from '@/utils/workflow'
 
-const props = defineProps<{ trackId: number }>()
+const props = withDefaults(defineProps<{ open?: boolean; trackId: number }>(), { open: false })
 const emit = defineEmits<{ close: []; saved: [] }>()
 const { t, te } = useI18n()
 const track = ref<Track | null>(null)
@@ -17,12 +17,13 @@ const assignments = ref<StageAssignment[]>([])
 const candidates = ref<ReviewerCandidate[]>([])
 const selected = ref<number[]>([])
 const enabled = ref(false)
-const loading = ref(true)
+const loading = ref(false)
 const saving = ref(false)
 const confirming = ref(false)
 const error = ref('')
 const conflict = ref(false)
 const search = ref('')
+let requestSequence = 0
 const preview = computed(() => previewFlexibleReview(selected.value, assignments.value, track.value?.workflow_step))
 const rows = computed(() => {
   const result = candidates.value.map(candidate => ({ id: candidate.user_id, name: candidate.user.display_name, eligible: true }))
@@ -43,14 +44,19 @@ function names(ids: number[]) {
     ?? assignments.value.find(assignment => assignment.user_id === id)?.user?.display_name ?? `#${id}`).join('、')
 }
 async function load() {
+  if (!props.open || !props.trackId) return
+  const sequence = ++requestSequence
+  const trackId = props.trackId
   loading.value = true
   confirming.value = false
   error.value = ''
   conflict.value = false
   try {
     // Read the version before the roster: any subsequent change makes saving conflict.
-    const detail = await trackApi.get(props.trackId)
-    const [members, history] = await Promise.all([trackApi.listReviewerCandidates(props.trackId), trackApi.listAssignments(props.trackId)])
+    const detail = await trackApi.get(trackId)
+    if (sequence !== requestSequence) return
+    const [members, history] = await Promise.all([trackApi.listReviewerCandidates(trackId), trackApi.listAssignments(trackId)])
+    if (sequence !== requestSequence) return
     if (!detail.track.viewer_can_manage_review || !detail.track.review_state?.flexible_available) {
       throw new Error(t('flexibleReview.unavailable'))
     }
@@ -60,13 +66,17 @@ async function load() {
     assignments.value = activeAssignmentsForStep(history, detail.track.review_state.step_id)
     selected.value = assignments.value.map(assignment => assignment.user_id)
     enabled.value = detail.track.review_state.flexible === true
-  } catch (err: any) {
-    error.value = err.message || t('common.requestFailed')
+  } catch (err: unknown) {
+    if (sequence !== requestSequence) return
+    error.value = err instanceof Error ? err.message : t('common.requestFailed')
     conflict.value = true
-  } finally { loading.value = false }
+  } finally {
+    if (sequence === requestSequence) loading.value = false
+  }
 }
 async function save() {
-  if (!valid.value || saving.value || !track.value?.review_state?.state_version) return
+  if (!props.open || !valid.value || saving.value || !track.value?.review_state?.state_version) return
+  const sequence = requestSequence
   saving.value = true
   error.value = ''
   try {
@@ -74,19 +84,42 @@ async function save() {
       stage_id: track.value.review_state.step_id, flexible: true,
       user_ids: selected.value, state_version: track.value.review_state.state_version,
     })
-    emit('saved')
-  } catch (err: any) {
+    if (sequence === requestSequence) emit('saved')
+  } catch (err: unknown) {
+    if (sequence !== requestSequence) return
     // A new review may have arrived; require a fresh snapshot and another preview.
-    error.value = t('flexibleReview.refreshRequired') + ' ' + (err.message || '')
+    error.value = t('flexibleReview.refreshRequired') + ' ' + (err instanceof Error ? err.message : '')
     conflict.value = true
     confirming.value = false
-  } finally { saving.value = false }
+  } finally {
+    if (sequence === requestSequence) saving.value = false
+  }
 }
-onMounted(load)
+watch(() => [props.open, props.trackId] as const, ([open]) => {
+  requestSequence++
+  if (!open) return
+  search.value = ''
+  saving.value = false
+  track.value = null
+  config.value = null
+  assignments.value = []
+  candidates.value = []
+  selected.value = []
+  enabled.value = false
+  void load()
+}, { immediate: true })
+function afterLeave() {
+  if (props.open) return
+  track.value = null
+  config.value = null
+  assignments.value = []
+  candidates.value = []
+}
+onBeforeUnmount(() => { requestSequence++ })
 </script>
 
 <template>
-  <BaseModal :aria-label="t('flexibleReview.title')" :closable="!saving" @close="!saving && emit('close')">
+  <BaseModal :open="open" :aria-label="t('flexibleReview.title')" :closable="!saving" @close="!saving && emit('close')" @after-leave="afterLeave">
     <div class="space-y-4 max-h-[80dvh] overflow-y-auto">
       <h3 class="text-sm font-mono font-semibold text-foreground pr-6">{{ t('flexibleReview.title') }}</h3>
       <p v-if="loading" class="text-sm text-muted-foreground">{{ t('common.loading') }}</p>

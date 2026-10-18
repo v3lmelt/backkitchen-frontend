@@ -78,21 +78,17 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 </template>
 
 <style scoped>
-.fade-enter-active, .fade-leave-active { transition: opacity 0.18s ease-out; }
+.fade-enter-active { transition: opacity var(--motion-modal-in) var(--motion-ease-out); }
+.fade-leave-active { transition: opacity var(--motion-modal-out) var(--motion-ease-in); }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 
 .fade-enter-active .modal-panel {
-  animation: modal-panel-in 0.18s ease-out;
+  transition: transform var(--motion-modal-in) var(--motion-ease-out);
 }
 .fade-leave-active .modal-panel {
-  animation: modal-panel-out 0.14s ease-in;
+  transition: transform var(--motion-modal-out) var(--motion-ease-in);
 }
-@keyframes modal-panel-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to   { opacity: 1; transform: scale(1); }
-}
-@keyframes modal-panel-out {
-  from { opacity: 1; transform: scale(1); }
-  to   { opacity: 0; transform: scale(0.98); }
+.fade-enter-from .modal-panel, .fade-leave-to .modal-panel {
+  transform: scale(.98);
 }
 </style>

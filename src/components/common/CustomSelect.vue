@@ -217,7 +217,7 @@ onBeforeUnmount(() => {
     >
       <span class="truncate">{{ selectedLabel }}</span>
       <ChevronDown
-        class="custom-select-chevron shrink-0 transition-transform duration-150"
+        class="custom-select-chevron shrink-0 transition-transform duration-[var(--motion-feedback)]"
         :class="{ 'rotate-180': open }"
       />
     </button>
@@ -271,7 +271,7 @@ onBeforeUnmount(() => {
   font-family: theme('fontFamily.sans');
   font-size: 14px;
   cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--motion-feedback), box-shadow var(--motion-feedback);
   text-align: left;
 }
 
@@ -334,7 +334,7 @@ onBeforeUnmount(() => {
   font-size: 14px;
   color: rgb(var(--color-foreground));
   cursor: pointer;
-  transition: background-color 0.1s;
+  transition: background-color var(--motion-feedback);
   text-align: left;
 }
 
@@ -361,7 +361,7 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   background: transparent;
   flex-shrink: 0;
-  transition: background-color 0.15s;
+  transition: background-color var(--motion-feedback);
 }
 
 .custom-select-option.is-selected .custom-select-dot {
@@ -369,15 +369,21 @@ onBeforeUnmount(() => {
 }
 
 /* Transition */
-.cs-drop-enter-active,
+.cs-drop-enter-active {
+  transition: opacity var(--motion-popover-in) var(--motion-ease-out), transform var(--motion-popover-in) var(--motion-ease-out);
+}
 .cs-drop-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition: opacity var(--motion-popover-out) var(--motion-ease-in), transform var(--motion-popover-out) var(--motion-ease-in);
 }
 
 .cs-drop-enter-from,
 .cs-drop-leave-to {
   opacity: 0;
-  transform: translateY(-4px);
+  transform: translateY(calc(-1 * var(--motion-offset)));
+}
+.custom-select-dropdown--above.cs-drop-enter-from,
+.custom-select-dropdown--above.cs-drop-leave-to {
+  transform: translateY(var(--motion-offset));
 }
 
 /* Scrollbar inside dropdown */

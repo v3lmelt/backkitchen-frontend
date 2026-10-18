@@ -3,12 +3,13 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { albumApi, r2Api, uploadToR2, uploadWithProgress } from '@/api'
-import type { Album, Track } from '@/types'
+import type { Album, ComposerAccount, Track } from '@/types'
 import { useToast } from '@/composables/useToast'
 import { useAppStore } from '@/stores/app'
 import { extractAudioDuration } from '@/utils/audio'
 import { Plus, Upload, X } from 'lucide-vue-next'
 import CustomSelect from '@/components/common/CustomSelect.vue'
+import ComposerAccountPicker from '@/components/common/ComposerAccountPicker.vue'
 import type { SelectOption } from '@/components/common/CustomSelect.vue'
 import { viewerCanManageAlbum } from '@/utils/albumPermissions'
 import { MAX_AUDIO_SIZE } from '@/utils/uploadLimits'
@@ -83,6 +84,29 @@ const selectedAlbum = computed(() =>
 const canProxySubmission = computed(() =>
   selectedAlbum.value ? viewerCanManageAlbum(selectedAlbum.value, appStore.currentUser) : false,
 )
+
+const pickerEntry = ref<ArtistEntry | null>(null)
+const excludedComposerIds = computed(() =>
+  form.value.artist_entries
+    .filter(entry => entry !== pickerEntry.value)
+    .map(entry => parseArtistUid(entry.uid.trim()))
+    .filter((id): id is number => id !== null),
+)
+
+function selectComposerAccount(account: ComposerAccount) {
+  const entry = pickerEntry.value
+  if (entry && form.value.artist_entries.includes(entry) && canProxySubmission.value && !uploading.value) {
+    entry.uid = String(account.id)
+    if (!entry.name.trim()) entry.name = account.display_name
+    validateArtists()
+  }
+  pickerEntry.value = null
+}
+
+watch(() => form.value.album_id, () => { pickerEntry.value = null }, { flush: 'sync' })
+watch([canProxySubmission, uploading, () => form.value.artist_entries.includes(pickerEntry.value!)], ([canManage, isUploading, exists]) => {
+  if (!canManage || isUploading || !exists) pickerEntry.value = null
+}, { flush: 'sync' })
 
 function currentUserUid(): string {
   const id = appStore.currentUser?.id
@@ -610,6 +634,11 @@ function formatFileSize(bytes: number): string {
             >
               <X class="w-4 h-4" :stroke-width="2" />
             </button>
+            <div v-if="canProxySubmission && !uploading" class="sm:col-span-3">
+              <button type="button" class="btn-secondary" @click="pickerEntry = entry">
+                {{ t('upload.chooseAccount') }}
+              </button>
+            </div>
           </div>
         </div>
         <button type="button" class="btn-secondary text-sm inline-flex items-center gap-2" @click="addArtistEntry">
@@ -655,10 +684,18 @@ function formatFileSize(bytes: number): string {
       </div>
       <div v-if="uploading" class="space-y-1">
         <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
-          <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: uploadProgress + '%' }"></div>
+          <div class="ui-progress h-full bg-primary rounded-full" :style="{ width: uploadProgress + '%' }"></div>
         </div>
         <p class="text-xs text-muted-foreground text-right">{{ uploadProgress }}%</p>
       </div>
     </div>
+    <ComposerAccountPicker
+      :open="pickerEntry !== null && selectedAlbum !== null"
+      :album-id="selectedAlbum?.id ?? null"
+      :circle-bound="selectedAlbum?.circle_id != null"
+      :excluded-user-ids="excludedComposerIds"
+      @select="selectComposerAccount"
+      @close="pickerEntry = null"
+    />
   </div>
 </template>

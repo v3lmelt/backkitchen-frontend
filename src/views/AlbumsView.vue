@@ -254,7 +254,7 @@ function roleBadgeClass(album: Album): string {
             <AlbumCoverImage
               :src="album.cover_image ? resolveUploadUrl(album.cover_image) : null"
               :alt="album.title"
-              class="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200"
+              class="w-full h-full object-cover"
               :class="{ 'opacity-60 grayscale': album.archived_at }"
             />
           </div>

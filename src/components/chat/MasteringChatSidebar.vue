@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveAssetUrl } from '@/api'
 import { useAppStore } from '@/stores/app'
@@ -11,7 +11,7 @@ import CommentInput from '@/components/common/CommentInput.vue'
 import EditHistoryModal from '@/components/common/EditHistoryModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import TimestampText from '@/components/common/TimestampText.vue'
-import { Maximize2, MessageSquare, Minimize2, X, Pencil, Trash2, Music } from 'lucide-vue-next'
+import { ArrowDown, Maximize2, MessageSquare, Minimize2, X, Pencil, Trash2, Music } from 'lucide-vue-next'
 
 const props = defineProps<{
   trackId: number
@@ -33,65 +33,173 @@ const mastering = useDiscussions(trackIdRef, 'mastering')
 
 const open = ref(false)
 const fullscreen = ref(false)
-const unreadCount = ref(0)
+type ChatReadAnchor = { id: number; offset: number; scrollTop: number }
+const unreadIds = ref(new Set<number>())
+const unreadCount = computed(() => unreadIds.value.size)
+const followLatest = ref(true)
 const messageListRef = ref<HTMLElement | null>(null)
+const messageContentRef = ref<HTMLElement | null>(null)
 const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
 const pendingDeleteDiscussion = ref<Discussion | null>(null)
+let anchor: ChatReadAnchor | null = null
+let anchorOrder: number[] = []
+let hasOpened = false
+let session = 0
+let restoreFrame: number | null = null
+let programmaticTop: number | null = null
+let resizeObserver: ResizeObserver | null = null
+
+function captureAnchor() {
+  const list = messageListRef.value
+  if (!list || !open.value || mastering.loading.value) return
+  const bounds = list.getBoundingClientRect()
+  const rows = Array.from(list.querySelectorAll<HTMLElement>('[data-discussion-id]'))
+  anchorOrder = rows.map(row => Number(row.dataset.discussionId))
+  const first = rows.find(row => {
+    const rect = row.getBoundingClientRect()
+    return rect.bottom > bounds.top && rect.top < bounds.bottom
+  })
+  if (first) anchor = {
+    id: Number(first.dataset.discussionId),
+    offset: first.getBoundingClientRect().top - bounds.top,
+    scrollTop: list.scrollTop,
+  }
+}
+
+function restoreReadingPosition() {
+  const list = messageListRef.value
+  if (!open.value || !list || mastering.loading.value) return
+  if (!hasOpened || followLatest.value) {
+    list.scrollTop = list.scrollHeight
+    followLatest.value = true
+    unreadIds.value.clear()
+  } else if (anchor) {
+    const rows = new Map(Array.from(list.querySelectorAll<HTMLElement>('[data-discussion-id]'))
+      .map(row => [Number(row.dataset.discussionId), row]))
+    let target = rows.get(anchor.id)
+    if (!target) {
+      const index = anchorOrder.indexOf(anchor.id)
+      const fallbackId = anchorOrder.slice(index + 1).find(id => rows.has(id))
+        ?? anchorOrder.slice(0, index).reverse().find(id => rows.has(id))
+      if (fallbackId !== undefined) target = rows.get(fallbackId)
+    }
+    list.scrollTop = target
+      ? list.scrollTop + target.getBoundingClientRect().top - list.getBoundingClientRect().top - anchor.offset
+      : anchor.scrollTop
+  }
+  programmaticTop = list.scrollTop
+  hasOpened = true
+  captureAnchor()
+}
+
+function scheduleRestore() {
+  if (!open.value || restoreFrame !== null) return
+  const currentSession = session
+  restoreFrame = requestAnimationFrame(() => {
+    restoreFrame = null
+    if (currentSession === session) restoreReadingPosition()
+  })
+}
+
+function onScroll() {
+  const list = messageListRef.value
+  if (!list || !open.value) return
+  if (programmaticTop !== null && Math.abs(list.scrollTop - programmaticTop) < 1) {
+    programmaticTop = null
+    return
+  }
+  programmaticTop = null
+  followLatest.value = list.scrollHeight - list.scrollTop - list.clientHeight <= 40
+  if (followLatest.value) unreadIds.value.clear()
+  captureAnchor()
+}
+
+function pauseFollowing() {
+  programmaticTop = null
+  followLatest.value = false
+}
+
+function onScrollKey(event: KeyboardEvent) {
+  if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)
+    && !(event.target instanceof HTMLElement && event.target.closest('input, textarea, button, audio, [contenteditable]'))) {
+    pauseFollowing()
+  }
+}
 
 function openPanel() {
   if (open.value) return
   open.value = true
-  unreadCount.value = 0
-  nextTick(scrollToBottom)
+  void nextTick(scheduleRestore)
 }
 
 function closePanel() {
+  captureAnchor()
   open.value = false
   fullscreen.value = false
+  if (restoreFrame !== null) cancelAnimationFrame(restoreFrame)
+  restoreFrame = null
 }
 
 function toggleFullscreen() {
+  captureAnchor()
   fullscreen.value = !fullscreen.value
-  nextTick(scrollToBottom)
+  void nextTick(scheduleRestore)
 }
 
 async function loadDiscussions() {
+  const currentSession = session
   await mastering.load()
+  if (currentSession === session) {
+    await nextTick()
+    scheduleRestore()
+  }
 }
 
-function scrollToBottom() {
-  nextTick(() => {
-    if (messageListRef.value) {
-      messageListRef.value.scrollTop = messageListRef.value.scrollHeight
-    }
-  })
+function jumpToLatest() {
+  followLatest.value = true
+  restoreReadingPosition()
 }
 
 async function handleSubmit(payload: { content: string; images: File[]; audios: File[] }) {
-  const prevLen = mastering.discussions.value.length
-  await mastering.submit(payload)
-  if (mastering.discussions.value.length > prevLen) {
-    commentInputRef.value?.reset()
-    scrollToBottom()
-  }
+  const currentSession = session
+  const discussion = await mastering.submit(payload)
+  if (!discussion || currentSession !== session) return
+  commentInputRef.value?.reset()
+  followLatest.value = true
+  await nextTick()
+  if (currentSession === session) restoreReadingPosition()
 }
 
 async function handleDiscussionEvent(event: string, discussionId: number) {
-  if (event === 'created') {
-    if (mastering.discussions.value.some(d => d.id === discussionId)) return
-    const prevLen = mastering.discussions.value.length
-    await mastering.applyRealtimeEvent(event, discussionId)
-    if (mastering.discussions.value.length > prevLen) {
-      if (open.value) {
-        scrollToBottom()
-      } else {
-        unreadCount.value++
-      }
+  if (event === 'created' && mastering.discussions.value.some(d => d.id === discussionId)) return
+  const currentSession = session
+  captureAnchor()
+  const previousIds = new Set(mastering.discussions.value.map(d => d.id))
+  await mastering.applyRealtimeEvent(event, discussionId)
+  if (currentSession !== session) return
+  if (event === 'created' && (!open.value || !followLatest.value)) {
+    for (const discussion of mastering.discussions.value) {
+      if (!previousIds.has(discussion.id)) unreadIds.value.add(discussion.id)
     }
-  } else {
-    await mastering.applyRealtimeEvent(event, discussionId)
   }
+  if (event === 'deleted') unreadIds.value.delete(discussionId)
+  await nextTick()
+  if (currentSession === session) scheduleRestore()
 }
+
+watch([mastering.discussions, mastering.loading], scheduleRestore, { deep: true, flush: 'post' })
+watch([messageContentRef, messageListRef], ([content, list]) => {
+  resizeObserver?.disconnect()
+  if (!content || !list || typeof ResizeObserver === 'undefined') return
+  resizeObserver ??= new ResizeObserver(scheduleRestore)
+  resizeObserver.observe(content)
+  resizeObserver.observe(list)
+}, { flush: 'post' })
+onBeforeUnmount(() => {
+  session++
+  resizeObserver?.disconnect()
+  if (restoreFrame !== null) cancelAnimationFrame(restoreFrame)
+})
 
 const isOwnMessage = (d: Discussion) => d.author_id === appStore.currentUser?.id
 
@@ -107,7 +215,20 @@ function confirmDeleteDiscussion() {
 
 onMounted(loadDiscussions)
 
-watch(() => props.trackId, loadDiscussions)
+watch(() => props.trackId, () => {
+  session++
+  if (restoreFrame !== null) cancelAnimationFrame(restoreFrame)
+  restoreFrame = null
+  anchor = null
+  anchorOrder = []
+  hasOpened = false
+  followLatest.value = true
+  unreadIds.value.clear()
+  programmaticTop = null
+  pendingDeleteDiscussion.value = null
+  commentInputRef.value?.reset()
+  void loadDiscussions()
+})
 
 // Realtime discussion events arrive via the shared bus (dispatched by the
 // track workspace's WebSocket) — no imperative handler exposed to parents.
@@ -122,7 +243,7 @@ subscribe((event, discussionId) => {
   <button
     v-if="!open"
     @click="openPanel"
-    class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex w-[132px] sm:w-[148px] items-center gap-3 rounded-l-2xl border border-primary/30 border-r-0 bg-card/95 px-3 py-3 text-left shadow-lg backdrop-blur transition-all hover:bg-primary/10"
+    class="ui-control fixed right-0 top-1/2 -translate-y-1/2 z-40 flex w-[132px] sm:w-[148px] items-center gap-3 rounded-l-2xl border border-primary/30 border-r-0 bg-card/95 px-3 py-3 text-left shadow-lg backdrop-blur hover:bg-primary/10"
     :title="t('chat.openChat')"
   >
     <div class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
@@ -145,7 +266,7 @@ subscribe((event, discussionId) => {
     <div
       v-if="open"
       data-testid="mastering-chat-panel"
-      class="fixed flex flex-col bg-card border-border shadow-lg transition-[width,transform] duration-200"
+      class="fixed flex flex-col bg-card border-border shadow-lg"
       :class="fullscreen
         ? 'inset-0 z-50 w-full max-w-none border-l-0'
         : 'right-0 top-0 bottom-0 z-40 w-[360px] max-w-full border-l'"
@@ -160,7 +281,7 @@ subscribe((event, discussionId) => {
           <button
             type="button"
             @click="toggleFullscreen"
-            class="rounded-full p-1.5 text-muted-foreground hover:bg-background hover:text-foreground transition-colors"
+            class="ui-control rounded-full p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
             :title="fullscreen ? t('chat.exitFullscreen') : t('chat.enterFullscreen')"
             :aria-label="fullscreen ? t('chat.exitFullscreen') : t('chat.enterFullscreen')"
           >
@@ -170,7 +291,7 @@ subscribe((event, discussionId) => {
           <button
             type="button"
             @click="closePanel"
-            class="rounded-full p-1.5 text-muted-foreground hover:bg-background hover:text-foreground transition-colors"
+            class="ui-control rounded-full p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
             :title="t('chat.closeChat')"
             :aria-label="t('chat.closeChat')"
           >
@@ -182,8 +303,15 @@ subscribe((event, discussionId) => {
       <!-- Messages -->
       <div
         ref="messageListRef"
-        class="flex-1 overflow-y-auto px-4 py-3 space-y-4"
+        class="flex-1 overflow-y-auto px-4 py-3"
+        style="overflow-anchor: none"
+        tabindex="0"
+        @scroll="onScroll"
+        @wheel.passive="pauseFollowing"
+        @touchmove.passive="pauseFollowing"
+        @keydown="onScrollKey"
       >
+        <div ref="messageContentRef" class="space-y-4">
         <!-- Loading -->
         <div v-if="mastering.loading.value" class="flex items-center justify-center py-8">
           <span class="text-sm text-muted-foreground">{{ t('common.loading') }}</span>
@@ -215,6 +343,7 @@ subscribe((event, discussionId) => {
           <div
             v-for="d in mastering.discussions.value"
             :key="d.id"
+            :data-discussion-id="d.id"
             class="flex gap-2.5"
             :class="isOwnMessage(d) ? 'flex-row-reverse' : ''"
           >
@@ -318,6 +447,18 @@ subscribe((event, discussionId) => {
           </div>
           </TransitionGroup>
         </template>
+        </div>
+      </div>
+      <div class="h-9 shrink-0 flex items-center justify-center px-3">
+        <button
+          class="ui-control text-xs text-primary inline-flex items-center gap-1.5 rounded-full px-3 py-1"
+          :class="{ invisible: followLatest && unreadCount === 0 }"
+          :disabled="followLatest && unreadCount === 0"
+          @click="jumpToLatest"
+        >
+          <ArrowDown class="w-3.5 h-3.5" />
+          {{ unreadCount ? t('chat.newMessages', { count: unreadCount }) : t('chat.jumpToLatest') }}
+        </button>
       </div>
 
       <!-- Input area -->
@@ -344,13 +485,13 @@ subscribe((event, discussionId) => {
   </Transition>
 
   <EditHistoryModal
-    v-if="mastering.showHistoryForId.value !== null"
+    :open="mastering.showHistoryForId.value !== null"
     :items="mastering.historyItems.value"
     @close="mastering.closeHistory()"
   />
 
   <ConfirmModal
-    v-if="pendingDeleteDiscussion"
+    :open="pendingDeleteDiscussion !== null"
     :title="t('discussion.deleteTitle')"
     :message="t('discussion.deleteMessage')"
     :confirm-text="t('common.delete')"
@@ -361,9 +502,11 @@ subscribe((event, discussionId) => {
 </template>
 
 <style scoped>
-.chat-slide-enter-active,
+.chat-slide-enter-active {
+  transition: transform var(--motion-panel-in) var(--motion-ease-out);
+}
 .chat-slide-leave-active {
-  transition: transform 0.25s ease;
+  transition: transform var(--motion-panel-out) var(--motion-ease-in);
 }
 .chat-slide-enter-from,
 .chat-slide-leave-to {

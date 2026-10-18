@@ -25,9 +25,10 @@ export function withAuthToken(url: string): string {
 /**
  * Resolve an audio URL for playback.
  *
- * - Blob URLs and absolute URLs (public R2 CDN) are returned as-is.
- * - Relative API URLs go through ``?resolve=json`` to obtain the
- *   actual URL (public R2 or local fallback with auth token).
+ * - Blob URLs and external absolute URLs (including signed R2 downloads)
+ *   are returned as-is.
+ * - API URLs go through ``?resolve=json`` to obtain a short-lived signed R2
+ *   download URL or a local fallback with an auth token.
  */
 export async function resolveAudioUrl(url: string): Promise<string> {
   // Blob URLs are local object URLs — no resolution needed

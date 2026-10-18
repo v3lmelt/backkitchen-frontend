@@ -3,68 +3,65 @@ import { ref, computed, watch } from 'vue'
 
 import { useI18n } from 'vue-i18n'
 import { issueApi } from '@/api'
-import type { Issue, MentionCandidates, StageAssignment } from '@/types'
+import type { Issue, MasterDelivery, MentionCandidates, StageAssignment, Track, TrackSourceVersion } from '@/types'
 import StatusBadge from '@/components/workflow/StatusBadge.vue'
 import IssueDetailContent from '@/components/IssueDetailContent.vue'
-import IssuePlaybackPreview from '@/components/issue/IssuePlaybackPreview.vue'
-import type { PreviewAction } from '@/composables/useIssuePreviewPlayback'
+import OriginalIssuePlayback from '@/components/issue/OriginalIssuePlayback.vue'
+import { issueOriginLabel } from '@/utils/issueAudio'
 import { formatTimestamp } from '@/utils/time'
 import { anonTokenFor } from '@/utils/hash'
 import { X } from 'lucide-vue-next'
 
 const props = defineProps<{
   issue: Issue | null
-  track?: import('@/types').Track | null
+  track?: Track | null
   assignments?: StageAssignment[]
   issues?: Issue[] | null
   mentionCandidates?: MentionCandidates | null
-  preview?: {
-    duration: number
-    currentTime: number
-    isPreviewPlaying: boolean
-    activeMarkerIndex: number | null
-    peaks: number[]
-  } | null
+  sourceVersions?: TrackSourceVersion[]
+  masterDeliveries?: MasterDelivery[]
 }>()
 
 const emit = defineEmits<{
   close: []
   updated: [issue: Issue]
-  'preview-play-at': [time: number]
-  'preview-action': [issue: Issue, action: PreviewAction]
   'open-issue': [issueId: number]
 }>()
 
 const { t } = useI18n()
 
 const fullIssue = ref<Issue | null>(null)
+const issue = ref<Issue | null>(null)
 const loading = ref(false)
 const contentRef = ref<InstanceType<typeof IssueDetailContent> | null>(null)
 
-const previewIssue = computed(() => fullIssue.value ?? props.issue)
-const hasPlaybackPreview = computed(() =>
-  Boolean(
-    previewIssue.value
-    && props.preview
-    && props.preview.duration > 0
-    && previewIssue.value.markers.length > 0,
-  ),
-)
+const previewRef = ref<InstanceType<typeof OriginalIssuePlayback> | null>(null)
+const previewIssue = computed(() => fullIssue.value ?? issue.value)
+let detailRequest = 0
 
-watch(() => props.issue, async (issue) => {
+watch(() => props.issue, async (nextIssue) => {
+  const request = ++detailRequest
+  if (!nextIssue) { loading.value = false; return }
   contentRef.value?.reset()
-  if (!issue) { fullIssue.value = null; loading.value = false; return }
-  if (!fullIssue.value || fullIssue.value.id !== issue.id) {
-    fullIssue.value = issue
-  }
+  issue.value = nextIssue
+  fullIssue.value = nextIssue
   loading.value = true
   try {
-    const detail = await issueApi.get(issue.id)
-    if (props.issue?.id === detail.id) fullIssue.value = detail
+    const detail = await issueApi.get(nextIssue.id)
+    if (request === detailRequest && props.issue?.id === detail.id) fullIssue.value = detail
+  } catch {
+    // Keep the already-visible issue context when detail/comments cannot load.
   } finally {
-    loading.value = false
+    if (request === detailRequest) loading.value = false
   }
-})
+}, { immediate: true })
+
+function afterLeave() {
+  if (props.issue) return
+  issue.value = null
+  fullIssue.value = null
+  contentRef.value?.reset()
+}
 
 function formatTime(s: number) { return formatTimestamp(s) }
 
@@ -84,27 +81,24 @@ function onContentUpdated(updated: Issue) {
     <!-- Backdrop -->
     <Transition name="idp-fade">
       <div
-        v-if="issue"
+        v-if="props.issue"
         class="fixed inset-0 z-40 bg-overlay/50"
         @click="emit('close')"
       />
     </Transition>
 
     <!-- Panel -->
-    <Transition name="idp-slide">
+    <Transition name="idp-slide" @after-leave="afterLeave">
       <div
-        v-if="issue"
+        v-if="props.issue && issue"
         class="fixed inset-x-0 bottom-0 z-50 flex h-[88dvh] max-h-[88dvh] w-full flex-col border-t border-border bg-card sm:inset-y-0 sm:left-auto sm:right-0 sm:h-full sm:max-h-none sm:w-[460px] sm:border-l sm:border-t-0"
       >
         <!-- Header -->
         <div class="px-5 py-4 border-b border-border flex items-start gap-3 flex-shrink-0">
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-1.5 flex-wrap mb-1.5">
-              <span
-                v-if="issue.source_version_number != null"
-                class="inline-flex items-center rounded-full bg-border px-2 py-0.5 text-[11px] font-mono text-foreground"
-              >
-                v{{ issue.source_version_number }}
+              <span class="inline-flex border border-border bg-background px-2 py-0.5 text-[11px] font-mono text-foreground">
+                {{ issueOriginLabel(fullIssue ?? issue, t, track ?? null, sourceVersions) }}
               </span>
               <StatusBadge :status="issue.phase" type="phase" />
               <StatusBadge :status="issue.severity" type="severity" />
@@ -127,7 +121,7 @@ function onContentUpdated(updated: Issue) {
           </div>
           <button
             @click="emit('close')"
-            class="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors mt-0.5"
+            class="ui-control flex-shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
             :aria-label="t('common.close')"
           >
             <X class="w-5 h-5" :stroke-width="2" />
@@ -145,19 +139,18 @@ function onContentUpdated(updated: Issue) {
             :issues="issues"
             :mention-candidates="mentionCandidates"
             @updated="onContentUpdated"
-            @track-reference="(time) => emit('preview-play-at', time)"
+            @track-reference="previewRef?.playFrom($event)"
             @open-issue="(issueId) => emit('open-issue', issueId)"
           >
             <template #preview>
-              <IssuePlaybackPreview
-                v-if="hasPlaybackPreview && previewIssue && preview"
+              <OriginalIssuePlayback
+                v-if="previewIssue"
+                :key="previewIssue.id"
+                ref="previewRef"
                 :issue="previewIssue"
-                :duration="preview.duration"
-                :current-time="preview.currentTime"
-                :is-preview-playing="preview.isPreviewPlaying"
-                :active-marker-index="preview.activeMarkerIndex"
-                :peaks="preview.peaks"
-                @action="emit('preview-action', previewIssue, $event)"
+                :track="track"
+                :source-versions="sourceVersions"
+                :master-deliveries="masterDeliveries"
               />
             </template>
           </IssueDetailContent>
@@ -168,10 +161,12 @@ function onContentUpdated(updated: Issue) {
 </template>
 
 <style scoped>
-.idp-fade-enter-active, .idp-fade-leave-active { transition: opacity 0.2s ease; }
+.idp-fade-enter-active { transition: opacity var(--motion-panel-in) var(--motion-ease-out); }
+.idp-fade-leave-active { transition: opacity var(--motion-panel-out) var(--motion-ease-in); }
 .idp-fade-enter-from, .idp-fade-leave-to { opacity: 0; }
 
-.idp-slide-enter-active, .idp-slide-leave-active { transition: transform 0.25s ease; }
+.idp-slide-enter-active { transition: transform var(--motion-panel-in) var(--motion-ease-out); }
+.idp-slide-leave-active { transition: transform var(--motion-panel-out) var(--motion-ease-in); }
 .idp-slide-enter-from, .idp-slide-leave-to { transform: translateY(100%); }
 
 @media (min-width: 640px) {

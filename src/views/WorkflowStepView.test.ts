@@ -3,6 +3,8 @@ import { flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
 
 import { mountWithPlugins } from '@/tests/utils'
+import type { MasterDelivery, TrackSourceVersion } from '@/types'
+import { historyDetail, historySource } from '@/tests/issueHistoryFixtures'
 
 const mocks = vi.hoisted(() => ({
   pushMock: vi.fn(),
@@ -51,9 +53,8 @@ vi.mock('@/api', () => ({
   AUTH_USER_KEY: 'backkitchen_user',
   getAuthToken: () => localStorage.getItem('backkitchen_token'),
   trackAudioUrl: (trackId: number, v?: number | null) => `/api/tracks/${trackId}/audio?v=${v ?? 0}`,
-  masterAudioUrl: (trackId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-audio?v=${v ?? 0}&c=${c ?? 1}`,
-  masterDeliveryAudioUrl: (trackId: number, deliveryId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-deliveries/${deliveryId}/audio?v=${v ?? 0}&c=${c ?? 1}`,
-  sourceVersionAudioUrl: (trackId: number, versionId: number) => `/api/tracks/${trackId}/source-versions/${versionId}/audio`,
+  masterDeliveryAudioUrl: (trackId: number, delivery: MasterDelivery) => `/api/tracks/${trackId}/master-deliveries/${delivery.id}/audio?v=${delivery.delivery_number}&c=${delivery.workflow_cycle}&t=${encodeURIComponent(delivery.created_at)}`,
+  sourceVersionAudioUrl: (trackId: number, version: TrackSourceVersion) => `/api/tracks/${trackId}/source-versions/${version.id}/audio?v=${version.version_number}&c=${version.workflow_cycle}&t=${encodeURIComponent(version.created_at)}`,
   checklistApi: {
     getDraft: mocks.checklistGetDraftMock,
     getTemplate: mocks.checklistGetTemplateMock,
@@ -101,7 +102,8 @@ vi.mock('@/components/workflow/WorkflowProgress.vue', () => ({
 
 vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
   default: {
-    props: ['compareVersionId'],
+    name: 'WaveformPlayer',
+    props: ['compareAudioUrl', 'selectable', 'mode'],
     emits: ['ready', 'timeupdate', 'playbackStateChange'],
     mounted(this: any) {
       this.$emit('ready', 95)
@@ -113,7 +115,7 @@ vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
       seekTo: mocks.waveformSeekToMock,
       togglePlay: mocks.waveformTogglePlayMock,
     },
-    template: '<div class="waveform">compare:{{ compareVersionId ?? "none" }}</div>',
+    template: '<div class="waveform">compare:{{ compareAudioUrl || "none" }}</div>',
   },
 }))
 
@@ -148,21 +150,18 @@ vi.mock('@/components/audio/IssueMarkerList.vue', () => ({
 vi.mock('@/components/IssueCreatePanel.vue', () => ({
   default: {
     name: 'IssueCreatePanel',
-    props: ['trackId', 'phase', 'allowInternalVisibility'],
+    props: ['trackId', 'phase', 'allowInternalVisibility', 'readonly', 'creationTarget', 'masterDeliveryId'],
     template: '<div class="issue-create" />',
   },
 }))
 
 vi.mock('@/components/IssueDetailPanel.vue', () => ({
   default: {
-    props: ['issue', 'preview'],
-    emits: ['close', 'updated', 'preview-play-at', 'preview-action'],
+    props: ['issue', 'sourceVersions'],
+    emits: ['close', 'updated'],
     template: `
       <div v-if="issue" class="peer-issue-drawer">
-        {{ issue.title }}|{{ issue.status }}|preview:{{ preview?.duration ?? 0 }}|playing:{{ preview?.isPreviewPlaying ? '1' : '0' }}|marker:{{ preview?.activeMarkerIndex ?? '-' }}
-        <button class="drawer-preview-play" @click="$emit('preview-play-at', 21.5)">preview play</button>
-        <button class="drawer-preview-seek" @click="$emit('preview-action', issue, { type: 'seek', time: 18.25 })">preview seek</button>
-        <button class="drawer-preview-toggle" @click="$emit('preview-action', issue, { type: 'playSequence' })">preview toggle</button>
+        {{ issue.title }}|{{ issue.status }}
       </div>
     `,
   },
@@ -330,6 +329,8 @@ describe('WorkflowStepView', () => {
         mastering_engineer_id: 3,
         current_master_delivery: {
           id: 11,
+          workflow_cycle: 1,
+          delivery_number: 1,
           file_path: '/master.wav',
           producer_approved_at: null,
           submitter_approved_at: null,
@@ -421,6 +422,162 @@ describe('WorkflowStepView', () => {
     })
   })
 
+  it.each(['mastering', 'final_review'])(
+    'redirects a public nonparticipant %s step to detail without exposing master playback, history or chat',
+    async (status) => {
+      mocks.route.query = { returnTo: '/albums/5', issue: '61' }
+      const privateDelivery = {
+        id: 21,
+        workflow_cycle: 2,
+        delivery_number: 4,
+        file_path: '/private-master.wav',
+        delivery_message: 'Private delivery discussion',
+        confirmed_at: '2024-01-03T00:00:00Z',
+      }
+      mocks.trackGetMock.mockResolvedValueOnce({
+        track: {
+          id: 9,
+          title: 'Public Track',
+          artist: 'Nova',
+          status,
+          is_public: true,
+          file_path: '/source.wav',
+          version: 1,
+          workflow_cycle: 2,
+          submitter_id: 2,
+          producer_id: 3,
+          mastering_engineer_id: 4,
+          viewer_is_mastering_participant: false,
+          viewer_can_access_master_audio: false,
+          current_master_delivery: privateDelivery,
+          allowed_actions: [],
+          workflow_step: {
+            id: status,
+            label: 'Protected Mastering Step',
+            type: status === 'mastering' ? 'delivery' : 'approval',
+            ui_variant: status,
+            assignee_role: 'producer',
+            order: 1,
+            transitions: {},
+          },
+        },
+        issues: [{ id: 61, workflow_cycle: 2, phase: 'final_review', master_delivery_id: 21, title: 'Visible issue' }],
+        master_deliveries: [privateDelivery, { ...privateDelivery, id: 20, delivery_number: 3 }],
+      })
+
+      const wrapper = mountWithPlugins(WorkflowStepView)
+      await flushPromises()
+
+      expect(mocks.replaceMock).toHaveBeenCalledWith({
+        path: '/tracks/9',
+        query: { returnTo: '/albums/5', issue: '61' },
+      })
+      expect(wrapper.findAll('.waveform')).toHaveLength(0)
+      expect(wrapper.find('.mastering-chat-sidebar').exists()).toBe(false)
+      expect(wrapper.find('.peer-issue-drawer').exists()).toBe(false)
+      expect(wrapper.text()).not.toContain('Private delivery discussion')
+      expect(wrapper.text()).not.toContain('Approval Status')
+      expect(wrapper.text()).not.toContain('Master Delivery History')
+      expect(mocks.downloadTrackAudioMock).not.toHaveBeenCalled()
+      expect(mocks.downloadAudioAssetMock).not.toHaveBeenCalled()
+      wrapper.unmount()
+    },
+  )
+
+  it('withholds master delivery data on a public generic step without changing the source player', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Public Custom Track',
+        artist: 'Nova',
+        status: 'custom_delivery',
+        is_public: true,
+        file_path: '/source.wav',
+        version: 1,
+        workflow_cycle: 2,
+        viewer_is_mastering_participant: false,
+        viewer_can_access_master_audio: false,
+        current_master_delivery: {
+          id: 21,
+          workflow_cycle: 2,
+          delivery_number: 4,
+          file_path: '/private-master.wav',
+          delivery_message: 'Private generic delivery note',
+        },
+        workflow_step: {
+          id: 'custom_delivery',
+          label: 'Custom Delivery',
+          type: 'delivery',
+          ui_variant: 'generic',
+          is_mastering_related: false,
+          assignee_role: 'mastering_engineer',
+          order: 1,
+          transitions: {},
+        },
+      },
+      issues: [],
+      master_deliveries: [],
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    expect(mocks.replaceMock).not.toHaveBeenCalled()
+    expect(wrapper.findAll('.waveform')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('Private generic delivery note')
+    expect(wrapper.find('.mastering-chat-sidebar').exists()).toBe(false)
+    expect(wrapper.findAll('button').filter(button => button.text() === 'Download Audio')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('retains prior-cycle participant playback but hides final approval until a current-cycle delivery exists', async () => {
+    mocks.trackGetMock.mockResolvedValueOnce({
+      track: {
+        id: 9,
+        title: 'Reopened Final Track',
+        artist: 'Nova',
+        status: 'final_review',
+        file_path: '/source.wav',
+        version: 1,
+        workflow_cycle: 2,
+        producer_id: 1,
+        viewer_is_mastering_participant: true,
+        viewer_can_access_master_audio: true,
+        current_master_delivery: {
+          id: 21,
+          workflow_cycle: 1,
+          delivery_number: 4,
+          file_path: '/previous-cycle-master.wav',
+          confirmed_at: '2024-01-03T00:00:00Z',
+          producer_approved_at: null,
+          submitter_approved_at: null,
+        },
+        workflow_step: {
+          id: 'final_review',
+          label: 'Final Review',
+          type: 'approval',
+          ui_variant: 'final_review',
+          assignee_role: 'producer',
+          order: 1,
+          transitions: {},
+        },
+        workflow_transitions: [],
+      },
+      issues: [],
+      master_deliveries: [],
+    })
+
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+
+    expect(wrapper.findAll('.waveform')).toHaveLength(1)
+    expect(wrapper.find('.mastering-chat-sidebar').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Download Audio')
+    expect(wrapper.text()).not.toContain('Approve Current Master')
+    expect(mocks.approveFinalReviewMock).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('requires an uploaded audio file before submitting a delivery step', async () => {
     mocks.route = {
       params: { id: '9', stepId: 'custom_delivery' },
@@ -487,6 +644,7 @@ describe('WorkflowStepView', () => {
         file_path: '/audio.wav',
         version: 1,
         workflow_cycle: 1,
+        mastering_engineer_id: 1,
         current_master_delivery: {
           id: 41,
           workflow_cycle: 1,
@@ -1167,8 +1325,8 @@ describe('WorkflowStepView', () => {
       ],
       checklist_items: [],
       source_versions: [
-        { id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' },
-        { id: 201, version_number: 2, created_at: '2024-01-02T00:00:00Z' },
+        historySource(301, 3, { file_path: '/audio.wav', created_at: '2024-01-03T00:00:00Z' }),
+        historySource(201, 2, { created_at: '2024-01-02T00:00:00Z' }),
       ],
       workflow_config: {
         version: 2,
@@ -1191,8 +1349,9 @@ describe('WorkflowStepView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('Older source-version compare is read-only. Switch back to the current version before adding new issues.')
-    expect(wrapper.find('.waveform').text()).toContain('compare:201')
-    expect(wrapper.find('.issue-list').text()).toBe('1')
+    expect(wrapper.find('.waveform').text()).toContain('source-versions/201/audio?v=2')
+    expect(wrapper.find('.issue-list').text()).toBe('2')
+    expect(wrapper.getComponent({ name: 'IssueCreatePanel' }).props('readonly')).toBe(true)
   })
 
   it('keeps peer review issue inspection and status updates inside the step page', async () => {
@@ -1289,83 +1448,6 @@ describe('WorkflowStepView', () => {
     expect(wrapper.find('.peer-issue-drawer').text()).toContain('Tame the hats|resolved')
   })
 
-  it('lets the drawer audition peer issues through the main waveform', async () => {
-    mocks.route = {
-      params: { id: '9', stepId: 'peer_review' },
-      query: {},
-      path: '/tracks/9/step/peer_review',
-      fullPath: '/tracks/9/step/peer_review',
-    }
-    mocks.trackGetMock.mockResolvedValueOnce({
-      track: {
-        id: 9,
-        title: 'Peer Track',
-        artist: 'Nova',
-        status: 'peer_review',
-        file_path: '/audio.wav',
-        version: 1,
-        workflow_cycle: 1,
-        workflow_step: {
-          id: 'peer_review',
-          label: 'Peer Review',
-          type: 'review',
-          ui_variant: 'peer_review',
-          assignee_role: 'peer_reviewer',
-          order: 1,
-          transitions: { pass: 'producer_gate' },
-        },
-        workflow_transitions: [{ decision: 'pass', label: 'Pass' }],
-      },
-      issues: [
-        {
-          id: 61,
-          track_id: 9,
-          author_id: 3,
-          phase: 'peer',
-          workflow_cycle: 1,
-          source_version_id: 101,
-          source_version_number: 1,
-          master_delivery_id: null,
-          title: 'Watch the hats',
-          description: 'The hats still poke through.',
-          severity: 'major',
-          status: 'open',
-          markers: [
-            { id: 501, issue_id: 61, marker_type: 'point', time_start: 12.5, time_end: null },
-          ],
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-02T00:00:00Z',
-          comment_count: 1,
-        },
-      ],
-      checklist_items: [],
-      workflow_config: {
-        version: 2,
-        steps: [
-          { id: 'peer_review', label: 'Peer Review', type: 'review', ui_variant: 'peer_review', assignee_role: 'peer_reviewer', order: 1, transitions: { pass: 'producer_gate' } },
-        ],
-      },
-    })
-
-    const wrapper = mountWithPlugins(WorkflowStepView)
-    await flushPromises()
-
-    await wrapper.find('.issue-list-item').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.find('.peer-issue-drawer').text()).toContain('preview:95')
-    expect(wrapper.find('.peer-issue-drawer').text()).toContain('playing:0')
-    expect(wrapper.find('.peer-issue-drawer').text()).toContain('marker:-')
-
-    await wrapper.find('.drawer-preview-toggle').trigger('click')
-    expect(mocks.waveformPlayFromMock).toHaveBeenNthCalledWith(1, 12.5)
-
-    await wrapper.find('.drawer-preview-play').trigger('click')
-    expect(mocks.waveformPlayFromMock).toHaveBeenNthCalledWith(2, 21.5)
-
-    await wrapper.find('.drawer-preview-seek').trigger('click')
-    expect(mocks.waveformSeekToMock).toHaveBeenCalledWith(18.25)
-  })
 
   it('enables source compare on producer gate too', async () => {
     mocks.trackGetMock.mockResolvedValueOnce({
@@ -1397,8 +1479,8 @@ describe('WorkflowStepView', () => {
       ],
       checklist_items: [],
       source_versions: [
-        { id: 401, version_number: 4, created_at: '2024-01-04T00:00:00Z' },
-        { id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' },
+        historySource(401, 4, { file_path: '/audio.wav', created_at: '2024-01-04T00:00:00Z' }),
+        historySource(301, 3, { created_at: '2024-01-03T00:00:00Z' }),
       ],
       workflow_config: {
         version: 2,
@@ -1416,8 +1498,9 @@ describe('WorkflowStepView', () => {
     await wrapper.find('.compare-select').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('.waveform').text()).toContain('compare:301')
-    expect(wrapper.find('.issue-list').text()).toBe('1')
+    expect(wrapper.find('.waveform').text()).toContain('source-versions/301/audio?v=3')
+    expect(wrapper.find('.issue-list').text()).toBe('2')
+    expect(wrapper.getComponent({ name: 'IssueCreatePanel' }).props('readonly')).toBe(true)
   })
 
   it('shows peer-only handoff issues in a drawer and groups producer gate decisions together', async () => {
@@ -1486,7 +1569,7 @@ describe('WorkflowStepView', () => {
       ],
       checklist_items: [],
       source_versions: [
-        { id: 201, version_number: 2, created_at: '2024-01-02T00:00:00Z' },
+        historySource(201, 2, { file_path: '/audio.wav', created_at: '2024-01-02T00:00:00Z' }),
       ],
       workflow_config: {
         version: 2,
@@ -1583,8 +1666,8 @@ describe('WorkflowStepView', () => {
       ],
       checklist_items: [],
       source_versions: [
-        { id: 401, version_number: 3, created_at: '2024-01-03T00:00:00Z' },
-        { id: 301, version_number: 2, created_at: '2024-01-02T00:00:00Z' },
+        historySource(401, 3, { file_path: '/audio.wav', created_at: '2024-01-03T00:00:00Z' }),
+        historySource(301, 2, { created_at: '2024-01-02T00:00:00Z' }),
       ],
       workflow_config: {
         version: 2,
@@ -1631,6 +1714,8 @@ describe('WorkflowStepView', () => {
         mastering_engineer_id: 3,
         current_master_delivery: {
           id: 11,
+          workflow_cycle: 1,
+          delivery_number: 1,
           file_path: '/master.wav',
           producer_approved_at: null,
           submitter_approved_at: null,
@@ -2063,5 +2148,29 @@ describe('WorkflowStepView', () => {
       path: '/tracks/9',
       query: { returnTo: '/tracks/9/step/delivery_custom' },
     })
+  })
+
+  it('keeps final-review master comparisons read-only and leaves the creation target on the current master', async () => {
+    mocks.route = {
+      params: { id: '9', stepId: 'final_review' }, query: {},
+      path: '/tracks/9/step/final_review', fullPath: '/tracks/9/step/final_review',
+    }
+    mocks.trackGetMock.mockResolvedValue(historyDetail([], {
+      status: 'final_review', producer_id: 1, viewer_is_album_manager: true,
+      workflow_step: { id: 'final_review', label: 'Final review', type: 'review', ui_variant: 'final_review',
+        assignee_role: 'submitter', order: 1, transitions: {} },
+    }))
+    const wrapper = mountWithPlugins(WorkflowStepView)
+    await flushPromises()
+    expect(wrapper.getComponent({ name: 'IssueCreatePanel' }).props('readonly')).toBe(false)
+    await wrapper.findAll('button').find(button => button.text().includes('Compare Versions'))!.trigger('click')
+    await wrapper.get('.compare-select').trigger('click')
+    await flushPromises()
+    const createPanel = wrapper.getComponent({ name: 'IssueCreatePanel' })
+    expect(createPanel.props('readonly')).toBe(true)
+    expect(createPanel.props('masterDeliveryId')).toBe(22)
+    expect(wrapper.findComponent({ name: 'WaveformPlayer' }).props('selectable')).toBe(false)
+    expect(wrapper.get('.waveform').text()).toContain('/master-deliveries/21/audio?v=1&c=1')
+    wrapper.unmount()
   })
 })

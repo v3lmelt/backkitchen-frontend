@@ -1,8 +1,16 @@
 <script setup lang="ts">
+import { shallowRef, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseModal from '@/components/common/BaseModal.vue'
 import type { AudioSpecCheck } from '@/types'
-defineProps<{ check: AudioSpecCheck | null }>()
+const props = withDefaults(defineProps<{ open?: boolean; check: AudioSpecCheck | null }>(), { open: false })
+const retainedCheck = shallowRef<AudioSpecCheck | null>(null)
+watchEffect(() => {
+  if (props.open && props.check) retainedCheck.value = props.check
+})
+function afterLeave() {
+  if (!props.open) retainedCheck.value = null
+}
 const emit = defineEmits<{ answer: [accepted: boolean] }>()
 const { t } = useI18n()
 function format(field: string, value: string | number | null) {
@@ -14,10 +22,10 @@ function format(field: string, value: string | number | null) {
 </script>
 
 <template>
-  <BaseModal :aria-label="t('audioSpecs.mismatch')" v-if="check" @close="emit('answer', false)">
-    <div class="space-y-4">
+  <BaseModal :open="open" :aria-label="t('audioSpecs.mismatch')" @close="emit('answer', false)" @after-leave="afterLeave">
+    <div v-if="retainedCheck" class="space-y-4">
       <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('audioSpecs.mismatch') }}</h3>
-      <div v-for="difference in check.differences" :key="difference.field" class="border-b border-border pb-3 text-sm">
+      <div v-for="difference in retainedCheck.differences" :key="difference.field" class="border-b border-border pb-3 text-sm">
         <div class="mb-1 text-muted-foreground">{{ t(`audioSpecs.fields.${difference.field}`) }}</div>
         <div>{{ t('audioSpecs.actual') }}: {{ format(difference.field, difference.actual) }}</div>
         <div class="text-muted-foreground">{{ t('audioSpecs.required') }}: {{ difference.allowed.map(value => format(difference.field, value)).join(' / ') }}</div>

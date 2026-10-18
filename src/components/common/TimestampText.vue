@@ -219,6 +219,7 @@ onBeforeUnmount(() => {
   </span>
 
   <Teleport to="body">
+    <Transition name="timestamp-preview">
     <div
       v-if="interactive && hoveredIssue"
       class="fixed z-[80] max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-card/95 px-3 py-2.5 text-left shadow-[var(--shadow-tooltip)] backdrop-blur"
@@ -239,5 +240,18 @@ onBeforeUnmount(() => {
         <span v-if="issueMarkerSummary(hoveredIssue)">{{ issueMarkerSummary(hoveredIssue) }}</span>
       </p>
     </div>
+    </Transition>
   </Teleport>
 </template>
+
+<style scoped>
+.timestamp-preview-enter-active {
+  transition: opacity var(--motion-popover-in) var(--motion-ease-out);
+}
+.timestamp-preview-leave-active {
+  transition: opacity var(--motion-popover-out) var(--motion-ease-in);
+}
+.timestamp-preview-enter-from, .timestamp-preview-leave-to {
+  opacity: 0;
+}
+</style>

@@ -3,6 +3,7 @@ import { flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
 
 import { mountWithPlugins } from '@/tests/utils'
+import type { MasterDelivery, TrackSourceVersion } from '@/types'
 
 const mocks = vi.hoisted(() => ({
   route: { params: { id: '9' }, query: {} as Record<string, string>, path: '/tracks/9/mastering', fullPath: '/tracks/9/mastering' },
@@ -37,9 +38,8 @@ vi.mock('@/api', () => ({
   AUTH_USER_KEY: 'backkitchen_user',
   getAuthToken: () => localStorage.getItem('backkitchen_token'),
   trackAudioUrl: (trackId: number, v?: number | null) => `/api/tracks/${trackId}/audio?v=${v ?? 0}`,
-  masterAudioUrl: (trackId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-audio?v=${v ?? 0}&c=${c ?? 1}`,
-  masterDeliveryAudioUrl: (trackId: number, deliveryId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-deliveries/${deliveryId}/audio?v=${v ?? 0}&c=${c ?? 1}`,
-  sourceVersionAudioUrl: (trackId: number, versionId: number) => `/api/tracks/${trackId}/source-versions/${versionId}/audio`,
+  masterDeliveryAudioUrl: (trackId: number, delivery: MasterDelivery) => `/api/tracks/${trackId}/master-deliveries/${delivery.id}/audio?v=${delivery.delivery_number}&c=${delivery.workflow_cycle}&t=${encodeURIComponent(delivery.created_at)}`,
+  sourceVersionAudioUrl: (trackId: number, version: TrackSourceVersion) => `/api/tracks/${trackId}/source-versions/${version.id}/audio?v=${version.version_number}&c=${version.workflow_cycle}&t=${encodeURIComponent(version.created_at)}`,
   trackApi: {
     get: mocks.trackGetMock,
     listAssignments: mocks.listAssignmentsMock,
@@ -124,13 +124,11 @@ vi.mock('@/components/IssueCreatePanel.vue', () => ({
 
 vi.mock('@/components/IssueDetailPanel.vue', () => ({
   default: {
-    props: ['issue', 'preview'],
-    emits: ['close', 'updated', 'preview-play-at', 'preview-action'],
+    props: ['issue', 'sourceVersions'],
+    emits: ['close', 'updated'],
     template: `
       <div v-if="issue" class="issue-drawer">
-        {{ issue.title }}|{{ issue.status }}|preview:{{ preview?.duration ?? 0 }}|playing:{{ preview?.isPreviewPlaying ? '1' : '0' }}|marker:{{ preview?.activeMarkerIndex ?? '-' }}
-        <button class="drawer-preview-play" @click="$emit('preview-play-at', 18.25)">preview play</button>
-        <button class="drawer-preview-toggle" @click="$emit('preview-action', issue, { type: 'playSequence' })">preview toggle</button>
+        {{ issue.title }}|{{ issue.status }}
       </div>
     `,
   },
@@ -364,6 +362,104 @@ describe('MasteringView', () => {
     mocks.confirmDeliveryMock.mockResolvedValue({})
     mocks.workflowTransitionMock.mockResolvedValue({})
     mocks.issueUpdateMock.mockResolvedValue({})
+  })
+
+  it.each(['mastering', 'mastering_revision', 'final_review', 'completed'])(
+    'redirects ordinary visitors from the %s mastering workspace without loading mastering discussion or mounting players',
+    async (status) => {
+      mocks.currentUser.id = 42
+      mocks.route.query = { returnTo: '/albums/5', issue: '61' }
+      mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
+        track: {
+          status,
+          is_public: true,
+          viewer_is_mastering_participant: false,
+          viewer_can_access_master_audio: status === 'completed',
+          mastering_notes: 'Private mastering notes',
+        },
+      }))
+
+      const wrapper = mountWithPlugins(MasteringView)
+      await flushPromises()
+
+      expect(mocks.replaceMock).toHaveBeenCalledWith({
+        path: '/tracks/9',
+        query: { returnTo: '/albums/5', issue: '61' },
+      })
+      expect(mocks.discussionListMock).not.toHaveBeenCalled()
+      expect(wrapper.findAll('.waveform')).toHaveLength(0)
+      expect(wrapper.find('.mastering-chat-sidebar').exists()).toBe(false)
+      expect(wrapper.find('.discussion-panel').exists()).toBe(false)
+      expect(wrapper.text()).not.toContain('Private mastering notes')
+      expect(wrapper.text()).not.toContain('Master Delivery History')
+      expect(wrapper.text()).not.toContain('Approval Status')
+      expect(mocks.downloadTrackAudioMock).not.toHaveBeenCalled()
+      expect(mocks.downloadAudioAssetMock).not.toHaveBeenCalled()
+      wrapper.unmount()
+    },
+  )
+
+  it('respects a server-denied participant flag even when local ids identify the viewer as the engineer', async () => {
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
+      track: {
+        viewer_is_mastering_participant: false,
+        viewer_can_access_master_audio: false,
+      },
+    }))
+
+    const wrapper = mountWithPlugins(MasteringView)
+    await flushPromises()
+
+    expect(mocks.replaceMock).toHaveBeenCalledWith({ path: '/tracks/9', query: {} })
+    expect(mocks.discussionListMock).not.toHaveBeenCalled()
+    expect(wrapper.find('.mastering-chat-sidebar').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('keeps mastering discussion and prior-cycle playback/history available to an authoritative participant', async () => {
+    mocks.currentUser.id = 42
+    const historicalDelivery = {
+      id: 21,
+      workflow_cycle: 1,
+      delivery_number: 4,
+      file_path: '/historical-master.wav',
+      delivery_kind: 'file',
+      delivery_message: 'Earlier-cycle mastering note',
+      uploaded_by_id: 2,
+      confirmed_at: '2024-01-02T12:00:00Z',
+      producer_approved_at: '2024-01-02T13:00:00Z',
+      submitter_approved_at: '2024-01-02T14:00:00Z',
+      created_at: '2024-01-02T00:00:00Z',
+    }
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
+      track: {
+        status: 'peer_review',
+        workflow_cycle: 2,
+        viewer_is_mastering_participant: true,
+        viewer_can_access_master_audio: true,
+        workflow_step: null,
+        workflow_transitions: [],
+        current_master_delivery: historicalDelivery,
+      },
+      master_deliveries: [historicalDelivery],
+    }))
+
+    const wrapper = mountWithPlugins(MasteringView)
+    await flushPromises()
+
+    expect(mocks.replaceMock).not.toHaveBeenCalled()
+    expect(mocks.discussionListMock).toHaveBeenCalledWith(9, 'mastering', { limit: 20 })
+    expect(wrapper.find('.mastering-chat-sidebar').exists()).toBe(true)
+    await wrapper.findAll('button').find(button => button.text() === 'Listen')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('.waveform')).toHaveLength(2)
+
+    await openDeliveryTab(wrapper)
+    await wrapper.findAll('button').find(button => button.text().includes('Master Delivery History'))!.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Earlier-cycle mastering note')
+    expect(wrapper.text()).toContain('Download Audio')
+    wrapper.unmount()
   })
 
   it('does not show final approval before the track reaches final review when submitter and mastering engineer are the same user', async () => {
@@ -626,90 +722,6 @@ describe('MasteringView', () => {
     expect(mocks.approveFinalReviewMock).toHaveBeenCalledWith(9)
   })
 
-  it('lets the drawer audition final-review issues through the master waveform on the listen tab', async () => {
-    mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
-      track: {
-        status: 'final_review',
-        workflow_step: {
-          id: 'final_review',
-          label: 'Final Review',
-          type: 'approval',
-          ui_variant: 'final_review',
-          assignee_role: 'producer',
-          order: 1,
-          transitions: { reject_to_mastering: 'mastering' },
-        },
-        workflow_transitions: [{ decision: 'reject_to_mastering', label: 'Return to Mastering' }],
-        current_master_delivery: {
-          id: 21,
-          workflow_cycle: 1,
-          delivery_number: 1,
-          file_path: '/master.wav',
-          uploaded_by_id: 2,
-          confirmed_at: '2024-01-02T12:00:00Z',
-          producer_approved_at: null,
-          submitter_approved_at: null,
-          created_at: '2024-01-02T00:00:00Z',
-        },
-      },
-      issues: [
-        {
-          id: 81,
-          track_id: 9,
-          author_id: 8,
-          phase: 'final_review',
-          workflow_cycle: 1,
-          source_version_id: 11,
-          source_version_number: 1,
-          master_delivery_id: 21,
-          title: 'Trim the outro',
-          description: 'The outro can end a touch earlier.',
-          severity: 'minor',
-          status: 'open',
-          markers: [
-            { id: 701, issue_id: 81, marker_type: 'point', time_start: 12.5, time_end: null },
-          ],
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-02T00:00:00Z',
-          comment_count: 0,
-        },
-      ],
-      master_deliveries: [
-        {
-          id: 21,
-          workflow_cycle: 1,
-          delivery_number: 1,
-          file_path: '/master.wav',
-          uploaded_by_id: 2,
-          confirmed_at: '2024-01-02T12:00:00Z',
-          producer_approved_at: null,
-          submitter_approved_at: null,
-          created_at: '2024-01-02T00:00:00Z',
-        },
-      ],
-    }))
-
-    const wrapper = mountWithPlugins(MasteringView)
-    await flushPromises()
-
-    const listenTab = wrapper.findAll('button').find(button => button.text() === 'Listen')
-    expect(listenTab).toBeTruthy()
-    await listenTab!.trigger('click')
-    await flushPromises()
-
-    await wrapper.find('.issue-list-item').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.find('.issue-drawer').text()).toContain('preview:95')
-    expect(wrapper.find('.issue-drawer').text()).toContain('playing:0')
-    expect(wrapper.find('.issue-drawer').text()).toContain('marker:-')
-
-    await wrapper.find('.drawer-preview-toggle').trigger('click')
-    expect(mocks.waveformPlayFromMock).toHaveBeenNthCalledWith(1, 12.5)
-
-    await wrapper.find('.drawer-preview-play').trigger('click')
-    expect(mocks.waveformPlayFromMock).toHaveBeenNthCalledWith(2, 18.25)
-  })
 
   it('allows a submitter-assigned delivery step to confirm and upload from the mastering page', async () => {
     mocks.trackGetMock.mockResolvedValue(makeTrackDetail({
@@ -894,6 +906,7 @@ describe('MasteringView', () => {
       submitter_id: 2,
       producer_id: 8,
       mastering_engineer_id: 2,
+      workflow_cycle: 1,
       workflow_step: {
         id: 'final_review',
         label: 'Final Review',
@@ -905,6 +918,7 @@ describe('MasteringView', () => {
       },
       current_master_delivery: {
         id: 21,
+        workflow_cycle: 1,
         confirmed_at: '2024-01-02T12:00:00Z',
         producer_approved_at: null,
         submitter_approved_at: null,

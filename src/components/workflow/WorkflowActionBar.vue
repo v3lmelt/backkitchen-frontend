@@ -1,16 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { ChevronRight, RotateCcw, X } from 'lucide-vue-next'
-import BaseModal from '@/components/common/BaseModal.vue'
 import AudioSpecHint from '@/components/audio/AudioSpecHint.vue'
 import type { AudioSpecCheck } from '@/types'
-
-export interface WorkflowActionConfirm {
-  title?: string
-  message: string
-  confirmLabel?: string
-}
 
 export interface WorkflowAction {
   label: string
@@ -19,8 +11,6 @@ export interface WorkflowAction {
   specCheck?: AudioSpecCheck
   disabled?: boolean
   handler: () => void
-  /** If set, clicking shows a confirmation dialog before calling handler */
-  confirm?: WorkflowActionConfirm
 }
 
 const props = withDefaults(defineProps<{
@@ -35,8 +25,6 @@ const props = withDefaults(defineProps<{
   layout: 'split',
 })
 
-const { t } = useI18n()
-const pendingAction = ref<WorkflowAction | null>(null)
 const actionBarRef = ref<HTMLElement | null>(null)
 const actionBarHeight = ref(0)
 const spacerStyle = computed(() => ({ '--fixed-bottom-bar-height': `${actionBarHeight.value}px` }))
@@ -66,47 +54,9 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', updateActionBarHeight)
 })
 
-function handleClick(action: WorkflowAction) {
-  if (action.confirm) {
-    pendingAction.value = action
-  } else {
-    action.handler()
-  }
-}
-
-function confirmPending() {
-  pendingAction.value?.handler()
-  pendingAction.value = null
-}
 </script>
 
 <template>
-  <!-- Confirmation modal -->
-  <BaseModal v-if="pendingAction" @close="pendingAction = null" max-width="max-w-sm" :closable="false">
-    <div class="space-y-4">
-      <h3 class="text-sm font-mono font-semibold text-foreground">
-        {{ pendingAction.confirm?.title ?? pendingAction.label }}
-      </h3>
-      <p class="text-sm text-muted-foreground leading-relaxed">{{ pendingAction.confirm?.message }}</p>
-      <div class="flex gap-2 pt-1">
-        <button
-          @click="confirmPending"
-          :class="[
-            'flex-1 rounded-full font-mono font-medium text-sm h-9 transition-colors',
-            pendingAction.type === 'reject'
-              ? 'bg-error hover:bg-error/80 text-white'
-              : 'border border-muted-foreground/40 text-foreground hover:bg-foreground/5',
-          ]"
-        >
-          {{ pendingAction.confirm?.confirmLabel ?? t('common.confirm') }}
-        </button>
-        <button @click="pendingAction = null" class="flex-1 btn-secondary h-9 text-sm">
-          {{ t('common.cancel') }}
-        </button>
-      </div>
-    </div>
-  </BaseModal>
-
   <div class="fixed-bottom-bar-spacer" :style="spacerStyle" aria-hidden="true"></div>
 
   <div ref="actionBarRef" class="workflow-action-bar fixed-bottom-bar">
@@ -115,7 +65,7 @@ function confirmPending() {
 
         <!-- Left: hint -->
         <div v-if="props.hint" class="inline-flex max-w-full items-center gap-3 self-start rounded-full border border-warning/30 bg-warning-bg px-3 py-2 sm:flex-none">
-          <span class="pulse-dot flex-shrink-0"></span>
+          <span class="status-dot flex-shrink-0"></span>
           <p class="text-sm font-mono font-medium text-warning tracking-wide leading-none">{{ props.hint }}</p>
         </div>
 
@@ -129,9 +79,9 @@ function confirmPending() {
                 v-for="action in props.actions"
                 :key="action.label"
                 :disabled="action.disabled"
-                @click="handleClick(action)"
+                @click="action.handler()"
                 :class="[
-                  'grouped-btn group flex items-center justify-center gap-2 rounded-full font-mono text-sm px-4 h-10 transition-all duration-200 whitespace-nowrap disabled:opacity-30 disabled:cursor-not-allowed',
+                  'ui-control grouped-btn flex items-center justify-center gap-2 rounded-full font-mono text-sm px-4 h-10 whitespace-nowrap disabled:opacity-30 disabled:cursor-not-allowed',
                   action.type === 'advance'
                     ? 'grouped-btn-advance'
                     : action.type === 'reject'
@@ -141,7 +91,7 @@ function confirmPending() {
               >
                 <RotateCcw
                   v-if="action.type === 'return'"
-                  class="w-3.5 h-3.5 flex-shrink-0 transition-transform duration-300 group-hover:-rotate-90"
+                  class="w-3.5 h-3.5 flex-shrink-0"
                   :stroke-width="2"
                 />
                 <X
@@ -151,7 +101,7 @@ function confirmPending() {
                 />
                 <ChevronRight
                   v-else
-                  class="w-4 h-4 flex-shrink-0 transition-transform duration-200 group-hover:translate-x-0.5"
+                  class="w-4 h-4 flex-shrink-0"
                   :stroke-width="2.5"
                 />
                 {{ action.label }}
@@ -166,9 +116,9 @@ function confirmPending() {
             v-for="action in props.actions.filter(a => a.type !== 'advance')"
             :key="action.label"
             :disabled="action.disabled"
-            @click="handleClick(action)"
+            @click="action.handler()"
             :class="[
-              'ghost-btn group flex items-center gap-2 rounded-full font-mono font-medium text-sm px-4 h-9 transition-all duration-200 whitespace-nowrap',
+              'ui-control ghost-btn flex items-center gap-2 rounded-full font-mono font-medium text-sm px-4 h-9 whitespace-nowrap',
               action.type === 'reject'
                 ? 'text-error border-error/30 hover:bg-error/10'
                 : 'text-muted-foreground border-border hover:text-foreground hover:border-muted-foreground',
@@ -177,7 +127,7 @@ function confirmPending() {
           >
             <RotateCcw
               v-if="action.type === 'return'"
-              class="w-3.5 h-3.5 flex-shrink-0 transition-transform duration-300 group-hover:-rotate-90"
+              class="w-3.5 h-3.5 flex-shrink-0"
               :stroke-width="2"
             />
             <X
@@ -195,15 +145,13 @@ function confirmPending() {
             v-for="action in props.actions.filter(a => a.type === 'advance')"
             :key="action.label"
             :disabled="action.disabled"
-            @click="handleClick(action)"
-            class="advance-btn group relative overflow-hidden flex items-center justify-center gap-2 rounded-full font-mono font-semibold text-sm px-6 h-10
+            @click="action.handler()"
+            class="ui-control advance-btn relative overflow-hidden flex items-center justify-center gap-2 rounded-full font-mono font-semibold text-sm px-6 h-10
                    w-full sm:w-auto disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            <!-- shimmer sweep -->
-            <span class="shimmer" aria-hidden="true"></span>
             <span class="relative z-10 whitespace-nowrap">{{ action.label }}</span>
             <ChevronRight
-              class="relative z-10 w-4 h-4 flex-shrink-0 transition-transform duration-200 group-hover:translate-x-0.5"
+              class="relative z-10 w-4 h-4 flex-shrink-0"
               :stroke-width="2.5"
             />
           </button>
@@ -218,20 +166,14 @@ function confirmPending() {
   background: transparent;
 }
 
-/* ── Pulsing status dot ── */
-.pulse-dot {
+.status-dot {
   display: inline-block;
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: rgb(var(--color-primary));
-  animation: pulse 2.4s ease-in-out infinite;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1;   transform: scale(1);    box-shadow: 0 0 0 0 rgb(var(--color-primary) / 0.4); }
-  50%       { opacity: 0.5; transform: scale(0.75); box-shadow: 0 0 0 4px rgb(var(--color-primary) / 0);  }
-}
 
 /* ── Ghost secondary button ── */
 .ghost-btn {
@@ -293,13 +235,13 @@ function confirmPending() {
 }
 
 .grouped-btn-advance {
-  background: rgb(var(--color-primary));
-  color: rgb(var(--color-primary-foreground));
+  background: rgb(var(--color-button-primary));
+  color: rgb(var(--color-button-primary-foreground));
   font-weight: 600;
 }
 
 .grouped-btn-advance:hover:not(:disabled) {
-  background: rgb(var(--color-primary-hover));
+  background: rgb(var(--color-button-primary-hover));
 }
 
 @media (min-width: 640px) {
@@ -318,41 +260,12 @@ function confirmPending() {
 
 /* ── Primary advance button ── */
 .advance-btn {
-  background: rgb(var(--color-primary));
-  color: rgb(var(--color-primary-foreground));
+  background: rgb(var(--color-button-primary));
+  color: rgb(var(--color-button-primary-foreground));
 }
 
 .advance-btn:hover:not(:disabled) {
-  background: rgb(var(--color-primary-hover));
+  background: rgb(var(--color-button-primary-hover));
 }
 
-/* shimmer layer */
-.shimmer {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    105deg,
-    transparent 35%,
-    rgb(255 255 255 / 0.18) 50%,
-    transparent 65%
-  );
-  transform: translateX(-100%);
-  transition: none;
-}
-
-.advance-btn:hover:not(:disabled) .shimmer {
-  transform: translateX(100%);
-  transition: transform 0.45s ease;
-}
-
-/* subtle idle glow on advance */
-.advance-btn:not(:disabled) {
-  box-shadow: 0 0 18px rgb(var(--color-primary) / 0.22);
-  animation: idle-glow 3s ease-in-out infinite;
-}
-
-@keyframes idle-glow {
-  0%, 100% { box-shadow: 0 0 18px rgb(var(--color-primary) / 0.20); }
-  50%       { box-shadow: 0 0 28px rgb(var(--color-primary) / 0.40); }
-}
 </style>

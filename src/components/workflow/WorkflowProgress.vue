@@ -1,21 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Check, ChevronRight } from 'lucide-vue-next'
+import { Check } from 'lucide-vue-next'
 import type { TrackStatus, WorkflowConfig, WorkflowVariant } from '@/types'
 import { translateStepLabel } from '@/utils/workflow'
-
-export interface WorkflowProgressAction {
-  label: string
-  handler: () => void
-}
 
 const props = defineProps<{
   status: TrackStatus
   /** Album workflow config — if provided, renders dynamic steps */
   workflowConfig?: WorkflowConfig | null
-  /** Optional actions rendered inline on the connector after the active step */
-  actions?: WorkflowProgressAction[]
   /** Track workflow variant — producer_direct hides the peer review step. */
   variant?: WorkflowVariant
 }>()
@@ -105,7 +98,6 @@ const currentGroupId = computed(() => {
 
 const currentIndex = computed(() => steps.value.indexOf(currentGroupId.value))
 
-const hasInlineAction = computed(() => !!(props.actions?.length && currentIndex.value < steps.value.length - 1))
 </script>
 
 <template>
@@ -137,31 +129,10 @@ const hasInlineAction = computed(() => !!(props.actions?.length && currentIndex.
 
       <!-- Connector between steps -->
       <template v-if="i < steps.length - 1">
-        <!-- Active connector with inline action button (desktop only) -->
-        <div
-          v-if="hasInlineAction && i === currentIndex"
-          class="flex-[3] hidden lg:flex items-center gap-0 min-w-4"
-        >
-          <div class="flex-1 h-px bg-primary"></div>
-          <button
-            v-for="action in actions"
-            :key="action.label"
-            @click="action.handler()"
-            class="workflow-bridge-btn group flex items-center gap-1.5 rounded-full font-mono font-semibold text-xs px-3.5 h-7 whitespace-nowrap transition-all shrink-0 mx-1
-                   bg-button-primary hover:bg-button-primary-hover text-button-primary-foreground border-2 border-button-primary-hover
-                   shadow-[0_0_14px_rgb(var(--color-button-primary)_/_0.25)] hover:shadow-[0_0_22px_rgb(var(--color-button-primary)_/_0.42)]"
-          >
-            {{ action.label }}
-            <ChevronRight class="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" :stroke-width="2.5" />
-          </button>
-          <div class="flex-1 h-px bg-border"></div>
-        </div>
-        <!-- Fallback connector on smaller screens, or normal connector -->
         <div
           :class="[
             'flex-1 h-px min-w-4',
             i < currentIndex ? 'bg-primary' : 'bg-border',
-            hasInlineAction && i === currentIndex ? 'lg:hidden' : ''
           ]"
         />
       </template>
@@ -169,12 +140,3 @@ const hasInlineAction = computed(() => !!(props.actions?.length && currentIndex.
   </div>
 </template>
 
-<style scoped>
-.workflow-bridge-btn {
-  animation: bridge-glow 3s ease-in-out infinite;
-}
-@keyframes bridge-glow {
-  0%, 100% { box-shadow: 0 0 14px rgb(var(--color-button-primary) / 0.2); }
-  50% { box-shadow: 0 0 24px rgb(var(--color-button-primary) / 0.36); }
-}
-</style>

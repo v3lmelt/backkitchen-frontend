@@ -1245,19 +1245,19 @@ onMounted(() => {
     </template>
 
     <ConfirmModal
-      v-if="pendingAdminAction"
-      :title="pendingAdminAction.title"
-      :message="pendingAdminAction.message"
-      :confirm-text="pendingAdminAction.confirmText"
-      :destructive="pendingAdminAction.destructive"
+      :open="pendingAdminAction !== null"
+      :title="pendingAdminAction?.title ?? ''"
+      :message="pendingAdminAction?.message"
+      :confirm-text="pendingAdminAction?.confirmText"
+      :destructive="pendingAdminAction?.destructive"
       @confirm="confirmAdminAction"
       @cancel="pendingAdminAction = null"
     />
 
     <ConfirmModal
-      v-if="deleteUserTarget"
+      :open="deleteUserTarget !== null"
       :title="t('admin.softDeleteTitle')"
-      :message="t('admin.softDeleteMessage', { name: deleteUserTarget.display_name })"
+      :message="t('admin.softDeleteMessage', { name: deleteUserTarget?.display_name ?? '' })"
       :confirm-text="t('admin.softDeleteConfirm')"
       :destructive="true"
       @confirm="confirmDeleteUser"

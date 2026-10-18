@@ -12,6 +12,7 @@ interface BatchIssueActionsDeps {
   trackId: Ref<number>
   issues: Ref<Issue[]>
   selectedIssue?: Ref<Issue | null>
+  additionalIssues?: Ref<Issue[]>[]
   canSubmitStatus: (issue: Issue) => boolean
   canChangeStatus: (issue: Issue) => boolean
 }
@@ -20,6 +21,7 @@ export function useBatchIssueActions({
   trackId,
   issues,
   selectedIssue,
+  additionalIssues = [],
   canSubmitStatus,
   canChangeStatus,
 }: BatchIssueActionsDeps) {
@@ -50,17 +52,19 @@ export function useBatchIssueActions({
         status_note: note.value.trim() || undefined,
       })
       const updatedById = new Map(updatedIssues.map(issue => [issue.id, issue]))
-      issues.value = issues.value.map((issue) => {
-        const updated = updatedById.get(issue.id)
-        return updated ? { ...issue, ...updated } : issue
-      })
+      for (const list of [issues, ...additionalIssues]) {
+        list.value = list.value.map((issue) => {
+          const updated = updatedById.get(issue.id)
+          return updated ? { ...issue, ...updated } : issue
+        })
+      }
       if (selectedIssue?.value && updatedById.has(selectedIssue.value.id)) {
         selectedIssue.value = { ...selectedIssue.value, ...updatedById.get(selectedIssue.value.id)! }
       }
       selectedIds.value = []
       note.value = ''
-    } catch (err: any) {
-      toastError(err.message || t('workflowStep.transitionFailed'))
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t('workflowStep.transitionFailed'))
     } finally {
       batchUpdatingIssues.value = false
     }

@@ -597,7 +597,7 @@ function selectStage(stageId: string) {
   const desktopQuery = typeof window.matchMedia === 'function' ? window.matchMedia('(min-width: 1280px)') : null
   if (desktopQuery?.matches) return
   nextTick(() => {
-    inspectorRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    inspectorRef.value?.scrollIntoView({ behavior: typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: no-preference)').matches ? 'smooth' : 'auto', block: 'start' })
   })
 }
 
@@ -1006,7 +1006,7 @@ function saveConfig() {
               @keydown.enter.prevent="selectStage(stage.id)"
               @keydown.space.prevent="selectStage(stage.id)"
               :class="[
-                'group w-full text-left border rounded-none transition-all cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
+                'group w-full text-left border rounded-none transition-[color,background-color,border-color,box-shadow] duration-[var(--motion-feedback)] cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
                 selectedStageId === stage.id
                   ? selectedStageCardClass
                   : 'border-border bg-card hover:bg-background/80',
@@ -1409,11 +1409,11 @@ function saveConfig() {
       </button>
     </div>
     <ConfirmModal
-      v-if="pendingConfirmationCopy"
-      :title="pendingConfirmationCopy.title"
-      :message="pendingConfirmationCopy.message"
-      :confirm-text="pendingConfirmationCopy.confirmText"
-      :destructive="pendingConfirmationCopy.destructive"
+      :open="pendingConfirmationCopy !== null"
+      :title="pendingConfirmationCopy?.title ?? ''"
+      :message="pendingConfirmationCopy?.message"
+      :confirm-text="pendingConfirmationCopy?.confirmText"
+      :destructive="pendingConfirmationCopy?.destructive"
       @confirm="confirmPendingAction"
       @cancel="pendingConfirmation = null"
     />

@@ -17,6 +17,7 @@ import type {
   CircleMember,
   CircleSummary,
   Comment,
+  ComposerAccount,
   Discussion,
   EditHistory,
   ExportProgressEvent,
@@ -33,12 +34,14 @@ import type {
   WorkflowEvent,
   WorkflowTemplate,
   Issue,
+  MasterDelivery,
   IssueStatus,
   Notification,
   Track,
   TrackPlaybackPreference,
   TrackPlaybackPreferenceScope,
   TrackDetailResponse,
+  TrackSourceVersion,
   TrackStatus,
   User,
   UserRole,
@@ -90,28 +93,21 @@ export function resolveUploadUrl(path: string | null | undefined): string {
 }
 
 /**
- * Track audio endpoint URLs. `cacheKey` feeds the `?v=` cache-busting param
- * (track version / delivery number); `cycle` feeds `&c=` (workflow cycle).
+ * Immutable source/delivery URLs include record revision context so reused
+ * SQLite IDs cannot reuse another record's cached bytes. Current source
+ * fallback retains its track-version cache key.
  */
 export function trackAudioUrl(trackId: number, cacheKey?: number | null): string {
   return `${API_ORIGIN}/api/tracks/${trackId}/audio?v=${cacheKey ?? 0}`
 }
 
-export function masterAudioUrl(trackId: number, cacheKey?: number | null, cycle?: number | null): string {
-  return `${API_ORIGIN}/api/tracks/${trackId}/master-audio?v=${cacheKey ?? 0}&c=${cycle ?? 1}`
+
+export function sourceVersionAudioUrl(trackId: number, version: TrackSourceVersion): string {
+  return `${API_ORIGIN}/api/tracks/${trackId}/source-versions/${version.id}/audio?v=${version.version_number}&c=${version.workflow_cycle}&t=${encodeURIComponent(version.created_at)}`
 }
 
-export function sourceVersionAudioUrl(trackId: number, versionId: number): string {
-  return `${API_ORIGIN}/api/tracks/${trackId}/source-versions/${versionId}/audio`
-}
-
-export function masterDeliveryAudioUrl(
-  trackId: number,
-  deliveryId: number,
-  cacheKey?: number | null,
-  cycle?: number | null,
-): string {
-  return `${API_ORIGIN}/api/tracks/${trackId}/master-deliveries/${deliveryId}/audio?v=${cacheKey ?? 0}&c=${cycle ?? 1}`
+export function masterDeliveryAudioUrl(trackId: number, delivery: MasterDelivery): string {
+  return `${API_ORIGIN}/api/tracks/${trackId}/master-deliveries/${delivery.id}/audio?v=${delivery.delivery_number}&c=${delivery.workflow_cycle}&t=${encodeURIComponent(delivery.created_at)}`
 }
 
 function parseErrorDetail(detail: unknown): string {
@@ -336,6 +332,12 @@ export const albumApi = {
     return request<Album[]>(`/albums${qs ? `?${qs}` : ''}`)
   },
   get: (id: number) => request<Album>(`/albums/${id}`),
+  listComposerCandidates: (albumId: number, query = '') => {
+    const params = new URLSearchParams()
+    if (query) params.set('q', query)
+    const qs = params.toString()
+    return request<ComposerAccount[]>(`/albums/${albumId}/composer-candidates${qs ? `?${qs}` : ''}`)
+  },
   archive: (id: number) =>
     request<Album>(`/albums/${id}/archive`, { method: 'POST' }),
   restore: (id: number) =>
@@ -1145,7 +1147,7 @@ export function uploadToR2(
     const xhr = new XMLHttpRequest()
     xhr.open('PUT', presignedUrl)
     xhr.setRequestHeader('Content-Type', contentType)
-    xhr.setRequestHeader('Cache-Control', 'public, max-age=2592000')
+    xhr.setRequestHeader('Cache-Control', 'private, no-store')
 
     if (onProgress) {
       xhr.upload.addEventListener('progress', (e) => {

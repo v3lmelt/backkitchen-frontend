@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { trackApi, r2Api, uploadToR2, masterAudioUrl as buildMasterAudioUrl, trackAudioUrl, issueApi } from '@/api'
+import { trackApi, r2Api, uploadToR2, masterDeliveryAudioUrl, sourceVersionAudioUrl, issueApi } from '@/api'
 import { useAppStore } from '@/stores/app'
 import type { Track, Issue, WorkflowEvent, TrackSourceVersion, WorkflowStepDef, ReviewerCandidate } from '@/types'
 import { formatLocaleDate } from '@/utils/time'
@@ -34,13 +34,14 @@ import { useToast } from '@/composables/useToast'
 import { useIssueDrawer } from '@/composables/useIssueDrawer'
 import { buildTrackWorkspaceRoute, stepIsMasteringRelated, translateStepLabel, translateWorkflowDecision, translateWorkflowStatusLabel, workflowEventDotColor } from '@/utils/workflow'
 import { formatSourceVersionOptionLabel } from '@/utils/sourceVersions'
+import { currentPlayableSource, currentSourceAudioUrl, issuesForMasterAudio, issuesForSourceAudio } from '@/utils/issueAudio'
 import { activeAssignmentsForStep } from '@/utils/reviewAssignments'
 import { useTrackWebSocket } from '@/composables/useTrackWebSocket'
-import { useDualWaveformPreview } from '@/composables/useDualWaveformPreview'
 import { useTrackStore } from '@/stores/tracks'
 import { useTrackDetail } from '@/composables/useTrackDetail'
 import { extractAudioDuration } from '@/utils/audio'
 import {
+  canViewerAccessMasterAudio,
   canViewerSeeMastering,
   requiredReviewerCount,
   viewerCanManageTrackAlbum as viewerCanManageTrackAlbumOf,
@@ -216,28 +217,6 @@ function formatTimelineEvent(event: WorkflowEvent): string {
 const trackId = computed(() => Number(route.params.id))
 
 const selectedIssue = ref<Issue | null>(null)
-const sourceWaveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
-const masterWaveformRef = ref<InstanceType<typeof WaveformPlayer> | null>(null)
-const {
-  sourceWaveformDuration,
-  sourceWaveformCurrentTime,
-  sourceWaveformIsPlaying,
-  sourceWaveformPeaks,
-  masterWaveformDuration,
-  masterWaveformCurrentTime,
-  masterWaveformIsPlaying,
-  masterWaveformPeaks,
-  onSourceWaveformReady,
-  onSourceWaveformTimeUpdate,
-  onSourceWaveformPlaybackStateChange,
-  onMasterWaveformReady,
-  onMasterWaveformTimeUpdate,
-  onMasterWaveformPlaybackStateChange,
-  resetDualWaveformState,
-  selectedIssuePreview,
-  handleIssuePreviewPlayAt,
-  handleIssuePreviewAction,
-} = useDualWaveformPreview({ selectedIssue, sourceWaveformRef, masterWaveformRef })
 const events = ref<WorkflowEvent[]>([])
 const {
   track,
@@ -245,6 +224,7 @@ const {
   allIssues,
   mentionCandidates,
   sourceVersions,
+  masterDeliveries,
   reviewAssignments,
   workflowConfig,
   loading,
@@ -257,13 +237,21 @@ const {
   },
   onTrackIdChange: () => {
     selectedIssue.value = null
-    resetDualWaveformState()
     if (parseIssueQuery(route.query.issue) != null) {
       replaceIssueDrawerQuery(null)
     }
     events.value = []
   },
 })
+const viewerCanManageTrackAlbum = computed(() =>
+  viewerCanManageTrackAlbumOf(track.value, appStore.currentUser),
+)
+const canSeeMastering = computed(() =>
+  canViewerSeeMastering(track.value, appStore.currentUser?.id, viewerCanManageTrackAlbum.value),
+)
+const canAccessMasterAudio = computed(() =>
+  canViewerAccessMasterAudio(track.value, appStore.currentUser?.id, viewerCanManageTrackAlbum.value),
+)
 const timelineExpanded = ref(false)
 const timelineFilter = ref<'all' | 'transitions' | 'issues' | 'uploads'>('all')
 const TIMELINE_PREVIEW_COUNT = 5
@@ -351,47 +339,31 @@ watch(() => route.query.issue, () => {
   syncIssueDrawerFromRoute()
 })
 
-const audioUrl = computed(() => {
-  const t = track.value
-  if (!t?.file_path) return ''
-  return trackAudioUrl(trackId.value, t.version ?? 0)
-})
+const audioUrl = computed(() => currentSourceAudioUrl(track.value, sourceVersions.value))
 const { downloading, downloadProgress, downloadTrackAudio } = useAudioDownload()
 const handleDownload = () => downloadTrackAudio(audioUrl, track)
 
 const masterAudioUrl = computed(() => {
   const d = track.value?.current_master_delivery
-  if (!d?.file_path) return ''
-  return buildMasterAudioUrl(trackId.value, d.delivery_number, d.workflow_cycle)
+  if (!canAccessMasterAudio.value || !d?.file_path) return ''
+  return masterDeliveryAudioUrl(trackId.value, d)
 })
 const { downloading: masterDownloading, downloadProgress: masterDownloadProgress, downloadTrackAudio: downloadMasterAudio } = useAudioDownload()
 const handleMasterDownload = () => downloadMasterAudio(masterAudioUrl, track, '_master')
 
-watch(audioUrl, () => {
-  sourceWaveformDuration.value = 0
-  sourceWaveformCurrentTime.value = 0
-  sourceWaveformIsPlaying.value = false
-  sourceWaveformPeaks.value = []
-})
 
-watch(masterAudioUrl, () => {
-  masterWaveformDuration.value = 0
-  masterWaveformCurrentTime.value = 0
-  masterWaveformIsPlaying.value = false
-  masterWaveformPeaks.value = []
+const currentWaveformIssues = computed(() => issuesForSourceAudio(
+  issues.value, currentPlayableSource(track.value, sourceVersions.value), track.value, true, sourceVersions.value,
+))
+const compareWaveformIssues = computed(() => issuesForSourceAudio(
+  allIssues.value, sourceVersions.value.find(version => version.id === selectedCompareVersionId.value) ?? null, track.value,
+))
+const compareSourceAudioUrl = computed(() => {
+  const source = sourceVersions.value.find(version => version.id === selectedCompareVersionId.value)
+  return source ? sourceVersionAudioUrl(trackId.value, source) : ''
 })
-
-const currentCycleIssues = computed(() => issues.value)
-const currentWaveformIssues = computed(() => {
-  const currentVersion = track.value?.version
-  if (currentVersion == null) return currentCycleIssues.value
-  return currentCycleIssues.value.filter(issue => issue.phase !== 'final_review' && (issue.source_version_number == null || issue.source_version_number === currentVersion))
-})
-const masterWaveformIssues = computed(() => {
-  const deliveryId = track.value?.current_master_delivery?.id
-  if (!deliveryId) return []
-  return currentCycleIssues.value.filter(issue => issue.phase === 'final_review' && issue.master_delivery_id === deliveryId)
-})
+const masterWaveformIssues = computed(() => canSeeMastering.value
+  ? issuesForMasterAudio(allIssues.value, track.value?.current_master_delivery ?? null) : [])
 // The API already scopes `allIssues` to what this viewer may see. Keep the
 // complete cross-cycle history in the detail list while waveform markers stay
 // scoped above to the current workflow cycle and audio asset.
@@ -450,8 +422,6 @@ const {
 })
 
 function onIssueSelect(issue: Issue) {
-  sourceWaveformRef.value?.focusIssue?.(issue)
-  masterWaveformRef.value?.focusIssue?.(issue)
   openSelectedIssue(issue)
 }
 
@@ -541,12 +511,6 @@ const selectedCompareVersionNotes = computed(() => {
   return sv?.revision_notes ?? null
 })
 
-const viewerCanManageTrackAlbum = computed(() =>
-  viewerCanManageTrackAlbumOf(track.value, appStore.currentUser),
-)
-const canSeeMastering = computed(() =>
-  canViewerSeeMastering(track.value, appStore.currentUser?.id, viewerCanManageTrackAlbum.value),
-)
 const hasMasteringHistory = computed(() => Boolean(track.value?.current_master_delivery))
 const isActiveMasteringFlow = computed(() => {
   if (!track.value) return false
@@ -954,7 +918,7 @@ async function cancelSourceFollowup() {
 }
 
 const primaryActions = computed(() => {
-  if (!track.value?.allowed_actions?.length) return []
+  if (track.value?.viewer_can_open_workflow !== true) return []
   if (!track.value.workflow_step) return []
   return [{
     key: 'open-step',
@@ -986,12 +950,37 @@ const composerProxyActorDisplay = computed(() => {
   if (!track.value || hasPlatformComposers.value || !hasExternalComposers.value) return ''
   return track.value.proxy_uploader?.display_name ?? track.value.submitter?.display_name ?? '--'
 })
+const pendingReopenRequest = computed(() => track.value?.pending_reopen_request ?? null)
+const canDecideReopen = computed(() => pendingReopenRequest.value !== null
+  && track.value?.viewer_is_album_manager === true && track.value.viewer_has_pending_work === true)
+const reopenDeciding = ref(false)
+const pendingReopenStageLabel = computed(() => {
+  const stageId = pendingReopenRequest.value?.target_stage_id
+  const step = workflowConfig.value?.steps.find(step => step.id === stageId)
+  return step ? translateStepLabel(step, t) : stageId
+})
+
+async function decideReopen(decision: 'approve' | 'reject') {
+  if (!pendingReopenRequest.value || !canDecideReopen.value || reopenDeciding.value) return
+  reopenDeciding.value = true
+  try {
+    await trackApi.decideReopenRequest(pendingReopenRequest.value.id, decision)
+    await loadTrack()
+    toastSuccess(t(`trackDetail.reopenRequest.${decision === 'approve' ? 'approved' : 'rejected'}`))
+  } catch (error) {
+    toastError(error instanceof Error ? error.message : t('trackDetail.reopenFailed'))
+  } finally {
+    reopenDeciding.value = false
+  }
+}
+
 const canDirectReopen = computed(() => {
   const allowedActions = track.value?.allowed_actions
   if (allowedActions) return allowedActions.includes('direct_reopen')
   return track.value?.status === 'completed' && (viewerCanManageTrackAlbum.value || isMasteringEngineer.value)
 })
 const canRequestReopen = computed(() => {
+  if (pendingReopenRequest.value) return false
   const allowedActions = track.value?.allowed_actions
   if (allowedActions) return allowedActions.includes('request_reopen')
   return track.value?.status === 'completed' && isSubmitter.value && !viewerCanManageTrackAlbum.value && !isMasteringEngineer.value
@@ -1086,6 +1075,7 @@ async function handleReopen() {
     } else {
       await trackApi.requestReopen(track.value.id, reopenTargetStage.value, reopenReason.value, reopenMasteringNotes.value.trim() || undefined)
       toastSuccess(t('trackDetail.reopenRequested'))
+      await loadTrack()
     }
     resetReopenForm()
   } catch (e: any) {
@@ -1122,7 +1112,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
         class="flex items-center justify-between gap-3 px-4 py-2.5 bg-warning-bg border border-warning/30 text-warning text-sm font-mono"
       >
         <div class="flex items-center gap-2 min-w-0">
-          <span class="w-2 h-2 rounded-full bg-warning animate-pulse flex-shrink-0"></span>
+          <span class="w-2 h-2 rounded-full bg-warning flex-shrink-0"></span>
           <span class="truncate">{{ wsReconnectAttempts > 0 ? t('trackDetail.liveReconnecting', { n: wsReconnectAttempts }) : t('trackDetail.liveDisconnected') }}</span>
         </div>
         <button @click="wsRetry" class="text-xs font-mono text-warning underline underline-offset-2 hover:no-underline flex-shrink-0">
@@ -1147,7 +1137,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
               class="inline-flex items-center gap-1.5 text-xs text-success font-mono"
               :title="t('trackDetail.liveConnected')"
             >
-              <span class="w-1.5 h-1.5 rounded-full bg-success animate-pulse"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
               {{ t('trackDetail.live') }}
             </span>
           </div>
@@ -1260,16 +1250,13 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
               </button>
             </div>
             <WaveformPlayer
-              ref="sourceWaveformRef"
               :audio-url="audioUrl"
               :issues="currentWaveformIssues"
+              :compare-issues="compareWaveformIssues"
               zoomable
               :track-id="trackId"
-              :compare-version-id="selectedCompareVersionId"
+              :compare-audio-url="compareSourceAudioUrl"
               @regionClick="onIssueSelect"
-              @ready="onSourceWaveformReady"
-              @timeupdate="onSourceWaveformTimeUpdate"
-              @playbackStateChange="onSourceWaveformPlaybackStateChange"
             />
             <div v-if="currentVersionRevisionNotes" class="mt-2 px-3 py-2 border border-border rounded-none bg-card">
               <p class="text-xs font-mono text-muted-foreground mb-0.5">{{ currentVersionNotesLabel }}</p>
@@ -1285,7 +1272,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
           </div>
 
           <!-- Master delivery audio (read-only preview) -->
-          <div v-if="masterAudioUrl && canSeeMastering">
+          <div v-if="masterAudioUrl">
             <div class="flex items-center justify-between mb-2">
               <h3 class="text-sm font-medium text-muted-foreground">
                 {{ t('trackDetail.masterAudio') }}
@@ -1296,16 +1283,12 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
               </button>
             </div>
             <WaveformPlayer
-              ref="masterWaveformRef"
               :audio-url="masterAudioUrl"
               :issues="masterWaveformIssues"
               zoomable
               :track-id="trackId"
               playback-scope="master"
               @regionClick="onIssueSelect"
-              @ready="onMasterWaveformReady"
-              @timeupdate="onMasterWaveformTimeUpdate"
-              @playbackStateChange="onMasterWaveformPlaybackStateChange"
             />
           </div>
           <div v-else-if="track.current_master_delivery && canSeeMastering" class="card space-y-3">
@@ -1355,7 +1338,6 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
             </div>
             <IssueMarkerList
               :issues="visibleIssueList"
-              :current-source-version-number="track.version"
               :track="track"
               :assignments="reviewAssignments"
               :show-activity="true"
@@ -1405,13 +1387,25 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
             v-for="action in primaryActions"
             :key="action.key"
             @click="action.handler()"
-            class="workflow-cta-btn group w-full flex items-center justify-between gap-2 rounded-full font-mono font-semibold px-5 h-11 text-sm transition-all
-                   bg-button-primary hover:bg-button-primary-hover text-button-primary-foreground
-                   shadow-[0_0_16px_rgb(var(--color-primary)_/_0.25)] hover:shadow-[0_0_24px_rgb(var(--color-primary)_/_0.45)]"
+            class="ui-control w-full flex items-center justify-between gap-2 rounded-full font-mono font-semibold px-5 h-11 text-sm bg-button-primary hover:bg-button-primary-hover text-button-primary-foreground"
           >
             {{ action.label }}
-            <ChevronRight class="w-5 h-5 transition-transform group-hover:translate-x-0.5" :stroke-width="2.5" />
+            <ChevronRight class="w-5 h-5" :stroke-width="2.5" />
           </button>
+        </div>
+
+        <div v-if="pendingReopenRequest" class="card space-y-3 border-warning/30">
+          <h3 class="text-sm font-mono font-semibold text-foreground">{{ t('trackDetail.reopenRequest.pending') }}</h3>
+          <p class="text-xs text-muted-foreground">{{ t('trackDetail.reopenRequest.target', { stage: pendingReopenStageLabel }) }}</p>
+          <p class="text-sm text-foreground whitespace-pre-wrap">{{ pendingReopenRequest.reason }}</p>
+          <div v-if="canDecideReopen" class="flex gap-2">
+            <button class="btn-primary flex-1" :disabled="reopenDeciding" @click="decideReopen('approve')">
+              {{ t('trackDetail.reopenRequest.approve') }}
+            </button>
+            <button class="btn-secondary flex-1" :disabled="reopenDeciding" @click="decideReopen('reject')">
+              {{ t('trackDetail.reopenRequest.reject') }}
+            </button>
+          </div>
         </div>
 
         <div v-if="pendingSourceFollowupRequest" class="card space-y-3 border-warning/30">
@@ -1482,7 +1476,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
           />
           <div v-if="sourceFollowupUploading" class="space-y-1">
             <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
-              <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: sourceFollowupProgress + '%' }"></div>
+              <div class="ui-progress h-full bg-primary rounded-full" :style="{ width: sourceFollowupProgress + '%' }"></div>
             </div>
             <p class="text-xs text-muted-foreground text-right">{{ sourceFollowupProgress }}%</p>
           </div>
@@ -1514,7 +1508,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
           </p>
           <div v-if="resubmitUploading" class="space-y-1">
             <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
-              <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: resubmitProgress + '%' }"></div>
+              <div class="ui-progress h-full bg-primary rounded-full" :style="{ width: resubmitProgress + '%' }"></div>
             </div>
             <p class="text-xs text-muted-foreground text-right">{{ resubmitProgress }}%</p>
           </div>
@@ -1604,14 +1598,14 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
             <span class="text-muted-foreground">{{ t('trackDetail.openIssues') }}</span>
             <span class="text-foreground">{{ track.open_issue_count || 0 }}</span>
           </div>
-          <div class="flex justify-between">
+          <div v-if="canSeeMastering || canAccessMasterAudio" class="flex justify-between">
             <span class="text-muted-foreground">{{ t('trackDetail.currentMaster') }}</span>
             <span class="text-foreground">
               <span v-if="track.current_master_delivery">v{{ track.current_master_delivery.delivery_number }}</span>
               <span v-else>--</span>
             </span>
           </div>
-          <div v-if="track.current_master_delivery" class="pt-2 border-t border-border">
+          <div v-if="canSeeMastering && track.current_master_delivery" class="pt-2 border-t border-border">
             <div class="text-xs text-muted-foreground">{{ t('trackDetail.finalApprovals') }}</div>
             <div class="flex items-center justify-between mt-1">
               <span>{{ t('trackDetail.producer') }}</span>
@@ -1748,7 +1742,7 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
               />
               <div v-if="sourceFollowupUploading" class="space-y-1">
                 <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
-                  <div class="h-full bg-primary rounded-full transition-all duration-300" :style="{ width: sourceFollowupProgress + '%' }"></div>
+                  <div class="ui-progress h-full bg-primary rounded-full" :style="{ width: sourceFollowupProgress + '%' }"></div>
                 </div>
                 <p class="text-xs text-muted-foreground text-right">{{ sourceFollowupProgress }}%</p>
               </div>
@@ -1911,12 +1905,10 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
           v-for="action in primaryActions"
           :key="'m-' + action.key"
           @click="action.handler()"
-          class="workflow-cta-btn group flex items-center gap-2 rounded-full font-mono font-semibold px-5 h-10 text-sm leading-none transition-all
-                 bg-button-primary hover:bg-button-primary-hover text-button-primary-foreground
-                 shadow-[0_0_16px_rgb(var(--color-primary)_/_0.25)] hover:shadow-[0_0_24px_rgb(var(--color-primary)_/_0.45)]"
+          class="ui-control flex items-center gap-2 rounded-full font-mono font-semibold px-5 h-10 text-sm leading-none bg-button-primary hover:bg-button-primary-hover text-button-primary-foreground"
         >
           {{ action.label }}
-          <ChevronRight class="w-4 h-4 transition-transform group-hover:translate-x-0.5" :stroke-width="2.5" />
+          <ChevronRight class="w-4 h-4" :stroke-width="2.5" />
         </button>
       </div>
     </div>
@@ -1928,17 +1920,12 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
       :assignments="reviewAssignments"
       :issues="allIssues"
       :mention-candidates="mentionCandidates"
-      :preview="selectedIssuePreview"
+      :source-versions="sourceVersions"
+      :master-deliveries="masterDeliveries"
       @close="closeIssueDrawer"
       @updated="onIssueUpdated"
       @open-issue="openIssueReference"
-      @preview-play-at="handleIssuePreviewPlayAt"
-      @preview-action="handleIssuePreviewAction"
     />
-    <TrackProgressModal v-if="showProgressModal && track" :track="track" :config="workflowConfig"
-      @close="showProgressModal = false" @saved="reloadAfterManagement" />
-    <ReviewManagementModal v-if="showReviewManagement && track" :key="track.id" :track-id="track.id"
-      @close="showReviewManagement = false" @saved="reloadAfterManagement" />
     <MasteringChatSidebar
       v-if="canSeeMastering && track"
       :track-id="trackId"
@@ -1948,15 +1935,10 @@ watch([track, olderPlayableVersions, () => route.query.compareVersion], ([curren
       @open-issue="openIssueReference"
     />
   </div>
+  <TrackProgressModal :open="showProgressModal && track !== null" :track="track" :config="workflowConfig"
+    @close="showProgressModal = false" @saved="reloadAfterManagement" />
+  <ReviewManagementModal :open="showReviewManagement && track !== null" :track-id="trackId"
+    @close="showReviewManagement = false" @saved="reloadAfterManagement" />
 
 </template>
 
-<style scoped>
-.workflow-cta-btn {
-  animation: cta-glow 3s ease-in-out infinite;
-}
-@keyframes cta-glow {
-  0%, 100% { box-shadow: 0 0 16px rgb(var(--color-primary) / 0.2); }
-  50% { box-shadow: 0 0 28px rgb(var(--color-primary) / 0.4); }
-}
-</style>
