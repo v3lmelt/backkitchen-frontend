@@ -83,7 +83,7 @@ async function handleSubmit() {
       >{{ t('auth.langToggle') }}</button>
     </div>
 
-    <div class="relative z-10 w-full max-w-[400px] px-6 animate-fade-in">
+    <div class="relative z-10 w-full max-w-[400px] px-6 ui-enter">
       <div class="flex items-center justify-center gap-3 mb-10">
         <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center shrink-0">
           <Music class="w-5 h-5 text-primary-foreground" :stroke-width="2" />
@@ -95,7 +95,7 @@ async function handleSubmit() {
         <h1 class="font-mono text-xl font-bold text-foreground mb-1">{{ t('auth.resetPassword.title') }}</h1>
         <p class="text-muted-foreground text-sm font-sans mb-7">{{ t('auth.resetPassword.subtitle') }}</p>
 
-        <Transition name="slide-fade">
+        <Transition name="ui-feedback-fade">
           <div v-if="error" class="mb-5 px-4 py-3 bg-error-bg border border-error/20 text-error text-sm font-sans rounded-none flex items-start gap-2">
             <AlertCircle class="w-4 h-4 mt-0.5 shrink-0" :stroke-width="2" />
             <span>{{ error }}</span>
@@ -158,16 +158,3 @@ async function handleSubmit() {
   </div>
 </template>
 
-<style scoped>
-.animate-fade-in {
-  animation: fadeIn 0.35s ease-out;
-}
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.slide-fade-enter-active { transition: all 0.25s ease-out; }
-.slide-fade-leave-active { transition: all 0.15s ease-in; }
-.slide-fade-enter-from { opacity: 0; transform: translateY(-6px); }
-.slide-fade-leave-to { opacity: 0; transform: translateY(-6px); }
-</style>

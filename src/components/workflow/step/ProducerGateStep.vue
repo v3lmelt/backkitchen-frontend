@@ -37,11 +37,13 @@ const props = defineProps<{
   // waveform + compare
   audioUrl: string
   waveformIssues: Issue[]
+  compareWaveformIssues: Issue[]
   trackId: number
   hasComparableVersions: boolean
   showSourceCompare: boolean
   sourceCompareOptions: SelectOption[]
   compareSourceVersionId: number | null
+  compareSourceAudioUrl: string
   isSourceCompareActive: boolean
   waveformMode: 'seek' | 'annotate'
   hoveredIssueId: number | null
@@ -53,7 +55,6 @@ const props = defineProps<{
   // issues
   issues: Issue[]
   mentionCandidates: MentionCandidates
-  displayedSourceVersionNumber: number | null
   reviewAssignments: StageAssignment[]
   // checklist summary
   checklistByReviewer: { user: User | null | undefined; items: ChecklistItem[] }[]
@@ -79,9 +80,6 @@ const emit = defineEmits<{
   toggleSourceCompare: []
   'update:compareSourceVersionId': [value: number | null]
   download: []
-  waveformReady: [duration: number]
-  waveformTimeupdate: [time: number]
-  waveformPlaybackStateChange: [isPlaying: boolean]
   requestWaveformMode: [mode: 'seek' | 'annotate']
   issueSelect: [issue: Issue]
   issueHover: [issue: Issue]
@@ -201,14 +199,15 @@ function peerIssueMarkerSummary(issue: Issue): string {
         :ref="registerWaveform"
         :audio-url="audioUrl"
         :issues="waveformIssues"
+        :compare-issues="compareWaveformIssues"
         zoomable
         :track-id="trackId"
-        :compare-version-id="compareSourceVersionId"
-        :selectable="true"
-        :mode="waveformMode"
-        :selected-range="issueFormRef?.selectedRange ?? null"
-        :draft-markers="issueFormRef?.markers ?? []"
-        :draft-range-anchor="issueFormRef?.rangeAnchor ?? null"
+        :compare-audio-url="compareSourceAudioUrl"
+        :selectable="!isSourceCompareActive"
+        :mode="isSourceCompareActive ? 'seek' : waveformMode"
+        :selected-range="isSourceCompareActive ? null : issueFormRef?.selectedRange ?? null"
+        :draft-markers="isSourceCompareActive ? [] : issueFormRef?.markers ?? []"
+        :draft-range-anchor="isSourceCompareActive ? null : issueFormRef?.rangeAnchor ?? null"
         :hovered-issue-id="hoveredIssueId"
         @click="(time: number) => issueFormRef?.handleClick(time)"
         @regionClick="emit('issueSelect', $event)"
@@ -216,9 +215,6 @@ function peerIssueMarkerSummary(issue: Issue): string {
         @issueHover="emit('issueHover', $event)"
         @issueLeave="emit('issueLeave')"
         @requestModeChange="emit('requestWaveformMode', $event)"
-        @ready="emit('waveformReady', $event)"
-        @timeupdate="emit('waveformTimeupdate', $event)"
-        @playbackStateChange="emit('waveformPlaybackStateChange', $event)"
       />
     </div>
 
@@ -226,6 +222,8 @@ function peerIssueMarkerSummary(issue: Issue): string {
       :ref="bindIssueForm"
       :track-id="trackId"
       phase="producer"
+      :readonly="isSourceCompareActive"
+      :creation-target="t('issueHistory.createSourceTarget', { number: track.current_source_version?.version_number ?? track.version })"
       :allow-internal-visibility="false"
       :issues="issues"
       :mention-users="mentionCandidates.issue_public"
@@ -235,14 +233,13 @@ function peerIssueMarkerSummary(issue: Issue): string {
     >
       <template #heading>
         <h3 class="text-sm font-sans font-semibold text-foreground">
-          {{ t('producer.producerIssuesHeading', { count: waveformIssues.length }) }}
+          {{ t('producer.producerIssuesHeading', { count: producerSnapshotIssues.length }) }}
         </h3>
       </template>
     </IssueCreatePanel>
 
     <IssueMarkerList
-      :issues="waveformIssues"
-      :current-source-version-number="displayedSourceVersionNumber"
+      :issues="producerSnapshotIssues"
       :hovered-issue-id="hoveredIssueId"
       :track="track"
       :assignments="reviewAssignments"
@@ -381,9 +378,9 @@ function peerIssueMarkerSummary(issue: Issue): string {
       <IssueMarkerList
         :issues="producerSnapshotIssues"
         :track="track"
+        :assignments="reviewAssignments"
         :selectable="true"
         :selected-ids="selectedProducerIssueIds"
-        :current-source-version-number="track.version"
         :hovered-issue-id="hoveredIssueId"
         :show-activity="true"
         :enable-quick-actions="true"

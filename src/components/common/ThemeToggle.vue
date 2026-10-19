@@ -33,7 +33,7 @@ onBeforeUnmount(() => window.removeEventListener(THEME_CHANGED_EVENT, handleThem
   <button
     type="button"
     data-testid="theme-toggle"
-    class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+    class="ui-control inline-flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
     :aria-label="label"
     :title="label"
     @click="handleToggle"

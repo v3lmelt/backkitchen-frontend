@@ -1,0 +1,60 @@
+{
+  "version": "0.1.56",
+  "date": "2026-10-13",
+  "headline": {
+    "zh-CN": "最终母带访问与终审保护",
+    "en": "Final master access and final-review safeguards"
+  },
+  "summary": {
+    "zh-CN": "专辑成员可在已完成曲目详情试听、下载最终母带；制作中母带和历史草稿保持参与者权限，终审批复严格绑定当前制作周期。",
+    "en": "Album members can play and download the final master from completed track details. In-progress masters and historical drafts remain participant-only, and final approval is restricted to the current workflow cycle."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "母带访问",
+        "en": "Master access"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "成员试听最终母带",
+            "en": "Final master playback for members"
+          },
+          "description": {
+            "zh-CN": "已完成曲目的最终母带可在详情页试听和下载。母带工作台、制作中交付与历史草稿继续向制作参与者开放；重新开启制作后，普通成员的母带访问随状态收回。",
+            "en": "Members can play and download the final master on completed track details. The mastering workspace, in-progress deliveries and historical drafts stay restricted to production participants. Reopening a track withdraws ordinary members' master access."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "统一音频访问校验",
+            "en": "Consistent audio authorization"
+          },
+          "description": {
+            "zh-CN": "母带试听和下载接口按曲目状态与交付版本校验权限。本地音频通过受保护接口提供，R2 音频使用短期签名下载地址。",
+            "en": "Master playback and download endpoints check track state and delivery identity. Local audio is served through protected endpoints, and R2 audio uses short-lived signed download URLs."
+          }
+        }
+      ]
+    },
+    {
+      "heading": {
+        "zh-CN": "终审",
+        "en": "Final review"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "当前周期交付守卫",
+            "en": "Current-cycle delivery safeguard"
+          },
+          "description": {
+            "zh-CN": "终审批复要求当前制作周期的母带交付，防止重新开启后批准旧周期母带并提前完成曲目。新上传文件使用独立存储名称，保留历史音频内容。",
+            "en": "Final approval requires a master delivery from the current workflow cycle, preventing reopened tracks from completing through an older delivery. Newly uploaded files use unique storage names to preserve historical audio."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -24,6 +24,7 @@ function track(id: number, albumId = 1, status = 'peer_review') {
     id, album_id: albumId, title: `Song ${id}`, artist: 'Artist', status,
     version: 1, updated_at: '2026-09-19T00:00:00Z', duration: 60,
     allowed_actions: ['open-step'], open_issue_count: 1,
+    viewer_has_pending_work: true, viewer_can_open_workflow: true,
   }
 }
 function album(id: number) {

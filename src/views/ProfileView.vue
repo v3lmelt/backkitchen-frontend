@@ -237,7 +237,7 @@ async function changePassword() {
         :key="tab"
         @click="activeTab = tab"
         :class="[
-          'px-4 py-1.5 rounded-full text-sm font-medium transition-all',
+          'px-4 py-1.5 rounded-full text-sm font-medium transition-[color,background-color,box-shadow] duration-[var(--motion-feedback)]',
           activeTab === tab
             ? 'bg-background text-foreground shadow-sm'
             : 'text-muted-foreground hover:text-foreground',

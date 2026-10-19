@@ -14,6 +14,25 @@ vi.mock('@/api', () => ({
 import IssueCreatePanel from './IssueCreatePanel.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
+interface CreatePanelState {
+  handleClick: (time: number) => void
+  handleRangeSelect: (start: number, end: number) => void
+  handleRangeUpdate: (start: number, end: number) => void
+  setRangeAnchorAt: (time: number) => void
+  commitRangeFromAnchorTo: (time: number) => void
+  clearRangeAnchor: () => void
+  removeLastMarker: () => void
+  clearMarkers: () => void
+  openForm: () => void
+  switchMode: (mode: 'timed' | 'general') => void
+  submitIssue: () => Promise<void>
+  markers: { marker_type: 'point' | 'range'; time_start: number; time_end: number | null }[]
+  rangeAnchor: number | null
+  selectedRange: { start: number; end: number } | null
+  showForm: boolean
+  canSubmit: boolean
+}
+
 function clipboardFileItem(file: File, type = file.type): DataTransferItem {
   return {
     kind: 'file',
@@ -523,6 +542,87 @@ describe('IssueCreatePanel', () => {
 
     expect((textarea.element as HTMLTextAreaElement).value).toBe('Compare @issue:7 ')
 
+    wrapper.unmount()
+  })
+  it('blocks every exposed annotation and submit entry while comparison is readonly', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, { props: { trackId: 1, phase: 'mastering', readonly: true,
+      formOpen: true, creationTarget: 'New issues use: current source v3' } })
+    const vm = wrapper.vm as unknown as CreatePanelState
+    await wrapper.get('button.btn-primary').trigger('click')
+    vm.openForm()
+    vm.handleClick(1)
+    vm.handleRangeSelect(1, 2)
+    vm.handleRangeUpdate(2, 3)
+    vm.setRangeAnchorAt(1)
+    vm.commitRangeFromAnchorTo(2)
+    vm.clearRangeAnchor()
+    vm.removeLastMarker()
+    vm.clearMarkers()
+    vm.switchMode('general')
+    vm.showForm = true
+    await vm.submitIssue()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('input').exists()).toBe(false)
+    expect(wrapper.text()).toContain('New issues use: current source v3')
+    expect(wrapper.get('button.btn-primary').attributes('disabled')).toBeDefined()
+    expect(vm.markers).toEqual([])
+    expect(vm.rangeAnchor).toBeNull()
+    expect(vm.selectedRange).toBeNull()
+    expect(vm.canSubmit).toBe(false)
+    expect(mocks.createMock).not.toHaveBeenCalled()
+    await wrapper.setProps({ formOpen: false })
+    await wrapper.setProps({ formOpen: true })
+    expect(wrapper.find('input').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('preserves a restored readonly draft and its markers until comparison ends', async () => {
+    const key = 'backkitchen_issue_draft:1:mastering:none'
+    localStorage.setItem(key, JSON.stringify({ showForm: true, issueMode: 'timed', title: 'Saved title',
+      description: 'Saved description', markers: [{ marker_type: 'range', time_start: 1, time_end: 2 }], rangeAnchor: 1.5 }))
+    const wrapper = mountWithPlugins(IssueCreatePanel, { props: { trackId: 1, phase: 'mastering', readonly: true } })
+    const vm = wrapper.vm as unknown as CreatePanelState
+    vm.handleClick(1)
+    vm.handleRangeUpdate(2, 3)
+    vm.removeLastMarker()
+    vm.clearMarkers()
+    vm.setRangeAnchorAt(4)
+    vm.commitRangeFromAnchorTo(5)
+    vm.clearRangeAnchor()
+    vm.switchMode('general')
+    await vm.submitIssue()
+    expect(vm.markers).toEqual([{ marker_type: 'range', time_start: 1, time_end: 2 }])
+    expect(vm.rangeAnchor).toBe(1.5)
+    expect(wrapper.find('input').exists()).toBe(false)
+    expect(localStorage.getItem(key)).toContain('Saved description')
+    expect(mocks.createMock).not.toHaveBeenCalled()
+    await wrapper.setProps({ readonly: false })
+    expect(wrapper.get('input:not([type="file"])').element).toHaveProperty('value', 'Saved title')
+    expect(wrapper.get('textarea').element).toHaveProperty('value', 'Saved description')
+    expect(vm.canSubmit).toBe(true)
+    await vm.submitIssue()
+    expect(mocks.createMock).toHaveBeenCalledTimes(1)
+    expect(mocks.createMock.mock.calls[0][1].markers).toEqual([{ marker_type: 'range', time_start: 1, time_end: 2 }])
+    expect(localStorage.getItem(key)).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('hides editing inputs and attachments without discarding a live draft when comparison becomes readonly', async () => {
+    const wrapper = mountWithPlugins(IssueCreatePanel, { props: { trackId: 1, phase: 'peer' } })
+    const vm = wrapper.vm as unknown as CreatePanelState
+    vm.handleClick(1)
+    await wrapper.vm.$nextTick()
+    await wrapper.get('input:not([type="file"])').setValue('Live title')
+    await wrapper.get('textarea').setValue('Live description')
+    await wrapper.setProps({ readonly: true, formOpen: true })
+    expect(wrapper.find('input').exists()).toBe(false)
+    expect(wrapper.find('textarea').exists()).toBe(false)
+    expect(vm.selectedRange).toBeNull()
+    await vm.submitIssue()
+    expect(mocks.createMock).not.toHaveBeenCalled()
+    await wrapper.setProps({ readonly: false })
+    expect(wrapper.get('textarea').element).toHaveProperty('value', 'Live description')
+    expect(vm.markers).toEqual([{ marker_type: 'point', time_start: 1, time_end: null }])
     wrapper.unmount()
   })
 })

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
+import { historyIssue } from '@/tests/issueHistoryFixtures'
 
 import { mountWithPlugins } from '@/tests/utils'
 
@@ -40,6 +42,11 @@ type WaveSurferInstance = {
   getDuration: ReturnType<typeof vi.fn>
   getCurrentTime: ReturnType<typeof vi.fn>
   isPlaying: ReturnType<typeof vi.fn>
+}
+
+interface WaveformPlaybackControls {
+  play: () => Promise<void>
+  togglePlay: () => Promise<void>
 }
 
 const waveSurferInstances: WaveSurferInstance[] = []
@@ -119,8 +126,8 @@ vi.mock('wavesurfer.js', () => ({
 import WaveformPlayer from './WaveformPlayer.vue'
 
 async function flushWaveformMount() {
-  await new Promise(resolve => setTimeout(resolve, 0))
-  await new Promise(resolve => setTimeout(resolve, 0))
+  await flushPromises()
+  await flushPromises()
 }
 
 describe('WaveformPlayer', () => {
@@ -215,6 +222,7 @@ describe('WaveformPlayer', () => {
     })
 
     await flushWaveformMount()
+    waveSurferInstances[0].handlers.ready?.()
 
     waveSurferInstances[0].handlers.play?.()
     waveSurferInstances[0].handlers.pause?.()
@@ -222,7 +230,7 @@ describe('WaveformPlayer', () => {
     expect(wrapper.emitted('playbackStateChange')).toEqual([[true], [false]])
   })
 
-  it('applies deferred B mode after compare track becomes ready', async () => {
+  it('keeps A active while B loads and only switches once B is ready', async () => {
     const wrapper = mountWithPlugins(WaveformPlayer, {
       props: {
         audioUrl: '/api/tracks/1/audio',
@@ -231,31 +239,33 @@ describe('WaveformPlayer', () => {
     })
 
     await flushWaveformMount()
+    waveSurferInstances[0].handlers.ready?.()
 
     waveSurferInstances[0].isPlaying.mockReturnValue(true)
     waveSurferInstances[0].getCurrentTime.mockReturnValue(24)
 
-    await wrapper.setProps({ compareVersionId: 2 })
+    await wrapper.setProps({ compareAudioUrl: '/api/tracks/1/source-versions/2/audio?v=2&c=1&t=fixture-2' })
     await flushWaveformMount()
 
     expect(waveSurferInstances).toHaveLength(2)
     expect(loadAudioBlobCachedMock).toHaveBeenCalledWith(
-      '/api/tracks/1/source-versions/2/audio',
+      '/api/tracks/1/source-versions/2/audio?v=2&c=1&t=fixture-2',
       expect.any(Function),
     )
     expect(waveSurferInstances[1].loadBlob).toHaveBeenCalledWith(expect.any(Blob))
     expect(waveSurferInstances[1].load).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('Loading B 0%')
 
-    waveSurferInstances[0].setVolume.mockClear()
-    waveSurferInstances[1].setVolume.mockClear()
 
     await wrapper.findAll('button').find(button => button.text() === 'B')!.trigger('click')
 
+    expect(wrapper.findAll('button').find(button => button.text() === 'B')!.attributes('disabled')).toBeDefined()
     expect(waveSurferInstances[0].setVolume).toHaveBeenLastCalledWith(1)
-    expect(waveSurferInstances[1].setVolume).not.toHaveBeenCalledWith(1)
 
     waveSurferInstances[1].handlers.ready?.()
+    await wrapper.vm.$nextTick()
+    expect(waveSurferInstances[0].setVolume).toHaveBeenLastCalledWith(1)
+    await wrapper.findAll('button').find(button => button.text() === 'B')!.trigger('click')
 
     expect(waveSurferInstances[0].setVolume).toHaveBeenLastCalledWith(0)
     expect(waveSurferInstances[1].setVolume).toHaveBeenLastCalledWith(1)
@@ -272,15 +282,18 @@ describe('WaveformPlayer', () => {
     })
 
     await flushWaveformMount()
+    waveSurferInstances[0].handlers.ready?.()
 
-    await wrapper.setProps({ compareVersionId: 2 })
+    await wrapper.setProps({ compareAudioUrl: '/api/tracks/1/source-versions/2/audio?v=2&c=1&t=fixture-2' })
     await flushWaveformMount()
 
     waveSurferInstances[0].getCurrentTime.mockReturnValue(30)
     waveSurferInstances[1].getDuration.mockReturnValue(120)
     waveSurferInstances[1].handlers.ready?.()
+    await wrapper.vm.$nextTick()
 
     await wrapper.findAll('button').find(button => button.text() === 'B')!.trigger('click')
+    expect(wrapper.emitted('activeSideChange')?.at(-1)).toEqual(['B'])
 
     expect(waveSurferInstances[1].seekTo).toHaveBeenCalledWith(30 / 120)
   })
@@ -297,13 +310,15 @@ describe('WaveformPlayer', () => {
 
     waveSurferInstances[0].handlers.ready?.()
     waveSurferInstances[0].getDuration.mockReturnValue(95)
-    await wrapper.setProps({ compareVersionId: 2 })
+    await wrapper.setProps({ compareAudioUrl: '/api/tracks/1/source-versions/2/audio?v=2&c=1&t=fixture-2' })
     await flushWaveformMount()
 
     waveSurferInstances[1].getDuration.mockReturnValue(120)
     waveSurferInstances[1].handlers.ready?.()
+    await wrapper.vm.$nextTick()
 
     await wrapper.findAll('button').find(button => button.text() === 'B')!.trigger('click')
+    expect(wrapper.emitted('activeSideChange')?.at(-1)).toEqual(['B'])
 
     waveSurferInstances[0].seekTo.mockClear()
     waveSurferInstances[1].seekTo.mockClear()
@@ -330,7 +345,7 @@ describe('WaveformPlayer', () => {
     const [primaryUserGain] = createGainMock.mock.results.map(result => result.value as FakeGainNode)
     expect(primaryUserGain.gain.setTargetAtTime).toHaveBeenCalledWith(10 ** (6 / 20), 0, 0.01)
 
-    await wrapper.setProps({ compareVersionId: 2 })
+    await wrapper.setProps({ compareAudioUrl: '/api/tracks/1/source-versions/2/audio?v=2&c=1&t=fixture-2' })
     await flushWaveformMount()
 
     expect(createGainMock).toHaveBeenCalledTimes(4)
@@ -476,7 +491,7 @@ describe('WaveformPlayer', () => {
     await wrapper.findAll('button').find(button => button.attributes('aria-label') === 'Zoom in')!.trigger('click')
     waveSurferInstances[0].getScroll.mockReturnValue(240)
 
-    await wrapper.setProps({ compareVersionId: 2 })
+    await wrapper.setProps({ compareAudioUrl: '/api/tracks/1/source-versions/2/audio?v=2&c=1&t=fixture-2' })
     await flushWaveformMount()
     waveSurferInstances[1].handlers.ready?.()
 
@@ -484,4 +499,234 @@ describe('WaveformPlayer', () => {
     expect(waveSurferInstances[1].setScroll).toHaveBeenLastCalledWith(240)
   })
 
+  it('uses only the actually audible side markers and its duration for geometry', async () => {
+    const wrapper = mountWithPlugins(WaveformPlayer, { props: {
+      audioUrl: '/api/tracks/9/source-versions/13/audio', trackId: 9,
+      issues: [historyIssue({ title: 'Current A' })],
+      compareIssues: [historyIssue({ id: 2, title: 'Historical B', source_version_id: 11 })],
+      zoomable: true,
+    } })
+    await flushWaveformMount()
+    waveSurferInstances[0].getDuration.mockReturnValue(4)
+    waveSurferInstances[0].getWidth.mockReturnValue(160)
+    waveSurferInstances[0].getCurrentTime.mockReturnValue(1)
+    waveSurferInstances[0].handlers.ready?.()
+    await wrapper.setProps({ compareAudioUrl: '/api/tracks/9/source-versions/11/audio?v=1&c=1&t=fixture-11' })
+    await flushWaveformMount()
+    expect(wrapper.find('button[aria-label="Current A"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="Historical B"]').exists()).toBe(false)
+    waveSurferInstances[1].getDuration.mockReturnValue(2)
+    waveSurferInstances[1].handlers.ready?.()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('button[aria-label="Current A"]').element.parentElement?.style.left).toBe('25%')
+    expect(wrapper.find('button[aria-label="Historical B"]').exists()).toBe(false)
+    await wrapper.findAll('button').find(button => button.text() === 'B')!.trigger('click')
+    expect(wrapper.find('button[aria-label="Current A"]').exists()).toBe(false)
+    expect(wrapper.get('button[aria-label="Historical B"]').element.parentElement?.style.left).toBe('50%')
+    expect(wrapper.emitted('activeSideChange')?.at(-1)).toEqual(['B'])
+    await wrapper.findAll('button').find(button => button.attributes('aria-label') === 'Zoom in')!.trigger('click')
+    waveSurferInstances[1].handlers.scroll?.(0.5, 1.5, 200)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('button[aria-label="Historical B"]').element.parentElement?.style.left).toBe('50%')
+    await wrapper.findAll('button').find(button => button.text() === 'A')!.trigger('click')
+    expect(wrapper.find('button[aria-label="Historical B"]').exists()).toBe(false)
+    expect(wrapper.get('button[aria-label="Current A"]').element.parentElement?.style.left).toBe('25%')
+    wrapper.unmount()
+  })
+
+  it('reports primary network and decode failures with the exact audio identity', async () => {
+    const error = new Error('Audio fetch failed: 403')
+    loadAudioBlobCachedMock.mockRejectedValueOnce(error)
+    const wrapper = mountWithPlugins(WaveformPlayer, { props: { audioUrl: '/api/tracks/9/master-deliveries/21/audio' } })
+    await flushWaveformMount()
+    expect(wrapper.emitted('load-error')?.[0]).toEqual([{ audioUrl: '/api/tracks/9/master-deliveries/21/audio', side: 'A', error }])
+    const pending = Promise.withResolvers<Blob>()
+    loadAudioBlobCachedMock.mockReturnValueOnce(pending.promise)
+    await wrapper.setProps({ audioUrl: '/api/tracks/9/source-versions/11/audio' })
+    const decodeError = new Error('Decode failed')
+    waveSurferInstances[1].loadBlob.mockRejectedValueOnce(decodeError)
+    pending.resolve(new Blob(['bad audio']))
+    await flushWaveformMount()
+    expect(wrapper.emitted('load-error')?.at(-1)).toEqual([{ audioUrl: '/api/tracks/9/source-versions/11/audio', side: 'A', error: decodeError }])
+    wrapper.unmount()
+  })
+
+  it('keeps A markers and playback available when the protected comparison fails', async () => {
+    const wrapper = mountWithPlugins(WaveformPlayer, { props: {
+      audioUrl: '/api/tracks/9/source-versions/13/audio', trackId: 9,
+      issues: [historyIssue({ title: 'Current A' })], compareIssues: [historyIssue({ id: 2, title: 'Historical B' })],
+    } })
+    await flushWaveformMount()
+    waveSurferInstances[0].handlers.ready?.()
+    loadAudioBlobCachedMock.mockRejectedValueOnce(new Error('Audio fetch failed: 404'))
+    await wrapper.setProps({ compareAudioUrl: '/api/tracks/9/source-versions/11/audio?v=1&c=1&t=fixture-11' })
+    await flushWaveformMount()
+    expect(wrapper.emitted('load-error')?.at(-1)?.[0]).toMatchObject({ audioUrl: '/api/tracks/9/source-versions/11/audio?v=1&c=1&t=fixture-11', side: 'B' })
+    expect(wrapper.find('button[aria-label="Current A"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="Historical B"]').exists()).toBe(false)
+    expect(wrapper.findAll('button').find(button => button.text() === 'B')!.attributes('disabled')).toBeDefined()
+    expect(waveSurferInstances[0].setVolume).toHaveBeenLastCalledWith(1)
+    wrapper.unmount()
+  })
+
+  it('does not stretch B click time when both zoomed tracks share pixels per second', async () => {
+    const wrapper = mountWithPlugins(WaveformPlayer, { props: {
+      audioUrl: '/api/tracks/9/source-versions/13/audio', zoomable: true,
+    } })
+    await flushWaveformMount()
+    waveSurferInstances[0].getDuration.mockReturnValue(4)
+    waveSurferInstances[0].getWidth.mockReturnValue(160)
+    waveSurferInstances[0].getCurrentTime.mockReturnValue(1)
+    waveSurferInstances[0].handlers.ready?.()
+    await wrapper.setProps({ compareAudioUrl: '/api/tracks/9/source-versions/11/audio?v=1&c=1&t=fixture-11' })
+    await flushWaveformMount()
+    waveSurferInstances[1].getDuration.mockReturnValue(2)
+    waveSurferInstances[1].handlers.ready?.()
+    await wrapper.vm.$nextTick()
+    await wrapper.findAll('button').find(button => button.text() === 'B')!.trigger('click')
+    expect(wrapper.emitted('activeSideChange')?.at(-1)).toEqual(['B'])
+    await wrapper.findAll('button').find(button => button.attributes('aria-label') === 'Zoom in')!.trigger('click')
+    waveSurferInstances[0].seekTo.mockClear()
+    waveSurferInstances[1].seekTo.mockClear()
+    waveSurferInstances[0].handlers.interaction?.(1)
+    expect(waveSurferInstances[0].seekTo).toHaveBeenLastCalledWith(1 / 4)
+    expect(waveSurferInstances[1].seekTo).toHaveBeenLastCalledWith(1 / 2)
+    wrapper.unmount()
+  })
+
+  it('blocks stale ready, markers and playback while a different source blob is pending or still decoding', async () => {
+    const wrapper = mountWithPlugins(WaveformPlayer, { props: {
+      audioUrl: '/api/tracks/9/source-versions/13/audio?v=3&c=2&t=original',
+      issues: [historyIssue({ title: 'Before source switch' })],
+    } })
+    await flushWaveformMount()
+    waveSurferInstances[0].getDuration.mockReturnValue(4)
+    waveSurferInstances[0].handlers.ready?.()
+    await wrapper.vm.$nextTick()
+    const readyCount = wrapper.emitted('ready')?.length
+    const pending = Promise.withResolvers<Blob>()
+    loadAudioBlobCachedMock.mockImplementationOnce((_url: string, progress: (value: number) => void) => {
+      progress(100)
+      return pending.promise
+    })
+    await wrapper.setProps({
+      audioUrl: '/api/tracks/9/source-versions/12/audio?v=2&c=2&t=replacement',
+      issues: [historyIssue({ id: 2, title: 'After source switch', source_version_id: 12 })],
+    })
+    expect(waveSurferInstances[0].destroy).toHaveBeenCalledTimes(1)
+    waveSurferInstances[0].handlers.ready?.()
+    waveSurferInstances[0].handlers.click?.()
+    const controls = wrapper.vm as unknown as WaveformPlaybackControls
+    await controls.play()
+    await controls.togglePlay()
+    expect(wrapper.emitted('ready')).toHaveLength(readyCount ?? 0)
+    expect(wrapper.find('button[aria-label="Before source switch"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="After source switch"]').exists()).toBe(false)
+    expect(waveSurferInstances[1].play).not.toHaveBeenCalled()
+    expect(waveSurferInstances[1].playPause).not.toHaveBeenCalled()
+    pending.resolve(new Blob(['replacement']))
+    await flushWaveformMount()
+    await controls.play()
+    expect(waveSurferInstances[1].play).not.toHaveBeenCalled()
+    waveSurferInstances[1].getDuration.mockReturnValue(2)
+    waveSurferInstances[1].handlers.ready?.()
+    await wrapper.vm.$nextTick()
+    await controls.play()
+    expect(waveSurferInstances[1].play).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('button[aria-label="After source switch"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('isolates an uncancellable old decoder so a stale failure cannot disable the ready new source', async () => {
+    const originalBlob = Promise.withResolvers<Blob>()
+    loadAudioBlobCachedMock.mockReturnValueOnce(originalBlob.promise)
+    const wrapper = mountWithPlugins(WaveformPlayer, { props: {
+      audioUrl: '/api/tracks/9/source-versions/13/audio?v=3&c=2&t=original',
+    } })
+    await flushWaveformMount()
+    const oldDecode = Promise.withResolvers<void>()
+    waveSurferInstances[0].loadBlob.mockReturnValueOnce(oldDecode.promise)
+    originalBlob.resolve(new Blob(['original']))
+    await flushWaveformMount()
+    await wrapper.setProps({ audioUrl: '/api/tracks/9/source-versions/12/audio?v=2&c=2&t=replacement' })
+    await flushWaveformMount()
+    expect(waveSurferInstances[0].destroy).toHaveBeenCalledTimes(1)
+    expect(waveSurferInstances[1].loadBlob).toHaveBeenCalledTimes(1)
+    waveSurferInstances[1].handlers.ready?.()
+    const oldError = new Error('Old decode failed')
+    waveSurferInstances[0].handlers.error?.(oldError)
+    oldDecode.reject(oldError)
+    await flushWaveformMount()
+    expect(wrapper.emitted('load-error')).toBeUndefined()
+    const controls = wrapper.vm as unknown as WaveformPlaybackControls
+    await controls.play()
+    expect(waveSurferInstances[1].play).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('reports pre-ready native metadata errors even when loadBlob never rejects and permits a later source', async () => {
+    const originalBlob = Promise.withResolvers<Blob>()
+    loadAudioBlobCachedMock.mockReturnValueOnce(originalBlob.promise)
+    const originalUrl = '/api/tracks/9/source-versions/13/audio?v=3&c=2&t=original'
+    const wrapper = mountWithPlugins(WaveformPlayer, { props: { audioUrl: originalUrl } })
+    await flushWaveformMount()
+    const metadataWait = Promise.withResolvers<void>()
+    waveSurferInstances[0].loadBlob.mockReturnValueOnce(metadataWait.promise)
+    originalBlob.resolve(new Blob(['bad metadata']))
+    await flushWaveformMount()
+    const error = new Error('Metadata unavailable')
+    waveSurferInstances[0].handlers.error?.(error)
+    expect(wrapper.emitted('load-error')?.[0]).toEqual([{ audioUrl: originalUrl, side: 'A', error }])
+    expect(waveSurferInstances[0].destroy).toHaveBeenCalledTimes(1)
+    await wrapper.setProps({ audioUrl: '/api/tracks/9/source-versions/12/audio?v=2&c=2&t=replacement' })
+    await flushWaveformMount()
+    waveSurferInstances[1].handlers.ready?.()
+    const controls = wrapper.vm as unknown as WaveformPlaybackControls
+    await controls.play()
+    expect(waveSurferInstances[1].play).toHaveBeenCalledTimes(1)
+    metadataWait.resolve()
+    await flushWaveformMount()
+    expect(wrapper.emitted('load-error')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('ignores ready, error, progress and time events from replaced comparison instances', async () => {
+    const wrapper = mountWithPlugins(WaveformPlayer, { props: {
+      audioUrl: '/api/tracks/9/source-versions/13/audio', trackId: 9,
+      issues: [historyIssue({ title: 'Current A' })],
+      compareIssues: [historyIssue({ id: 2, title: 'Historical B', source_version_id: 11 })],
+    } })
+    await flushWaveformMount()
+    waveSurferInstances[0].getDuration.mockReturnValue(4)
+    waveSurferInstances[0].getCurrentTime.mockReturnValue(1)
+    waveSurferInstances[0].handlers.ready?.()
+    await wrapper.setProps({ compareAudioUrl: '/api/tracks/9/source-versions/11/audio?v=1&c=1&t=older' })
+    await flushWaveformMount()
+    await wrapper.setProps({
+      compareAudioUrl: '/api/tracks/9/source-versions/12/audio?v=2&c=2&t=newer',
+      compareIssues: [historyIssue({ id: 3, title: 'New historical B', source_version_id: 12 })],
+    })
+    await flushWaveformMount()
+    expect(waveSurferInstances[1].destroy).toHaveBeenCalledTimes(1)
+    waveSurferInstances[1].handlers.loading?.(73)
+    waveSurferInstances[1].handlers.ready?.()
+    waveSurferInstances[1].handlers.error?.(new Error('Stale comparison error'))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('Loading B 0%')
+    expect(wrapper.findAll('button').find(button => button.text() === 'B')!.attributes('disabled')).toBeDefined()
+    expect(wrapper.emitted('load-error')).toBeUndefined()
+    waveSurferInstances[2].getDuration.mockReturnValue(2)
+    waveSurferInstances[2].handlers.ready?.()
+    await wrapper.vm.$nextTick()
+    await wrapper.findAll('button').find(button => button.text() === 'B')!.trigger('click')
+    expect(wrapper.emitted('activeSideChange')?.at(-1)).toEqual(['B'])
+    expect(wrapper.find('button[aria-label="Current A"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="New historical B"]').exists()).toBe(true)
+    const previousUpdates = wrapper.emitted('timeupdate')?.length ?? 0
+    waveSurferInstances[1].handlers.timeupdate?.(1.5)
+    expect(wrapper.emitted('timeupdate')?.length ?? 0).toBe(previousUpdates)
+    waveSurferInstances[2].handlers.timeupdate?.(0.75)
+    expect(wrapper.emitted('timeupdate')?.at(-1)).toEqual([0.75])
+    wrapper.unmount()
+  })
 })

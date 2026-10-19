@@ -1,0 +1,32 @@
+{
+  "version": "0.1.60",
+  "date": "2026-10-18",
+  "headline": {
+    "zh-CN": "恢复历史版本问题的视觉区分",
+    "en": "Restore visual distinction for historical issues"
+  },
+  "summary": {
+    "zh-CN": "历史版本问题恢复弱化显示，当前版本的反馈保持突出，便于浏览跨版本评审记录。",
+    "en": "Historical issues are visually subdued again, keeping current-version feedback prominent when browsing reviews across versions."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "问题列表",
+        "en": "Issue lists"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "按曲目当前版本区分视觉层级",
+            "en": "Distinguish issues using the track's current version"
+          },
+          "description": {
+            "zh-CN": "历史源音频和母带版本的问题以较低不透明度显示，继续支持查看、试听及原有权限内的操作。列表以曲目当前版本为基准，A/B 切换时保持这一视觉层级，波形标记继续跟随实际播放的音频。",
+            "en": "Issues from historical source and master versions use reduced opacity while retaining viewing, playback, and permitted actions. The list stays anchored to the track's current version during A/B switching, while waveform markers continue to follow the audio being played."
+          }
+        }
+      ]
+    }
+  ]
+}

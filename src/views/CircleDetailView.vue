@@ -116,14 +116,15 @@
           <div
             v-for="member in circle.members"
             :key="member.id"
-            class="flex items-center gap-3 px-6 py-3 border-b border-border last:border-b-0"
+            class="flex flex-wrap items-center gap-3 px-6 py-3 border-b border-border last:border-b-0"
           >
             <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-mono font-semibold shrink-0" :style="{ backgroundColor: member.user.avatar_color }">
               {{ member.user.display_name.charAt(0).toUpperCase() }}
             </div>
-            <div class="flex-1 min-w-0">
+            <div class="flex-1 min-w-0 basis-24">
               <p class="text-sm font-mono text-foreground">{{ member.user.display_name }}</p>
               <p class="text-xs text-muted-foreground">{{ member.user.username }}</p>
+              <UserUidButton :user-id="member.user_id" />
             </div>
             <span class="text-xs font-mono px-2 py-0.5 rounded-full" :class="roleBadgeClass(member.role)">
               {{ t(`circleDetail.roles.${member.role}`) }}
@@ -366,9 +367,9 @@
     </template>
 
     <ConfirmModal
-      v-if="pendingMemberRemoval"
+      :open="pendingMemberRemoval !== null"
       :title="t('common.removeMemberTitle')"
-      :message="t('common.removeMemberConfirm', { name: pendingMemberRemoval.displayName })"
+      :message="t('common.removeMemberConfirm', { name: pendingMemberRemoval?.displayName ?? '' })"
       :confirm-text="t('circleDetail.remove')"
       :destructive="true"
       @confirm="removeMember"
@@ -376,22 +377,22 @@
     />
 
     <ConfirmModal
-      v-if="pendingTemplateAction"
-      :title="pendingTemplateAction.title"
-      :message="pendingTemplateAction.message"
-      :confirm-text="pendingTemplateAction.confirmText"
-      :destructive="pendingTemplateAction.destructive"
+      :open="pendingTemplateAction !== null"
+      :title="pendingTemplateAction?.title ?? ''"
+      :message="pendingTemplateAction?.message"
+      :confirm-text="pendingTemplateAction?.confirmText"
+      :destructive="pendingTemplateAction?.destructive"
       @confirm="confirmTemplateAction"
       @cancel="pendingTemplateAction = null"
     />
 
     <ConfirmModal
-      v-if="pendingInviteCodeRevoke"
+      :open="pendingInviteCodeRevoke !== null"
       :title="t('circleDetail.revokeInviteTitle')"
-      :message="t('circleDetail.revokeInviteConfirm', { code: pendingInviteCodeRevoke.code })"
+      :message="t('circleDetail.revokeInviteConfirm', { code: pendingInviteCodeRevoke?.code ?? '' })"
       :confirm-text="t('circleDetail.revoke')"
       :destructive="true"
-      @confirm="revokeCode(pendingInviteCodeRevoke.id)"
+      @confirm="confirmRevokeCode"
       @cancel="pendingInviteCodeRevoke = null"
     />
   </div>
@@ -412,6 +413,7 @@ import SkeletonLoader from '@/components/common/SkeletonLoader.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
+import UserUidButton from '@/components/common/UserUidButton.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -655,6 +657,10 @@ async function createInviteCode() {
   } finally {
     creatingCode.value = false
   }
+}
+
+function confirmRevokeCode() {
+  if (pendingInviteCodeRevoke.value) void revokeCode(pendingInviteCodeRevoke.value.id)
 }
 
 async function revokeCode(codeId: number) {

@@ -131,6 +131,12 @@ export interface WorkflowTransitionOption {
   requires_confirmation?: boolean
 }
 
+export interface ComposerAccount {
+  id: number
+  username: string
+  display_name: string
+}
+
 export interface User {
   id: number
   username: string
@@ -388,6 +394,8 @@ export interface Issue {
   source_version_id: number | null
   source_version_number?: number | null
   master_delivery_id: number | null
+  master_delivery_number?: number | null
+  master_delivery_workflow_cycle?: number | null
   title: string
   description: string
   severity: IssueSeverity
@@ -507,9 +515,15 @@ export interface Track {
   producer_id: number | null
   mastering_engineer_id: number | null
   viewer_is_album_manager?: boolean
+  /** Current-stage work, excluding optional reopen/followup actions. */
+  viewer_can_open_workflow?: boolean
+  /** Includes current-stage work and submitted requests awaiting this viewer. */
+  viewer_has_pending_work?: boolean
   /** Server-computed viewer-context flags; client-side derivation is the fallback. */
   viewer_is_composer_actor?: boolean
   viewer_is_mastering_participant?: boolean
+  /** Master playback/download grant; does not grant workspace or history access. */
+  viewer_can_access_master_audio?: boolean
   viewer_is_step_assignee?: boolean | null
   /** Present when the current workflow step is a review step. */
   review_state?: TrackReviewState | null
@@ -535,6 +549,7 @@ export interface Track {
   current_source_version?: TrackSourceVersion | null
   current_master_delivery?: MasterDelivery | null
   pending_source_followup_request?: SourceFollowupRequest | null
+  pending_reopen_request?: ReopenRequest | null
   allowed_actions: string[]
   workflow_step?: WorkflowStepDef | null
   workflow_transitions?: WorkflowTransitionOption[] | null

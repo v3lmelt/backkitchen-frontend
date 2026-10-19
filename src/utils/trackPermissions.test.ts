@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { MasterDelivery, Track, User, WorkflowStepDef } from '@/types'
 
 import {
+  canViewerAccessMasterAudio,
   canUserApproveFinal,
   canViewerSeeMastering,
   isFinalReviewStep,
@@ -58,6 +59,7 @@ function makeDelivery(overrides: Partial<MasterDelivery> = {}): MasterDelivery {
     workflow_cycle: 1,
     delivery_number: 1,
     file_path: '/master.wav',
+    delivery_kind: 'file',
     confirmed_at: '2026-01-01T00:00:00Z',
     producer_approved_at: null,
     submitter_approved_at: null,
@@ -93,6 +95,63 @@ describe('canViewerSeeMastering', () => {
     // Local derivation would say false for user 42, true for the engineer 30.
     expect(canViewerSeeMastering(makeTrack({ viewer_is_mastering_participant: true }), 42, false)).toBe(true)
     expect(canViewerSeeMastering(makeTrack({ viewer_is_mastering_participant: false }), 30, false)).toBe(false)
+  })
+})
+
+describe('canViewerAccessMasterAudio', () => {
+  it('uses the authoritative audio grant without widening mastering participation', () => {
+    const published = makeTrack({
+      status: 'completed',
+      viewer_is_mastering_participant: false,
+      viewer_can_access_master_audio: true,
+      current_master_delivery: makeDelivery({ confirmed_at: null }),
+    })
+    expect(canViewerAccessMasterAudio(published, 42, false)).toBe(true)
+    expect(canViewerSeeMastering(published, 42, false)).toBe(false)
+    expect(canViewerAccessMasterAudio({ ...published, viewer_can_access_master_audio: false }, 42, false)).toBe(false)
+    expect(canViewerAccessMasterAudio(makeTrack({ viewer_can_access_master_audio: false }), 30, false)).toBe(false)
+    expect(canViewerAccessMasterAudio(makeTrack({ viewer_can_access_master_audio: true }), 42, false)).toBe(true)
+    expect(canViewerAccessMasterAudio(published, null, false)).toBe(false)
+    expect(canViewerAccessMasterAudio(null, 42, false)).toBe(false)
+  })
+
+  it('falls back to completed current-cycle final files without requiring confirmation or approvals', () => {
+    const published = makeTrack({
+      status: 'completed',
+      current_master_delivery: makeDelivery({ confirmed_at: null }),
+    })
+    expect(canViewerAccessMasterAudio(published, 42, false)).toBe(true)
+    expect(canViewerSeeMastering(published, 42, false)).toBe(false)
+    expect(canViewerAccessMasterAudio({ ...published, current_master_delivery: null }, 42, false)).toBe(false)
+    expect(canViewerAccessMasterAudio({ ...published, current_master_delivery: makeDelivery({ workflow_cycle: 0 }) }, 42, false)).toBe(false)
+    expect(canViewerAccessMasterAudio({ ...published, current_master_delivery: makeDelivery({ file_path: null }) }, 42, false)).toBe(false)
+    expect(canViewerAccessMasterAudio({ ...published, current_master_delivery: makeDelivery({ delivery_kind: 'text' }) }, 42, false)).toBe(false)
+  })
+
+  it.each(['mastering', 'mastering_revision', 'final_review', 'peer_review'])(
+    'does not publish master audio while a public track is %s',
+    (status) => {
+      const track = makeTrack({
+        status,
+        is_public: true,
+        current_master_delivery: makeDelivery(),
+      })
+      expect(canViewerAccessMasterAudio(track, 42, false)).toBe(false)
+    },
+  )
+
+  it('preserves participant playback of prior-cycle deliveries while withholding them from completed ordinary viewers', () => {
+    const track = makeTrack({
+      status: 'completed',
+      workflow_cycle: 2,
+      current_master_delivery: makeDelivery({ workflow_cycle: 1 }),
+    })
+    expect(canViewerAccessMasterAudio(track, 10, false)).toBe(true)
+    expect(canViewerAccessMasterAudio(track, 99, true)).toBe(true)
+    expect(canViewerAccessMasterAudio(track, 30, false)).toBe(true)
+    expect(canViewerAccessMasterAudio(track, 42, false)).toBe(false)
+    expect(canViewerAccessMasterAudio({ ...track, viewer_is_mastering_participant: true }, 42, false)).toBe(true)
+    expect(canViewerAccessMasterAudio({ ...track, viewer_is_mastering_participant: false }, 30, false)).toBe(false)
   })
 })
 
@@ -254,6 +313,17 @@ describe('canUserApproveFinal', () => {
     expect(canUserApproveFinal(makeTrack({ workflow_step: finalStep, current_master_delivery: makeDelivery({ confirmed_at: null }) }), 20, true)).toBe(false)
     expect(canUserApproveFinal(makeTrack({ workflow_step: makeStep({ type: 'review' }), current_master_delivery: makeDelivery() }), 20, true)).toBe(false)
     expect(canUserApproveFinal(makeTrack({ workflow_step: finalStep }), 20, true)).toBe(false)
+  })
+
+  it('does not approve a prior-cycle playback fallback after reopening', () => {
+    const track = makeTrack({
+      workflow_cycle: 2,
+      workflow_step: finalStep,
+      current_master_delivery: makeDelivery({ workflow_cycle: 1 }),
+    })
+    expect(canViewerAccessMasterAudio(track, 20, true)).toBe(true)
+    expect(canUserApproveFinal(track, 20, true)).toBe(false)
+    expect(canUserApproveFinal(track, 10, false)).toBe(false)
   })
 
   it('producer and composer actor each approve their own side once', () => {

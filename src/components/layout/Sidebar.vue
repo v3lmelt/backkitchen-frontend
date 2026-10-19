@@ -74,8 +74,7 @@ function handleNav(path: string) {
 }
 
 const navItemClass = (path: string) => [
-  'relative flex w-full items-center rounded-full text-sm transition-colors',
-  showLabel.value ? 'gap-3 px-3' : 'justify-center px-0',
+  'relative flex w-full items-center overflow-hidden rounded-full text-sm transition-colors gap-3 px-3',
   isActive(path) ? 'bg-sidebar-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/60',
 ]
 
@@ -108,7 +107,7 @@ const profileLinkClass = computed(() => [
   <!-- Desktop sidebar -->
   <aside
     :class="[
-      'bg-sidebar border-r border-border flex flex-col transition-all duration-200',
+      'desktop-sidebar bg-sidebar border-r border-border flex flex-col',
       'hidden md:flex',
       collapsed ? 'md:w-16' : 'md:w-60'
     ]"
@@ -130,7 +129,7 @@ const profileLinkClass = computed(() => [
         :class="[...navItemClass(item.path), 'py-2']"
       >
         <component :is="iconMap[item.icon]" class="w-5 h-5 flex-shrink-0" :stroke-width="2" />
-        <span v-if="showLabel" class="whitespace-nowrap">{{ item.label }}</span>
+        <span v-if="showLabel" class="truncate">{{ item.label }}</span>
         <Transition name="badge-pop">
           <span
             v-if="item.path === '/notifications' && appStore.unreadCount > 0"
@@ -152,7 +151,7 @@ const profileLinkClass = computed(() => [
         :class="[...navItemClass('/admin'), 'py-2']"
       >
         <Lock class="w-5 h-5 flex-shrink-0" :stroke-width="2" />
-        <span v-if="showLabel" class="whitespace-nowrap">{{ t('nav.admin') }}</span>
+        <span v-if="showLabel" class="truncate">{{ t('nav.admin') }}</span>
       </RouterLink>
     </nav>
 
@@ -197,7 +196,7 @@ const profileLinkClass = computed(() => [
           </div>
           <span class="font-mono font-semibold text-foreground whitespace-nowrap">BACK KITCHEN</span>
         </div>
-        <button @click="appStore.closeMobileSidebar()" class="text-muted-foreground hover:text-foreground p-1">
+        <button @click="appStore.closeMobileSidebar()" class="ui-control text-muted-foreground hover:text-foreground p-1">
           <X class="w-5 h-5" :stroke-width="2" />
         </button>
       </div>
@@ -268,18 +267,25 @@ const profileLinkClass = computed(() => [
 </template>
 
 <style scoped>
-.sidebar-backdrop-enter-active,
+.desktop-sidebar {
+  transition: width var(--motion-layout) var(--motion-ease-out);
+}
+.sidebar-backdrop-enter-active {
+  transition: opacity var(--motion-panel-in) var(--motion-ease-out);
+}
 .sidebar-backdrop-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity var(--motion-panel-out) var(--motion-ease-in);
 }
 .sidebar-backdrop-enter-from,
 .sidebar-backdrop-leave-to {
   opacity: 0;
 }
 
-.sidebar-slide-enter-active,
+.sidebar-slide-enter-active {
+  transition: transform var(--motion-panel-in) var(--motion-ease-out);
+}
 .sidebar-slide-leave-active {
-  transition: transform 0.2s ease;
+  transition: transform var(--motion-panel-out) var(--motion-ease-in);
 }
 .sidebar-slide-enter-from,
 .sidebar-slide-leave-to {
@@ -287,14 +293,13 @@ const profileLinkClass = computed(() => [
 }
 
 .badge-pop-enter-active {
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.18s ease-out;
+  transition: opacity var(--motion-feedback) var(--motion-ease-out);
 }
 .badge-pop-leave-active {
-  transition: transform 0.12s ease-in, opacity 0.12s ease-in;
+  transition: opacity var(--motion-popover-out) var(--motion-ease-in);
 }
 .badge-pop-enter-from,
 .badge-pop-leave-to {
   opacity: 0;
-  transform: scale(0.6);
 }
 </style>

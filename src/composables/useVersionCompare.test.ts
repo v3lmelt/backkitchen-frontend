@@ -5,12 +5,12 @@ import { defineComponent, nextTick, ref, type Ref } from 'vue'
 import { createTestI18n } from '@/tests/utils'
 
 vi.mock('@/api', () => ({
-  masterAudioUrl: (trackId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-audio?v=${v ?? 0}&c=${c ?? 1}`,
-  masterDeliveryAudioUrl: (trackId: number, deliveryId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-deliveries/${deliveryId}/audio?v=${v ?? 0}&c=${c ?? 1}`,
+  masterDeliveryAudioUrl: (trackId: number, delivery: MasterDelivery) => `/api/tracks/${trackId}/master-deliveries/${delivery.id}/audio?v=${delivery.delivery_number}&c=${delivery.workflow_cycle}&t=${encodeURIComponent(delivery.created_at)}`,
+  sourceVersionAudioUrl: (trackId: number, version: TrackSourceVersion) => `/api/tracks/${trackId}/source-versions/${version.id}/audio?v=${version.version_number}&c=${version.workflow_cycle}&t=${encodeURIComponent(version.created_at)}`,
 }))
 
 import { useVersionCompare } from './useVersionCompare'
-import type { Issue, MasterDelivery, Track, TrackSourceVersion } from '@/types'
+import type { MasterDelivery, Track, TrackSourceVersion } from '@/types'
 
 type Composable = ReturnType<typeof useVersionCompare>
 
@@ -46,6 +46,8 @@ function mountHarness(overrides: {
   track?: Partial<Track>
   sourceVersions?: TrackSourceVersion[]
   masterDeliveries?: MasterDelivery[]
+  canAccessMasterAudio?: boolean
+  canAccessMasterHistory?: boolean
 } = {}) {
   let captured: Composable | null = null
   const track = ref<Track | null>({
@@ -57,6 +59,8 @@ function mountHarness(overrides: {
   } as unknown as Track)
   const sourceVersions = ref<TrackSourceVersion[]>(overrides.sourceVersions ?? [])
   const masterDeliveries = ref<MasterDelivery[]>(overrides.masterDeliveries ?? [])
+  const canAccessMasterAudio = ref(overrides.canAccessMasterAudio ?? true)
+  const canAccessMasterHistory = ref(overrides.canAccessMasterHistory ?? true)
   const Comp = defineComponent({
     setup() {
       captured = useVersionCompare({
@@ -64,6 +68,8 @@ function mountHarness(overrides: {
         track: track as Ref<Track | null>,
         sourceVersions,
         masterDeliveries,
+        canAccessMasterAudio,
+        canAccessMasterHistory,
       })
       return () => null
     },
@@ -77,6 +83,8 @@ function mountHarness(overrides: {
     track,
     sourceVersions,
     masterDeliveries,
+    canAccessMasterAudio,
+    canAccessMasterHistory,
   }
 }
 
@@ -92,34 +100,28 @@ describe('useVersionCompare', () => {
         sourceVersion(12, 2),
         sourceVersion(11, 1),
         sourceVersion(10, 0, { source_kind: 'external_link', file_path: null }),
+        sourceVersion(9, -1, { file_path: '' }),
+        sourceVersion(8, -2, { file_path: null }),
+        sourceVersion(7, -3, { file_path: undefined }),
       ],
     })
 
     expect(composable.olderPlayableSourceVersions.value.map(v => v.id)).toEqual([12, 11])
     expect(composable.sourceCompareOptions.value.map(o => o.value)).toEqual([12, 11])
     expect(composable.isSourceCompareActive.value).toBe(false)
-    expect(composable.displayedSourceVersionNumber.value).toBe(3)
     wrapper.unmount()
   })
 
-  it('tracks the displayed source version and filters issues accordingly', () => {
+  it('tracks the selected immutable source without defining issue-list membership', () => {
     const { composable, wrapper } = mountHarness({
       sourceVersions: [sourceVersion(13, 3), sourceVersion(12, 2)],
     })
-    const issues = [
-      { id: 1, source_version_number: 2 },
-      { id: 2, source_version_number: 3 },
-      { id: 3, source_version_number: null },
-    ] as unknown as Issue[]
-
     composable.selectedCompareSourceVersionId.value = 12
     expect(composable.isSourceCompareActive.value).toBe(true)
-    expect(composable.displayedSourceVersionNumber.value).toBe(2)
-    expect(composable.filterIssuesForDisplayedSourceVersion(issues).map(i => i.id)).toEqual([1, 3])
-
+    expect(composable.selectedCompareSourceVersion.value?.id).toBe(12)
+    expect(composable.selectedCompareSourceAudioUrl.value).toBe('/api/tracks/9/source-versions/12/audio?v=2&c=1&t=2024-01-01T00%3A00%3A00Z')
     composable.selectedCompareSourceVersionId.value = null
-    expect(composable.displayedSourceVersionNumber.value).toBe(3)
-    expect(composable.filterIssuesForDisplayedSourceVersion(issues).map(i => i.id)).toEqual([2, 3])
+    expect(composable.selectedCompareSourceVersion.value).toBe(null)
     wrapper.unmount()
   })
 
@@ -170,7 +172,7 @@ describe('useVersionCompare', () => {
     composable.compareWithMasterDelivery(21)
     expect(composable.showMasterCompare.value).toBe(true)
     expect(composable.selectedCompareMasterDeliveryId.value).toBe(21)
-    expect(composable.selectedCompareMasterAudioUrl.value).toBe('/api/tracks/9/master-deliveries/21/audio?v=2&c=1')
+    expect(composable.selectedCompareMasterAudioUrl.value).toBe('/api/tracks/9/master-deliveries/21/audio?v=2&c=1&t=2024-01-01T00%3A00%3A00Z')
 
     masterDeliveries.value = [current]
     await nextTick()
@@ -201,7 +203,60 @@ describe('useVersionCompare', () => {
       masterDeliveries: [current],
     })
 
-    expect(composable.masterAudioUrl.value).toBe('/api/tracks/9/master-audio?v=3&c=2')
+    expect(composable.masterAudioUrl.value).toBe('/api/tracks/9/master-deliveries/22/audio?v=3&c=2&t=2024-01-01T00%3A00%3A00Z')
+    wrapper.unmount()
+  })
+
+  it('exposes only current final audio without participant history or comparison', () => {
+    const current = delivery(22, 3, 2)
+    const { composable, wrapper } = mountHarness({
+      track: { current_master_delivery: current },
+      masterDeliveries: [current, delivery(21, 2, 2), delivery(20, 1, 1)],
+      canAccessMasterAudio: true,
+      canAccessMasterHistory: false,
+    })
+
+    expect(composable.masterAudioUrl.value).toBe('/api/tracks/9/master-deliveries/22/audio?v=3&c=2&t=2024-01-01T00%3A00%3A00Z')
+    expect(composable.sortedMasterDeliveries.value).toEqual([])
+    expect(composable.masterCompareOptions.value).toEqual([])
+    composable.compareWithMasterDelivery(21)
+    expect(composable.selectedCompareMasterAudioUrl.value).toBe('')
+    expect(composable.showMasterCompare.value).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('withholds master data and urls from active nonparticipants even if an older payload contains deliveries', () => {
+    const current = delivery(22, 3, 2)
+    const { composable, wrapper } = mountHarness({
+      track: { current_master_delivery: current },
+      masterDeliveries: [current, delivery(21, 2, 1)],
+      canAccessMasterAudio: false,
+      canAccessMasterHistory: false,
+    })
+
+    expect(composable.masterDelivery.value).toBe(null)
+    expect(composable.masterAudioUrl.value).toBe('')
+    expect(composable.sortedMasterDeliveries.value).toEqual([])
+    composable.selectedCompareMasterDeliveryId.value = 21
+    expect(composable.selectedCompareMasterAudioUrl.value).toBe('')
+    wrapper.unmount()
+  })
+
+  it('clears historical comparison when participant access is revoked', async () => {
+    const current = delivery(22, 3, 2)
+    const { composable, canAccessMasterHistory, wrapper } = mountHarness({
+      track: { current_master_delivery: current },
+      masterDeliveries: [current, delivery(21, 2, 1)],
+    })
+    composable.compareWithMasterDelivery(21)
+
+    canAccessMasterHistory.value = false
+    await nextTick()
+
+    expect(composable.showMasterCompare.value).toBe(false)
+    expect(composable.selectedCompareMasterDeliveryId.value).toBe(null)
+    expect(composable.selectedCompareMasterAudioUrl.value).toBe('')
+    expect(composable.masterAudioUrl.value).toBe('/api/tracks/9/master-deliveries/22/audio?v=3&c=2&t=2024-01-01T00%3A00%3A00Z')
     wrapper.unmount()
   })
 })

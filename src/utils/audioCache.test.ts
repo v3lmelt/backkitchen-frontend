@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { currentSourceAudioUrl, resolveIssueAudio } from './issueAudio'
+import { masterDeliveryAudioUrl, sourceVersionAudioUrl } from '@/api'
+import { historyIssue, historyMaster, historySource, historyTrack } from '@/tests/issueHistoryFixtures'
 
 vi.mock('./url', () => ({
   resolveAudioUrl: vi.fn(),
@@ -244,5 +247,63 @@ describe('audioCache', () => {
 
     await loadAudioCached(`${BASE}/api/tracks/7/audio?v=1`)
     await vi.waitFor(() => expect(cachesDelete).toHaveBeenCalledWith('backkitchen-audio-v1'))
+  })
+  it('downloads each canonical source or master once across main and independent issue preview', async () => {
+    const { cache } = makeCacheMock()
+    vi.stubGlobal('caches', { open: vi.fn().mockResolvedValue(cache) })
+    const fetchMock = vi.fn().mockImplementation(async () => streamingResponse([new Uint8Array([1, 2, 3])]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { loadAudioBlobCached, resolveAudioUrl } = await loadAudioCacheModule()
+    resolveAudioUrl.mockResolvedValue('/resolved/audio')
+    const track = historyTrack()
+    const mainSource = new URL(currentSourceAudioUrl(track, track.source_versions), BASE).href
+    const issueSource = new URL(resolveIssueAudio(historyIssue(), track), BASE).href
+    const sourceBlob = await loadAudioBlobCached(mainSource)
+    expect(await loadAudioBlobCached(issueSource)).toBe(sourceBlob)
+    const mainMaster = new URL(masterDeliveryAudioUrl(9, historyMaster()), BASE).href
+    const issueMaster = new URL(resolveIssueAudio(historyIssue({ master_delivery_id: 22 }), track), BASE).href
+    const masterBlob = await loadAudioBlobCached(mainMaster)
+    expect(await loadAudioBlobCached(issueMaster)).toBe(masterBlob)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(resolveAudioUrl).toHaveBeenCalledTimes(2)
+  })
+
+  it('misses the cache when a reused source record ID has a different creation timestamp', async () => {
+    vi.stubGlobal('caches', { open: vi.fn().mockResolvedValue(makeCacheMock().cache) })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(streamingResponse([new Uint8Array([1])]))
+      .mockResolvedValueOnce(streamingResponse([new Uint8Array([2, 3])]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { loadAudioBlobCached, resolveAudioUrl } = await loadAudioCacheModule()
+    resolveAudioUrl.mockResolvedValue('/resolved/audio')
+    const original = historySource()
+    const replacement = { ...original, created_at: '2026-10-13T03:00:00Z' }
+    const originalUrl = new URL(sourceVersionAudioUrl(9, original), BASE).href
+    const replacementUrl = new URL(sourceVersionAudioUrl(9, replacement), BASE).href
+    const before = await loadAudioBlobCached(originalUrl)
+    const after = await loadAudioBlobCached(replacementUrl)
+    expect(originalUrl).not.toBe(replacementUrl)
+    expect(after).not.toBe(before)
+    expect(before.size).toBe(1)
+    expect(after.size).toBe(2)
+    expect(await loadAudioBlobCached(replacementUrl)).toBe(after)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    '/api/tracks/9/audio?v=3',
+    '/api/tracks/9/source-versions/13/audio',
+    '/api/tracks/9/source-versions/13/audio?v=3&c=2',
+  ])('does not promote an older mutable or incomplete identity cache entry: %s', async (oldPath) => {
+    const { cache } = makeCacheMock([{ url: `${BASE}${oldPath}`, size: 16 }])
+    vi.stubGlobal('caches', { open: vi.fn().mockResolvedValue(cache) })
+    const fetchMock = vi.fn().mockResolvedValue(streamingResponse([new Uint8Array([4, 5, 6])]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { loadAudioBlobCached, resolveAudioUrl } = await loadAudioCacheModule()
+    resolveAudioUrl.mockResolvedValue('/resolved/audio')
+    const canonical = new URL(sourceVersionAudioUrl(9, historySource()), BASE).href
+    const audio = await loadAudioBlobCached(canonical)
+    expect(audio.size).toBe(3)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

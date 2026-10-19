@@ -207,13 +207,13 @@ function confirmDelete() {
   </div>
 
   <EditHistoryModal
-    v-if="showHistoryForId !== null"
+    :open="showHistoryForId !== null"
     :items="historyItems"
     @close="emit('closeHistory')"
   />
 
   <ConfirmModal
-    v-if="pendingDeleteDiscussion"
+    :open="pendingDeleteDiscussion !== null"
     :title="t('discussionPanel.deleteTitle')"
     :message="t('discussionPanel.deleteConfirm')"
     :confirm-text="t('common.delete')"

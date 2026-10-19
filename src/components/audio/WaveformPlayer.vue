@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { computed, ref, shallowRef, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Play, Pause, Headphones, MapPin, Maximize2, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import type { Issue, IssueMarker } from '@/types'
 import type WaveSurfer from 'wavesurfer.js'
 import type RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
-import { resolveAssetUrl, sourceVersionAudioUrl } from '@/api'
 import { useTrackPlaybackPreference } from '@/composables/useTrackPlaybackPreference'
 import { useAppStore } from '@/stores/app'
 import { formatTimestamp, formatTimestampShort, roundToMilliseconds } from '@/utils/time'
@@ -19,6 +18,7 @@ type PlaybackScope = 'source' | 'master' | 'local'
 const props = withDefaults(defineProps<{
   audioUrl: string
   issues?: Issue[]
+  compareIssues?: Issue[]
   height?: number
   gainDb?: number
   showGainControl?: boolean
@@ -26,7 +26,6 @@ const props = withDefaults(defineProps<{
   selectable?: boolean
   mode?: InteractionMode
   selectedRange?: { start: number; end: number } | null
-  compareVersionId?: number | null
   compareAudioUrl?: string
   trackId?: number
   draftMarkers?: { marker_type: 'point' | 'range'; time_start: number; time_end: number | null }[]
@@ -36,6 +35,7 @@ const props = withDefaults(defineProps<{
   zoomable?: boolean
 }>(), {
   mode: 'seek',
+  compareIssues: () => [],
   showGainControl: true,
   playbackScope: 'source',
   compact: false,
@@ -53,6 +53,8 @@ const emit = defineEmits<{
   issueHover: [issue: Issue]
   issueLeave: []
   requestModeChange: [mode: InteractionMode]
+  'load-error': [payload: { audioUrl: string; side: 'A' | 'B'; error: unknown }]
+  activeSideChange: [side: 'A' | 'B']
 }>()
 
 const { t } = useI18n()
@@ -60,8 +62,8 @@ const appStore = useAppStore()
 
 const container = ref<HTMLDivElement>()
 const compareContainerRef = ref<HTMLDivElement>()
-const wavesurfer = ref<WaveSurfer | null>(null)
-const compareWaveSurfer = ref<WaveSurfer | null>(null)
+const wavesurfer = shallowRef<WaveSurfer | null>(null)
+const compareWaveSurfer = shallowRef<WaveSurfer | null>(null)
 const audioContext = ref<AudioContext | null>(null)
 const primarySourceNode = ref<MediaElementAudioSourceNode | null>(null)
 const primaryUserGainNode = ref<GainNode | null>(null)
@@ -69,11 +71,12 @@ const primaryGateGainNode = ref<GainNode | null>(null)
 const compareSourceNode = ref<MediaElementAudioSourceNode | null>(null)
 const compareUserGainNode = ref<GainNode | null>(null)
 const compareGateGainNode = ref<GainNode | null>(null)
-const regionsPlugin = ref<RegionsPlugin | null>(null)
+const regionsPlugin = shallowRef<RegionsPlugin | null>(null)
 const isPlaying = ref(false)
 const currentTime = ref(0)
 const duration = ref(0)
 const isPrimaryLoading = ref(false)
+const isPrimaryReady = ref(false)
 const primaryLoadProgress = ref(0)
 const isRenderingRegions = ref(false)
 const selectionRegionId = ref<string | null>(null)
@@ -107,27 +110,24 @@ let panPointerId: number | null = null
 let panStartX = 0
 let panStartScroll = 0
 let lastPanAt = 0
-const compareSourceUrl = computed(() => {
-  if (props.compareAudioUrl) return props.compareAudioUrl
-  if (props.compareVersionId && props.trackId) {
-    return resolveAssetUrl(sourceVersionAudioUrl(props.trackId, props.compareVersionId))
-  }
-  return ''
-})
+const compareSourceUrl = computed(() => props.compareAudioUrl ?? '')
 const isCompareMode = computed(() => !!compareSourceUrl.value)
 const isCompareLoading = ref(false)
 const compareLoadProgress = ref(0)
 const isCompareReady = ref(false)
 const compareDuration = ref(0)
 const compareCurrentTime = ref(0)
-const activeDuration = computed(() => abMode.value === 'B' && compareDuration.value > 0 ? compareDuration.value : duration.value)
-const activeCurrentTime = computed(() => abMode.value === 'B' && compareDuration.value > 0 ? compareCurrentTime.value : currentTime.value)
-const markerTimelineDuration = computed(() => duration.value)
+const activeSide = computed(() => abMode.value === 'B' && isCompareReady.value ? 'B' : 'A')
+const activeWaveSurfer = computed(() => activeSide.value === 'B' ? compareWaveSurfer.value : wavesurfer.value)
+const activeIssues = computed(() => activeSide.value === 'B' ? props.compareIssues : props.issues ?? [])
+const activeDuration = computed(() => activeSide.value === 'B' ? compareDuration.value : duration.value)
+const activeCurrentTime = computed(() => activeSide.value === 'B' ? compareCurrentTime.value : currentTime.value)
+const markerTimelineDuration = computed(() => activeDuration.value)
 const MAX_ZOOM_DENSITY = 200
 const ZOOM_MULTIPLIERS = [1, 2, 4, 8, 16, 32, 64, 128] as const
 const fitPxPerSec = computed(() => {
-  if (duration.value <= 0 || waveformViewportWidth.value <= 0) return 0
-  return waveformViewportWidth.value / duration.value
+  if (markerTimelineDuration.value <= 0 || waveformViewportWidth.value <= 0) return 0
+  return waveformViewportWidth.value / markerTimelineDuration.value
 })
 const maxZoomStep = computed(() => {
   if (fitPxPerSec.value <= 0 || fitPxPerSec.value >= MAX_ZOOM_DENSITY) return 0
@@ -349,11 +349,11 @@ function getRangeWidth(start: number, end: number): string {
 }
 
 const pointGroupBases = computed<PointMarkerGroupBase[]>(() => {
-  if (!props.issues?.length || markerTimelineDuration.value <= 0) return []
+  if (!activeIssues.value.length || markerTimelineDuration.value <= 0) return []
 
   // Flatten: each point marker → its parent issue (an issue can appear in multiple groups)
   const grouped = new Map<number, Map<number, Issue>>()
-  for (const issue of props.issues) {
+  for (const issue of activeIssues.value) {
     for (const marker of issue.markers) {
       if (marker.marker_type !== 'point') continue
       const key = Math.round(marker.time_start * 1000)
@@ -391,8 +391,9 @@ const pointGroups = computed<PointMarkerGroup[]>(() => pointGroupBases.value
 
 // Flatten all range markers with their parent issue
 const rangeMarkerItems = computed<MarkerWithIssue[]>(() => {
+  if (markerTimelineDuration.value <= 0) return []
   const items: MarkerWithIssue[] = []
-  for (const issue of props.issues ?? []) {
+  for (const issue of activeIssues.value) {
     for (const marker of issue.markers) {
       if (marker.marker_type === 'range' && marker.time_end !== null) {
         items.push({ marker, issue })
@@ -461,7 +462,7 @@ const draftRangeAnchorLeft = computed(() => {
 
 const overlayHeight = computed(() => props.height || 128)
 
-const hasPointIssues = computed(() => (props.issues ?? []).some(i => i.markers.some(m => m.marker_type === 'point')))
+const hasPointIssues = computed(() => activeIssues.value.some(i => i.markers.some(m => m.marker_type === 'point')))
 const hasRangeIssues = computed(() => rangeLaneItems.value.length > 0)
 const rangeRulerHeight = computed(() => Math.max(rangeLaneCount.value, 1) * 6)
 
@@ -501,7 +502,6 @@ function pointGroupDotStyle(group: PointMarkerGroup) {
   return {
     background: tone.edge,
     boxShadow: hovered ? `0 0 0 2px ${tone.soft}, 0 0 6px ${tone.glow}` : `0 0 0 1px ${tokenColor('--color-overlay', 0.4)}`,
-    transform: hovered ? 'scale(1.2)' : 'scale(1)',
   }
 }
 
@@ -775,7 +775,7 @@ function _removeRegionById(id: string) {
 }
 
 function _addHighlightRegion(issue: Issue, start: number, end: number) {
-  if (!regionsPlugin.value) return
+  if (!regionsPlugin.value || activeSide.value === 'B') return
   const tone = isIssueResolvedLike(issue.status) ? RESOLVED_TONE : rangeTone(issue.severity)
   const region = regionsPlugin.value.addRegion({
     start,
@@ -801,7 +801,7 @@ function highlightIssue(issue: Issue | null) {
   highlightRegionIds.value = []
 
   if (activeRangeIssueId.value !== null) {
-    const target = props.issues?.find(i => i.id === activeRangeIssueId.value)
+    const target = activeIssues.value.find(i => i.id === activeRangeIssueId.value)
     if (target) {
       for (const m of target.markers) {
         if (m.marker_type === 'range' && m.time_end !== null) {
@@ -843,6 +843,10 @@ function emitPointGroupHover(group: PointMarkerGroup) {
 }
 
 function syncSelectedRange(region: { id: string; start: number; end: number; remove?: () => void }, isUpdate = false) {
+  if (!isPrimaryReady.value || loadedAudioUrl !== props.audioUrl) {
+    region.remove?.()
+    return
+  }
   const start = roundToMilliseconds(Math.min(region.start, region.end))
   const end = roundToMilliseconds(Math.max(region.start, region.end))
 
@@ -963,7 +967,7 @@ function updateVisibleWindow(start: number, end: number) {
 }
 
 function handlePrimaryScroll(start: number, end: number, scrollLeft: number) {
-  updateVisibleWindow(start, end)
+  if (activeSide.value === 'A') updateVisibleWindow(start, end)
   if (compareWaveSurfer.value && isCompareReady.value) {
     compareWaveSurfer.value.setScroll(scrollLeft)
   }
@@ -977,11 +981,11 @@ function syncWaveformScroll(scrollLeft: number) {
 }
 
 function applyZoomStep(nextStep: number, anchorRatio = 0.5) {
-  if (!props.zoomable || !wavesurfer.value || duration.value <= 0 || fitPxPerSec.value <= 0) return
+  if (!props.zoomable || !wavesurfer.value || !activeWaveSurfer.value || markerTimelineDuration.value <= 0 || fitPxPerSec.value <= 0) return
 
   const clampedStep = Math.min(Math.max(Math.round(nextStep), 0), maxZoomStep.value)
   const safeAnchorRatio = Math.min(Math.max(anchorRatio, 0), 1)
-  const currentSpan = visibleTimelineDuration.value || duration.value
+  const currentSpan = visibleTimelineDuration.value || markerTimelineDuration.value
   const anchorTime = visibleTimelineStart.value + currentSpan * safeAnchorRatio
   const density = getZoomDensity(clampedStep)
 
@@ -990,9 +994,9 @@ function applyZoomStep(nextStep: number, anchorRatio = 0.5) {
   if (compareWaveSurfer.value && isCompareReady.value) compareWaveSurfer.value.zoom(density)
 
   const nextSpan = clampedStep === 0
-    ? duration.value
-    : Math.min(duration.value, waveformViewportWidth.value / density)
-  const maxStart = Math.max(duration.value - nextSpan, 0)
+    ? markerTimelineDuration.value
+    : Math.min(markerTimelineDuration.value, waveformViewportWidth.value / density)
+  const maxStart = Math.max(markerTimelineDuration.value - nextSpan, 0)
   const nextStart = clampedStep === 0
     ? 0
     : Math.min(Math.max(anchorTime - nextSpan * safeAnchorRatio, 0), maxStart)
@@ -1016,7 +1020,7 @@ function onZoomInput(event: Event) {
 }
 
 function onWaveformWheel(event: WheelEvent) {
-  if (!props.zoomable || duration.value <= 0) return
+  if (!props.zoomable || markerTimelineDuration.value <= 0) return
 
   if (event.ctrlKey || event.metaKey) {
     event.preventDefault()
@@ -1039,7 +1043,7 @@ function onWaveformWheel(event: WheelEvent) {
 function centerTimeInView(time: number) {
   if (!isZoomed.value || visibleTimelineDuration.value <= 0) return
   const span = visibleTimelineDuration.value
-  const maxStart = Math.max(duration.value - span, 0)
+  const maxStart = Math.max(markerTimelineDuration.value - span, 0)
   const nextStart = Math.min(Math.max(time - span / 2, 0), maxStart)
   wavesurfer.value?.setScrollTime(nextStart)
   if (compareWaveSurfer.value && isCompareReady.value) compareWaveSurfer.value.setScrollTime(nextStart)
@@ -1048,7 +1052,7 @@ function centerTimeInView(time: number) {
 
 function focusIssue(issue: Issue | number) {
   const issueId = typeof issue === 'number' ? issue : issue.id
-  const target = props.issues?.find(item => item.id === issueId)
+  const target = activeIssues.value.find(item => item.id === issueId)
   const marker = target?.markers[0]
   if (!marker) return
 
@@ -1093,6 +1097,7 @@ function resetGain() {
 }
 
 async function setAbMode(mode: 'A' | 'B') {
+  if (mode === 'B' && !isCompareReady.value) return
   await resumeAudioContext()
   abMode.value = mode
 }
@@ -1107,7 +1112,7 @@ function formatTimeShort(seconds: number): string {
 }
 
 function updatePrimaryLoading(percent: number) {
-  isPrimaryLoading.value = percent < 100
+  isPrimaryLoading.value = !isPrimaryReady.value || percent < 100
   primaryLoadProgress.value = Math.min(100, Math.max(0, Math.round(percent)))
 }
 
@@ -1121,21 +1126,41 @@ function handleThemeChanged() {
   renderIssueRegions()
 }
 
-onMounted(async () => {
-  window.addEventListener(THEME_CHANGED_EVENT, handleThemeChanged)
-  window.addEventListener('keydown', onWindowKeyDown)
-  window.addEventListener('keyup', onWindowKeyUp)
-  if (!container.value) return
+let loadedAudioUrl = ''
+let primaryLoadSerial = 0
+let WaveSurferConstructor: typeof WaveSurfer | null = null
+let RegionsPluginConstructor: typeof RegionsPlugin | null = null
 
-  const [{ default: WaveSurfer }, { default: RegionsPlugin }] = await Promise.all([
-    import('wavesurfer.js'),
-    import('wavesurfer.js/dist/plugins/regions.js'),
-  ])
+function disposePrimaryWaveform() {
+  const ws = wavesurfer.value
+  wavesurfer.value = null
+  regionsPlugin.value = null
+  disconnectGraph('primary')
+  ws?.destroy()
+}
 
-  const regions = RegionsPlugin.create()
+function loadPrimaryAudio(url: string) {
+  if (!container.value || !WaveSurferConstructor || !RegionsPluginConstructor) return
+  const request = ++primaryLoadSerial
+  loadedAudioUrl = url
+  isPrimaryReady.value = false
+  isPrimaryLoading.value = Boolean(url)
+  primaryLoadProgress.value = 0
+  if (isPlaying.value) emit('playbackStateChange', false)
+  isPlaying.value = false
+  duration.value = 0
+  currentTime.value = 0
+  zoomStep.value = 0
+  updateVisibleWindow(0, 0)
+  compareWaveSurfer.value?.pause()
+  // A fresh instance isolates uncancellable metadata/decode work from old files.
+  disposePrimaryWaveform()
+  if (!url) return
+
+  const regions = RegionsPluginConstructor.create()
   regionsPlugin.value = regions
 
-  const ws = WaveSurfer.create({
+  const ws = WaveSurferConstructor.create({
     container: container.value,
     waveColor: waveformWaveColor(),
     progressColor: waveformProgressColor(),
@@ -1147,29 +1172,47 @@ onMounted(async () => {
     barRadius: 2,
     plugins: [regions],
   })
+  wavesurfer.value = ws
   ws.setVolume(1)
   attachGainGraph(ws, 'primary')
 
+  function failPrimaryAudio(error: unknown) {
+    if (request !== primaryLoadSerial) return
+    primaryLoadSerial++
+    loadedAudioUrl = ''
+    isPrimaryReady.value = false
+    isPrimaryLoading.value = false
+    if (isPlaying.value) emit('playbackStateChange', false)
+    isPlaying.value = false
+    disposePrimaryWaveform()
+    emit('load-error', { audioUrl: url, side: 'A', error })
+    console.warn('WaveformPlayer: failed to load audio', error)
+  }
+
   ws.on('ready', () => {
+    if (request !== primaryLoadSerial) return
+    isPrimaryReady.value = true
     updatePrimaryLoading(100)
     duration.value = ws.getDuration()
     waveformViewportWidth.value = ws.getWidth()
     updateVisibleWindow(0, duration.value)
+    applyCompareMode(abMode.value)
     emit('ready', duration.value)
     renderIssueRegions()
   })
   ws.on('loading', (percent: number) => {
-    updatePrimaryLoading(percent)
+    if (request === primaryLoadSerial) updatePrimaryLoading(percent)
   })
 
   let lastTimeUpdateMs = 0
   ws.on('timeupdate', (time: number) => {
+    if (request !== primaryLoadSerial || !isPrimaryReady.value) return
     // Throttle Vue reactive updates to ~20fps to avoid flooding the reactivity
     // system at 60fps and causing main-thread pressure that can stutter audio.
     const now = Date.now()
     if (now - lastTimeUpdateMs >= 50) {
       currentTime.value = time
-      emit('timeupdate', time)
+      if (activeSide.value === 'A') emit('timeupdate', time)
       lastTimeUpdateMs = now
     }
     // Compare sync is handled at key moments (play, pause, seek, A/B switch)
@@ -1177,19 +1220,19 @@ onMounted(async () => {
   })
 
   ws.on('play', () => {
+    if (request !== primaryLoadSerial || !isPrimaryReady.value) return
     isPlaying.value = true
     emit('playbackStateChange', true)
   })
   ws.on('pause', () => {
+    if (request !== primaryLoadSerial) return
     isPlaying.value = false
     emit('playbackStateChange', false)
   })
-  ws.on('error', (err: unknown) => {
-    isPrimaryLoading.value = false
-    console.error('WaveformPlayer: wavesurfer primary error', err)
-  })
+  ws.on('error', failPrimaryAudio)
 
   ws.on('click', () => {
+    if (request !== primaryLoadSerial || !isPrimaryReady.value) return
     if (Date.now() - lastSelectionAt.value < 250) return
     if (Date.now() - lastPanAt < 250) return
     // In seek mode clicks only move the play head (wavesurfer handles that
@@ -1199,13 +1242,15 @@ onMounted(async () => {
   })
 
   ws.on('interaction', (newTime: number) => {
+    if (request !== primaryLoadSerial || !isPrimaryReady.value) return
     if (compareWaveSurfer.value && isCompareMode.value) {
       if (abMode.value === 'B') {
         const primaryDur = ws.getDuration()
         const compDur = compareWaveSurfer.value.getDuration()
         if (primaryDur > 0 && compDur > 0) {
-          const clickedRatio = Math.min(Math.max(newTime / primaryDur, 0), 1)
-          const compareTime = clickedRatio * compDur
+          const compareTime = isZoomed.value
+            ? Math.min(Math.max(newTime, 0), compDur)
+            : Math.min(Math.max(newTime / primaryDur, 0), 1) * compDur
           syncPrimaryToCompareTime(compareTime)
           syncCompareToPrimaryTime(compareTime)
           return
@@ -1216,10 +1261,12 @@ onMounted(async () => {
   })
 
   ws.on('scroll', (start: number, end: number, scrollLeft: number) => {
+    if (request !== primaryLoadSerial) return
     handlePrimaryScroll(start, end, scrollLeft)
   })
 
   ws.on('resize', () => {
+    if (request !== primaryLoadSerial) return
     waveformViewportWidth.value = ws.getWidth()
     if (props.zoomable && zoomStep.value > 0) {
       applyZoomStep(zoomStep.value)
@@ -1229,56 +1276,51 @@ onMounted(async () => {
   })
 
   regions.on('region-clicked', (region: any, e: Event) => {
+    if (request !== primaryLoadSerial) return
     e.stopPropagation()
-    const issue = props.issues?.find(i => String(i.id) === region.id)
+    const issue = activeIssues.value.find(i => String(i.id) === region.id)
     if (issue) emit('regionClick', issue)
   })
 
   regions.on('region-created', (region: any) => {
+    if (request !== primaryLoadSerial) return
     if (isRenderingRegions.value) return
     syncSelectedRange(region, false)
   })
 
   regions.on('region-updated', (region: any) => {
+    if (request !== primaryLoadSerial) return
     if (selectionRegionId.value !== region.id) return
     syncSelectedRange(region, true)
   })
 
   applyDragSelection()
 
-  loadedAudioUrl = props.audioUrl
-  isPrimaryLoading.value = true
-  primaryLoadProgress.value = 0
-  loadAudioBlobCached(props.audioUrl, (p) => updatePrimaryLoading(p))
-    .then(blob => ws.loadBlob(blob))
-    .catch((err) => {
-      loadedAudioUrl = ''
-      isPrimaryLoading.value = false
-      console.warn('WaveformPlayer: failed to load audio', err)
+  loadAudioBlobCached(url, (p) => { if (request === primaryLoadSerial) updatePrimaryLoading(p) })
+    .then(blob => {
+      if (request !== primaryLoadSerial) return
+      return ws.loadBlob(blob)
     })
+    .catch(failPrimaryAudio)
+}
 
-  wavesurfer.value = ws
+onMounted(async () => {
+  const request = ++primaryLoadSerial
+  window.addEventListener(THEME_CHANGED_EVENT, handleThemeChanged)
+  window.addEventListener('keydown', onWindowKeyDown)
+  window.addEventListener('keyup', onWindowKeyUp)
+  const [{ default: WaveSurfer }, { default: RegionsPlugin }] = await Promise.all([
+    import('wavesurfer.js'),
+    import('wavesurfer.js/dist/plugins/regions.js'),
+  ])
+  if (request !== primaryLoadSerial) return
+  WaveSurferConstructor = WaveSurfer
+  RegionsPluginConstructor = RegionsPlugin
+  loadPrimaryAudio(props.audioUrl)
 })
 
-// When audioUrl changes (different track/version), reload audio into the
-// existing WaveSurfer instance instead of destroying and recreating it.
-let loadedAudioUrl = ''
-watch(() => props.audioUrl, async (newUrl) => {
-  if (!newUrl || !wavesurfer.value) return
-  if (newUrl === loadedAudioUrl) return
-  loadedAudioUrl = newUrl
-  zoomStep.value = 0
-  updateVisibleWindow(0, 0)
-  isPrimaryLoading.value = true
-  primaryLoadProgress.value = 0
-  try {
-    const blob = await loadAudioBlobCached(newUrl, (p) => updatePrimaryLoading(p))
-    await wavesurfer.value.loadBlob(blob)
-  } catch (err) {
-    loadedAudioUrl = ''
-    isPrimaryLoading.value = false
-    console.warn('WaveformPlayer: failed to reload audio', err)
-  }
+watch(() => props.audioUrl, (newUrl) => {
+  if (newUrl !== loadedAudioUrl) loadPrimaryAudio(newUrl)
 })
 
 function renderIssueRegions() {
@@ -1293,7 +1335,7 @@ function renderIssueRegions() {
 
   // Restore highlights for all range markers of the active issue
   if (activeRangeIssueId.value !== null) {
-    const issue = props.issues?.find(i => i.id === activeRangeIssueId.value)
+    const issue = activeIssues.value.find(i => i.id === activeRangeIssueId.value)
     if (issue) {
       const rangeMarkers = issue.markers.filter(m => m.marker_type === 'range' && m.time_end !== null)
       if (rangeMarkers.length > 0) {
@@ -1311,7 +1353,7 @@ function renderIssueRegions() {
   isRenderingRegions.value = false
 }
 
-watch(() => props.issues, (issues) => {
+watch(activeIssues, (issues) => {
   if (activeRangeIssueId.value === null) return
   const issue = issues?.find(i => i.id === activeRangeIssueId.value)
   const hasRange = issue?.markers.some(m => m.marker_type === 'range' && m.time_end !== null)
@@ -1330,6 +1372,16 @@ watch(duration, () => {
 watch(markerTimelineDuration, () => {
   activePointGroupKey.value = null
 })
+watch(activeSide, (side) => {
+  zoomStep.value = 0
+  wavesurfer.value?.zoom(0)
+  compareWaveSurfer.value?.zoom(0)
+  updateVisibleWindow(0, markerTimelineDuration.value)
+  activePointGroupKey.value = null
+  hoveredRangeKey.value = null
+  renderIssueRegions()
+  emit('activeSideChange', side)
+})
 watch([() => props.mode, () => props.selectable], () => {
   applyDragSelection()
 })
@@ -1339,7 +1391,10 @@ watch(() => props.zoomable, (zoomable) => {
   updateVisibleWindow(0, duration.value)
 })
 
-watch(compareSourceUrl, async (newCompareUrl) => {
+watch(compareSourceUrl, async (newCompareUrl, _previous, onCleanup) => {
+  let cancelled = false
+  onCleanup(() => { cancelled = true })
+  abMode.value = 'A'
   if (compareWaveSurfer.value) {
     disconnectGraph('compare')
     compareWaveSurfer.value.destroy()
@@ -1358,6 +1413,7 @@ watch(compareSourceUrl, async (newCompareUrl) => {
   isCompareLoading.value = true
   compareLoadProgress.value = 0
   await nextTick()
+  if (cancelled) return
   const compareContainer = compareContainerRef.value
   if (!compareContainer) {
     isCompareLoading.value = false
@@ -1365,6 +1421,7 @@ watch(compareSourceUrl, async (newCompareUrl) => {
   }
 
   const { default: WaveSurfer } = await import('wavesurfer.js')
+  if (cancelled) return
   const ws = WaveSurfer.create({
     container: compareContainer,
     waveColor: compareColor(0.5),
@@ -1380,6 +1437,7 @@ watch(compareSourceUrl, async (newCompareUrl) => {
   attachGainGraph(ws, 'compare')
 
   ws.on('ready', () => {
+    if (cancelled || compareWaveSurfer.value !== ws) return
     updateCompareLoading(100)
     compareDuration.value = ws.getDuration()
     isCompareReady.value = true
@@ -1397,32 +1455,49 @@ watch(compareSourceUrl, async (newCompareUrl) => {
     }
   })
   ws.on('loading', (percent: number) => {
+    if (cancelled || compareWaveSurfer.value !== ws) return
     updateCompareLoading(percent)
   })
   ws.on('error', (err: unknown) => {
+    if (cancelled || compareWaveSurfer.value !== ws) return
     isCompareLoading.value = false
+    isCompareReady.value = false
+    abMode.value = 'A'
+    applyCompareMode('A')
+    emit('load-error', { audioUrl: newCompareUrl, side: 'B', error: err })
     console.error('WaveformPlayer: wavesurfer compare error', err)
   })
   let lastCompareUpdateMs = 0
   ws.on('timeupdate', (t: number) => {
+    if (cancelled || compareWaveSurfer.value !== ws) return
     const now = Date.now()
     if (now - lastCompareUpdateMs >= 50) {
       compareCurrentTime.value = t
       lastCompareUpdateMs = now
     }
+    if (activeSide.value === 'B') emit('timeupdate', t)
+  })
+  ws.on('scroll', (start: number, end: number, scrollLeft: number) => {
+    if (cancelled || activeSide.value !== 'B' || compareWaveSurfer.value !== ws) return
+    updateVisibleWindow(start, end)
+    wavesurfer.value?.setScroll(scrollLeft)
   })
 
   compareWaveSurfer.value = ws
   applyCompareMode(abMode.value)
 
-  loadAudioBlobCached(newCompareUrl, (p) => updateCompareLoading(p))
-    .then(blob => ws.loadBlob(blob))
+  loadAudioBlobCached(newCompareUrl, (p) => { if (!cancelled) updateCompareLoading(p) })
+    .then(blob => cancelled ? undefined : ws.loadBlob(blob))
     .catch((err) => {
+      if (cancelled) return
+      abMode.value = 'A'
       isCompareLoading.value = false
       isCompareReady.value = false
+      applyCompareMode('A')
+      emit('load-error', { audioUrl: newCompareUrl, side: 'B', error: err })
       console.warn('WaveformPlayer: failed to load compare audio', err)
     })
-})
+}, { immediate: true })
 
 watch(abMode, (mode) => {
   applyCompareMode(mode)
@@ -1433,7 +1508,9 @@ watch(gainDb, () => {
 })
 
 async function togglePlay() {
+  if (!isPrimaryReady.value || loadedAudioUrl !== props.audioUrl) return
   await resumeAudioContext()
+  if (!isPrimaryReady.value || loadedAudioUrl !== props.audioUrl) return
   await wavesurfer.value?.playPause()
   if (compareWaveSurfer.value && isCompareMode.value) {
     if (wavesurfer.value?.isPlaying()) {
@@ -1446,8 +1523,9 @@ async function togglePlay() {
 }
 
 async function play() {
-  if (!wavesurfer.value) return
+  if (!wavesurfer.value || !isPrimaryReady.value || loadedAudioUrl !== props.audioUrl) return
   await resumeAudioContext()
+  if (!wavesurfer.value || !isPrimaryReady.value || loadedAudioUrl !== props.audioUrl) return
   await wavesurfer.value.play()
 
   if (compareWaveSurfer.value && isCompareMode.value) {
@@ -1498,12 +1576,14 @@ function exportPeaks(maxLength = 400): number[] {
 }
 
 onBeforeUnmount(() => {
+  primaryLoadSerial++
+  isPrimaryReady.value = false
+  loadedAudioUrl = ''
   window.removeEventListener(THEME_CHANGED_EVENT, handleThemeChanged)
   window.removeEventListener('keydown', onWindowKeyDown)
   window.removeEventListener('keyup', onWindowKeyUp)
-  disconnectGraph('primary')
+  disposePrimaryWaveform()
   disconnectGraph('compare')
-  wavesurfer.value?.destroy()
   compareWaveSurfer.value?.destroy()
   void audioContext.value?.close()
 })
@@ -1578,7 +1658,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
               :style="{ height: `${rangeRulerHeight + 4}px` }"
             />
             <span
-              class="h-2.5 w-2.5 shrink-0 rounded-full transition-transform duration-150"
+              class="h-2.5 w-2.5 shrink-0 rounded-full transition-colors"
               :style="pointGroupDotStyle(group)"
             />
             <span
@@ -1631,7 +1711,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
             v-for="item in visibleRangeLaneItems"
             :key="`${item.issue.id}-${item.marker.id}`"
             type="button"
-            class="absolute min-w-[4px] cursor-pointer transition-all duration-150"
+            class="range-marker absolute min-w-[4px] cursor-pointer"
             :class="activeRangeIssueId === item.issue.id ? 'z-10' : 'z-[1]'"
             :style="{
               left: getMarkerPosition(Math.max(item.marker.time_start, visibleTimelineStart)),
@@ -1654,9 +1734,9 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
         <div
           ref="container"
           data-testid="waveform-canvas"
-          class="relative overflow-hidden rounded-none bg-[rgb(var(--color-waveform-surface))] transition-[z-index] touch-manipulation"
+          class="relative overflow-hidden rounded-none bg-[rgb(var(--color-waveform-surface))] touch-manipulation transition-none"
           :class="[
-            abMode === 'A' ? 'z-[2]' : 'z-0',
+            activeSide === 'A' ? 'z-[2]' : 'z-0',
             isPanning ? 'cursor-grabbing' : (canPanWaveform() ? 'cursor-grab' : (selectable && mode === 'annotate' ? 'cursor-crosshair' : 'cursor-pointer')),
           ]"
           :style="{ height: `${props.height || 128}px` }"
@@ -1731,26 +1811,33 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
         <div
           v-if="isCompareMode"
           ref="compareContainerRef"
-          class="absolute inset-0 pointer-events-none transition-[z-index]"
-          :class="abMode === 'B' ? 'z-[2]' : 'z-0'"
+          class="absolute inset-0 pointer-events-none transition-none"
+          :class="activeSide === 'B' ? 'z-[2]' : 'z-0'"
         ></div>
         <div v-if="isCompareMode" class="absolute top-2 right-2 flex items-center gap-1 bg-overlay/60 rounded-lg p-1 z-10">
+          <div class="relative grid grid-cols-2">
+            <span
+              class="ab-selection pointer-events-none absolute inset-y-0 left-0 w-1/2 rounded bg-button-primary"
+              :style="{ transform: `translateX(${abMode === 'B' ? 100 : 0}%)` }"
+            />
           <button
             type="button"
             @click="setAbMode('A')"
-            :class="['px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'A' ? 'bg-button-primary text-button-primary-foreground' : 'text-muted-foreground hover:text-foreground']">
+            :class="['relative px-2 py-0.5 rounded text-xs font-bold transition-colors', abMode === 'A' ? 'text-button-primary-foreground' : 'text-muted-foreground hover:text-foreground']">
             A
           </button>
           <button
             type="button"
+            :disabled="!isCompareReady"
             @click="setAbMode('B')"
             :class="[
-              'px-2 py-0.5 rounded text-xs font-bold transition-colors',
-              abMode === 'B' ? 'bg-button-primary text-button-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+              'relative px-2 py-0.5 rounded text-xs font-bold transition-colors',
+              abMode === 'B' ? 'text-button-primary-foreground' : 'text-muted-foreground hover:text-foreground',
               isCompareLoading ? 'cursor-wait' : '',
             ]">
             B
           </button>
+          </div>
           <span class="text-xs text-muted-foreground px-1">
             {{ isCompareLoading ? `Loading B ${compareLoadProgress}%` : (abMode === 'A' ? $t('compare.currentVersion') : $t('compare.previousVersion')) }}
           </span>
@@ -1772,7 +1859,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
       <div class="flex items-center gap-2 sm:min-w-[19rem] sm:justify-end">
         <button
           type="button"
-          class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground transition duration-200 hover:border-primary hover:text-primary active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+          class="ui-control inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
           :disabled="zoomStep === 0"
           :aria-label="t('waveform.zoomOut')"
           :title="t('waveform.zoomOut')"
@@ -1792,7 +1879,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
         />
         <button
           type="button"
-          class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground transition duration-200 hover:border-primary hover:text-primary active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+          class="ui-control inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
           :disabled="zoomStep >= maxZoomStep"
           :aria-label="t('waveform.zoomIn')"
           :title="t('waveform.zoomIn')"
@@ -1802,7 +1889,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
         </button>
         <button
           type="button"
-          class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-[11px] font-mono text-foreground transition duration-200 hover:border-primary hover:text-primary active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+          class="ui-control inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-[11px] font-mono text-foreground hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
           :disabled="zoomStep === 0"
           @click="resetZoom"
         >
@@ -1832,7 +1919,7 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
 
       <div class="flex flex-col gap-3" :class="compact ? '' : 'sm:flex-row sm:items-center sm:justify-between'">
       <div class="flex items-center gap-4">
-        <button type="button" @click="togglePlay" class="text-primary hover:text-primary-hover transition-colors relative w-8 h-8">
+        <button type="button" :disabled="!isPrimaryReady" @click="togglePlay" class="text-primary hover:text-primary-hover disabled:opacity-40 transition-colors relative w-8 h-8">
           <Transition name="play-icon">
             <Play v-if="!isPlaying" class="w-8 h-8 absolute inset-0" fill="currentColor" :stroke-width="0" />
             <Pause v-else class="w-8 h-8 absolute inset-0" fill="currentColor" :stroke-width="0" />
@@ -1873,17 +1960,22 @@ defineExpose({ seekTo, togglePlay, highlightIssue, focusIssue, play, playFrom, g
 </template>
 
 <style scoped>
+.range-marker {
+  transition: background-color var(--motion-feedback), border-color var(--motion-feedback), box-shadow var(--motion-feedback), opacity var(--motion-feedback);
+}
+.ab-selection {
+  transition: transform var(--motion-selection) var(--motion-ease-out);
+}
 .waveform-zoom-slider {
   accent-color: rgb(var(--color-control-accent));
 }
 
 .play-icon-enter-active,
 .play-icon-leave-active {
-  transition: opacity 0.12s ease-out, transform 0.12s ease-out;
+  transition: opacity var(--motion-feedback) var(--motion-ease-out);
 }
 .play-icon-enter-from,
 .play-icon-leave-to {
   opacity: 0;
-  transform: scale(0.85);
 }
 </style>

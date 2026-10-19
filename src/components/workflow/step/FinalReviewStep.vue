@@ -45,6 +45,8 @@ const props = defineProps<{
   issues: Issue[]
   mentionCandidates: MentionCandidates
   finalReviewIssues: Issue[]
+  waveformIssues: Issue[]
+  compareWaveformIssues: Issue[]
   reviewAssignments: StageAssignment[]
   batchUpdating: boolean
   batchActions: IssueStatus[]
@@ -61,9 +63,6 @@ const emit = defineEmits<{
   toggleMasterCompare: []
   'update:compareMasterDeliveryId': [value: number | null]
   downloadMaster: []
-  waveformReady: [duration: number]
-  waveformTimeupdate: [time: number]
-  waveformPlaybackStateChange: [isPlaying: boolean]
   requestWaveformMode: [mode: 'seek' | 'annotate']
   issueSelect: [issue: Issue]
   issueHover: [issue: Issue]
@@ -83,7 +82,7 @@ const { t, locale } = useI18n()
 const fmtDate = (d: string) => formatLocaleDate(d, locale.value)
 
 // Local handle for waveform ⇄ issue-form cross-bindings; the instance is also
-// registered upward so the view can drive hotkeys and preview playback.
+// registered upward so the view can drive annotation hotkeys.
 const issueFormRef = ref<InstanceType<typeof IssueCreatePanel>>()
 function bindIssueForm(el: unknown) {
   issueFormRef.value = el as InstanceType<typeof IssueCreatePanel> | undefined
@@ -150,15 +149,16 @@ function bindIssueForm(el: unknown) {
         :ref="registerWaveform"
         :audio-url="masterAudioUrl"
         :compare-audio-url="compareMasterAudioUrl"
-        :issues="finalReviewIssues"
+        :issues="waveformIssues"
+        :compare-issues="compareWaveformIssues"
         zoomable
         :track-id="trackId"
         playback-scope="master"
-        :selectable="true"
-        :mode="waveformMode"
-        :selected-range="issueFormRef?.selectedRange ?? null"
-        :draft-markers="issueFormRef?.markers ?? []"
-        :draft-range-anchor="issueFormRef?.rangeAnchor ?? null"
+        :selectable="compareMasterDeliveryId == null"
+        :mode="compareMasterDeliveryId != null ? 'seek' : waveformMode"
+        :selected-range="compareMasterDeliveryId != null ? null : issueFormRef?.selectedRange ?? null"
+        :draft-markers="compareMasterDeliveryId != null ? [] : issueFormRef?.markers ?? []"
+        :draft-range-anchor="compareMasterDeliveryId != null ? null : issueFormRef?.rangeAnchor ?? null"
         :hovered-issue-id="hoveredIssueId"
         @click="(time: number) => issueFormRef?.handleClick(time)"
         @regionClick="emit('issueSelect', $event)"
@@ -166,9 +166,6 @@ function bindIssueForm(el: unknown) {
         @issueHover="emit('issueHover', $event)"
         @issueLeave="emit('issueLeave')"
         @requestModeChange="emit('requestWaveformMode', $event)"
-        @ready="emit('waveformReady', $event)"
-        @timeupdate="emit('waveformTimeupdate', $event)"
-        @playbackStateChange="emit('waveformPlaybackStateChange', $event)"
       />
     </div>
     <div v-else-if="masterDelivery" class="card space-y-3">
@@ -186,6 +183,8 @@ function bindIssueForm(el: unknown) {
           :ref="bindIssueForm"
           :track-id="trackId"
           phase="final_review"
+          :readonly="compareMasterDeliveryId != null"
+          :creation-target="t('issueHistory.createMasterTarget', { cycle: masterDelivery?.workflow_cycle ?? '?', number: masterDelivery?.delivery_number ?? '?' })"
           :allow-internal-visibility="false"
           :master-delivery-id="masterDelivery?.id ?? null"
           :issues="issues"

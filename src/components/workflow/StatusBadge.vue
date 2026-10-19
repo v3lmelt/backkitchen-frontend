@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { TrackStatus, IssueStatus, IssueSeverity, IssuePhase, WorkflowVariant } from '@/types'
 
@@ -65,30 +65,13 @@ const config = computed(() => {
   return { label, class: cls }
 })
 
-const flashing = ref(false)
-let flashTimer: ReturnType<typeof setTimeout> | null = null
-
-watch(() => props.status, (next, prev) => {
-  if (prev === undefined || next === prev) return
-  flashing.value = true
-  if (flashTimer) clearTimeout(flashTimer)
-  flashTimer = setTimeout(() => {
-    flashing.value = false
-    flashTimer = null
-  }, 600)
-})
-
-onBeforeUnmount(() => {
-  if (flashTimer) clearTimeout(flashTimer)
-})
 </script>
 
 <template>
   <span
     :class="[
-      'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+      'status-badge inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
       config.class,
-      flashing ? 'status-flash' : '',
     ]"
   >
     {{ config.label }}
@@ -96,12 +79,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.status-flash {
-  animation: status-flash 0.6s ease-out;
-}
-@keyframes status-flash {
-  0%   { box-shadow: 0 0 0 0 rgb(var(--color-primary) / 0.55); }
-  40%  { box-shadow: 0 0 0 6px rgb(var(--color-primary) / 0.25); }
-  100% { box-shadow: 0 0 0 0 rgb(var(--color-primary) / 0); }
+.status-badge {
+  transition: color var(--motion-feedback), background-color var(--motion-feedback);
 }
 </style>

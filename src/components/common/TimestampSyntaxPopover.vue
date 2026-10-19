@@ -251,10 +251,10 @@ const examples = computed(() => ([
   </button>
 
   <Transition
-    enter-active-class="transition-all duration-150 ease-out"
+    enter-active-class="popover-enter-active"
     :enter-from-class="transitionFromClass"
     enter-to-class="opacity-100 translate-y-0"
-    leave-active-class="transition-all duration-100 ease-in"
+    leave-active-class="popover-leave-active"
     leave-from-class="opacity-100 translate-y-0"
     :leave-to-class="transitionToClass"
   >

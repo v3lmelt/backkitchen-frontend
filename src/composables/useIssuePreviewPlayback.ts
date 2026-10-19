@@ -58,8 +58,7 @@ export function useIssuePreviewPlayback(deps: IssuePreviewPlaybackDeps) {
 
   const isPreviewPlaying = computed<boolean>(() => {
     const issue = activeIssue.value
-    if (!plan.value || !issue || plan.value.issueId !== issue.id) return false
-    return deps.isPlayingFor(issue)
+    return issue != null && deps.isPlayingFor(issue)
   })
 
   // Advance plan as currentTime crosses segment boundaries.
@@ -107,7 +106,10 @@ export function useIssuePreviewPlayback(deps: IssuePreviewPlaybackDeps) {
     const issue = activeIssue.value
     if (!issue) return
     const segments = makeSegments(issue.markers)
-    if (!segments.length) return
+    if (!segments.length) {
+      await deps.waveformFor(issue)?.playFrom?.(0)
+      return
+    }
     plan.value = { issueId: issue.id, segments, index: 0 }
     await deps.waveformFor(issue)?.playFrom?.(segments[0].start)
   }

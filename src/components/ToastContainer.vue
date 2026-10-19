@@ -43,13 +43,15 @@ const colorMap = {
 </template>
 
 <style scoped>
-.toast-enter-active,
+.toast-enter-active {
+  transition: transform var(--motion-modal-in) var(--motion-ease-out), opacity var(--motion-modal-in) var(--motion-ease-out);
+}
 .toast-leave-active {
-  transition: transform 0.22s ease-out, opacity 0.22s ease-out;
+  transition: transform var(--motion-modal-out) var(--motion-ease-in), opacity var(--motion-modal-out) var(--motion-ease-in);
 }
 .toast-enter-from {
   opacity: 0;
-  transform: translateX(16px);
+  transform: translateX(var(--motion-offset));
 }
 .toast-leave-active {
   position: absolute;
@@ -57,9 +59,9 @@ const colorMap = {
 }
 .toast-leave-to {
   opacity: 0;
-  transform: translateX(16px);
+  transform: translateX(var(--motion-offset));
 }
 .toast-move {
-  transition: transform 0.22s ease-out;
+  transition: transform var(--motion-layout) var(--motion-ease-out);
 }
 </style>

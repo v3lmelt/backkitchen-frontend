@@ -1,0 +1,42 @@
+{
+  "version": "0.1.54",
+  "date": "2026-10-12",
+  "headline": {
+    "zh-CN": "专辑截止提醒统一",
+    "en": "Unified album deadline reminders"
+  },
+  "summary": {
+    "zh-CN": "首页和专辑列表保留专辑整体截止提醒，移除曲目逾期数量提示，并同步调整关注筛选与排序。",
+    "en": "The dashboard and album list retain overall album deadline reminders, remove overdue track counts, and align attention filtering and sorting."
+  },
+  "sections": [
+    {
+      "heading": {
+        "zh-CN": "首页与专辑列表",
+        "en": "Dashboard and album list"
+      },
+      "items": [
+        {
+          "title": {
+            "zh-CN": "仅显示专辑整体截止",
+            "en": "Overall album deadline reminders"
+          },
+          "description": {
+            "zh-CN": "保留“今日截止”“逾期 N 天”“还剩 N 天”，移除“X 首逾期”。已完成和已归档专辑继续隐藏截止提醒。",
+            "en": "Keep due-today, days-overdue and days-left reminders while removing overdue track counts. Completed and archived albums continue to hide deadline reminders."
+          }
+        },
+        {
+          "title": {
+            "zh-CN": "统一关注口径",
+            "en": "Aligned attention criteria"
+          },
+          "description": {
+            "zh-CN": "首页关注专辑由整体截止状态和未解决问题决定，按问题数排序；专辑列表关注排序综合整体截止状态和未解决问题。阶段曲目逾期数量的关注权重已移除，阶段日期设置和待办保持原有行为。",
+            "en": "Dashboard attention includes albums based on overall deadlines and open issues, ordered by issue count. Album-list attention sorting combines overall deadlines and open issues. Overdue track counts no longer add attention weight; phase-deadline settings and tasks retain their existing behavior."
+          }
+        }
+      ]
+    }
+  ]
+}

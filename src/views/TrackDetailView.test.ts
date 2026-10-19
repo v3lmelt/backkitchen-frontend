@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
+import { ref } from 'vue'
 
 import { mountWithPlugins } from '@/tests/utils'
+import type { MasterDelivery, TrackSourceVersion } from '@/types'
+import { historySource } from '@/tests/issueHistoryFixtures'
 
 const mocks = vi.hoisted(() => ({
   route: {
@@ -25,8 +28,10 @@ const mocks = vi.hoisted(() => ({
   uploadToR2Mock: vi.fn(),
   trackReopenMock: vi.fn(),
   trackRequestReopenMock: vi.fn(),
+  decideReopenRequestMock: vi.fn(),
   discussionCreateMock: vi.fn(),
   issueUpdateMock: vi.fn(),
+  downloadTrackAudioMock: vi.fn(),
   setVisibilityMock: vi.fn(),
   currentUser: { id: 2 },
   waveformPlayFromMock: vi.fn(),
@@ -47,9 +52,8 @@ vi.mock('@/api', () => ({
   AUTH_USER_KEY: 'backkitchen_user',
   getAuthToken: () => localStorage.getItem('backkitchen_token'),
   trackAudioUrl: (trackId: number, v?: number | null) => `/api/tracks/${trackId}/audio?v=${v ?? 0}`,
-  masterAudioUrl: (trackId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-audio?v=${v ?? 0}&c=${c ?? 1}`,
-  masterDeliveryAudioUrl: (trackId: number, deliveryId: number, v?: number | null, c?: number | null) => `/api/tracks/${trackId}/master-deliveries/${deliveryId}/audio?v=${v ?? 0}&c=${c ?? 1}`,
-  sourceVersionAudioUrl: (trackId: number, versionId: number) => `/api/tracks/${trackId}/source-versions/${versionId}/audio`,
+  masterDeliveryAudioUrl: (trackId: number, delivery: MasterDelivery) => `/api/tracks/${trackId}/master-deliveries/${delivery.id}/audio?v=${delivery.delivery_number}&c=${delivery.workflow_cycle}&t=${encodeURIComponent(delivery.created_at)}`,
+  sourceVersionAudioUrl: (trackId: number, version: TrackSourceVersion) => `/api/tracks/${trackId}/source-versions/${version.id}/audio?v=${version.version_number}&c=${version.workflow_cycle}&t=${encodeURIComponent(version.created_at)}`,
   trackApi: {
     get: mocks.trackGetMock,
     listAssignments: mocks.listAssignmentsMock,
@@ -59,6 +63,7 @@ vi.mock('@/api', () => ({
     cancelSourceFollowup: mocks.cancelSourceFollowupMock,
     reopen: mocks.trackReopenMock,
     requestReopen: mocks.trackRequestReopenMock,
+    decideReopenRequest: mocks.decideReopenRequestMock,
     setVisibility: mocks.setVisibilityMock,
   },
   issueApi: {
@@ -83,7 +88,7 @@ type WaveformMockThis = {
 
 vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
   default: {
-    props: ['audioUrl', 'compareVersionId', 'compareAudioUrl', 'issues', 'playbackScope'],
+    props: ['audioUrl', 'compareAudioUrl', 'compareIssues', 'issues', 'playbackScope'],
     emits: ['ready', 'timeupdate', 'playbackStateChange', 'regionClick'],
     mounted(this: WaveformMockThis) {
       const scope = this.playbackScope ?? 'source'
@@ -117,13 +122,13 @@ vi.mock('@/components/audio/WaveformPlayer.vue', () => ({
         return scope === 'master' ? [0.1, 0.3, 0.9] : [0.25, 0.5, 0.75]
       },
     },
-    template: '<div class="waveform">scope:{{ playbackScope ?? "source" }} audio:{{ audioUrl ?? "none" }} compare:{{ compareVersionId ?? "none" }} compareAudio:{{ compareAudioUrl ?? "none" }} issues:{{ issues?.length ?? 0 }}</div>',
+    template: '<div class="waveform">scope:{{ playbackScope ?? "source" }} audio:{{ audioUrl ?? "none" }} compare:{{ compareAudioUrl || "none" }} issues:{{ issues?.length ?? 0 }}</div>',
   },
 }))
 
 vi.mock('@/components/audio/IssueMarkerList.vue', () => ({
   default: {
-    props: ['issues', 'track', 'assignments', 'showActivity', 'enableQuickActions', 'currentSourceVersionNumber'],
+    props: ['issues', 'track', 'assignments', 'showActivity', 'enableQuickActions'],
     emits: ['select', 'status-change'],
     template: `
       <div
@@ -203,23 +208,23 @@ vi.mock('@/components/common/CommentInput.vue', () => ({
   },
 }))
 
+vi.mock('@/composables/useAudioDownload', () => ({
+  useAudioDownload: () => ({
+    downloading: ref(false),
+    downloadProgress: ref(0),
+    downloadTrackAudio: mocks.downloadTrackAudioMock,
+  }),
+}))
+
 
 vi.mock('@/components/IssueDetailPanel.vue', () => ({
   default: {
-    props: ['issue', 'track', 'assignments', 'issues', 'mentionCandidates', 'preview'],
-    emits: ['close', 'updated', 'open-issue', 'preview-play-at', 'preview-action'],
+    props: ['issue', 'track', 'assignments', 'issues', 'mentionCandidates', 'sourceVersions'],
+    emits: ['close', 'updated', 'open-issue'],
     template: `
       <div class="issue-detail-panel" :data-open="issue ? 'true' : 'false'">
         <span class="drawer-title">{{ issue?.title ?? '' }}</span>
         <span class="drawer-status">{{ issue?.status ?? '' }}</span>
-        <span
-          class="drawer-preview"
-          :data-duration="preview?.duration ?? ''"
-          :data-current-time="preview?.currentTime ?? ''"
-          :data-playing="preview?.isPreviewPlaying ? 'true' : 'false'"
-          :data-active-marker="preview?.activeMarkerIndex ?? ''"
-          :data-peaks="preview?.peaks?.join(',') ?? ''"
-        />
         <button type="button" class="drawer-close" @click="$emit('close')">close</button>
         <button
           v-if="issue"
@@ -230,10 +235,6 @@ vi.mock('@/components/IssueDetailPanel.vue', () => ({
           update
         </button>
         <button type="button" class="drawer-open-linked" @click="$emit('open-issue', 2)">linked</button>
-        <button v-if="issue" type="button" class="preview-play-at" @click="$emit('preview-play-at', issue.markers?.[0]?.time_start ?? 0)">play at</button>
-        <button v-if="issue" type="button" class="preview-play-sequence" @click="$emit('preview-action', issue, { type: 'playSequence' })">play issue</button>
-        <button v-if="issue" type="button" class="preview-play-marker" @click="$emit('preview-action', issue, { type: 'playMarker', index: 0 })">play marker</button>
-        <button v-if="issue" type="button" class="preview-seek" @click="$emit('preview-action', issue, { type: 'seek', time: 15 })">seek</button>
       </div>
     `,
   },
@@ -256,7 +257,7 @@ const makeIssue = (overrides: Record<string, unknown> = {}) => ({
   author_id: 4,
   phase: 'peer',
   workflow_cycle: 2,
-  source_version_id: null,
+  source_version_id: overrides.source_version_number === 2 ? 201 : 301,
   source_version_number: 3,
   master_delivery_id: null,
   title: 'Current version',
@@ -273,7 +274,7 @@ const makeIssue = (overrides: Record<string, unknown> = {}) => ({
 function makeTrackDetailResponse(overrides: {
   track?: Record<string, unknown>
   issues?: Array<Record<string, unknown>>
-  source_versions?: Array<Record<string, unknown>>
+  source_versions?: TrackSourceVersion[]
   master_deliveries?: Array<Record<string, unknown>>
 } = {}) {
   const track = {
@@ -291,7 +292,7 @@ function makeTrackDetailResponse(overrides: {
     open_issue_count: 1,
     submitter: { display_name: 'Nova' },
     peer_reviewer: { id: 4, display_name: 'Echo' },
-    current_source_version: { id: 301 },
+    current_source_version: historySource(301, 3, { file_path: '/audio.wav', created_at: '2024-01-03T00:00:00Z' }),
     current_master_delivery: null,
     ...overrides.track,
   }
@@ -305,8 +306,8 @@ function makeTrackDetailResponse(overrides: {
     discussions: [],
     events: [],
     source_versions: overrides.source_versions ?? [
-      { id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' },
-      { id: 201, version_number: 2, created_at: '2024-01-02T00:00:00Z' },
+      historySource(301, 3, { file_path: '/audio.wav', created_at: '2024-01-03T00:00:00Z' }),
+      historySource(201, 2, { created_at: '2024-01-02T00:00:00Z' }),
     ],
     ...(overrides.master_deliveries ? { master_deliveries: overrides.master_deliveries } : {}),
   }
@@ -347,8 +348,10 @@ describe('TrackDetailView', () => {
     mocks.uploadToR2Mock.mockReset()
     mocks.trackReopenMock.mockReset()
     mocks.trackRequestReopenMock.mockReset()
+    mocks.decideReopenRequestMock.mockReset()
     mocks.setVisibilityMock.mockReset()
     mocks.issueUpdateMock.mockReset()
+    mocks.downloadTrackAudioMock.mockReset()
     mocks.waveformPlayFromMock.mockReset()
     mocks.waveformSeekToMock.mockReset()
     mocks.waveformTogglePlayMock.mockReset()
@@ -389,7 +392,7 @@ describe('TrackDetailView', () => {
         open_issue_count: 1,
         submitter: { display_name: 'Nova' },
         peer_reviewer: { id: 4, display_name: 'Echo' },
-        current_source_version: { id: 301 },
+        current_source_version: { id: 301, version_number: 3, source_kind: 'file', file_path: '/audio.wav' },
         current_master_delivery: null,
       },
       issues: [
@@ -400,8 +403,8 @@ describe('TrackDetailView', () => {
       discussions: [],
       events: [],
       source_versions: [
-        { id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' },
-        { id: 201, version_number: 2, created_at: '2024-01-02T00:00:00Z' },
+        historySource(301, 3, { file_path: '/audio.wav', created_at: '2024-01-03T00:00:00Z' }),
+        historySource(201, 2, { created_at: '2024-01-02T00:00:00Z' }),
       ],
     })
     mocks.discussionCreateMock.mockResolvedValue({
@@ -447,97 +450,7 @@ describe('TrackDetailView', () => {
     expect(mocks.pushMock).not.toHaveBeenCalled()
   })
 
-  it('passes source waveform playback preview to the inline issue panel', async () => {
-    mocks.trackGetMock.mockResolvedValueOnce(makeTrackDetailResponse({
-      issues: [
-        makeIssue({
-          id: 1,
-          local_number: 1,
-          title: 'Timed source issue',
-          source_version_number: 3,
-          markers: [{ time_start: 12, time_end: 14 }],
-        }),
-        makeIssue({ id: 2, local_number: 2, title: 'Older version', source_version_number: 2 }),
-      ],
-    }))
 
-    const wrapper = mountTrackDetailView()
-    await flushPromises()
-
-    await wrapper.findAll('.issue-select')[0].trigger('click')
-    await flushPromises()
-
-    const preview = wrapper.find('.drawer-preview')
-    expect(preview.attributes('data-duration')).toBe('180')
-    expect(preview.attributes('data-current-time')).toBe('18')
-    expect(preview.attributes('data-peaks')).toBe('0.25,0.5,0.75')
-    expect(mocks.waveformExportPeaksMock).toHaveBeenCalledWith('source', 400)
-
-    await wrapper.find('.preview-play-at').trigger('click')
-    await flushPromises()
-    expect(mocks.waveformPlayFromMock).toHaveBeenCalledWith('source', 12)
-
-    mocks.waveformPlayFromMock.mockClear()
-    await wrapper.find('.preview-play-sequence').trigger('click')
-    await flushPromises()
-    expect(mocks.waveformPlayFromMock).toHaveBeenCalledWith('source', 12)
-
-    await wrapper.find('.preview-seek').trigger('click')
-    await flushPromises()
-    expect(mocks.waveformSeekToMock).toHaveBeenCalledWith('source', 15)
-  })
-
-  it('uses the master waveform for final-review issue preview controls', async () => {
-    const currentMasterDelivery = {
-      id: 21,
-      delivery_number: 4,
-      workflow_cycle: 2,
-      file_path: 'master-v4.wav',
-      created_at: '2024-01-04T00:00:00Z',
-      producer_approved_at: null,
-      submitter_approved_at: null,
-    }
-    mocks.trackGetMock.mockResolvedValueOnce(makeTrackDetailResponse({
-      track: {
-        status: 'final_review',
-        allowed_actions: [],
-        current_master_delivery: currentMasterDelivery,
-      },
-      issues: [
-        makeIssue({
-          id: 11,
-          local_number: 1,
-          phase: 'final_review',
-          title: 'Final delivery issue',
-          source_version_number: null,
-          master_delivery_id: 21,
-          markers: [{ time_start: 45, time_end: 48 }],
-        }),
-      ],
-      master_deliveries: [currentMasterDelivery],
-    }))
-
-    const wrapper = mountTrackDetailView()
-    await flushPromises()
-
-    expect(wrapper.findAll('.waveform')).toHaveLength(2)
-    await wrapper.findAll('.issue-select')[0].trigger('click')
-    await flushPromises()
-
-    const preview = wrapper.find('.drawer-preview')
-    expect(preview.attributes('data-duration')).toBe('240')
-    expect(preview.attributes('data-current-time')).toBe('24')
-    expect(preview.attributes('data-peaks')).toBe('0.1,0.3,0.9')
-    expect(mocks.waveformExportPeaksMock).toHaveBeenCalledWith('master', 400)
-
-    await wrapper.find('.preview-play-sequence').trigger('click')
-    await flushPromises()
-    expect(mocks.waveformPlayFromMock).toHaveBeenCalledWith('master', 45)
-
-    await wrapper.find('.preview-seek').trigger('click')
-    await flushPromises()
-    expect(mocks.waveformSeekToMock).toHaveBeenCalledWith('master', 15)
-  })
 
   it('renders text-only master deliveries without creating a master waveform', async () => {
     const currentMasterDelivery = {
@@ -570,6 +483,137 @@ describe('TrackDetailView', () => {
 
   })
 
+  it('lets an ordinary member play and download a completed current-cycle final without opening mastering history or chat', async () => {
+    mocks.currentUser = { id: 42 }
+    const finalDelivery = {
+      id: 21,
+      delivery_number: 4,
+      workflow_cycle: 2,
+      delivery_kind: 'file',
+      file_path: 'master-v4.wav',
+      created_at: '2024-01-04T00:00:00Z',
+      confirmed_at: null,
+      producer_approved_at: null,
+      submitter_approved_at: null,
+      delivery_message: 'Private mastering delivery note',
+    }
+    mocks.trackGetMock.mockResolvedValueOnce(makeTrackDetailResponse({
+      track: {
+        status: 'completed',
+        allowed_actions: [],
+        mastering_engineer_id: 9,
+        viewer_is_mastering_participant: false,
+        viewer_can_access_master_audio: true,
+        current_master_delivery: finalDelivery,
+      },
+      issues: [makeIssue({ title: 'Peer issue remains visible' })],
+      master_deliveries: [
+        finalDelivery,
+        { ...finalDelivery, id: 20, delivery_number: 3, delivery_message: 'Older private draft' },
+      ],
+    }))
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    const masterPlayer = wrapper.findAll('.waveform').find(player => player.text().includes('scope:master'))
+    expect(masterPlayer?.text()).toContain('/api/tracks/7/master-deliveries/21/audio')
+    expect(masterPlayer?.text()).toContain('issues:0')
+    expect(wrapper.text()).toContain('Master Audio')
+    expect(wrapper.text()).toContain('Peer issue remains visible')
+    expect(wrapper.text()).not.toContain('Final-review issue remains visible')
+    expect(wrapper.text()).not.toContain('Private mastering delivery note')
+    expect(wrapper.text()).not.toContain('Older private draft')
+    expect(wrapper.text()).not.toContain('Final approvals')
+    expect(wrapper.text()).not.toContain('Master Delivery History')
+    expect(wrapper.text()).not.toContain('View Mastering History')
+    expect(wrapper.text()).not.toContain('Open Mastering Page')
+    expect(wrapper.find('.mastering-chat-sidebar').exists()).toBe(false)
+
+    const downloads = wrapper.findAll('button').filter(button => button.text() === 'Download Audio')
+    expect(downloads).toHaveLength(2)
+    await downloads[1]!.trigger('click')
+    expect(mocks.downloadTrackAudioMock).toHaveBeenCalledWith(
+      expect.objectContaining({ value: expect.stringContaining('/api/tracks/7/master-deliveries/21/audio?v=4&c=2&t=') }),
+      expect.objectContaining({ value: expect.objectContaining({ current_master_delivery: finalDelivery }) }),
+      '_master',
+    )
+    wrapper.unmount()
+  })
+
+  it.each(['mastering', 'mastering_revision', 'final_review', 'peer_review'])(
+    'hides all master playback, summary and workspace controls from an ordinary member while a public track is %s',
+    async (status) => {
+      mocks.currentUser = { id: 42 }
+      mocks.trackGetMock.mockResolvedValueOnce(makeTrackDetailResponse({
+        track: {
+          status,
+          is_public: true,
+          allowed_actions: [],
+          mastering_engineer_id: 9,
+          viewer_is_mastering_participant: false,
+          viewer_can_access_master_audio: false,
+          mastering_notes: 'Private mastering notes',
+          current_master_delivery: {
+            id: 21,
+            delivery_number: 4,
+            workflow_cycle: 2,
+            delivery_kind: 'file',
+            file_path: 'private-master.wav',
+            confirmed_at: '2024-01-04T00:00:00Z',
+            delivery_message: 'Private mastering delivery note',
+          },
+        },
+        issues: [],
+      }))
+
+      const wrapper = mountTrackDetailView()
+      await flushPromises()
+
+      expect(wrapper.findAll('.waveform')).toHaveLength(1)
+      expect(wrapper.text()).not.toContain('/api/tracks/7/master-audio')
+      expect(wrapper.text()).not.toContain('Master Audio')
+      expect(wrapper.text()).not.toContain('Current Master')
+      expect(wrapper.text()).not.toContain('Final approvals')
+      expect(wrapper.text()).not.toContain('Private mastering delivery note')
+      expect(wrapper.text()).not.toContain('Private mastering notes')
+      expect(wrapper.text()).not.toContain('Open Mastering Page')
+      expect(wrapper.text()).not.toContain('View Mastering History')
+      expect(wrapper.find('.mastering-chat-sidebar').exists()).toBe(false)
+      expect(wrapper.findAll('button').filter(button => button.text() === 'Download Audio')).toHaveLength(1)
+      expect(mocks.downloadTrackAudioMock).not.toHaveBeenCalled()
+      wrapper.unmount()
+    },
+  )
+
+  it('withholds a prior-cycle master from completed ordinary viewers when capability flags are absent', async () => {
+    mocks.currentUser = { id: 42 }
+    mocks.trackGetMock.mockResolvedValueOnce(makeTrackDetailResponse({
+      track: {
+        status: 'completed',
+        allowed_actions: [],
+        mastering_engineer_id: 9,
+        current_master_delivery: {
+          id: 20,
+          delivery_number: 3,
+          workflow_cycle: 1,
+          file_path: 'old-final-master.wav',
+          confirmed_at: '2024-01-04T00:00:00Z',
+        },
+      },
+      issues: [],
+    }))
+
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+
+    expect(wrapper.findAll('.waveform')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('/api/tracks/7/master-audio')
+    expect(wrapper.text()).not.toContain('Current Master')
+    expect(wrapper.find('.mastering-chat-sidebar').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('keeps issues from older workflow cycles out of the current waveform', async () => {
     mocks.trackGetMock.mockResolvedValueOnce(makeTrackDetailResponse({
       track: {
@@ -593,8 +637,8 @@ describe('TrackDetailView', () => {
         }),
       ],
       source_versions: [
-        { id: 401, version_number: 4, created_at: '2024-01-04T00:00:00Z' },
-        { id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' },
+        historySource(401, 4, { file_path: '/audio.wav', created_at: '2024-01-04T00:00:00Z' }),
+        historySource(301, 3, { created_at: '2024-01-03T00:00:00Z' }),
       ],
     }))
 
@@ -777,7 +821,7 @@ describe('TrackDetailView', () => {
       issues: [],
       discussions: [],
       events: [],
-      source_versions: [{ id: 301, version_number: 1, created_at: '2024-01-03T00:00:00Z' }],
+      source_versions: [historySource(301, 1, { file_path: '/audio.wav', created_at: '2024-01-03T00:00:00Z' })],
     })
 
     const wrapper = mountTrackDetailView()
@@ -842,7 +886,7 @@ describe('TrackDetailView', () => {
     const wrapper = mountTrackDetailView()
     await flushPromises()
 
-    expect(wrapper.find('.waveform').text()).toContain('compare:201')
+    expect(wrapper.find('.waveform').text()).toContain('compare:/api/tracks/7/source-versions/201/audio?v=2&c=2')
   })
 
   it('shows the current visibility separately from the toggle action', async () => {
@@ -922,7 +966,7 @@ describe('TrackDetailView', () => {
       issues: [],
       discussions: [],
       events: [],
-      source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
+      source_versions: [historySource(301, 3, { file_path: '/audio.wav', created_at: '2024-01-03T00:00:00Z' })],
     })
     mocks.listAssignmentsMock.mockResolvedValueOnce([
       {
@@ -1002,7 +1046,7 @@ describe('TrackDetailView', () => {
       issues: [],
       discussions: [],
       events: [],
-      source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
+      source_versions: [historySource(301, 3, { file_path: '/audio.wav', created_at: '2024-01-03T00:00:00Z' })],
     })
 
     const wrapper = mountTrackDetailView()
@@ -1010,6 +1054,8 @@ describe('TrackDetailView', () => {
 
     expect(wrapper.findAll('button').some(button => button.text() === 'View Mastering History')).toBe(true)
     expect(wrapper.findAll('button').some(button => button.text() === 'Open Mastering Page')).toBe(false)
+    expect(wrapper.text()).toContain('audio:/api/tracks/7/master-deliveries/21/audio')
+    expect(wrapper.find('.mastering-chat-sidebar').exists()).toBe(true)
   })
 
   it('renders current master audio in a separate waveform and filters master issues to the active delivery', async () => {
@@ -1046,7 +1092,7 @@ describe('TrackDetailView', () => {
       ],
       discussions: [],
       events: [],
-      source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
+      source_versions: [historySource(301, 3, { file_path: '/audio.wav', created_at: '2024-01-03T00:00:00Z' })],
       master_deliveries: [
         {
           id: 21,
@@ -1075,7 +1121,7 @@ describe('TrackDetailView', () => {
     const waveforms = wrapper.findAll('.waveform')
     expect(waveforms).toHaveLength(2)
     expect(waveforms[1].text()).toContain('scope:master')
-    expect(waveforms[1].text()).toContain('audio:/api/tracks/7/master-audio?v=4&c=2')
+    expect(waveforms[1].text()).toContain('audio:/api/tracks/7/master-deliveries/21/audio')
     expect(waveforms[1].text()).toContain('issues:1')
     expect(waveforms[1].text()).toContain('compare:none')
     expect(wrapper.find('.issue-count').text()).toBe('3')
@@ -1097,6 +1143,7 @@ describe('TrackDetailView', () => {
         submitter_id: 2,
         producer_id: 8,
         allowed_actions: ['accept', 'reject_final'],
+        viewer_can_open_workflow: true,
         workflow_step: { id: 'intake', label: 'Intake', type: 'approval', assignee_role: 'producer', order: 0, transitions: {} },
         open_issue_count: 1,
         submitter: { display_name: 'Nova' },
@@ -1107,19 +1154,78 @@ describe('TrackDetailView', () => {
       issues: [],
       discussions: [],
       events: [],
-      source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
+      source_versions: [historySource(301, 3, { file_path: '/audio.wav', created_at: '2024-01-03T00:00:00Z' })],
       workflow_config: { version: 2, steps: [{ id: 'intake', label: 'Intake', type: 'approval', assignee_role: 'producer', order: 0, transitions: { accept: 'peer_review' } }] },
     })
 
     const wrapper = mountTrackDetailView()
     await flushPromises()
 
-    const buttons = wrapper.findAll('button.workflow-cta-btn')
+    const buttons = wrapper.findAll('button').filter(button => button.text().includes('Open Intake'))
     expect(buttons).toHaveLength(2)
-    expect(buttons.every(button => button.text().includes('Open Intake'))).toBe(true)
 
     await buttons[0].trigger('click')
     expect(mocks.pushMock).toHaveBeenCalledWith({ path: '/tracks/7/step/intake', query: undefined })
+  })
+
+  it('keeps the followup form without a reception CTA for a composer with only optional actions', async () => {
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetailResponse({ track: {
+      status: 'intake',
+      allowed_actions: ['request_source_followup'],
+      viewer_can_open_workflow: false,
+      viewer_has_pending_work: false,
+      workflow_step: { id: 'intake', label: 'Intake', type: 'approval', assignee_role: 'producer', order: 0, transitions: {} },
+    } }))
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+    expect(wrapper.findAll('button').some(button => button.text().includes('Open Intake'))).toBe(false)
+    expect(wrapper.find('input[type="file"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it.each(['approve', 'reject'] as const)('clears the pending reopen card after %s and reloads the next task', async (decision) => {
+    const pending = makeTrackDetailResponse({ track: {
+      status: 'completed', viewer_is_album_manager: true, viewer_has_pending_work: true,
+      viewer_can_open_workflow: false, allowed_actions: ['direct_reopen'],
+      pending_reopen_request: { id: 19, target_stage_id: 'mastering', reason: 'Restore dynamics', status: 'pending' },
+    } })
+    mocks.trackGetMock.mockResolvedValueOnce(pending).mockResolvedValue(makeTrackDetailResponse({
+      track: { status: decision === 'approve' ? 'mastering' : 'completed', pending_reopen_request: null },
+    }))
+    mocks.decideReopenRequestMock.mockResolvedValue({ status: decision === 'approve' ? 'approved' : 'rejected' })
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('Restore dynamics')
+    await wrapper.findAll('button').find(button => button.text() === (decision === 'approve' ? 'Approve reopen' : 'Reject request'))!.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('Restore dynamics')
+    expect(wrapper.text()).not.toContain('Reopen request pending')
+    wrapper.unmount()
+  })
+
+  it('keeps a failed reopen decision available and leaves requester views read-only', async () => {
+    const response = makeTrackDetailResponse({ track: {
+      status: 'completed', viewer_is_album_manager: true, viewer_has_pending_work: true,
+      allowed_actions: ['direct_reopen'],
+      pending_reopen_request: { id: 19, target_stage_id: 'mastering', reason: 'Restore dynamics', status: 'pending' },
+    } })
+    mocks.trackGetMock.mockResolvedValue(response)
+    mocks.decideReopenRequestMock.mockRejectedValue(new Error('Permission changed'))
+    const wrapper = mountTrackDetailView()
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'Approve reopen')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Restore dynamics')
+    expect(wrapper.findAll('button').find(button => button.text() === 'Approve reopen')!.attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
+    mocks.trackGetMock.mockResolvedValue(makeTrackDetailResponse({ track: {
+      ...response.track, viewer_is_album_manager: false, viewer_has_pending_work: false, allowed_actions: ['request_reopen'],
+    } }))
+    const requester = mountTrackDetailView()
+    await flushPromises()
+    expect(requester.text()).toContain('Restore dynamics')
+    expect(requester.findAll('button').some(button => ['Approve reopen', 'Reject request', 'Request Workflow Reopen'].includes(button.text()))).toBe(false)
+    requester.unmount()
   })
 
   it('shows a resubmit upload entry for resubmittable rejected tracks', async () => {
@@ -1164,7 +1270,7 @@ describe('TrackDetailView', () => {
       issues: [],
       discussions: [],
       events: [],
-      source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
+      source_versions: [historySource(301, 3, { file_path: '/audio.wav', created_at: '2024-01-03T00:00:00Z' })],
       workflow_config: { version: 2, steps: [{ id: 'intake', label: 'Intake', type: 'approval', assignee_role: 'producer', order: 0, transitions: {} }] },
     })
     mocks.uploadSourceVersionMock.mockResolvedValueOnce(updatedTrack)
@@ -1216,7 +1322,7 @@ describe('TrackDetailView', () => {
       issues: [],
       discussions: [],
       events: [],
-      source_versions: [{ id: 301, version_number: 3, created_at: '2024-01-03T00:00:00Z' }],
+      source_versions: [historySource(301, 3, { file_path: '/audio.wav', created_at: '2024-01-03T00:00:00Z' })],
       workflow_config: {
         version: 2,
         steps: [

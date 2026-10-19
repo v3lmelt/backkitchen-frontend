@@ -6,7 +6,7 @@
         <h1 class="text-2xl font-semibold font-mono text-foreground">{{ t('circles.heading') }}</h1>
       </div>
       <div class="flex items-center gap-3 shrink-0">
-        <button class="btn-secondary flex items-center gap-2" @click="showJoinModal = true">
+        <button class="btn-secondary flex items-center gap-2" @click="openJoinModal">
           <UserPlus class="w-4 h-4" :stroke-width="2" />
           {{ t('circles.joinCircle') }}
         </button>
@@ -57,7 +57,7 @@
     </div>
 
     <!-- join modal -->
-    <BaseModal v-if="showJoinModal" max-width="max-w-sm" @close="showJoinModal = false">
+    <BaseModal :open="showJoinModal" max-width="max-w-sm" :aria-label="t('circles.joinCircle')" @close="showJoinModal = false" @after-leave="finishJoinLeave">
       <div class="flex flex-col gap-5">
         <h2 class="font-mono font-semibold text-foreground">{{ t('circles.joinCircle') }}</h2>
         <div>
@@ -105,6 +105,20 @@ const showJoinModal = ref(false)
 const joinCode = ref('')
 const joinError = ref('')
 const joining = ref(false)
+let clearJoinedCode = false
+function openJoinModal() {
+  if (clearJoinedCode) {
+    joinCode.value = ''
+    clearJoinedCode = false
+  }
+  showJoinModal.value = true
+}
+function finishJoinLeave() {
+  if (!showJoinModal.value && clearJoinedCode) {
+    joinCode.value = ''
+    clearJoinedCode = false
+  }
+}
 
 const isProducer = computed(() => appStore.currentUser?.role === 'producer')
 
@@ -131,7 +145,7 @@ async function joinCircle() {
     const summary = await circleApi.join(joinCode.value.trim())
     circles.value.push(summary)
     showJoinModal.value = false
-    joinCode.value = ''
+    clearJoinedCode = true
     toast.success(t('circles.joinSuccess'))
   } catch (e: any) {
     joinError.value = e.message

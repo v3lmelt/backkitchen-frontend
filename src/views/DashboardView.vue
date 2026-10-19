@@ -79,7 +79,6 @@ function toAlbumStats(album: Album): AlbumStats {
     open_issues: album.open_issues ?? 0,
     recent_events: album.recent_events ?? [],
     deadline: album.deadline ?? null,
-    overdue_track_count: album.overdue_track_count ?? 0,
   }
 }
 
@@ -264,7 +263,7 @@ const displayedAlbums = computed(() => {
 
 const actionableTracks = computed(() =>
   [...tracks.value]
-    .filter(track => (track.allowed_actions?.length ?? 0) > 0)
+    .filter(track => track.viewer_has_pending_work === true)
     .sort((left, right) => {
       const issueDelta = (right.open_issue_count ?? 0) - (left.open_issue_count ?? 0)
       if (issueDelta !== 0) return issueDelta
@@ -295,13 +294,13 @@ const attentionAlbums = computed(() =>
     .filter((album) => {
       if (album.is_completed || album.archived_at) return false
       const stats = albumStatsMap.value[album.id]
-      return Boolean(stats && ((stats.overdue_track_count ?? 0) > 0 || stats.open_issues > 0 || deadlineInfo(album.id)?.overdue))
+      return Boolean(stats && (stats.open_issues > 0 || deadlineInfo(album.id)?.overdue))
     })
     .sort((left, right) => {
       const leftStats = albumStatsMap.value[left.id]
       const rightStats = albumStatsMap.value[right.id]
-      const leftScore = (leftStats?.overdue_track_count ?? 0) * 10 + (leftStats?.open_issues ?? 0)
-      const rightScore = (rightStats?.overdue_track_count ?? 0) * 10 + (rightStats?.open_issues ?? 0)
+      const leftScore = leftStats?.open_issues ?? 0
+      const rightScore = rightStats?.open_issues ?? 0
       return rightScore - leftScore
     })
     .slice(0, 5),
@@ -425,7 +424,7 @@ function openAlbumSettings(albumId: number) {
 }
 
 function openTrack(track: Track) {
-  if ((track.allowed_actions?.length ?? 0) > 0) {
+  if (track.viewer_can_open_workflow === true) {
     router.push(buildTrackWorkspaceRoute(track, { returnTo: route.fullPath }))
     return
   }
@@ -667,9 +666,6 @@ function openTrack(track: Track) {
                   <span v-if="deadlineInfo(album.id)" class="text-xs px-2 py-0.5 rounded-full" :class="deadlineInfo(album.id)!.overdue ? 'bg-error-bg text-error' : 'bg-warning-bg text-warning'">
                     {{ deadlineInfo(album.id)!.text }}
                   </span>
-                  <span v-if="!album.is_completed && albumStatsMap[album.id]?.overdue_track_count" class="text-xs bg-error-bg text-error px-2 py-0.5 rounded-full">
-                    {{ t('dashboard.overdueCount', { count: albumStatsMap[album.id].overdue_track_count }) }}
-                  </span>
                   <span v-if="albumStatsMap[album.id]?.open_issues > 0" class="text-xs px-2 py-0.5 rounded-full" :class="album.is_completed ? 'bg-border text-foreground' : 'bg-error-bg text-error'">
                     {{ t('dashboard.openIssues', { count: albumStatsMap[album.id].open_issues }) }}
                   </span>
@@ -899,7 +895,7 @@ function openTrack(track: Track) {
         <!-- Progress bar -->
         <div class="w-full h-2 bg-background rounded-full overflow-hidden">
           <div
-            class="h-full bg-primary transition-all duration-300"
+            class="ui-progress h-full bg-primary"
             :style="{ width: exportProgress.total > 0 ? `${(exportProgress.index / exportProgress.total) * 100}%` : '0%' }"
           ></div>
         </div>

@@ -112,7 +112,7 @@ async function handleResend() {
       >{{ t('auth.langToggle') }}</button>
     </div>
 
-    <div class="relative z-10 w-full max-w-[400px] px-6 overflow-y-auto max-h-screen py-8 animate-fade-in">
+    <div class="relative z-10 w-full max-w-[400px] px-6 overflow-y-auto max-h-screen py-8 ui-enter">
       <!-- Logo -->
       <div class="flex items-center justify-center gap-3 mb-10">
         <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center shrink-0">
@@ -122,7 +122,7 @@ async function handleResend() {
       </div>
 
       <!-- Check email state -->
-      <Transition name="slide-fade" mode="out-in">
+      <Transition name="ui-feedback-fade" mode="out-in">
         <div v-if="registeredEmail" key="check-email" class="bg-card border border-border rounded-none p-8 text-center">
           <div class="w-12 h-12 rounded-full bg-success-bg flex items-center justify-center mx-auto mb-5">
             <Mail class="w-6 h-6 text-success" :stroke-width="2" />
@@ -132,13 +132,13 @@ async function handleResend() {
           <p class="text-foreground text-sm font-mono font-semibold mb-5">{{ registeredEmail }}</p>
           <p class="text-muted-foreground text-xs font-sans mb-7">{{ t('auth.checkEmail.hint') }}</p>
 
-          <Transition name="slide-fade">
+          <Transition name="ui-feedback-fade">
             <div v-if="resendDone" class="mb-4 px-4 py-2.5 bg-success-bg border border-border text-success text-sm font-sans rounded-none flex items-center justify-center gap-2">
               <CheckCircle2 class="w-4 h-4" :stroke-width="2" />
               {{ t('auth.checkEmail.resent') }}
             </div>
           </Transition>
-          <Transition name="slide-fade">
+          <Transition name="ui-feedback-fade">
             <div v-if="resendError" class="mb-4 px-4 py-2.5 bg-error-bg border border-error/20 text-error text-sm font-sans rounded-none flex items-start gap-2 text-left">
               <AlertCircle class="w-4 h-4 mt-0.5 shrink-0" :stroke-width="2" />
               <span>{{ resendError }}</span>
@@ -164,7 +164,7 @@ async function handleResend() {
           <h1 class="font-mono text-xl font-bold text-foreground mb-7">{{ t('auth.register.title') }}</h1>
 
           <!-- Error -->
-          <Transition name="slide-fade">
+          <Transition name="ui-feedback-fade">
             <div v-if="error" class="mb-5 px-4 py-3 bg-error-bg border border-error/20 text-error text-sm font-sans rounded-none flex items-start gap-2">
               <AlertCircle class="w-4 h-4 mt-0.5 shrink-0" :stroke-width="2" />
               <span>{{ error }}</span>
@@ -300,16 +300,3 @@ async function handleResend() {
   </div>
 </template>
 
-<style scoped>
-.animate-fade-in {
-  animation: fadeIn 0.35s ease-out;
-}
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.slide-fade-enter-active { transition: all 0.3s ease-out; }
-.slide-fade-leave-active { transition: all 0.15s ease-in; }
-.slide-fade-enter-from { opacity: 0; transform: translateY(-6px); }
-.slide-fade-leave-to { opacity: 0; transform: translateY(-6px); }
-</style>

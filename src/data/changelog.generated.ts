@@ -5,6 +5,406 @@ import type { ChangelogEntry } from './changelog.schema'
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    "version": "0.1.61",
+    "date": "2026-10-18",
+    "headline": {
+      "zh-CN": "更轻盈的交互与稳定的阅读位置",
+      "en": "Lighter interactions and steadier reading"
+    },
+    "summary": {
+      "zh-CN": "统一界面动效，改善弹窗焦点与母带沟通阅读体验，并适配系统减弱动效设置。",
+      "en": "Consistent interface motion, improved dialog focus and mastering chat reading, with support for reduced motion preferences."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "交互体验",
+          "en": "Interaction"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "轻触反馈与一致的面板过渡",
+              "en": "Light press feedback and consistent panel transitions"
+            },
+            "description": {
+              "zh-CN": "按钮、菜单、侧栏与弹窗使用统一的轻量动效。减弱动效模式保留清晰的静态反馈，音频标记与播放定位保持即时响应。",
+              "en": "Buttons, menus, sidebars and dialogs share lightweight motion. Reduced motion preserves clear static feedback, while audio markers and playback positioning remain immediate."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "稳定的弹窗内容与焦点",
+              "en": "Stable dialog content and focus"
+            },
+            "description": {
+              "zh-CN": "关闭确认框时保留完整退场内容，快速重开与切换目标时保持正确焦点，并隔离旧会话请求结果。",
+              "en": "Confirmation content remains intact during dismissal. Rapid reopening and target changes preserve focus and isolate results from older dialog sessions."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "母带沟通保留阅读位置",
+              "en": "Keep your place in mastering chat"
+            },
+            "description": {
+              "zh-CN": "浏览历史消息时，收到新消息、切换全屏与重新打开面板会保留阅读位置；新增查看最新消息及未读数量提示。发送失败保留草稿，成功发送后跟随最新消息。",
+              "en": "While reading history, incoming messages, fullscreen changes and reopening preserve your place. A latest-message shortcut shows unread counts. Failed sends retain drafts; successful sends follow the latest message."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.60",
+    "date": "2026-10-18",
+    "headline": {
+      "zh-CN": "恢复历史版本问题的视觉区分",
+      "en": "Restore visual distinction for historical issues"
+    },
+    "summary": {
+      "zh-CN": "历史版本问题恢复弱化显示，当前版本的反馈保持突出，便于浏览跨版本评审记录。",
+      "en": "Historical issues are visually subdued again, keeping current-version feedback prominent when browsing reviews across versions."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "问题列表",
+          "en": "Issue lists"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "按曲目当前版本区分视觉层级",
+              "en": "Distinguish issues using the track's current version"
+            },
+            "description": {
+              "zh-CN": "历史源音频和母带版本的问题以较低不透明度显示，继续支持查看、试听及原有权限内的操作。列表以曲目当前版本为基准，A/B 切换时保持这一视觉层级，波形标记继续跟随实际播放的音频。",
+              "en": "Issues from historical source and master versions use reduced opacity while retaining viewing, playback, and permitted actions. The list stays anchored to the track's current version during A/B switching, while waveform markers continue to follow the audio being played."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.59",
+    "date": "2026-10-17",
+    "headline": {
+      "zh-CN": "并发访问与数据保存稳定性修复",
+      "en": "Concurrent access and data-saving reliability"
+    },
+    "summary": {
+      "zh-CN": "修复并发请求共享数据库连接导致的查询异常和事务相互干扰，保障各请求独立读取、提交与回滚。",
+      "en": "Fix query failures and transaction interference caused by concurrent requests sharing a database connection, keeping reads, commits, and rollbacks isolated between requests."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "稳定性修复",
+          "en": "Reliability fixes"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "并发查询保持一致",
+              "en": "Consistent concurrent queries"
+            },
+            "description": {
+              "zh-CN": "修复同时加载多个接口时可能出现的用户信息读取异常、列表内容错乱和请求报错。并发请求使用独立的数据库连接。",
+              "en": "Fix user-information read failures, inconsistent lists, and request errors when multiple endpoints load simultaneously. Concurrent requests use separate database connections."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "独立处理提交与回滚",
+              "en": "Independent commits and rollbacks"
+            },
+            "description": {
+              "zh-CN": "修复一个请求结束或提交时可能影响其他请求待保存修改的问题，保留现有数据库外键约束与写入等待设置。",
+              "en": "Fix requests closing or committing transactions affecting pending changes in other requests, while preserving foreign-key enforcement and database write-wait settings."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.58",
+    "date": "2026-10-16",
+    "headline": {
+      "zh-CN": "准确的待办与重开申请审批",
+      "en": "Accurate pending tasks and reopen approvals"
+    },
+    "summary": {
+      "zh-CN": "首页待办按当前职责展示，曲目工作台入口遵循阶段权限；主催可在曲目详情直接处理重开申请。",
+      "en": "Dashboard tasks reflect current responsibilities, workflow entry points follow stage permissions, and album managers can handle reopen requests from track details."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "待办与流程入口",
+          "en": "Pending tasks and workflow entry points"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "按实际职责显示待办",
+              "en": "Show tasks for current responsibilities"
+            },
+            "description": {
+              "zh-CN": "“等待我处理”覆盖阶段审批、评审指派、修订上传、母带交付与确认，以及已提交的补交和重开申请审批。已完成曲目的可选重开、补交入口保留在详情中，已归档内容退出待办。",
+              "en": "Waiting for Me covers stage decisions, reviewer assignment, revision uploads, master delivery and confirmation, and submitted follow-up and reopen approvals. Optional reopen and follow-up actions remain in track details, while archived content leaves the queue."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "工作台入口遵循当前阶段权限",
+              "en": "Match workflow entry points to stage permissions"
+            },
+            "description": {
+              "zh-CN": "阶段任务进入对应工作台，申请审批进入曲目详情。曲师在接收审核阶段可继续使用源音频补交入口，工作台入口按当前用户的阶段操作权限展示。",
+              "en": "Stage tasks open the corresponding workspace, while request approvals open track details. Composers retain source follow-up actions during intake, and workflow entry points reflect the current user's stage permissions."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "重开申请",
+          "en": "Reopen requests"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "在曲目详情批准或拒绝申请",
+              "en": "Approve or reject requests in track details"
+            },
+            "description": {
+              "zh-CN": "专辑管理者可查看待审批申请的目标阶段与原因，并直接批准重开或拒绝申请。批准后进入申请的目标阶段，拒绝后保持已完成，申请状态与待办同步更新。曲师可查看待审批状态。",
+              "en": "Album managers can review the requested stage and reason, then approve or reject the request. Approval enters the requested stage; rejection keeps the track completed. Request status and pending tasks update together, and composers can view pending status."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.57",
+    "date": "2026-10-13",
+    "headline": {
+      "zh-CN": "历史问题上下文与制作记录权限",
+      "en": "Historical issue context and production-record permissions"
+    },
+    "summary": {
+      "zh-CN": "母带问题反馈保留跨版本、跨制作周期的未解决问题，已解决记录折叠展示；平台内的母带与终审问题、评论及附件按制作参与者权限提供。",
+      "en": "Mastering feedback retains unresolved issues across audio versions and workflow cycles and folds resolved history; in-platform mastering and final-review issues, comments, and attachments are limited to production participants."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "问题上下文",
+          "en": "Issue context"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "保留历史待处理事项",
+              "en": "Keep historical issues in view"
+            },
+            "description": {
+              "zh-CN": "未解决问题默认展开，已解决和内部结案记录可按需展开。来源标识区分源版本与母带制作轮次，历史未解决问题保持清晰可读。",
+              "en": "Unresolved issues are expanded by default, while resolved and internally closed records can be expanded when needed. Provenance distinguishes source versions and master delivery cycles, and historical unresolved issues remain clearly readable."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "独立的问题版本筛选",
+              "en": "Independent issue version filters"
+            },
+            "description": {
+              "zh-CN": "问题列表可选择全部版本或当前版本，审听中的 A/B 对比选择保持独立。主波形只显示对应音频的标记，历史问题通过详情中的原版本预览查看；音频不可用时仍保留文字和讨论。",
+              "en": "Issue lists offer all-version and current-version filters independent of A/B listening selections. Main waveform markers match their audio, historical issues use original-version detail previews, and text and discussions remain available when audio is unavailable."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "明确新问题的版本归属",
+              "en": "Explicit version context for new issues"
+            },
+            "description": {
+              "zh-CN": "新问题明确绑定当前源版本，历史对比期间保持只读标注。提交后恢复可见筛选并定位新问题，避免问题保存后被旧版本条件隐藏。",
+              "en": "New issues explicitly target the current source version, while historical comparisons keep annotation read-only. Submission restores a visible filter and focuses the new issue so an older-version selection cannot hide it."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "制作记录权限",
+          "en": "Production-record permissions"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "制作问题与成品试听分开授权",
+              "en": "Separate production records from final-audio access"
+            },
+            "description": {
+              "zh-CN": "平台内的母带与终审问题、评论和附件仅向相关曲师、专辑管理者及指定母带工程师开放，历史记录、站内通知和活动记录遵循同一访问范围。普通成员可继续试听已完成曲目的最终母带，同行评审问题权限保持原有规则。已经配置的专辑 Webhook 保留现有推送设置。",
+              "en": "In-platform mastering and final-review issues, comments, and attachments are available to credited composers, album managers, and the assigned mastering engineer. History, in-app notifications, and activity records follow the same access boundary. Ordinary members retain final-audio access for completed tracks, and peer-review permissions stay unchanged. Configured album webhooks retain their existing delivery settings."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.56",
+    "date": "2026-10-13",
+    "headline": {
+      "zh-CN": "最终母带访问与终审保护",
+      "en": "Final master access and final-review safeguards"
+    },
+    "summary": {
+      "zh-CN": "专辑成员可在已完成曲目详情试听、下载最终母带；制作中母带和历史草稿保持参与者权限，终审批复严格绑定当前制作周期。",
+      "en": "Album members can play and download the final master from completed track details. In-progress masters and historical drafts remain participant-only, and final approval is restricted to the current workflow cycle."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "母带访问",
+          "en": "Master access"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "成员试听最终母带",
+              "en": "Final master playback for members"
+            },
+            "description": {
+              "zh-CN": "已完成曲目的最终母带可在详情页试听和下载。母带工作台、制作中交付与历史草稿继续向制作参与者开放；重新开启制作后，普通成员的母带访问随状态收回。",
+              "en": "Members can play and download the final master on completed track details. The mastering workspace, in-progress deliveries and historical drafts stay restricted to production participants. Reopening a track withdraws ordinary members' master access."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "统一音频访问校验",
+              "en": "Consistent audio authorization"
+            },
+            "description": {
+              "zh-CN": "母带试听和下载接口按曲目状态与交付版本校验权限。本地音频通过受保护接口提供，R2 音频使用短期签名下载地址。",
+              "en": "Master playback and download endpoints check track state and delivery identity. Local audio is served through protected endpoints, and R2 audio uses short-lived signed download URLs."
+            }
+          }
+        ]
+      },
+      {
+        "heading": {
+          "zh-CN": "终审",
+          "en": "Final review"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "当前周期交付守卫",
+              "en": "Current-cycle delivery safeguard"
+            },
+            "description": {
+              "zh-CN": "终审批复要求当前制作周期的母带交付，防止重新开启后批准旧周期母带并提前完成曲目。新上传文件使用独立存储名称，保留历史音频内容。",
+              "en": "Final approval requires a master delivery from the current workflow cycle, preventing reopened tracks from completing through an older delivery. Newly uploaded files use unique storage names to preserve historical audio."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.55",
+    "date": "2026-10-12",
+    "headline": {
+      "zh-CN": "曲师账号选择与 UID 复制",
+      "en": "Composer account selection and UID copying"
+    },
+    "summary": {
+      "zh-CN": "专辑管理者可在上传页搜索曲师账号，社团和专辑成员页支持查看、复制 UID。",
+      "en": "Album managers can search composer accounts during upload and copy UIDs from circle and album members."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "曲师账号",
+          "en": "Composer accounts"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "上传时选择账号",
+              "en": "Choose accounts during upload"
+            },
+            "description": {
+              "zh-CN": "按显示名、用户名或 UID 搜索当前专辑可绑定的账号。选中后填入 UID，并预填空艺名；已有艺名、手工 UID 和外部曲师行继续保留。",
+              "en": "Search eligible accounts by display name, username or UID. Selection fills the UID and an empty alias while preserving existing aliases, manual UIDs and external composers."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "成员 UID 复制",
+              "en": "Copy member UIDs"
+            },
+            "description": {
+              "zh-CN": "社团成员和专辑团队展示 UID，点击复制纯数字；复制失败时可选中文本手动复制。",
+              "en": "Circle members and album teams show UIDs. Click to copy the numeric ID, or select the text manually if copying fails."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.54",
+    "date": "2026-10-12",
+    "headline": {
+      "zh-CN": "专辑截止提醒统一",
+      "en": "Unified album deadline reminders"
+    },
+    "summary": {
+      "zh-CN": "首页和专辑列表保留专辑整体截止提醒，移除曲目逾期数量提示，并同步调整关注筛选与排序。",
+      "en": "The dashboard and album list retain overall album deadline reminders, remove overdue track counts, and align attention filtering and sorting."
+    },
+    "sections": [
+      {
+        "heading": {
+          "zh-CN": "首页与专辑列表",
+          "en": "Dashboard and album list"
+        },
+        "items": [
+          {
+            "title": {
+              "zh-CN": "仅显示专辑整体截止",
+              "en": "Overall album deadline reminders"
+            },
+            "description": {
+              "zh-CN": "保留“今日截止”“逾期 N 天”“还剩 N 天”，移除“X 首逾期”。已完成和已归档专辑继续隐藏截止提醒。",
+              "en": "Keep due-today, days-overdue and days-left reminders while removing overdue track counts. Completed and archived albums continue to hide deadline reminders."
+            }
+          },
+          {
+            "title": {
+              "zh-CN": "统一关注口径",
+              "en": "Aligned attention criteria"
+            },
+            "description": {
+              "zh-CN": "首页关注专辑由整体截止状态和未解决问题决定，按问题数排序；专辑列表关注排序综合整体截止状态和未解决问题。阶段曲目逾期数量的关注权重已移除，阶段日期设置和待办保持原有行为。",
+              "en": "Dashboard attention includes albums based on overall deadlines and open issues, ordered by issue count. Album-list attention sorting combines overall deadlines and open issues. Overdue track counts no longer add attention weight; phase-deadline settings and tasks retain their existing behavior."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.53",
     "date": "2026-09-19",
     "headline": {

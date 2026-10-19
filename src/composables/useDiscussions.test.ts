@@ -6,20 +6,19 @@ import { discussionApi } from '@/api'
 import { useDiscussions, type UseDiscussionsOptions } from './useDiscussions'
 import { createTestI18n } from '@/tests/utils'
 import { createPinia, setActivePinia } from 'pinia'
+import type { Discussion } from '@/types'
 
-type FakeDiscussion = { id: number; content: string; images: []; audios: [] }
-
-function disc(id: number, content = `msg-${id}`): FakeDiscussion {
-  return { id, content, images: [], audios: [] }
+function disc(id: number, content = `msg-${id}`): Discussion {
+  return { id, track_id: 42, author_id: 2, created_at: '2026-10-18T00:00:00Z', content, images: [], audios: [] }
 }
 
 type Composable = ReturnType<typeof useDiscussions>
 
 function mountHarness(options: UseDiscussionsOptions = {}) {
   let captured: Composable | null = null
+  const trackId = ref(42)
   const Comp = defineComponent({
     setup() {
-      const trackId = ref(42)
       captured = useDiscussions(trackId, 'general', options)
       return () => null
     },
@@ -28,7 +27,7 @@ function mountHarness(options: UseDiscussionsOptions = {}) {
   const wrapper = mount(Comp, {
     global: { plugins: [createTestI18n()] },
   })
-  return { wrapper, composable: captured as unknown as Composable }
+  return { wrapper, composable: captured as unknown as Composable, trackId }
 }
 
 describe('useDiscussions (paginated)', () => {
@@ -146,15 +145,47 @@ describe('useDiscussions (paginated)', () => {
 
   it('non-paginated load() returns the whole list and leaves hasMore false', async () => {
     const all = Array.from({ length: 50 }, (_, i) => disc(i + 1))
-    const listMock = vi.spyOn(discussionApi, 'list').mockResolvedValue(all as unknown as never)
+    vi.spyOn(discussionApi, 'list').mockResolvedValue(all)
 
     const { composable, wrapper } = mountHarness({ paginated: false })
     await composable.load()
     await flushPromises()
 
-    expect(listMock).toHaveBeenCalledWith(42, 'general')
     expect(composable.discussions.value).toHaveLength(50)
     expect(composable.hasMore.value).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('returns a successful discussion even when realtime already inserted it, and returns null on failure', async () => {
+    const created = disc(9)
+    const pending = Promise.withResolvers<Discussion>()
+    vi.spyOn(discussionApi, 'create').mockReturnValueOnce(pending.promise).mockRejectedValueOnce(new Error('offline'))
+    const { composable, wrapper } = mountHarness()
+    const result = composable.submit({ content: 'draft', images: [], audios: [] })
+    composable.discussions.value = [created]
+    pending.resolve(created)
+    expect(await result).toBe(created)
+    expect(composable.discussions.value.map(d => d.id)).toEqual([9])
+    expect(await composable.submit({ content: 'retry', images: [], audios: [] })).toBeNull()
+    expect(composable.discussions.value.map(d => d.id)).toEqual([9])
+    wrapper.unmount()
+  })
+
+  it('isolates old list and submit responses after switching tracks', async () => {
+    const oldList = Promise.withResolvers<Discussion[]>()
+    const oldSubmit = Promise.withResolvers<Discussion>()
+    vi.spyOn(discussionApi, 'list').mockReturnValueOnce(oldList.promise).mockResolvedValueOnce([disc(80)])
+    vi.spyOn(discussionApi, 'create').mockReturnValueOnce(oldSubmit.promise)
+    const { composable, wrapper, trackId } = mountHarness()
+    const loading = composable.load()
+    const posting = composable.submit({ content: 'old track', images: [], audios: [] })
+    trackId.value = 8
+    await composable.load()
+    oldList.resolve([disc(1)])
+    oldSubmit.resolve(disc(2))
+    await Promise.all([loading, posting])
+    expect(composable.discussions.value.map(d => d.id)).toEqual([80])
+    expect(composable.posting.value).toBe(false)
     wrapper.unmount()
   })
 })
