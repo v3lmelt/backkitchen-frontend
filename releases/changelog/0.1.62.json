@@ -1,0 +1,15 @@
+{
+  "version": "0.1.62",
+  "date": "2026-11-26",
+  "headline": { "zh-CN": "首页曲目按专辑曲序排列", "en": "Dashboard tracks follow album track order" },
+  "summary": { "zh-CN": "修复首页专辑分组内的曲目排序，使曲目按照专辑内已排好的曲序显示。", "en": "Tracks grouped under each album on the Dashboard now follow the album's configured track order." },
+  "sections": [{
+    "heading": { "zh-CN": "问题修复", "en": "Fixes" },
+    "items": [
+      {
+        "title": { "zh-CN": "首页曲目列表按专辑曲序排列", "en": "Album track order in Dashboard track list" },
+        "description": { "zh-CN": "首页各专辑分组下的曲目现已按专辑设定的曲号升序排列，未设置曲号的曲目排在最后。", "en": "Tracks under each album group on the Dashboard are now sorted by album track number ascending, with unnumbered tracks placed last." }
+      }
+    ]
+  }]
+}

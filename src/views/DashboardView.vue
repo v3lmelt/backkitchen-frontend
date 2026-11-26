@@ -183,6 +183,13 @@ onBeforeUnmount(() => {
   if (searchTimer) clearTimeout(searchTimer)
 })
 
+function compareTrackAlbumOrder(left: Track, right: Track): number {
+  const leftNumber = left.track_number ?? Number.POSITIVE_INFINITY
+  const rightNumber = right.track_number ?? Number.POSITIVE_INFINITY
+  if (leftNumber !== rightNumber) return leftNumber - rightNumber
+  return left.id - right.id
+}
+
 const filteredTracks = computed(() => {
   const activeFilter = filterStatus.value
   if (activeFilter === 'rejected') {
@@ -194,9 +201,27 @@ const filteredTracks = computed(() => {
   return tracks.value.filter(track => statuses.includes(track.status))
 })
 
-const visibleTracks = computed(() => filteredTracks.value.slice(0, visibleTrackLimit.value))
-const hasMoreTracks = computed(() => filteredTracks.value.length > visibleTracks.value.length)
-const nextBatchSize = computed(() => Math.min(TRACK_DISPLAY_STEP, filteredTracks.value.length - visibleTracks.value.length))
+const orderedFilteredTracks = computed(() => {
+  const groups = new Map<number, Track[]>()
+  for (const track of filteredTracks.value) {
+    let albumTracks = groups.get(track.album_id)
+    if (!albumTracks) {
+      albumTracks = []
+      groups.set(track.album_id, albumTracks)
+    }
+    albumTracks.push(track)
+  }
+  const ordered: Track[] = []
+  for (const albumTracks of groups.values()) {
+    albumTracks.sort(compareTrackAlbumOrder)
+    ordered.push(...albumTracks)
+  }
+  return ordered
+})
+
+const visibleTracks = computed(() => orderedFilteredTracks.value.slice(0, visibleTrackLimit.value))
+const hasMoreTracks = computed(() => orderedFilteredTracks.value.length > visibleTracks.value.length)
+const nextBatchSize = computed(() => Math.min(TRACK_DISPLAY_STEP, orderedFilteredTracks.value.length - visibleTracks.value.length))
 
 async function loadAllTracks(params?: { status?: TrackStatus; album_id?: number; search?: string; album_scope?: AlbumScope }) {
   const allTracks: Track[] = []
