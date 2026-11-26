@@ -424,4 +424,74 @@ describe('DashboardView', () => {
     expect(wrapper.text()).toContain('New Search Song')
     expect(wrapper.text()).not.toContain('Old Search Song')
   })
+
+  it('orders tracks within each album by track_number with unnumbered tracks last', async () => {
+    mocks.pendingInvitations = []
+    mocks.albumListMock.mockResolvedValue([
+      albumFixture({ id: 1, title: 'Album One' }),
+      albumFixture({ id: 2, title: 'Album Two' }),
+    ])
+    mocks.trackListMock.mockImplementation(async ({ status }: { status?: string } = {}) => {
+      if (status === 'rejected') return []
+      return [
+        trackFixture(10, 'A1 Track 3', 'submitted', { album_id: 1, track_number: 3 }),
+        trackFixture(11, 'A1 Unnumbered 11', 'submitted', { album_id: 1, track_number: null }),
+        trackFixture(20, 'A2 Track 2', 'submitted', { album_id: 2, track_number: 2 }),
+        trackFixture(12, 'A1 Track 1', 'submitted', { album_id: 1, track_number: 1 }),
+        trackFixture(13, 'A1 Unnumbered 13', 'submitted', { album_id: 1 }),
+        trackFixture(14, 'A1 Track 2', 'submitted', { album_id: 1, track_number: 2 }),
+        trackFixture(21, 'A2 Track 1', 'submitted', { album_id: 2, track_number: 1 }),
+      ]
+    })
+
+    const wrapper = mountWithPlugins(DashboardView)
+    await flushPromises()
+
+    const expectedOrder = [
+      'A1 Track 1',
+      'A1 Track 2',
+      'A1 Track 3',
+      'A1 Unnumbered 11',
+      'A1 Unnumbered 13',
+      'A2 Track 1',
+      'A2 Track 2',
+    ]
+
+    const desktopTitles = wrapper
+      .findAll('tbody tr.cursor-pointer')
+      .map(row => row.find('td:nth-child(2) .text-sm').text())
+    expect(desktopTitles).toEqual(expectedOrder)
+
+    const mobileTitles = wrapper
+      .findAll('.md\\:hidden div.cursor-pointer')
+      .map(card => card.find('.text-sm.font-medium').text())
+    expect(mobileTitles).toEqual(expectedOrder)
+    wrapper.unmount()
+  })
+
+  it('sorts album tracks before slicing the initial visible limit', async () => {
+    mocks.pendingInvitations = []
+    mocks.albumListMock.mockResolvedValue([albumFixture({ id: 1, title: 'Large Album', track_count: 55, total_tracks: 55 })])
+    const tracks = Array.from({ length: 54 }, (_, idx) =>
+      trackFixture(idx + 1, `Track #${idx + 2}`, 'submitted', { album_id: 1, track_number: idx + 2 }),
+    )
+    tracks.push(trackFixture(55, 'Opening Track', 'submitted', { album_id: 1, track_number: 1 }))
+
+    mocks.trackListMock.mockImplementation(async ({ status }: { status?: string } = {}) => (status === 'rejected' ? [] : tracks))
+
+    const wrapper = mountWithPlugins(DashboardView)
+    await flushPromises()
+
+    const initialDesktopRows = wrapper.findAll('tbody tr.cursor-pointer')
+    expect(initialDesktopRows).toHaveLength(50)
+    expect(initialDesktopRows[0]!.find('td:nth-child(2) .text-sm').text()).toBe('Opening Track')
+    expect(initialDesktopRows[49]!.find('td:nth-child(2) .text-sm').text()).toBe('Track #50')
+    expect(wrapper.find('tbody').text()).not.toContain('Track #55')
+
+    await wrapper.findAll('button').find(button => button.text().includes('Load more (5)'))!.trigger('click')
+    const expandedDesktopRows = wrapper.findAll('tbody tr.cursor-pointer')
+    expect(expandedDesktopRows).toHaveLength(55)
+    expect(expandedDesktopRows[54]!.find('td:nth-child(2) .text-sm').text()).toBe('Track #55')
+    wrapper.unmount()
+  })
 })
